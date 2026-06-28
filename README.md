@@ -47,7 +47,6 @@ tests/engine/ # determinism + bounds + 2000-genome fuzz + CAM1 round-trip
 - [DESIGN.md](DESIGN.md) — vision, the genome/growth core, architecture, milestones.
 - [ROADMAP.md](ROADMAP.md) — milestone checklist with Test steps.
 - [PROGRESS.md](PROGRESS.md) — build log.
-- [CLAUDE.md](CLAUDE.md) — standing instructions for the AI build loop.
 - [docs/adr/](docs/adr/) — architecture decision records.
 
 ## License
