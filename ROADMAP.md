@@ -51,6 +51,7 @@ unchecked milestone.
   `runGenerations` headless fast-forward, then show the result and the path taken.
   **Test:** set "bigger + aquatic", run 50 generations → the result is larger and more
   fin/streamlined than the start; running again with the same seed reproduces it.
+  _(built 2026-06-28, self-verified in-browser, awaiting human confirmation)_
 
 - [ ] **M5 — Better bodies & motion.** Radial symmetry, terminals (fins/claws/feet/eyes)
   rendered as distinct tips, procedural undulation/walk animation, palette/materials.

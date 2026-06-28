@@ -5,8 +5,9 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 1 → Phase 2. M0–M3 built and self-verified (incl. in-browser);
-awaiting acceptance test. Creatures are now steerable, branchable, and shareable.
+**Current phase:** Phase 2. M0–M4 built and self-verified (incl. in-browser); awaiting
+acceptance test. Creatures are steerable by hand (breeder) or by target (directed pressures),
+branchable, and shareable.
 
 ### State of the tree
 
@@ -25,11 +26,49 @@ awaiting acceptance test. Creatures are now steerable, branchable, and shareable
 | Sharing | `src/engine/share.ts` | ✅ `CAM1:` encode/decode/validate |
 | Lineage | `src/engine/lineage.ts`, `src/viewer/LineageTree.tsx` | ✅ tree model + SVG view |
 | Share bar | `src/viewer/ShareBar.tsx` | ✅ copy / paste-and-load |
-| UI / store | `src/ui/App.tsx`, `store.ts` | ✅ Zustand: lineage tree + current + litter, localStorage |
+| Directed pressures | `src/engine/pressures.ts`, `src/viewer/PressurePanel.tsx` | ✅ scorePhenotype + runGenerations + panel |
+| UI / store | `src/ui/App.tsx`, `store.ts` | ✅ Zustand: lineage + current + litter + pressure, localStorage |
 | Test invariants | `tests/engine/invariants.ts` | ✅ shared phenotype + genome-bounds asserts |
-| Directed pressures | — | ⬜ M4 |
+| Better bodies & motion | — | ⬜ M5 |
 
 ---
+
+## M4 — Directed pressures · built 2026-06-28 (awaiting test)
+
+"Set a direction and run." New `src/engine/pressures.ts`: a `Pressure` vector (size,
+limbCount, bodyLength, aquatic, predator; each in [-1,1], 0 = don't care), `scorePhenotype`
+(cheap morphological metrics — overall scale, limb tips, elongation, fin↔leg ratio,
+claw/eye predator cues — each smoothed monotonic via `tanh`), and `runGenerations`, a
+headless greedy hill-climb with **elitism** (the parent always competes, so the target score
+never regresses) that's deterministic from (root, streamSeed). Store gains `pressure` +
+`setPressure` + `runDirected(generations)`, which appends the chosen path to the lineage
+tree. UI: `PressurePanel` (5 sliders + a generations field + Run) in the right rail.
+
+**Verified (2026-06-28):** `npm run typecheck` clean; `npm test` → **36/36** (4 new: run
+determinism, score never regresses, single-axis pressure provably moves its metric across a
+dozen roots, aquatic trades legs→fins); `npm run build` → succeeds. **In-browser:** from the
+default quadruped (z-length 3.4, 4 feet, 0 fins), 45 generations of "long + aquatic" →
+z-length **29.2**, **0 feet / 6 fins**, and the full 45-step path recorded in the lineage
+tree (1 → 46 nodes). No console errors.
+
+## Compositional generator — fix archetype over-fit · 2026-06-28 (awaiting test)
+
+Feedback: creatures looked more "creatury" but **over-fit to a few archetypes** — every
+creature snapped to one of five rigid molds (quadruped / hexapod / fish / serpent / radial).
+Rewrote `random.ts` to **compose body plans from independent traits** instead of picking one
+mold: a body on a length/girth continuum (`repeat` 2–13 from a `lengthClass`, height ratio,
+windiness), an independent **leg-pair count (0–3, weighted)**, **independent dorsal/pectoral
+fins**, and an optional head + face — features sized to the body girth (legs reach the
+ground, eyes scale to the head) and all clamped to `GENE_BOUNDS`. The familiar forms now
+*emerge* as common cases; hybrids (a finned quadruped, a long 3-legged body, a two-legged
+dragon) fill the space between. Radial creatures also vary more (dome height, arm
+length/curl, an optional second ring of spikes/eyes).
+
+**Verified (2026-06-28):** `npm run typecheck` clean; `npm test` → **32/32**; `npm run build`
+→ succeeds. **Diversity sample (600 random genomes, headless):** symmetry 71% bilateral / 29%
+radial; bilateral leg-pairs spread 0→88 / 1→87 / 2→179 / 3→71 (no collapse onto one mold);
+51% carry fins; body length short 215 / mid 241 / long 144; node counts 6–49 across **38
+distinct** sizes. Awaiting the human's visual read.
 
 ## Creature-look pass — face, skin, articulation · 2026-06-28 (awaiting test)
 

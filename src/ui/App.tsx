@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { grow } from '../engine/grow';
 import { CreatureViewer } from '../viewer/CreatureViewer';
 import { OffspringGallery } from '../viewer/OffspringGallery';
+import { PressurePanel } from '../viewer/PressurePanel';
 import { ShareBar } from '../viewer/ShareBar';
 import { LineageTree } from '../viewer/LineageTree';
 import { useStore } from './store';
@@ -11,12 +12,15 @@ export function App() {
   const currentId = useStore((s) => s.currentId);
   const offspring = useStore((s) => s.offspring);
   const symmetryMode = useStore((s) => s.symmetryMode);
+  const pressure = useStore((s) => s.pressure);
   const newCreature = useStore((s) => s.newCreature);
   const promote = useStore((s) => s.promote);
   const selectNode = useStore((s) => s.selectNode);
   const reroll = useStore((s) => s.reroll);
   const importString = useStore((s) => s.importString);
   const setSymmetryMode = useStore((s) => s.setSymmetryMode);
+  const setPressure = useStore((s) => s.setPressure);
+  const runDirected = useStore((s) => s.runDirected);
 
   const current = nodes[currentId];
   const genome = current.genome;
@@ -63,6 +67,7 @@ export function App() {
 
         <aside className="gallery">
           <OffspringGallery offspring={offspring} generation={generation} onPick={promote} onReroll={reroll} />
+          <PressurePanel pressure={pressure} onChange={setPressure} onRun={runDirected} />
           <ShareBar genome={genome} onImport={importString} />
         </aside>
       </div>

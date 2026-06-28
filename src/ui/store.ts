@@ -9,6 +9,7 @@ import { defaultGenome, type Genome } from '../engine/genome';
 import { randomGenome, type SymmetryMode } from '../engine/random';
 import { breederOffspring } from '../engine/selection';
 import { decodeGenome } from '../engine/share';
+import { runGenerations, ZERO_PRESSURE, type Pressure } from '../engine/pressures';
 import type { LineageNode, LineageNodes } from '../engine/lineage';
 
 const LITTER = 9;
@@ -24,12 +25,16 @@ interface Session {
 }
 
 interface AppState extends Session {
+  pressure: Pressure; // directed-evolution target (M4)
   newCreature: () => void;
   promote: (child: Genome) => void;
   selectNode: (id: string) => void; // revisit / branch from an ancestor
   reroll: () => void;
   importString: (s: string) => void; // CAM1: → new lineage rooted at that creature
   setSymmetryMode: (mode: SymmetryMode) => void;
+  setPressure: (patch: Partial<Pressure>) => void;
+  /** Fast-forward `generations` of directed selection; appends the path to the tree. */
+  runDirected: (generations: number) => void;
 }
 
 const seed32 = () => (Math.random() * 0xffffffff) >>> 0; // UI-layer only; engine RNG is seeded
@@ -98,6 +103,7 @@ export const useStore = create<AppState>((set, get) => {
   };
   return {
     ...loadInitial(),
+    pressure: ZERO_PRESSURE,
 
     newCreature: () => commit(rootedAt(randomGenome(seed32(), get().symmetryMode), get().symmetryMode)),
 
@@ -137,5 +143,27 @@ export const useStore = create<AppState>((set, get) => {
         commit(rootedAt(randomGenome(seed32(), mode), mode));
       }
     },
+
+    setPressure: (patch) => set((state) => ({ pressure: { ...state.pressure, ...patch } })),
+
+    runDirected: (generations) =>
+      set((state) => {
+        const start = state.nodes[state.currentId];
+        const path = runGenerations(start.genome, state.pressure, generations, seed32(), {
+          lockSymmetry: state.symmetryMode !== 'auto',
+        });
+        // Append the chosen path (skip index 0 = the current creature) to the tree.
+        let nodes = state.nodes;
+        let counter = state.counter;
+        let parentId = state.currentId;
+        for (let i = 1; i < path.length; i++) {
+          const id = String(counter++);
+          nodes = { ...nodes, [id]: { id, genome: path[i], parentId, generation: start.generation + i } };
+          parentId = id;
+        }
+        const b = batch(nodes, parentId, counter, state.symmetryMode);
+        persist(b);
+        return b;
+      }),
   };
 });

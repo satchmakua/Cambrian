@@ -223,6 +223,105 @@ body,
   height: 100% !important;
 }
 
+/* --- directed-evolution panel --- */
+
+.pressures {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.pressures-head {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.axis {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.axis-label {
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.axis-label em {
+  font-style: normal;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.axis input[type='range'] {
+  width: 100%;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.axis-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.axis-ends i {
+  font-style: normal;
+}
+
+.pressures-run {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.pressures-run label {
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pressures-run input[type='number'] {
+  width: 52px;
+  background: #0c0e13;
+  border: 1px solid var(--line);
+  color: var(--fg);
+  border-radius: 6px;
+  padding: 5px 7px;
+  font-size: 13px;
+}
+
+.pressures-run button {
+  flex: 1;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: #11201c;
+  color: var(--accent);
+  padding: 7px 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  transition: border-color 0.15s ease;
+}
+
+.pressures-run button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.pressures-run button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 /* --- share bar --- */
 
 .share {

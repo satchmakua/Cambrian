@@ -8,9 +8,10 @@ A 3D artificial-evolution toy: creatures are *grown* from a generative genome, m
 selected — by you (Biomorphs-style breeder) or by directed pressures — so you can walk a
 lineage from a scurrying blob to a finned giant to a striped quadruped.
 
-**Status:** 🟢 M3 (lineage + sharing) — steer evolution via the breeder grid, branch from
-any ancestor in the family tree, and copy/paste `CAM1:` strings to share creatures (session
-persists across reloads). See [ROADMAP.md](ROADMAP.md) for what's next.
+**Status:** 🟢 M4 (directed pressures) — steer evolution by hand (breeder grid) or by target
+(size / limbs / body length / aquatic↔terrestrial / predator↔prey, fast-forwarded K
+generations), branch from any ancestor, and share creatures as `CAM1:` strings (session
+persists). See [ROADMAP.md](ROADMAP.md) for what's next.
 
 ## Stack
 
