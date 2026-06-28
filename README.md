@@ -22,13 +22,13 @@ A **pure, headless evolution engine** (`src/engine/`) drives a thin R3F viewer. 
 
 ```bash
 npm install      # once
-npm run dev      # dev server → http://localhost:5173
+npm run dev      # dev server → http://localhost:5180
 npm test         # engine unit + determinism + fuzz tests
 npm run typecheck
 npm run build    # tsc + vite production build
 ```
 
-Open the dev URL: an alien rotates on the left; click an offspring on the right to make it
+Open **http://localhost:5180**: an alien rotates on the left; click an offspring on the right to make it
 the next parent; the family tree along the bottom lets you revisit/branch from any ancestor.
 Copy the `CAM1:` string to share a creature, or paste one and hit Load to regrow it.
 
