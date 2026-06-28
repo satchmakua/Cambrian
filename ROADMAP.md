@@ -30,6 +30,7 @@ unchecked milestone.
   (segments, appendages, bilateral symmetry). Determinism + fuzz tests stay green.
   **Test:** click "New random creature" repeatedly → visibly different, always-valid
   creatures appear; the same seed always regrows the same one.
+  _(built 2026-06-27, self-verified in-browser, awaiting human confirmation)_
 
 - [ ] **M2 — Mutate + breeder loop.** The four mutation operators (point / structural /
   duplication / macro) + a 3×3 offspring gallery; click a child → it parents the next

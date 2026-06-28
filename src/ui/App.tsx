@@ -5,7 +5,7 @@ import { useStore } from './store';
 
 export function App() {
   const genome = useStore((s) => s.genome);
-  const reseed = useStore((s) => s.reseed);
+  const newCreature = useStore((s) => s.newCreature);
   const phenotype = useMemo(() => grow(genome), [genome]);
 
   return (
@@ -13,7 +13,7 @@ export function App() {
       <CreatureViewer phenotype={phenotype} />
       <header className="hud">
         <h1>Cambrian</h1>
-        <p className="tag">grow · mutate · select — M0 walking skeleton</p>
+        <p className="tag">grow · mutate · select — M1 random creatures</p>
         <dl className="stats">
           <div>
             <dt>seed</dt>
@@ -28,7 +28,7 @@ export function App() {
             <dd>{phenotype.edges.length}</dd>
           </div>
         </dl>
-        <button onClick={reseed}>Re-roll jitter</button>
+        <button onClick={newCreature}>New random creature</button>
       </header>
     </div>
   );

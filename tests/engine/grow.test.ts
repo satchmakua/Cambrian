@@ -1,32 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { grow, type Phenotype } from '../../src/engine/grow';
+import { grow } from '../../src/engine/grow';
 import { defaultGenome, type Genome, type SegmentGene, type Symmetry } from '../../src/engine/genome';
-import { R_MIN, NODE_MAX, GENE_BOUNDS } from '../../src/engine/bounds';
+import { GENE_BOUNDS } from '../../src/engine/bounds';
 import { mulberry32, range, type Rng } from '../../src/engine/rng';
-
-/** Assert every §4.4 growth invariant on a phenotype. This is Pillar 2's guarantee. */
-function expectValid(p: Phenotype): void {
-  expect(p.nodes.length).toBeGreaterThan(0);
-  expect(p.nodes.length).toBeLessThanOrEqual(NODE_MAX);
-
-  // single connected tree: every non-root node has exactly one parent edge
-  expect(p.edges.length).toBe(p.nodes.length - 1);
-
-  for (const n of p.nodes) {
-    expect(n.radius).toBeGreaterThanOrEqual(R_MIN);
-    expect(n.pos.every(Number.isFinite)).toBe(true);
-    expect(n.quat.every(Number.isFinite)).toBe(true);
-  }
-  for (const [i, j] of p.edges) {
-    expect(i).toBeGreaterThanOrEqual(0);
-    expect(j).toBeGreaterThanOrEqual(0);
-    expect(i).toBeLessThan(p.nodes.length);
-    expect(j).toBeLessThan(p.nodes.length);
-  }
-  // bounds are finite
-  expect(p.bounds.min.every(Number.isFinite)).toBe(true);
-  expect(p.bounds.max.every(Number.isFinite)).toBe(true);
-}
+import { expectValidPhenotype as expectValid } from './invariants';
 
 describe('grow', () => {
   it('is a pure deterministic function of the genome (Pillar 3)', () => {

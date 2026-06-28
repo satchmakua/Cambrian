@@ -8,8 +8,8 @@ A 3D artificial-evolution toy: creatures are *grown* from a generative genome, m
 selected — by you (Biomorphs-style breeder) or by directed pressures — so you can walk a
 lineage from a scurrying blob to a finned giant to a striped quadruped.
 
-**Status:** 🟢 M0 (walking skeleton) — a fixed-seed creature grows and renders on a
-turntable. See [ROADMAP.md](ROADMAP.md) for what's next.
+**Status:** 🟢 M1 (random creatures) — generate endless coherent, always-valid critters
+from a seed; each grows and renders on a turntable. See [ROADMAP.md](ROADMAP.md) for next.
 
 ## Stack
 
@@ -27,12 +27,12 @@ npm run typecheck
 npm run build    # tsc + vite production build
 ```
 
-Open the dev URL: a little alien rotates on a turntable; "Re-roll jitter" re-grows it.
+Open the dev URL: an alien rotates on a turntable; "New random creature" grows a fresh one.
 
 ## Layout
 
 ```
-src/engine/   # pure, dependency-free: rng, genome, grow (the heart)
+src/engine/   # pure, dependency-free: rng, genome, random, grow (the heart)
 src/viewer/   # R3F: phenotype → capsule-union mesh, turntable
 src/ui/       # React + Zustand store
 tests/engine/ # determinism + 4000-genome fuzz invariants
