@@ -1,30 +1,18 @@
 /**
- * The 3D viewport: the current creature on a slow turntable, auto-framed and lit by
- * drei's <Stage>, with an orbit camera (DESIGN §7). The naturalist "alien field
- * guide" view that every other mode plugs into.
+ * The 3D viewport: the current creature, auto-framed and lit by drei's <Stage>, with
+ * an orbit camera that slowly auto-rotates (DESIGN §7). The turntable orbits the
+ * *camera*, not the creature, so the creature stays fixed in world space — which keeps
+ * the body material's world-space countershading/pattern stable.
  */
-import { useEffect, useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { useEffect, useState } from 'react';
+import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Stage } from '@react-three/drei';
-import type { Group } from 'three';
 import type { Phenotype } from '../engine/grow';
 import { CreatureMesh } from './CreatureMesh';
 
-function Turntable({ phenotype, frozen }: { phenotype: Phenotype; frozen: boolean }) {
-  const ref = useRef<Group>(null);
-  useFrame((_, dt) => {
-    if (!frozen && ref.current) ref.current.rotation.y += dt * 0.4;
-  });
-  return (
-    <group ref={ref}>
-      <CreatureMesh phenotype={phenotype} />
-    </group>
-  );
-}
-
 export function CreatureViewer({ phenotype }: { phenotype: Phenotype }) {
-  // Dev-only: freezing switches the canvas to on-demand rendering so the page can go
-  // idle (the turntable's continuous loop otherwise blocks headless screenshots).
+  // Dev-only: freezing stops the auto-rotate and switches to on-demand rendering so the
+  // page can go idle (a continuous loop otherwise blocks headless captures).
   const [frozen, setFrozen] = useState(false);
   useEffect(() => {
     (window as unknown as { __cambrianFreeze?: (v?: boolean) => void }).__cambrianFreeze = (v = true) =>
@@ -35,6 +23,10 @@ export function CreatureViewer({ phenotype }: { phenotype: Phenotype }) {
   useEffect(() => {
     const { min, max } = phenotype.bounds;
     const dims = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
+    const terminals: Record<string, number> = {};
+    for (const n of phenotype.nodes) {
+      if (n.terminal && n.terminal !== 'none') terminals[n.terminal] = (terminals[n.terminal] ?? 0) + 1;
+    }
     (window as unknown as { __cambrian?: unknown }).__cambrian = {
       nodeCount: phenotype.nodes.length,
       edgeCount: phenotype.edges.length,
@@ -42,16 +34,30 @@ export function CreatureViewer({ phenotype }: { phenotype: Phenotype }) {
       symmetry: phenotype.genomeRef.symmetry,
       dims: dims.map((d) => +d.toFixed(2)),
       maxRadius: +Math.max(...phenotype.nodes.map((n) => n.radius)).toFixed(2),
+      terminals,
     };
   }, [phenotype]);
 
   return (
-    <Canvas frameloop={frozen ? 'demand' : 'always'} shadows dpr={[1, 2]} camera={{ position: [4, 2.5, 5], fov: 45 }}>
+    <Canvas
+      frameloop={frozen ? 'demand' : 'always'}
+      gl={{ preserveDrawingBuffer: import.meta.env.DEV }}
+      shadows
+      dpr={[1, 2]}
+      camera={{ position: [4, 2.5, 5], fov: 45 }}
+    >
       <color attach="background" args={['#0f1116']} />
       <Stage intensity={0.5} environment="city" adjustCamera={1.1} shadows="contact">
-        <Turntable phenotype={phenotype} frozen={frozen} />
+        <CreatureMesh phenotype={phenotype} />
       </Stage>
-      <OrbitControls makeDefault enablePan={false} minDistance={2} maxDistance={20} />
+      <OrbitControls
+        makeDefault
+        autoRotate={!frozen}
+        autoRotateSpeed={0.8}
+        enablePan={false}
+        minDistance={2}
+        maxDistance={20}
+      />
     </Canvas>
   );
 }

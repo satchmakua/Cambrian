@@ -92,6 +92,11 @@ export function grow(genome: Genome): Phenotype {
     for (const app of seg.appendages) {
       if (atCap()) break;
       const ai = clampInt(Math.round(app.attachT * (spine.length - 1)), 0, spine.length - 1);
+      // shoulder / haunch: legs thicken the spine node they attach to, giving the
+      // body muscular structure instead of a uniform tube.
+      if (app.terminal === 'foot' || app.terminal === 'claw') {
+        nodes[spine[ai]].radius = Math.min(nodes[spine[ai]].radius * 1.22, nodes[spine[ai]].radius + 0.35);
+      }
       growAppendage(app, spine[ai]);
     }
 

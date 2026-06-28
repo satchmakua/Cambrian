@@ -9,7 +9,7 @@
 export const GENOME_VERSION = 1 as const;
 
 export type Symmetry = 'bilateral' | 'radial' | 'none';
-export type Terminal = 'none' | 'foot' | 'fin' | 'claw' | 'eye';
+export type Terminal = 'none' | 'foot' | 'fin' | 'claw' | 'eye' | 'mouth';
 export type Vec3 = [number, number, number];
 
 export interface Genome {
@@ -68,13 +68,26 @@ export function defaultGenome(seed = 0xc0ffee): Genome {
       taper: 0.95,
       curve: [-0.03, 0],
       appendages: [legPair(0.18), legPair(0.82)], // front + hind legs
-      // a distinct head with eyes
+      // a distinct head with eyes and a mouth
       child: {
         size: [0.45, 0.46, 0.42],
         repeat: 2,
         taper: 0.9,
         curve: [0.1, 0],
-        appendages: [eyePair(0.85)],
+        appendages: [
+          eyePair(0.85),
+          {
+            attachT: 0.95,
+            attachAzimuth: 4.71, // straight down — under the snout
+            segments: 1,
+            length: 0.24,
+            thickness: 0.16,
+            taper: 0.9,
+            curl: [0, 0],
+            terminal: 'mouth',
+            pair: false,
+          },
+        ],
       },
     },
   };

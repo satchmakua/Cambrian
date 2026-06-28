@@ -73,7 +73,12 @@ function fish(rng: Rng, seed: number): Genome {
     repeat: randint(rng, 4, 6),
     taper: range(rng, 0.76, 0.88),
     curve: [range(rng, -0.03, 0.03), 0],
-    appendages: [dorsalFin(rng, range(rng, 0.35, 0.55)), pectoralFin(rng, range(rng, 0.25, 0.4)), eyes(rng, 0.9)],
+    appendages: [
+      dorsalFin(rng, range(rng, 0.35, 0.55)),
+      pectoralFin(rng, range(rng, 0.25, 0.4)),
+      eyes(rng, 0.9),
+      mouth(rng),
+    ],
   });
 }
 
@@ -122,13 +127,31 @@ function bilateralGenome(rng: Rng, seed: number, body: SegmentGene): Genome {
 }
 
 function head(rng: Rng, bodyGirth: number, antennae = false): SegmentGene {
-  const g = bodyGirth * range(rng, 0.7, 1.0);
+  const g = bodyGirth * range(rng, 0.72, 1.02);
+  const apps: AppendageGene[] = [];
+  if (chance(rng, 0.92)) apps.push(eyes(rng, range(rng, 0.7, 0.98), antennae));
+  if (chance(rng, 0.85)) apps.push(mouth(rng));
   return {
     size: [g, g * range(rng, 0.85, 1.05), g * range(rng, 0.8, 1.1)],
     repeat: randint(rng, 1, 2),
     taper: range(rng, 0.85, 1.0),
     curve: [range(rng, 0.0, 0.14), 0], // tips up a little
-    appendages: chance(rng, 0.85) ? [eyes(rng, range(rng, 0.6, 1.0), antennae)] : [],
+    appendages: apps,
+  };
+}
+
+// A mouth on the lower-front of the face/snout. Rendered as a dark slit.
+function mouth(rng: Rng): AppendageGene {
+  return {
+    attachT: range(rng, 0.85, 1.0),
+    attachAzimuth: range(rng, 4.4, 5.0), // underside, facing down-forward
+    segments: 1,
+    length: range(rng, 0.2, 0.34),
+    thickness: range(rng, 0.1, 0.2),
+    taper: 0.9,
+    curl: [0, 0],
+    terminal: 'mouth',
+    pair: false,
   };
 }
 
@@ -139,11 +162,11 @@ function leg(rng: Rng, attachT: number): AppendageGene {
   return {
     attachT: clamp(attachT, GENE_BOUNDS.appendage.attachT),
     attachAzimuth: range(rng, 4.0, 4.5), // lower hemisphere → points down & to the side
-    segments: randint(rng, 2, 3),
-    length: range(rng, 0.34, 0.5),
-    thickness: range(rng, 0.15, 0.24),
-    taper: range(rng, 0.72, 0.9),
-    curl: [range(rng, 0.3, 0.6), range(rng, -0.06, 0.06)], // knee
+    segments: 3, // thigh → shin → foot
+    length: range(rng, 0.3, 0.46),
+    thickness: range(rng, 0.16, 0.26),
+    taper: range(rng, 0.7, 0.85), // shin thins toward the foot
+    curl: [range(rng, 0.4, 0.6), range(rng, -0.06, 0.06)], // a clear knee bend
     terminal: pick(rng, ['foot', 'claw'] as const),
     pair: true,
   };

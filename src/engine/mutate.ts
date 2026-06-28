@@ -204,7 +204,7 @@ function freshSegment(rng: Rng): SegmentGene {
 
 // --- helpers -----------------------------------------------------------------
 
-const TERMINALS: readonly Terminal[] = ['none', 'foot', 'fin', 'claw', 'eye'];
+const TERMINALS: readonly Terminal[] = ['none', 'foot', 'fin', 'claw', 'eye', 'mouth'];
 
 /** The body's segment chain (each SegmentGene has at most one `child`). */
 function segments(g: Genome): SegmentGene[] {

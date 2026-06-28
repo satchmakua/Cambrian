@@ -25,7 +25,7 @@ import {
 export const SHARE_PREFIX = 'CAM1:';
 
 const SYMMETRIES: readonly Symmetry[] = ['bilateral', 'radial', 'none'];
-const TERMINALS: readonly Terminal[] = ['none', 'foot', 'fin', 'claw', 'eye'];
+const TERMINALS: readonly Terminal[] = ['none', 'foot', 'fin', 'claw', 'eye', 'mouth'];
 
 export function encodeGenome(g: Genome): string {
   return SHARE_PREFIX + toBase64Url(JSON.stringify(canonicalize(g)));

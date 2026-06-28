@@ -31,6 +31,37 @@ awaiting acceptance test. Creatures are now steerable, branchable, and shareable
 
 ---
 
+## Creature-look pass — face, skin, articulation · 2026-06-28 (awaiting test)
+
+Feedback: creatures read as animal-ish but "still quite blobby" — needs a face, articulated
+legs, texture/definition. A flat single-color capsule-union will always look blobby, so this
+pass adds the art cues that make a smooth surface read as alive (grounded in creature-design
+refs — eyes are the emotional anchor; countershading + rim give form):
+
+- **A face (engine + viewer):** new `'mouth'` terminal (enum + share/mutate validators);
+  `random` puts eyes **and** a mouth on heads/fish. The viewer renders **eyes** as a pale
+  sclera + dark pupil (facing outward) + a bright highlight — the single biggest "alive"
+  win — and the **mouth** as a dark horizontal slit.
+- **Skin material (`creatureMaterial.ts`):** the body now shares a `MeshStandardMaterial`
+  extended via `onBeforeCompile` — **countershading** (dark dorsal → light belly by world
+  normal.y), a procedural **skin pattern** (plain / stripes / spots, per creature from the
+  seed), and a **fresnel rim** so the silhouette glows. World-space effects are stable
+  because the turntable now orbits the **camera**, not the creature (`CreatureViewer` uses
+  `OrbitControls autoRotate`; world ≡ body space).
+- **Body structure (`grow`):** legs now **thicken the spine node they attach to** → shoulders
+  and haunches instead of a uniform tube.
+- **Articulated legs (`random`):** 3 segments (thigh → shin → foot), a clearer knee bend, a
+  thinning shin; **feet/claws** render as flattened pads, **fins** as thin blades.
+- **Dev:** `preserveDrawingBuffer` in dev + the freeze hook for headless capture (the preview
+  screenshot tool still can't grab the WebGL framebuffer, so verified by stats + feature
+  tally + the human's eyes), and `window.__cambrian.terminals` reports the face/limb tally.
+
+**Verified (2026-06-28):** `npm run typecheck` clean (added `vite/client` types for
+`import.meta.env`); `npm test` → **32/32** (bounds guard caught an over-range knee curl —
+fixed); `npm run build` → succeeds. **In-browser feature tally:** quadrupeds spawn with 2
+eyes + 4 feet + a mouth, fish with 2 eyes + 3 fins + a mouth, radials with a clawed-arm
+crown. Awaiting the human's visual read on whether it now reads as a creature.
+
 ## Morphology pass — recognizable body plans · 2026-06-28 (awaiting test)
 
 Feedback: random creatures read as "wonky sticks / worms." Root causes: (1) `grow` strode
