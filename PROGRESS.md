@@ -6,7 +6,7 @@ acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
 **Current phase:** Phase 1. M0–M2 built and self-verified (incl. in-browser); awaiting
-human test. **M2 makes it a real toy** — pick offspring to steer evolution.
+acceptance test. **M2 makes it a real toy** — pick offspring to steer evolution.
 
 ### State of the tree
 
