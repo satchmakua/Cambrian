@@ -5,8 +5,8 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 1. M0 + M1 built and self-verified (incl. in-browser); awaiting
-human test.
+**Current phase:** Phase 1. M0–M2 built and self-verified (incl. in-browser); awaiting
+human test. **M2 makes it a real toy** — pick offspring to steer evolution.
 
 ### State of the tree
 
@@ -17,13 +17,44 @@ human test.
 | Genome | `src/engine/genome.ts` | ✅ types + `defaultGenome` (demo critter) |
 | Random genomes | `src/engine/random.ts` | ✅ bounds-driven `randomGenome(seed)`, coherent critters |
 | Growth | `src/engine/grow.ts` | ✅ segment chain + appendages + symmetry + child recursion |
+| Mutation | `src/engine/mutate.ts` | ✅ point / structural / duplication / macro, all bounded |
+| Selection (breeder) | `src/engine/selection.ts` | ✅ `breederOffspring(parent, streamSeed, n)` |
 | Mesh data | `src/viewer/meshData.ts` | ✅ capsule-union skinning |
 | Viewer | `src/viewer/CreatureViewer.tsx`, `CreatureMesh.tsx` | ✅ Stage + OrbitControls + turntable |
-| UI / store | `src/ui/App.tsx`, `store.ts` | ✅ Zustand, HUD, "New random creature" |
+| Gallery | `src/viewer/OffspringGallery.tsx`, `OffspringThumb.tsx` | ✅ 3×3 demand-rendered thumbs |
+| UI / store | `src/ui/App.tsx`, `store.ts` | ✅ Zustand: parent + generation + litter |
 | Test invariants | `tests/engine/invariants.ts` | ✅ shared phenotype + genome-bounds asserts |
-| Mutation / breeder | — | ⬜ M2 |
+| Lineage / sharing | — | ⬜ M3 |
 
 ---
+
+## M2 — Mutate + breeder loop · built 2026-06-27 (awaiting test)
+
+The core toy. Added `src/engine/mutate.ts` — `mutate(parent, streamSeed, n)` deep-clones
+the parent (no in-place mutation), derives a reproducible child seed via
+`mix32(parent.seed, streamSeed, n)`, and applies the four operator classes from DESIGN
+§4.5 with tunable `DEFAULT_RATES` (point 0.30 / structural 0.15 / duplication 0.08 / macro
+0.02). Point mutations use a Box-Muller Gaussian (σ = 8% of each gene's range) and clamp to
+`GENE_BOUNDS`; structural/duplication ops respect the appendage-count and chain-depth caps —
+so every mutant is in-bounds and growable by construction. `src/engine/selection.ts` adds
+`breederOffspring`. UI: `OffspringGallery` (3×3) of `OffspringThumb`s (small
+`frameloop="demand"` canvases auto-framed by drei `<Bounds>`); the Zustand store now tracks
+parent + generation + litter, with `promote` / `reroll` / `newCreature`.
+
+**Verified (2026-06-27):** `npm run typecheck` clean; `npm test` → **22/22 passing** —
+including mutation determinism, *parent-not-mutated*, **200 parents × 9 mutants all within
+bounds & growable**, litter variety, and a **cumulative-selection** test (greedily picking
+"more nodes" across 25 generations reliably grows the creature — steerability, proven
+headlessly). `npm run build` → succeeds. **In-browser:** gallery shows 9 live thumbnails
+(10 WebGL contexts total, no context-loss warnings); clicking a thumb promotes it — verified
+the chain Gen 0→1→2→3 with the parent changing each time (`0xC0FFEE`/24n → `0x29e621cf`/28n
+→ `0x29e6…`→ `0x9543…`/23n) and a fresh litter breeding; "new litter" re-breeds without
+changing the parent. No console errors.
+
+_Decision:_ each thumbnail is its own small WebGL canvas (10 contexts total). Fine at this
+scale and simplest; if a future milestone pushes context count up, switch the gallery to
+drei `<View>` (many views, one canvas). Also added `PORT` env support to `vite.config.ts`
+so the preview/launch harness's port handoff works cleanly.
 
 ## M1 — Random creatures · built 2026-06-27 (awaiting test)
 

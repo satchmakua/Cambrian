@@ -1,8 +1,10 @@
 :root {
   --bg: #0f1116;
+  --panel: #141821;
   --fg: #e8e6df;
   --muted: #8b8f9a;
   --accent: #7fd1b9;
+  --line: #2a2e38;
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
@@ -20,13 +22,21 @@ body,
 }
 
 .app {
-  position: relative;
+  display: flex;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
 }
 
-.app canvas {
+/* --- stage (current parent) --- */
+
+.stage-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.stage-wrap canvas {
   display: block;
 }
 
@@ -80,7 +90,7 @@ body,
 .hud button {
   pointer-events: auto;
   cursor: pointer;
-  border: 1px solid #2a2e38;
+  border: 1px solid var(--line);
   background: #171a21;
   color: var(--fg);
   padding: 7px 14px;
@@ -91,4 +101,80 @@ body,
 
 .hud button:hover {
   border-color: var(--accent);
+}
+
+/* --- breeder gallery --- */
+
+.gallery {
+  width: 340px;
+  flex: 0 0 340px;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.gallery-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.gallery-head .reroll {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: #171a21;
+  color: var(--muted);
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.gallery-head .reroll:hover {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.gallery-hint {
+  margin: 6px 0 12px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+.thumb {
+  position: relative;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0c0e13;
+  cursor: pointer;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+  transition:
+    border-color 0.12s ease,
+    transform 0.12s ease;
+}
+
+.thumb:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.thumb canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
 }

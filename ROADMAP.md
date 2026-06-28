@@ -37,6 +37,7 @@ unchecked milestone.
   generation. **This is the core toy.**
   **Test:** from a creature, pick offspring across ~10 generations and steer the body
   toward a target (e.g. "longer, more limbs"); the lineage visibly trends that way.
+  _(built 2026-06-27, self-verified in-browser, awaiting human confirmation)_
 
 - [ ] **M3 — Lineage + sharing.** Family-tree view, snapshots, `CAM1:` genome-string
   import/export, regrow-from-string, localStorage session.
