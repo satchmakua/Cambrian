@@ -43,6 +43,7 @@ unchecked milestone.
   import/export, regrow-from-string, localStorage session.
   **Test:** copy a creature's string, reload the page, paste it → the exact same
   creature returns; the lineage tree shows the path and lets you branch from an ancestor.
+  _(built 2026-06-27, self-verified in-browser, awaiting human confirmation)_
 
 ## Phase 2 — Direction & polish
 

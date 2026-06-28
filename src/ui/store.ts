@@ -1,52 +1,111 @@
 /**
- * App state (DESIGN §5): a Zustand store holding the current parent, its generation,
- * and the litter of mutant offspring. The engine stays pure and is *called by* the
- * store. M2 = the breeder loop; M3 grows this into the lineage tree + sharing.
+ * App state (DESIGN §5): the lineage tree + the current creature + its offspring
+ * litter, persisted to localStorage so a session survives a reload. The engine stays
+ * pure and is *called by* the store. M3 = lineage + sharing.
  */
 import { create } from 'zustand';
 import { mix32 } from '../engine/rng';
 import { defaultGenome, type Genome } from '../engine/genome';
 import { randomGenome } from '../engine/random';
 import { breederOffspring } from '../engine/selection';
+import { decodeGenome } from '../engine/share';
+import type { LineageNode, LineageNodes } from '../engine/lineage';
 
 const LITTER = 9;
+const STORAGE_KEY = 'cambrian.session.v1';
 
-interface Batch {
-  genome: Genome; // the current parent
-  generation: number;
+interface AppState {
+  nodes: LineageNodes; // the family tree
+  currentId: string; // the creature on the turntable
+  counter: number; // next node id
   streamSeed: number; // seed for the current litter
-  offspring: Genome[]; // LITTER mutants of `genome`
-}
+  offspring: Genome[]; // LITTER mutants of the current creature
 
-interface AppState extends Batch {
-  /** Fresh random parent, back to generation 0. */
   newCreature: () => void;
-  /** Promote a chosen offspring to parent and breed the next generation. */
   promote: (child: Genome) => void;
-  /** Re-breed a different litter from the same parent. */
+  selectNode: (id: string) => void; // revisit / branch from an ancestor
   reroll: () => void;
-}
-
-function makeBatch(genome: Genome, generation: number, streamSeed: number): Batch {
-  return { genome, generation, streamSeed, offspring: breederOffspring(genome, streamSeed, LITTER) };
+  importString: (s: string) => void; // CAM1: → new lineage rooted at that creature
 }
 
 const seed32 = () => (Math.random() * 0xffffffff) >>> 0; // UI-layer only; engine RNG is seeded
 
-const initial = defaultGenome();
+/** Compute the litter for whichever node is current. */
+type Batch = Pick<AppState, 'nodes' | 'currentId' | 'counter' | 'streamSeed' | 'offspring'>;
+function batch(nodes: LineageNodes, currentId: string, counter: number, streamSeed?: number): Batch {
+  const cur = nodes[currentId];
+  const ss = streamSeed ?? mix32(cur.genome.seed, cur.generation);
+  return { nodes, currentId, counter, streamSeed: ss, offspring: breederOffspring(cur.genome, ss, LITTER) };
+}
 
-export const useStore = create<AppState>((set, get) => ({
-  ...makeBatch(initial, 0, mix32(initial.seed, 0)),
-  newCreature: () => {
-    const g = randomGenome(seed32());
-    set(makeBatch(g, 0, mix32(g.seed, 0)));
-  },
-  promote: (child) => {
-    const generation = get().generation + 1;
-    set(makeBatch(child, generation, mix32(child.seed, generation)));
-  },
-  reroll: () => {
-    const { genome, generation } = get();
-    set(makeBatch(genome, generation, seed32()));
-  },
-}));
+function rootedAt(genome: Genome): Batch {
+  const node: LineageNode = { id: '0', genome, parentId: null, generation: 0 };
+  return batch({ '0': node }, '0', 1);
+}
+
+// --- localStorage persistence ------------------------------------------------
+
+function persist(b: Batch): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes: b.nodes, currentId: b.currentId, counter: b.counter }));
+  } catch {
+    /* ignore quota / unavailable */
+  }
+}
+
+function loadInitial(): Batch {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const s = JSON.parse(raw) as { nodes?: LineageNodes; currentId?: string; counter?: number };
+        if (s.nodes && s.currentId && s.nodes[s.currentId] && typeof s.counter === 'number') {
+          return batch(s.nodes, s.currentId, s.counter);
+        }
+      }
+    }
+  } catch {
+    /* fall through to a fresh session */
+  }
+  return rootedAt(defaultGenome());
+}
+
+export const useStore = create<AppState>((set) => {
+  const commit = (b: Batch) => {
+    persist(b);
+    set(b);
+  };
+  return {
+    ...loadInitial(),
+
+    newCreature: () => commit(rootedAt(randomGenome(seed32()))),
+
+    promote: (child) =>
+      set((state) => {
+        const id = String(state.counter);
+        const node: LineageNode = {
+          id,
+          genome: child,
+          parentId: state.currentId,
+          generation: state.nodes[state.currentId].generation + 1,
+        };
+        const nodes = { ...state.nodes, [id]: node };
+        const b = batch(nodes, id, state.counter + 1);
+        persist(b);
+        return b;
+      }),
+
+    selectNode: (id) =>
+      set((state) => {
+        if (!state.nodes[id]) return state;
+        const b = batch(state.nodes, id, state.counter);
+        persist(b);
+        return b;
+      }),
+
+    reroll: () => set((state) => batch(state.nodes, state.currentId, state.counter, seed32())),
+
+    importString: (s) => commit(rootedAt(decodeGenome(s))),
+  };
+});

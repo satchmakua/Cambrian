@@ -5,8 +5,8 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 1. M0–M2 built and self-verified (incl. in-browser); awaiting
-acceptance test. **M2 makes it a real toy** — pick offspring to steer evolution.
+**Current phase:** Phase 1 → Phase 2. M0–M3 built and self-verified (incl. in-browser);
+awaiting acceptance test. Creatures are now steerable, branchable, and shareable.
 
 ### State of the tree
 
@@ -22,11 +22,40 @@ acceptance test. **M2 makes it a real toy** — pick offspring to steer evolutio
 | Mesh data | `src/viewer/meshData.ts` | ✅ capsule-union skinning |
 | Viewer | `src/viewer/CreatureViewer.tsx`, `CreatureMesh.tsx` | ✅ Stage + OrbitControls + turntable |
 | Gallery | `src/viewer/OffspringGallery.tsx`, `OffspringThumb.tsx` | ✅ 3×3 demand-rendered thumbs |
-| UI / store | `src/ui/App.tsx`, `store.ts` | ✅ Zustand: parent + generation + litter |
+| Sharing | `src/engine/share.ts` | ✅ `CAM1:` encode/decode/validate |
+| Lineage | `src/engine/lineage.ts`, `src/viewer/LineageTree.tsx` | ✅ tree model + SVG view |
+| Share bar | `src/viewer/ShareBar.tsx` | ✅ copy / paste-and-load |
+| UI / store | `src/ui/App.tsx`, `store.ts` | ✅ Zustand: lineage tree + current + litter, localStorage |
 | Test invariants | `tests/engine/invariants.ts` | ✅ shared phenotype + genome-bounds asserts |
-| Lineage / sharing | — | ⬜ M3 |
+| Directed pressures | — | ⬜ M4 |
 
 ---
+
+## M3 — Lineage + sharing · built 2026-06-27 (awaiting test)
+
+Creatures became branchable and shareable. `src/engine/share.ts` gives the `CAM1:`
+genome string: `"CAM1:" + base64url(JSON(canonicalize(genome)))`, with a thorough
+`decodeGenome` validator that rejects junk / wrong version gracefully. `src/engine/lineage.ts`
+holds the family-tree model (`LineageNode` + pure `childIdsOf` / `pathToRoot` / `layoutTree`
+tidy layout). The Zustand store now owns a **lineage tree** (`nodes` + `currentId` +
+id `counter`): `promote` adds a child under the current node, `selectNode` revisits an
+ancestor (so the next promote **branches**), and everything is **persisted to localStorage**
+so a session survives a reload. `LineageTree.tsx` renders the tree as lightweight SVG dots
+(colored by palette) — deliberately *not* more WebGL canvases — and `ShareBar.tsx` does
+copy / paste-and-load.
+
+**Deviation from DESIGN §4.6:** dropped the `deflate` step from the share format to keep the
+engine dependency-free (no pako / no async CompressionStream). Genomes are ~1–1.5 KB of
+base64; revisit if that ever feels too long.
+
+**Verified (2026-06-27):** `npm run typecheck` clean; `npm test` → **31/31 passing** —
+incl. a 300-genome `CAM1:` round-trip (`decode(encode(g))` deep-equals `g` and grows
+identically), junk/version rejection, and the lineage layout helpers. `npm run build` →
+succeeds. **In-browser:** built a chain (Gen 0→1→2), then selected the root and promoted a
+different offspring → the tree **branched** (root gained a 2nd child, node "3"); **reloaded
+the page → the full 4-node tree and current position restored from localStorage**; copied a
+creature's string, hit "New random creature" (seed changed, tree reset), pasted the saved
+string + Load → **the exact original creature returned** (seed `635837315`). No console errors.
 
 ## M2 — Mutate + breeder loop · built 2026-06-27 (awaiting test)
 

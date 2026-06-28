@@ -8,8 +8,9 @@ A 3D artificial-evolution toy: creatures are *grown* from a generative genome, m
 selected — by you (Biomorphs-style breeder) or by directed pressures — so you can walk a
 lineage from a scurrying blob to a finned giant to a striped quadruped.
 
-**Status:** 🟢 M2 (breeder loop) — pick from a 3×3 grid of mutant offspring to steer
-evolution generation by generation, Biomorphs-style. See [ROADMAP.md](ROADMAP.md) for next.
+**Status:** 🟢 M3 (lineage + sharing) — steer evolution via the breeder grid, branch from
+any ancestor in the family tree, and copy/paste `CAM1:` strings to share creatures (session
+persists across reloads). See [ROADMAP.md](ROADMAP.md) for what's next.
 
 ## Stack
 
@@ -28,15 +29,16 @@ npm run build    # tsc + vite production build
 ```
 
 Open the dev URL: an alien rotates on the left; click an offspring on the right to make it
-the next parent. "New random creature" starts a fresh lineage.
+the next parent; the family tree along the bottom lets you revisit/branch from any ancestor.
+Copy the `CAM1:` string to share a creature, or paste one and hit Load to regrow it.
 
 ## Layout
 
 ```
-src/engine/   # pure, dependency-free: rng, genome, random, grow, mutate, selection
-src/viewer/   # R3F: capsule-union mesh, turntable viewer, breeder gallery
-src/ui/       # React + Zustand store (parent + generation + litter)
-tests/engine/ # determinism + bounds + 2000-genome fuzz invariants
+src/engine/   # pure, dependency-free: rng, genome, random, grow, mutate, selection, lineage, share
+src/viewer/   # R3F + UI: capsule mesh, turntable, breeder gallery, lineage tree, share bar
+src/ui/       # React + Zustand store (lineage tree + current + litter, localStorage)
+tests/engine/ # determinism + bounds + 2000-genome fuzz + CAM1 round-trip
 ```
 
 ## Docs

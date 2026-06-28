@@ -14,7 +14,7 @@ interface Props {
 
 export function OffspringGallery({ offspring, generation, onPick, onReroll }: Props) {
   return (
-    <aside className="gallery">
+    <div className="gallery-body">
       <div className="gallery-head">
         <span>
           Gen {generation} → {generation + 1}
@@ -29,6 +29,6 @@ export function OffspringGallery({ offspring, generation, onPick, onReroll }: Pr
           <OffspringThumb key={`${generation}-${i}-${g.seed}`} genome={g} onPick={() => onPick(g)} />
         ))}
       </div>
-    </aside>
+    </div>
   );
 }

@@ -2,43 +2,63 @@ import { useMemo } from 'react';
 import { grow } from '../engine/grow';
 import { CreatureViewer } from '../viewer/CreatureViewer';
 import { OffspringGallery } from '../viewer/OffspringGallery';
+import { ShareBar } from '../viewer/ShareBar';
+import { LineageTree } from '../viewer/LineageTree';
 import { useStore } from './store';
 
 export function App() {
-  const genome = useStore((s) => s.genome);
-  const generation = useStore((s) => s.generation);
+  const nodes = useStore((s) => s.nodes);
+  const currentId = useStore((s) => s.currentId);
   const offspring = useStore((s) => s.offspring);
   const newCreature = useStore((s) => s.newCreature);
   const promote = useStore((s) => s.promote);
+  const selectNode = useStore((s) => s.selectNode);
   const reroll = useStore((s) => s.reroll);
+  const importString = useStore((s) => s.importString);
 
+  const current = nodes[currentId];
+  const genome = current.genome;
+  const generation = current.generation;
   const phenotype = useMemo(() => grow(genome), [genome]);
 
   return (
     <div className="app">
-      <main className="stage-wrap">
-        <CreatureViewer phenotype={phenotype} />
-        <header className="hud">
-          <h1>Cambrian</h1>
-          <p className="tag">grow · mutate · select — M2 breeder loop</p>
-          <dl className="stats">
-            <div>
-              <dt>generation</dt>
-              <dd>{generation}</dd>
-            </div>
-            <div>
-              <dt>seed</dt>
-              <dd>{hex(genome.seed)}</dd>
-            </div>
-            <div>
-              <dt>nodes</dt>
-              <dd>{phenotype.nodes.length}</dd>
-            </div>
-          </dl>
-          <button onClick={newCreature}>New random creature</button>
-        </header>
-      </main>
-      <OffspringGallery offspring={offspring} generation={generation} onPick={promote} onReroll={reroll} />
+      <div className="top">
+        <main className="stage-wrap">
+          <CreatureViewer phenotype={phenotype} />
+          <header className="hud">
+            <h1>Cambrian</h1>
+            <p className="tag">grow · mutate · select — M3 lineage + sharing</p>
+            <dl className="stats">
+              <div>
+                <dt>generation</dt>
+                <dd>{generation}</dd>
+              </div>
+              <div>
+                <dt>seed</dt>
+                <dd>{hex(genome.seed)}</dd>
+              </div>
+              <div>
+                <dt>nodes</dt>
+                <dd>{phenotype.nodes.length}</dd>
+              </div>
+            </dl>
+            <button onClick={newCreature}>New random creature</button>
+          </header>
+        </main>
+
+        <aside className="gallery">
+          <OffspringGallery offspring={offspring} generation={generation} onPick={promote} onReroll={reroll} />
+          <ShareBar genome={genome} onImport={importString} />
+        </aside>
+      </div>
+
+      <section className="lineage">
+        <div className="lineage-head">Lineage — click a creature to revisit or branch a new line</div>
+        <div className="lineage-scroll">
+          <LineageTree nodes={nodes} currentId={currentId} onSelect={selectNode} />
+        </div>
+      </section>
     </div>
   );
 }
