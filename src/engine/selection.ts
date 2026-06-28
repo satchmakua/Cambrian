@@ -14,6 +14,7 @@ export function breederOffspring(
   streamSeed: number,
   count = 9,
   rates: MutationRates = DEFAULT_RATES,
+  lockSymmetry = false,
 ): Genome[] {
-  return Array.from({ length: count }, (_, n) => mutate(parent, streamSeed, n, rates));
+  return Array.from({ length: count }, (_, n) => mutate(parent, streamSeed, n, rates, lockSymmetry));
 }

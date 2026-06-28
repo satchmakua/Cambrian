@@ -28,4 +28,18 @@ describe('randomGenome', () => {
   it('carries the seed into the genome so it can be shown and reproduced', () => {
     expect(randomGenome(0xabcdef).seed).toBe(0xabcdef);
   });
+
+  it('honors the symmetry mode and stays valid for forced modes', () => {
+    for (let s = 0; s < 300; s++) {
+      const radial = randomGenome(s, 'radial');
+      expect(radial.symmetry).toBe('radial');
+      expectGenomeWithinBounds(radial);
+      expectValidPhenotype(grow(radial));
+
+      const bilat = randomGenome(s, 'bilateral');
+      expect(bilat.symmetry).toBe('bilateral');
+      expectGenomeWithinBounds(bilat);
+      expectValidPhenotype(grow(bilat));
+    }
+  });
 });

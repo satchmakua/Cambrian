@@ -16,6 +16,9 @@ import type { Genome, SegmentGene, AppendageGene, Terminal, Vec3 } from './genom
 
 export type Quat = [number, number, number, number]; // [x, y, z, w]
 
+/** Fusiform bulge: how much fatter the middle of a body chain is than its ends. */
+const BODY_BULGE = 0.35;
+
 export interface BodyNode {
   pos: Vec3;
   quat: Quat; // orientation; the node's local forward is +Z
@@ -58,7 +61,12 @@ export function grow(genome: Genome): Phenotype {
   // --- recursive growth -------------------------------------------------------
 
   function growSegment(seg: SegmentGene, startPos: Vec3, startQuat: Quat, depth: number, parentIdx: number): void {
-    const avgSize = (seg.size[0] + seg.size[1] + seg.size[2]) / 3;
+    // Body thickness is the cross-section (size x,y); size z stretches the segment
+    // forward. The stride is kept near the radius so consecutive capsules overlap into
+    // a continuous mass, and a fusiform profile makes the torso bulge in the middle —
+    // so it reads as a body, not beads on a stick.
+    const girth = (seg.size[0] + seg.size[1]) / 2;
+    const elong = Math.min(1.4, Math.max(0.75, seg.size[2] / Math.max(girth, 0.001)));
     const spine: number[] = [];
     let pos = startPos;
     let quat = startQuat;
@@ -66,8 +74,10 @@ export function grow(genome: Genome): Phenotype {
 
     for (let i = 0; i < seg.repeat; i++) {
       if (atCap()) break;
-      const t = Math.pow(seg.taper, i);
-      const idx = addNode(pos, quat, avgSize * t, 'spine');
+      const u = seg.repeat > 1 ? i / (seg.repeat - 1) : 0.5;
+      const profile = 1 + BODY_BULGE * Math.sin(Math.PI * u);
+      const radius = girth * Math.pow(seg.taper, i) * profile;
+      const idx = addNode(pos, quat, radius, 'spine');
       if (prev >= 0) edges.push([prev, idx]);
       spine.push(idx);
       prev = idx;
@@ -75,7 +85,7 @@ export function grow(genome: Genome): Phenotype {
       // advance along local forward (+Z), bending by the per-link curve
       quat = qMul(quat, qFromEuler(seg.curve[0], seg.curve[1]));
       const fwd = qRotate([0, 0, 1], quat);
-      const step = seg.size[2] * 2 * t;
+      const step = nodes[idx].radius * elong; // overlap-bounded stride → continuous body
       pos = [pos[0] + fwd[0] * step, pos[1] + fwd[1] * step, pos[2] + fwd[2] * step];
     }
 

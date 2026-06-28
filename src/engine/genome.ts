@@ -55,70 +55,56 @@ export interface Palette {
  * (M1 replaces this with bounds-driven random genomes; M2 adds mutation.)
  */
 export function defaultGenome(seed = 0xc0ffee): Genome {
+  const girth = 0.6;
   return {
     version: GENOME_VERSION,
     seed,
     symmetry: 'bilateral',
     radialCount: 4,
-    palette: { hueA: 0.07, hueB: 0.55, sat: 0.55, light: 0.5 },
+    palette: { hueA: 0.08, hueB: 0.55, sat: 0.55, light: 0.5 },
     body: {
-      size: [0.55, 0.45, 0.7],
-      repeat: 6,
-      taper: 0.9,
-      curve: [-0.04, 0],
-      appendages: [
-        // front leg pair
-        legPair(0.2, 0.55),
-        // hind leg pair
-        legPair(0.7, 0.55),
-        // dorsal fin (unpaired, on top)
-        {
-          attachT: 0.45,
-          attachAzimuth: Math.PI / 2,
-          segments: 2,
-          length: 0.5,
-          thickness: 0.18,
-          taper: 0.6,
-          curl: [0.1, 0],
-          terminal: 'fin',
-          pair: false,
-        },
-      ],
-      // a small head segment
+      size: [girth, girth * 0.92, girth * 1.0], // width, height, forward stretch
+      repeat: 3,
+      taper: 0.95,
+      curve: [-0.03, 0],
+      appendages: [legPair(0.18), legPair(0.82)], // front + hind legs
+      // a distinct head with eyes
       child: {
-        size: [0.4, 0.42, 0.4],
+        size: [0.45, 0.46, 0.42],
         repeat: 2,
-        taper: 0.85,
-        curve: [0.12, 0],
-        appendages: [eyePair(0.9, 0.4)],
+        taper: 0.9,
+        curve: [0.1, 0],
+        appendages: [eyePair(0.85)],
       },
     },
   };
 }
 
-function legPair(attachT: number, azimuth: number): AppendageGene {
+// Legs aim down-and-out (azimuth ≈ 4.2 rad is the lower hemisphere) with a knee bend.
+function legPair(attachT: number): AppendageGene {
   return {
     attachT,
-    attachAzimuth: azimuth,
+    attachAzimuth: 4.2,
     segments: 3,
-    length: 0.42,
-    thickness: 0.16,
+    length: 0.36,
+    thickness: 0.2,
     taper: 0.8,
-    curl: [0.35, 0],
+    curl: [0.45, 0],
     terminal: 'foot',
     pair: true,
   };
 }
 
-function eyePair(attachT: number, azimuth: number): AppendageGene {
+// Eyes aim up-and-forward (azimuth ≈ 1.0 rad) on the head.
+function eyePair(attachT: number): AppendageGene {
   return {
     attachT,
-    attachAzimuth: azimuth,
+    attachAzimuth: 1.0,
     segments: 1,
     length: 0.22,
-    thickness: 0.12,
+    thickness: 0.13,
     taper: 0.9,
-    curl: [-0.2, 0],
+    curl: [-0.15, 0],
     terminal: 'eye',
     pair: true,
   };

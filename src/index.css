@@ -110,6 +110,35 @@ body,
   border-color: var(--accent);
 }
 
+.hud .modes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+  pointer-events: auto;
+}
+
+.hud .modes span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-right: 6px;
+}
+
+.hud .modes button {
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  text-transform: capitalize;
+}
+
+.hud .modes button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #11201c;
+}
+
 /* --- breeder gallery --- */
 
 .gallery {

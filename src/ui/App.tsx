@@ -10,11 +10,13 @@ export function App() {
   const nodes = useStore((s) => s.nodes);
   const currentId = useStore((s) => s.currentId);
   const offspring = useStore((s) => s.offspring);
+  const symmetryMode = useStore((s) => s.symmetryMode);
   const newCreature = useStore((s) => s.newCreature);
   const promote = useStore((s) => s.promote);
   const selectNode = useStore((s) => s.selectNode);
   const reroll = useStore((s) => s.reroll);
   const importString = useStore((s) => s.importString);
+  const setSymmetryMode = useStore((s) => s.setSymmetryMode);
 
   const current = nodes[currentId];
   const genome = current.genome;
@@ -44,6 +46,18 @@ export function App() {
               </div>
             </dl>
             <button onClick={newCreature}>New random creature</button>
+            <div className="modes">
+              <span>symmetry</span>
+              {(['auto', 'bilateral', 'radial'] as const).map((m) => (
+                <button
+                  key={m}
+                  className={symmetryMode === m ? 'active' : ''}
+                  onClick={() => setSymmetryMode(m)}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
           </header>
         </main>
 

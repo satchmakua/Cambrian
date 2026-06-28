@@ -31,6 +31,38 @@ awaiting acceptance test. Creatures are now steerable, branchable, and shareable
 
 ---
 
+## Morphology pass — recognizable body plans · 2026-06-28 (awaiting test)
+
+Feedback: random creatures read as "wonky sticks / worms." Root causes: (1) `grow` strode
+~2× the segment radius, so capsules became thin rods (a stick chain) instead of merging into
+a body; (2) `randomGenome` produced uniform thin chains, not animal-like plans; (3) the demo
+creature's "legs" actually pointed *up* (azimuth in the upper hemisphere). Reworked all three
+(grounded in how Spore's metaball spine + procedural-creature systems get readable forms — see
+README refs):
+
+- **`grow.ts`:** body radius now comes from the cross-section (`size x,y`) while `size z`
+  stretches it forward; the stride is bounded near the radius so capsules **overlap into a
+  continuous mass**, plus a **fusiform bulge** (`BODY_BULGE`) fattens the middle. Result: a
+  torso, not beads on a string.
+- **`random.ts`:** rebuilt around **body-plan archetypes** — `quadruped`, `hexapod`, `fish`,
+  `serpent`, and a `radial` crown — each with tuned proportions and limbs aimed sensibly
+  (legs down, fins up/out, eyes on the head). Added a `mode: 'auto'|'bilateral'|'radial'`
+  param to `randomGenome`.
+- **Radial toggle + symmetry lock:** new `symmetryMode` in the store + a HUD segmented
+  control (Auto / Bilateral / Radial). Forcing a mode spawns a creature of that symmetry and
+  **locks it through mutation** (`lockSymmetry` skips the flip-symmetry operator), so a
+  radial lineage stays radial. Persisted with the session.
+- **Dev affordances:** enriched `window.__cambrian` (symmetry, bounds dims, max radius) and
+  added `window.__cambrianFreeze(true)` to switch the viewer to on-demand rendering. (Note:
+  the headless preview still can't screenshot the WebGL canvas, so this pass was verified by
+  geometry stats + the human's eyes.)
+
+**Verified (2026-06-28):** `npm run typecheck` clean; `npm test` → **32/32** (added a
+forced-mode test: radial/bilateral honored and valid across 300 seeds each); `npm run build`
+→ succeeds. **In-browser geometry stats:** bilateral z:width dropped from ≈3.3 → **≈2.2 avg**
+(animal proportions); bodies are now chunky (max radius 0.47–0.93, up from ~0.37 threads);
+radial creatures are fat discs/domes with arm crowns. Awaiting the human's visual read.
+
 ## M3 — Lineage + sharing · built 2026-06-27 (awaiting test)
 
 Creatures became branchable and shareable. `src/engine/share.ts` gives the `CAM1:`

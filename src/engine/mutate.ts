@@ -34,17 +34,23 @@ export const DEFAULT_RATES: MutationRates = {
   macro: 0.02,
 };
 
-export function mutate(parent: Genome, streamSeed: number, n: number, rates: MutationRates = DEFAULT_RATES): Genome {
+export function mutate(
+  parent: Genome,
+  streamSeed: number,
+  n: number,
+  rates: MutationRates = DEFAULT_RATES,
+  lockSymmetry = false,
+): Genome {
   const g = structuredClone(parent) as Genome;
   g.seed = mix32(parent.seed, streamSeed, n); // reproducible growth jitter for this child
   const rng = mulberry32(mix32(streamSeed, parent.seed, n, OP_SALT));
 
   applyPointMutations(g, rng, rates);
-  if (rng() < rates.structural) applyStructural(g, rng);
+  if (rng() < rates.structural) applyStructural(g, rng, lockSymmetry);
   if (rng() < rates.duplication) applyDuplication(g, rng);
   if (rng() < rates.macro) {
     const k = 3 + Math.floor(rng() * 3); // 3–5
-    for (let i = 0; i < k; i++) applyStructural(g, rng);
+    for (let i = 0; i < k; i++) applyStructural(g, rng, lockSymmetry);
   }
   return g;
 }
@@ -96,8 +102,9 @@ function jitterInt(rng: Rng, v: number, bound: readonly [number, number], rate: 
 
 // --- structural mutation -----------------------------------------------------
 
-function applyStructural(g: Genome, rng: Rng): void {
-  const ops = [bumpRepeat, addAppendage, removeAppendage, changeTerminal, addChild, removeChild, flipSymmetry];
+function applyStructural(g: Genome, rng: Rng, lockSymmetry = false): void {
+  const ops = [bumpRepeat, addAppendage, removeAppendage, changeTerminal, addChild, removeChild];
+  if (!lockSymmetry) ops.push(flipSymmetry);
   pick(rng, ops)(g, rng);
 }
 
