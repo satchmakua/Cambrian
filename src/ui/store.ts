@@ -15,6 +15,15 @@ import { archiveAll, descriptorsOf, type Menagerie } from '../viewer/archive';
 
 const LITTER = 9;
 const STORAGE_KEY = 'cambrian.session.v2c'; // bumped for the M12 covering genes
+const SMOOTH_KEY = 'cambrian.smoothSkin.v1'; // a render preference, persisted on its own
+
+function loadSmooth(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem(SMOOTH_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 interface Session {
   nodes: LineageNodes; // the family tree
@@ -28,6 +37,8 @@ interface Session {
 
 interface AppState extends Session {
   pressure: Pressure; // directed-evolution target (M4)
+  smoothSkin: boolean; // render a marching-cubes metaball surface instead of capsules (M15)
+  toggleSmooth: () => void;
   newCreature: () => void;
   promote: (child: Genome) => void;
   selectNode: (id: string) => void; // revisit / branch from an ancestor
@@ -118,6 +129,18 @@ export const useStore = create<AppState>((set, get) => {
   return {
     ...loadInitial(),
     pressure: ZERO_PRESSURE,
+    smoothSkin: loadSmooth(),
+
+    toggleSmooth: () =>
+      set((state) => {
+        const v = !state.smoothSkin;
+        try {
+          if (typeof localStorage !== 'undefined') localStorage.setItem(SMOOTH_KEY, v ? '1' : '0');
+        } catch {
+          /* ignore */
+        }
+        return { smoothSkin: v };
+      }),
 
     newCreature: () =>
       commit(rootedAt(randomGenome(seed32(), get().symmetryMode), get().symmetryMode, get().menagerie)),

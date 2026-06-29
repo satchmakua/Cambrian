@@ -14,9 +14,10 @@ so rolls read as cat / crab / heron / dragon / cephalopod, a **divergence engine
 morphospace + coherence labels + niched litters), **procedural covering & texture** (M12: in-shader
 patterns + per-covering surface bump for fur / scales / chitin / slime / feathers / plates), and
 **morphology-driven motion** (M13: walk / swim / slither / scuttle / flap / drift picked from the
-body plan), and **the Menagerie** (M14: a MAP-Elites archive that fills with divergent specimens as
-you play, browsable + pull-as-parent, plus a novelty steer). M0–M5 done: faces, countershaded skin,
-breeder + directed evolution, lineage, `CAM2:` sharing. Full variety spec in [MORPHOLOGY.md](MORPHOLOGY.md); see [ROADMAP.md](ROADMAP.md).
+body plan), **the Menagerie** (M14: a MAP-Elites archive that fills with divergent specimens as you
+play, browsable + pull-as-parent, plus a novelty steer), and **smooth skin** (M15: a toggleable
+marching-tetrahedra surface that welds the capsule kit into one organic body). M0–M5 done: faces,
+countershaded skin, breeder + directed evolution, lineage, `CAM2:` sharing. Full variety spec in [MORPHOLOGY.md](MORPHOLOGY.md); see [ROADMAP.md](ROADMAP.md).
 
 ## Stack
 

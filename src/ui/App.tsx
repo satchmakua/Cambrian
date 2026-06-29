@@ -26,6 +26,8 @@ export function App() {
   const runDirected = useStore((s) => s.runDirected);
   const menagerie = useStore((s) => s.menagerie);
   const loadCell = useStore((s) => s.loadCell);
+  const smoothSkin = useStore((s) => s.smoothSkin);
+  const toggleSmooth = useStore((s) => s.toggleSmooth);
 
   const current = nodes[currentId];
   const genome = current.genome;
@@ -39,7 +41,7 @@ export function App() {
     <div className="app">
       <div className="top">
         <main className="stage-wrap">
-          <CreatureViewer phenotype={phenotype} />
+          <CreatureViewer phenotype={phenotype} smooth={smoothSkin} />
           <header className="hud">
             <h1>Cambrian</h1>
             <p className="tag">
@@ -72,6 +74,12 @@ export function App() {
                   {m}
                 </button>
               ))}
+            </div>
+            <div className="modes">
+              <span>skin</span>
+              <button className={smoothSkin ? 'active' : ''} onClick={toggleSmooth}>
+                {smoothSkin ? 'smooth' : 'capsules'}
+              </button>
             </div>
           </header>
         </main>

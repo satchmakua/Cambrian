@@ -9,8 +9,9 @@ acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
-(the Menagerie — MAP-Elites archive + browser + novelty steer) built. Next: **M15 — smooth skin**
-(marching-cubes metaball surface over the node field, gated behind the capsule path).
+(the Menagerie — MAP-Elites archive + browser + novelty steer) + **M15** (smooth skin — marching-
+tetrahedra metaball surface, toggled, gated behind capsules) built. Next: **M16 — dials & polish**
+(surface the new axes in the UI; tune the distribution; grow the morphotype/part tables).
 
 ### State of the tree
 
@@ -34,11 +35,43 @@ per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from mo
 | Skin material | `src/viewer/creatureMaterial.ts` | ✅ countershading + 8 patterns + per-covering bump + sheen + fresnel rim |
 | Covering | `src/engine/genome.ts` (`Covering`) | ✅ type/pattern/scale/contrast/sheen, per-morphotype, mutated, `CAM2:`-shared |
 | Procedural motion | `src/viewer/animation.ts` | ✅ 8 motion styles (walk/swim/slither/scuttle/flap/drift/ooze) by morphology, role-based (unit-tested) |
+| Smooth skin | `src/viewer/smoothSkin.ts` | ✅ SDF smooth-union of capsules → marching tetrahedra; toggled, gated behind capsules (unit-tested) |
 | UI / store | `src/ui/App.tsx`, `store.ts` | ✅ Zustand: lineage + current + litter + pressure, localStorage |
 | Test invariants | `tests/engine/invariants.ts` | ✅ shared phenotype + genome-bounds asserts |
 | Physics fitness (stretch) | — | ⬜ M6 |
 
 ---
+
+## M15 — Smooth skin · built 2026-06-29 (awaiting test)
+
+The single biggest "less crude" win (MORPHOLOGY §12): one welded organic surface instead of the
+capsule kit. New `src/viewer/smoothSkin.ts` defines an implicit field that is the **smooth union**
+(polynomial smin) of the skeleton's capsules — the iso-surface at 0 *is* the capsule union, rounded
+at the joints — and polygonizes it with **marching tetrahedra** (each grid cell split into 6 tets
+sharing the 0–6 diagonal). Tets were chosen over marching cubes deliberately: watertight by
+construction, a tiny case table (no 256-entry triTable), and — crucially — the surface is defined
+by an exact SDF, so it hugs the body *predictably* with no opaque metaball strength/isolation tuning
+(which would have been un-dial-in-able given the preview can't screenshot a WebGL canvas). Winding
+is oriented outward per-cell by the field gradient, then `computeVertexNormals` gives smooth shading.
+
+Engineering: the field is sampled once per grid corner over the padded body bounds, with **adaptive,
+budget-bounded** resolution (roughly-cubic cells; grid_samples × primitives ≤ 0.7M) so the one-time
+build is ~25–85ms on any creature; the hot loop inlines the capsule SDF + smin over flat typed
+arrays. Capsules round-cap their endpoints, so only edges are needed as primitives (no per-node
+spheres) — halving the work and refining the grid. A HUD **skin** toggle (capsules ⇄ smooth,
+persisted on its own localStorage key) gates it; the per-covering material carries over unchanged
+(the shader is world-space, so its patterns/bump map onto the new geometry for free). Smooth is the
+**main view only** — thumbnails stay on capsules (framerate), and the smooth body is static (motion
+pauses while shown; re-meshing per frame is too dear — a future metaball-animation upgrade is noted).
+
+**Verified (2026-06-29):** `npm run typecheck` clean; `npm test` → **61/61** (4 new: a non-empty,
+finite default surface; across 30 random creatures every vertex sits inside the padded bounds and the
+surface spans ≥ half the body's length; deterministic; serpent + radial topologies don't explode).
+`npm run build` → succeeds. **In-browser:** the skin toggle flips capsules ⇄ smooth (the
+`window.__cambrian.skin` handle confirms), rebuilds on every new-creature roll, and toggles back —
+all with **no console errors**; a direct in-browser build of the default creature returned a
+**12,688-triangle** surface in **84ms**. (The multi-canvas page defeats the preview screenshot tool,
+so the organic *look* is the human's call — as in M5/M12/M14.)
 
 ## M14 — The Menagerie · built 2026-06-29 (awaiting test)
 

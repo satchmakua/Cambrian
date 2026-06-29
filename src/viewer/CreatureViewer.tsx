@@ -12,7 +12,7 @@ import { CreatureMesh } from './CreatureMesh';
 import { buildRig } from './animation';
 import { buildMeshData } from './meshData';
 
-export function CreatureViewer({ phenotype }: { phenotype: Phenotype }) {
+export function CreatureViewer({ phenotype, smooth = false }: { phenotype: Phenotype; smooth?: boolean }) {
   // Dev-only: freezing stops the auto-rotate and switches to on-demand rendering so the
   // page can go idle (a continuous loop otherwise blocks headless captures).
   const [frozen, setFrozen] = useState(false);
@@ -39,8 +39,9 @@ export function CreatureViewer({ phenotype }: { phenotype: Phenotype }) {
       terminals,
       covering: phenotype.genomeRef.covering.type,
       motion: buildRig(buildMeshData(phenotype), phenotype).style,
+      skin: smooth ? 'smooth' : 'capsules',
     };
-  }, [phenotype]);
+  }, [phenotype, smooth]);
 
   return (
     <Canvas
@@ -52,7 +53,7 @@ export function CreatureViewer({ phenotype }: { phenotype: Phenotype }) {
     >
       <color attach="background" args={['#0f1116']} />
       <Stage intensity={0.5} environment="city" adjustCamera={1.1} shadows="contact">
-        <CreatureMesh phenotype={phenotype} />
+        <CreatureMesh phenotype={phenotype} smooth={smooth} />
       </Stage>
       <OrbitControls
         makeDefault

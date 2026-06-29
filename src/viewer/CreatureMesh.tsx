@@ -15,10 +15,19 @@ import type { Phenotype } from '../engine/grow';
 import { buildMeshData, type MeshFeature } from './meshData';
 import { buildRig, computeAnim } from './animation';
 import { makeCreatureMaterial } from './creatureMaterial';
+import { buildSmoothGeometry } from './smoothSkin';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
-export function CreatureMesh({ phenotype, animate = true }: { phenotype: Phenotype; animate?: boolean }) {
+export function CreatureMesh({
+  phenotype,
+  animate = true,
+  smooth = false,
+}: {
+  phenotype: Phenotype;
+  animate?: boolean;
+  smooth?: boolean;
+}) {
   const data = useMemo(() => buildMeshData(phenotype), [phenotype]);
   const pal = phenotype.genomeRef.palette;
   const cov = phenotype.genomeRef.covering;
@@ -26,6 +35,12 @@ export function CreatureMesh({ phenotype, animate = true }: { phenotype: Phenoty
 
   const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed), [pal, cov, seed]);
   useEffect(() => () => bodyMat.dispose(), [bodyMat]);
+
+  // M15: one organic surface over the node field, built once (only when toggled on). The
+  // smooth body is static, so motion is paused while it's shown (re-meshing per frame is dear).
+  const smoothGeo = useMemo(() => (smooth ? buildSmoothGeometry(phenotype) : null), [smooth, phenotype]);
+  useEffect(() => () => smoothGeo?.dispose(), [smoothGeo]);
+  const animateBody = animate && !smooth;
 
   const footColor = useMemo(
     () => new THREE.Color().setHSL(pal.hueA, pal.sat, Math.max(0.12, pal.light * 0.45)).getHex(),
@@ -66,7 +81,7 @@ export function CreatureMesh({ phenotype, animate = true }: { phenotype: Phenoty
   const q = useMemo(() => new THREE.Quaternion(), []);
 
   useFrame((st) => {
-    if (!animate) return; // thumbnails render the static base pose (set via JSX positions)
+    if (!animateBody) return; // thumbnails + smooth skin render the static base pose
     const anim = computeAnim(rig, st.clock.elapsedTime);
     const { bodySpheres, edges, features } = data;
 
@@ -106,33 +121,40 @@ export function CreatureMesh({ phenotype, animate = true }: { phenotype: Phenoty
 
   return (
     <group>
-      {data.bodySpheres.map((i, s) => (
-        <mesh
-          key={`s${s}`}
-          ref={(el) => {
-            if (el) sphereRefs.current[s] = el;
-          }}
-          position={data.nodes[i].pos}
-          material={bodyMat}
-          castShadow
-        >
-          <sphereGeometry args={[data.nodes[i].radius, 18, 14]} />
-        </mesh>
-      ))}
-      {data.edges.map((e, k) => (
-        <mesh
-          key={`c${k}`}
-          ref={(el) => {
-            if (el) capsuleRefs.current[k] = el;
-          }}
-          position={baseCaps[k].pos}
-          quaternion={baseCaps[k].quat}
-          material={bodyMat}
-          castShadow
-        >
-          <capsuleGeometry args={[e.radius, baseCaps[k].len, 6, 14]} />
-        </mesh>
-      ))}
+      {smooth && smoothGeo ? (
+        // M15: a single welded organic surface replaces the capsule kit
+        <mesh geometry={smoothGeo} material={bodyMat} castShadow receiveShadow />
+      ) : (
+        <>
+          {data.bodySpheres.map((i, s) => (
+            <mesh
+              key={`s${s}`}
+              ref={(el) => {
+                if (el) sphereRefs.current[s] = el;
+              }}
+              position={data.nodes[i].pos}
+              material={bodyMat}
+              castShadow
+            >
+              <sphereGeometry args={[data.nodes[i].radius, 18, 14]} />
+            </mesh>
+          ))}
+          {data.edges.map((e, k) => (
+            <mesh
+              key={`c${k}`}
+              ref={(el) => {
+                if (el) capsuleRefs.current[k] = el;
+              }}
+              position={baseCaps[k].pos}
+              quaternion={baseCaps[k].quat}
+              material={bodyMat}
+              castShadow
+            >
+              <capsuleGeometry args={[e.radius, baseCaps[k].len, 6, 14]} />
+            </mesh>
+          ))}
+        </>
+      )}
       {data.features.map((f, k) => (
         <group
           key={`f${k}`}

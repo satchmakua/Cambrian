@@ -141,11 +141,21 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
   specimen (gen→0, seed from the archive), the novelty run advanced gen 0→15, no console errors;
   awaiting human's read)_
 
-- [ ] **M15 — Smooth skin** *(elevated from far-stretch — biggest "less crude" win)*.
-  Marching-cubes metaball surface over the node field, gated behind the robust capsule path;
-  per-covering material carries over.
+- [x] **M15 — Smooth skin** *(elevated from far-stretch — biggest "less crude" win)*.
+  `src/viewer/smoothSkin.ts`: a signed-distance field = the **smooth union** of the skeleton's
+  capsules, polygonized by **marching tetrahedra** (6 tets/cell — watertight, no opaque metaball
+  tuning; the iso-surface is exactly the smoothed capsule union, so it hugs the body). Adaptive,
+  budget-bounded grid resolution; built once per creature off the render loop (~25–85ms). A HUD
+  **skin** toggle (capsules ⇄ smooth, persisted) gates it; the per-covering material carries over
+  unchanged (the shader is world-space). Smooth is the **main view** only — thumbnails keep capsules,
+  so they stay at framerate; the smooth body is static (motion pauses while shown).
   **Test:** toggle smooth skin → one organic surface replaces the capsule kit without breaking
   on weird topologies; thumbnails still render at framerate.
+  _(built 2026-06-29, self-verified: 61 tests incl. 4 smooth-skin tests (non-empty + finite +
+  within padded bounds + spans the body across 30 creatures; deterministic; survives serpent/radial);
+  in-browser the toggle flips capsules⇄smooth and rebuilds on every roll with no console errors, and
+  a direct in-browser build of the default creature gave a 12,688-triangle surface in 84ms; awaiting
+  the human's visual read on the organic look)_
 
 - [ ] **M16 — Dials & polish.** Surface new axes in the UI (more pressure sliders, a morphotype
   filter); tune the distribution; expand the morphotype/part tables.
