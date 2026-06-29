@@ -52,6 +52,10 @@ interface AppState extends Session {
   runDirected: (generations: number) => void;
   /** Pull a Menagerie cell back as a fresh parent (M14). */
   loadCell: (key: string) => void;
+  physicsRunning: boolean; // a physics-fitness run is in flight (M6)
+  physicsDistance: number | null; // distance the latest evolved walker travelled (bu)
+  /** Evolve for locomotion in a lazy-loaded physics sim; appends the path to the tree (M6). */
+  runPhysics: (generations: number) => Promise<void>;
 }
 
 const seed32 = () => (Math.random() * 0xffffffff) >>> 0; // UI-layer only; engine RNG is seeded
@@ -133,6 +137,8 @@ export const useStore = create<AppState>((set, get) => {
     pressure: ZERO_PRESSURE,
     smoothSkin: loadSmooth(),
     morphoFilter: null,
+    physicsRunning: false,
+    physicsDistance: null,
 
     setMorphoFilter: (id) => set({ morphoFilter: id }),
 
@@ -223,6 +229,37 @@ export const useStore = create<AppState>((set, get) => {
     loadCell: (key) => {
       const entry = get().menagerie[key];
       if (entry) commit(rootedAt(entry.genome, get().symmetryMode, get().menagerie));
+    },
+
+    runPhysics: async (generations) => {
+      if (get().physicsRunning) return;
+      const startId = get().currentId;
+      const startNode = get().nodes[startId];
+      const lock = get().symmetryMode !== 'auto';
+      set({ physicsRunning: true });
+      try {
+        // lazy import keeps the physics module + Rapier WASM out of the main bundle until now
+        const { runPhysicsGenerations } = await import('../physics/fitness');
+        const { path, distances } = await runPhysicsGenerations(startNode.genome, generations, seed32(), {
+          lockSymmetry: lock,
+        });
+        set((state) => {
+          let nodes = state.nodes;
+          let counter = state.counter;
+          let parentId = startId;
+          for (let i = 1; i < path.length; i++) {
+            const id = String(counter++);
+            nodes = { ...nodes, [id]: { id, genome: path[i], parentId, generation: startNode.generation + i } };
+            parentId = id;
+          }
+          const b = batch(nodes, parentId, counter, state.symmetryMode, state.menagerie);
+          persist(b);
+          return { ...b, physicsRunning: false, physicsDistance: distances[distances.length - 1] };
+        });
+      } catch (e) {
+        set({ physicsRunning: false });
+        throw e;
+      }
     },
   };
 });

@@ -354,6 +354,61 @@ body,
   cursor: default;
 }
 
+/* --- physics panel --- */
+
+.physics-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.physics-row label {
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.physics-row input[type='number'] {
+  width: 52px;
+  background: #0c0e13;
+  border: 1px solid var(--line);
+  color: var(--fg);
+  border-radius: 6px;
+  padding: 5px 7px;
+  font-size: 13px;
+}
+
+.physics-row button {
+  flex: 1;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: #11201c;
+  color: var(--accent);
+  padding: 7px 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  transition: border-color 0.15s ease;
+}
+
+.physics-row button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.physics-row button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.physics-result {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- share bar --- */
 
 .share {

@@ -12,7 +12,8 @@ per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from mo
 (the Menagerie — MAP-Elites archive + browser + novelty steer) + **M15** (smooth skin — marching-
 tetrahedra metaball surface, toggled, gated behind capsules) + **M16** (dials & polish — wings/neck/
 covering steers, morphotype filter, frill part) built. **Phase 3 (the creature grammar, M8–M16) is
-complete.** Next: the **Phase 4 stretch** — M6 (physics fitness, Rapier) and M7 (glTF export).
+complete**, and so are both Phase-4 stretches — **M7** (glTF export) and **M6** (physics fitness,
+Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ### State of the tree
 
@@ -39,9 +40,62 @@ complete.** Next: the **Phase 4 stretch** — M6 (physics fitness, Rapier) and M
 | Smooth skin | `src/viewer/smoothSkin.ts` | ✅ SDF smooth-union of capsules → marching tetrahedra; toggled, gated behind capsules (unit-tested) |
 | UI / store | `src/ui/App.tsx`, `store.ts` | ✅ Zustand: lineage + current + litter + pressure, localStorage |
 | Test invariants | `tests/engine/invariants.ts` | ✅ shared phenotype + genome-bounds asserts |
-| Physics fitness (stretch) | — | ⬜ M6 |
+| glTF export (stretch) | `src/viewer/exportGltf.ts`, `src/viewer/ShareBar.tsx` | ✅ bakes capsule/smooth + features → binary `.glb` via GLTFExporter |
+| Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic |
 
 ---
+
+## M6 — Physics fitness (stretch) · built 2026-06-29 (awaiting test) — roadmap complete
+
+Creatures that *move*. New `src/physics/fitness.ts` (an adapter — the pure engine never touches it):
+`simulateDistance(phenotype)` builds the skeleton as a jointed ragdoll in **Rapier** — a dynamic
+rigid body (ball collider) per node, a **spherical joint** per edge — drops it onto a floor, drives
+each limb with an oscillating **muscle torque** (∝ the limb's own mass, a per-edge phase makes a
+travelling wave), steps 240× at a fixed 60 Hz, and returns how far the centre of mass travelled.
+`runPhysicsGenerations` is the Karl-Sims loop: greedy hill-climb with elitism over physics distance,
+so a wiggling blob becomes a crawler. The store's async `runPhysics` action appends the path to the
+lineage; an **Evolve to walk** panel (`PhysicsPanel.tsx`) runs it and shows the best distance.
+
+Two things made it work. **(1) Lazy-loading:** Rapier is the deterministic-compat build (~2.3 MB of
+WASM-in-JS); a dynamic `import()` (in `loadRapier` + the store action) code-splits it into its **own
+chunk** loaded only on the first Run — the main bundle is untouched (verified in the build output:
+a separate `rapier-*.js`). **(2) Stability:** the capsule-union heavily self-overlaps, so naive
+physics explodes. Fixed by **disabling self-collision** (collision groups — creature parts collide
+with the ground only) and driving with a *physical* mass-scaled τ·dt impulse (an early per-step
+torque-impulse drive flung creatures to 290,000 bu; the mass-scaled version gives a sane 0.5–4 bu
+crawl). Determinism holds (the deterministic build + fixed timestep + seed-derived phases →
+bit-identical replays).
+
+**Verified (2026-06-29):** `npm run typecheck` clean; `npm test` → **69/69** (3 new: distances are
+deterministic [`a === b` exactly] across seeds, finite + non-negative + non-exploding [< 100 bu]
+across 14 creatures, and a run strictly improves with elitism + replays identically). `npm run build`
+→ succeeds, **Rapier in its own lazy chunk** (`rapier-*.js` 2.3 MB / 842 KB gz, separate from the
+1.16 MB main). **In-browser:** the "Evolve to walk" panel lazy-loaded Rapier (init fired) and evolved
+an **8-generation walker travelling 3.76 bu**, the lineage advanced to gen 8, no console errors.
+(Watching it actually crawl is the human's call — the sim is headless; the viewer shows the evolved
+body, not the physics playback.)
+
+## M7 — glTF export (stretch) · built 2026-06-29 (awaiting test)
+
+Creatures leave the toy. New `src/viewer/exportGltf.ts`: `buildExportGroup(phenotype, smooth)`
+assembles a *static* base-pose THREE.Group — the capsule-union body (spheres + capsules) or the M15
+smooth surface, plus simplified feature solids (eyes = sclera+pupil, mouth = box, fin/wing/frill =
+thin blades, claw/horn = cones, pincer = two prongs, foot = flattened pad) — with plain
+`MeshStandardMaterial`s. glTF can't carry the procedural covering shader, so the export honestly
+keeps the **base colour + PBR roughness/metalness** per covering (not the in-shader patterns/bump);
+that's the expected trade for a portable model. `exportCreatureGlb` runs three's `GLTFExporter`
+(binary) over the group → a `.glb` ArrayBuffer; `downloadCreatureGlb` wraps it in a Blob and clicks
+an anchor. An **Export .glb** button joined the share bar (which also got its stale "CAM1" label
+fixed to CAM2). The group builder is pure three (no WebGL), so it's unit-tested headlessly; the
+exporter itself is browser-only (it uses `FileReader`), so the GLB bytes are validated in-browser.
+
+**Verified (2026-06-29):** `npm run typecheck` clean; `npm test` → **66/66** (3 new: the export group
+bakes real meshes with finite geometry + materials for capsule & smooth modes, and is non-empty
+across 20 random creatures × both modes). `npm run build` → succeeds. **In-browser:** `exportCreatureGlb`
+produced a **valid binary GLB** for both modes — `glTF` magic, version 2, the header total length
+matches the buffer, a well-formed `JSON` chunk parsing to a glTF-2.0 document with **59 meshes**
+(capsules, 704 KB) / **12 meshes** (smooth, 976 KB) + accessors + 4 materials; the Export button
+renders, no console errors. (Opening the file in Blender/another viewer is the human's confirmation.)
 
 ## M16 — Dials & polish · built 2026-06-29 (awaiting test) — Phase 3 complete
 

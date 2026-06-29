@@ -4,10 +4,12 @@ import { coherence, describe } from '../engine/morphospace';
 import { CreatureViewer } from '../viewer/CreatureViewer';
 import { OffspringGallery } from '../viewer/OffspringGallery';
 import { PressurePanel } from '../viewer/PressurePanel';
+import { PhysicsPanel } from '../viewer/PhysicsPanel';
 import { ShareBar } from '../viewer/ShareBar';
 import { LineageTree } from '../viewer/LineageTree';
 import { Menagerie } from '../viewer/Menagerie';
 import { binKey, MENAGERIE_GRID } from '../viewer/archive';
+import { downloadCreatureGlb } from '../viewer/exportGltf';
 import { MORPHOTYPE_IDS } from '../engine/random';
 import { useStore } from './store';
 
@@ -31,6 +33,9 @@ export function App() {
   const toggleSmooth = useStore((s) => s.toggleSmooth);
   const morphoFilter = useStore((s) => s.morphoFilter);
   const setMorphoFilter = useStore((s) => s.setMorphoFilter);
+  const physicsRunning = useStore((s) => s.physicsRunning);
+  const physicsDistance = useStore((s) => s.physicsDistance);
+  const runPhysics = useStore((s) => s.runPhysics);
 
   const current = nodes[currentId];
   const genome = current.genome;
@@ -105,7 +110,12 @@ export function App() {
         <aside className="gallery">
           <OffspringGallery offspring={offspring} generation={generation} onPick={promote} onReroll={reroll} />
           <PressurePanel pressure={pressure} onChange={setPressure} onRun={runDirected} />
-          <ShareBar genome={genome} onImport={importString} />
+          <PhysicsPanel running={physicsRunning} distance={physicsDistance} onRun={runPhysics} />
+          <ShareBar
+          genome={genome}
+          onImport={importString}
+          onExport={() => downloadCreatureGlb(phenotype, smoothSkin, `cambrian-${hex(genome.seed)}.glb`)}
+        />
         </aside>
       </div>
 

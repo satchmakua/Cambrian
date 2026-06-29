@@ -171,15 +171,31 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
 
 ## Phase 4 — Stretch
 
-- [ ] **M6 — (stretch) Physics fitness.** `@dimforge/rapier3d-deterministic-compat`,
-  lazy-loaded; oscillating muscle drive; distance-traveled fitness; select the movers.
+- [x] **M6 — (stretch) Physics fitness.** `src/physics/fitness.ts` builds the skeleton as a jointed
+  ragdoll in **Rapier** (`@dimforge/rapier3d-deterministic-compat`, **lazy-loaded** — its own 2.3 MB
+  chunk, kept out of the main bundle), drives the limbs with an oscillating mass-scaled muscle
+  torque, drops it on a floor, and measures how far the centre of mass travels; `runPhysicsGenerations`
+  selects the movers (greedy + elitism). An **Evolve to walk** panel runs it and shows the distance.
+  Self-collision is disabled (collision groups) so the overlapping capsule-union doesn't explode.
   **Test:** run physics fitness for N generations → later creatures travel measurably
   farther than earlier ones; identical seed → identical run.
+  _(built 2026-06-29, self-verified: 69 tests incl. 3 physics tests — distances are deterministic
+  (bit-identical replays), finite + non-exploding (< 100 bu) across 14 creatures, and a run strictly
+  improves with elitism + replays identically; in-browser "Evolve to walk" lazy-loaded Rapier and
+  evolved an 8-gen walker travelling 3.76 bu, lineage advanced, no console errors. **The roadmap is
+  complete.** Awaiting the human's read)_
 
-- [ ] **M7 — (stretch) glTF export.** Bake the current creature (capsule or smooth skin) to
-  `.glb` via three's `GLTFExporter`. _(The metaball/marching-cubes smooth skin itself was
-  pulled forward to **M15** — it's too central to the look to leave as a far-stretch.)_
+- [x] **M7 — (stretch) glTF export.** `src/viewer/exportGltf.ts` bakes the current creature
+  (capsule-union *or* the M15 smooth surface) + simplified feature solids into a static THREE.Group
+  with plain PBR materials, and `GLTFExporter` writes a binary **`.glb`** (the procedural covering
+  shader can't carry into glTF, so the export keeps the base colour + roughness, not the in-shader
+  patterns). An **Export .glb** button in the share bar downloads `cambrian-<seed>.glb`.
   **Test:** export a creature; it opens correctly in another glTF viewer.
+  _(built 2026-06-29, self-verified: 66 tests incl. 3 export-group tests (real meshes, finite
+  geometry, non-empty across 20×2 creatures); in-browser the exporter produced a **valid GLB** for
+  both modes — `glTF` magic, version 2, intact JSON chunk + length, glTF-2.0 doc with 59 meshes
+  (capsules) / 12 (smooth) + materials; the button renders, no console errors. Awaiting the human's
+  open-in-Blender check)_
 
 ---
 

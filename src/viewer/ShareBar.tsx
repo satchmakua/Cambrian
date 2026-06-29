@@ -6,10 +6,33 @@ import { useEffect, useState } from 'react';
 import { encodeGenome } from '../engine/share';
 import type { Genome } from '../engine/genome';
 
-export function ShareBar({ genome, onImport }: { genome: Genome; onImport: (s: string) => void }) {
+export function ShareBar({
+  genome,
+  onImport,
+  onExport,
+}: {
+  genome: Genome;
+  onImport: (s: string) => void;
+  onExport?: () => Promise<void> | void;
+}) {
   const current = encodeGenome(genome);
   const [text, setText] = useState(current);
   const [status, setStatus] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const exportGlb = async () => {
+    if (!onExport) return;
+    setExporting(true);
+    setStatus('Baking .glb…');
+    try {
+      await onExport();
+      setStatus('Exported .glb ✓');
+    } catch (e) {
+      setStatus((e as Error).message || 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // resync when the creature changes (promote / select / new / import)
   useEffect(() => {
@@ -40,7 +63,7 @@ export function ShareBar({ genome, onImport }: { genome: Genome; onImport: (s: s
   return (
     <div className="share">
       <div className="share-row">
-        <label>genome string (CAM1)</label>
+        <label>genome string (CAM2)</label>
         {status && <span className="share-status">{status}</span>}
       </div>
       <textarea
@@ -55,6 +78,11 @@ export function ShareBar({ genome, onImport }: { genome: Genome; onImport: (s: s
         <button onClick={load} disabled={!changed} title="regrow the pasted creature as a new lineage">
           Load
         </button>
+        {onExport && (
+          <button onClick={exportGlb} disabled={exporting} title="download this creature as a .glb 3D model">
+            {exporting ? 'Baking…' : 'Export .glb'}
+          </button>
+        )}
       </div>
     </div>
   );
