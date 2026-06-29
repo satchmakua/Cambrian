@@ -407,6 +407,24 @@ body,
   font-size: 12px;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.replay-toggle {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: #11201c;
+  color: var(--accent);
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.replay-toggle:hover {
+  border-color: var(--accent);
 }
 
 /* --- share bar --- */

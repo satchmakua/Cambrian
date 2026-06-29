@@ -36,6 +36,9 @@ export function App() {
   const physicsRunning = useStore((s) => s.physicsRunning);
   const physicsDistance = useStore((s) => s.physicsDistance);
   const runPhysics = useStore((s) => s.runPhysics);
+  const playback = useStore((s) => s.playback);
+  const playbackOn = useStore((s) => s.playbackOn);
+  const togglePlayback = useStore((s) => s.togglePlayback);
 
   const current = nodes[currentId];
   const genome = current.genome;
@@ -44,12 +47,14 @@ export function App() {
   const vibe = useMemo(() => coherence(phenotype), [phenotype]);
   const currentCell = useMemo(() => binKey(describe(phenotype)), [phenotype]);
   const menagerieCount = Object.keys(menagerie).length;
+  // play the recorded gait only while it belongs to the creature on screen
+  const activeGait = playbackOn && playback && playback.seed === genome.seed ? playback : null;
 
   return (
     <div className="app">
       <div className="top">
         <main className="stage-wrap">
-          <CreatureViewer phenotype={phenotype} smooth={smoothSkin} />
+          <CreatureViewer phenotype={phenotype} smooth={smoothSkin} trajectory={activeGait} />
           <header className="hud">
             <h1>Cambrian</h1>
             <p className="tag">
@@ -110,7 +115,14 @@ export function App() {
         <aside className="gallery">
           <OffspringGallery offspring={offspring} generation={generation} onPick={promote} onReroll={reroll} />
           <PressurePanel pressure={pressure} onChange={setPressure} onRun={runDirected} />
-          <PhysicsPanel running={physicsRunning} distance={physicsDistance} onRun={runPhysics} />
+          <PhysicsPanel
+            running={physicsRunning}
+            distance={physicsDistance}
+            onRun={runPhysics}
+            canReplay={!!(playback && playback.seed === genome.seed)}
+            replaying={!!activeGait}
+            onToggleReplay={togglePlayback}
+          />
           <ShareBar
           genome={genome}
           onImport={importString}

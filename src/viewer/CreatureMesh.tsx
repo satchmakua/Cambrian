@@ -16,6 +16,7 @@ import { buildMeshData, type MeshFeature } from './meshData';
 import { buildRig, computeAnim } from './animation';
 import { makeCreatureMaterial } from './creatureMaterial';
 import { buildSmoothGeometry } from './smoothSkin';
+import { sampleTrajectory, type Trajectory } from '../physics/fitness';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -23,10 +24,12 @@ export function CreatureMesh({
   phenotype,
   animate = true,
   smooth = false,
+  trajectory = null,
 }: {
   phenotype: Phenotype;
   animate?: boolean;
   smooth?: boolean;
+  trajectory?: Trajectory | null;
 }) {
   const data = useMemo(() => buildMeshData(phenotype), [phenotype]);
   const pal = phenotype.genomeRef.palette;
@@ -36,11 +39,15 @@ export function CreatureMesh({
   const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed), [pal, cov, seed]);
   useEffect(() => () => bodyMat.dispose(), [bodyMat]);
 
+  // physics playback (post-roadmap): when a recorded gait is present, capsules re-pose from it
+  // each frame — so the body must be the capsule kit (the smooth mesh is static), and it animates.
+  const showSmooth = smooth && !trajectory;
+
   // M15: one organic surface over the node field, built once (only when toggled on). The
   // smooth body is static, so motion is paused while it's shown (re-meshing per frame is dear).
-  const smoothGeo = useMemo(() => (smooth ? buildSmoothGeometry(phenotype) : null), [smooth, phenotype]);
+  const smoothGeo = useMemo(() => (showSmooth ? buildSmoothGeometry(phenotype) : null), [showSmooth, phenotype]);
   useEffect(() => () => smoothGeo?.dispose(), [smoothGeo]);
-  const animateBody = animate && !smooth;
+  const animateBody = !!trajectory || (animate && !showSmooth);
 
   const footColor = useMemo(
     () => new THREE.Color().setHSL(pal.hueA, pal.sat, Math.max(0.12, pal.light * 0.45)).getHex(),
@@ -82,7 +89,10 @@ export function CreatureMesh({
 
   useFrame((st) => {
     if (!animateBody) return; // thumbnails + smooth skin render the static base pose
-    const anim = computeAnim(rig, st.clock.elapsedTime);
+    // a recorded physics gait plays back from the trajectory; otherwise procedural motion
+    const anim = trajectory
+      ? sampleTrajectory(trajectory, st.clock.elapsedTime, rig.anim)
+      : computeAnim(rig, st.clock.elapsedTime);
     const { bodySpheres, edges, features } = data;
 
     if (import.meta.env.DEV) {
@@ -121,7 +131,7 @@ export function CreatureMesh({
 
   return (
     <group>
-      {smooth && smoothGeo ? (
+      {showSmooth && smoothGeo ? (
         // M15: a single welded organic surface replaces the capsule kit
         <mesh geometry={smoothGeo} material={bodyMat} castShadow receiveShadow />
       ) : (

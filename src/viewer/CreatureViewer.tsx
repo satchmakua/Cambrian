@@ -8,11 +8,20 @@ import { useEffect, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Stage } from '@react-three/drei';
 import type { Phenotype } from '../engine/grow';
+import type { Trajectory } from '../physics/fitness';
 import { CreatureMesh } from './CreatureMesh';
 import { buildRig } from './animation';
 import { buildMeshData } from './meshData';
 
-export function CreatureViewer({ phenotype, smooth = false }: { phenotype: Phenotype; smooth?: boolean }) {
+export function CreatureViewer({
+  phenotype,
+  smooth = false,
+  trajectory = null,
+}: {
+  phenotype: Phenotype;
+  smooth?: boolean;
+  trajectory?: Trajectory | null;
+}) {
   // Dev-only: freezing stops the auto-rotate and switches to on-demand rendering so the
   // page can go idle (a continuous loop otherwise blocks headless captures).
   const [frozen, setFrozen] = useState(false);
@@ -40,8 +49,9 @@ export function CreatureViewer({ phenotype, smooth = false }: { phenotype: Pheno
       covering: phenotype.genomeRef.covering.type,
       motion: buildRig(buildMeshData(phenotype), phenotype).style,
       skin: smooth ? 'smooth' : 'capsules',
+      gait: trajectory ? `playback(${trajectory.frameCount}f)` : 'procedural',
     };
-  }, [phenotype, smooth]);
+  }, [phenotype, smooth, trajectory]);
 
   return (
     <Canvas
@@ -53,7 +63,7 @@ export function CreatureViewer({ phenotype, smooth = false }: { phenotype: Pheno
     >
       <color attach="background" args={['#0f1116']} />
       <Stage intensity={0.5} environment="city" adjustCamera={1.1} shadows="contact">
-        <CreatureMesh phenotype={phenotype} smooth={smooth} />
+        <CreatureMesh phenotype={phenotype} smooth={smooth} trajectory={trajectory} />
       </Stage>
       <OrbitControls
         makeDefault

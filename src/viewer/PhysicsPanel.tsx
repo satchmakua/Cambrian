@@ -10,10 +10,16 @@ export function PhysicsPanel({
   running,
   distance,
   onRun,
+  canReplay,
+  replaying,
+  onToggleReplay,
 }: {
   running: boolean;
   distance: number | null;
   onRun: (generations: number) => Promise<void>;
+  canReplay: boolean;
+  replaying: boolean;
+  onToggleReplay: () => void;
 }) {
   const [gens, setGens] = useState(12);
 
@@ -37,7 +43,14 @@ export function PhysicsPanel({
         </button>
       </div>
       {distance != null && !running && (
-        <div className="physics-result">best walker travelled {distance.toFixed(2)} bu</div>
+        <div className="physics-result">
+          best walker travelled {distance.toFixed(2)} bu
+          {canReplay && (
+            <button className="replay-toggle" onClick={onToggleReplay}>
+              {replaying ? '■ stop gait' : '▶ play gait'}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

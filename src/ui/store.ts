@@ -6,12 +6,14 @@
 import { create } from 'zustand';
 import { mix32 } from '../engine/rng';
 import { defaultGenome, type Genome } from '../engine/genome';
+import { grow } from '../engine/grow';
 import { randomGenome, genomeOfMorphotype, type SymmetryMode } from '../engine/random';
 import { breederLitter } from '../engine/selection';
 import { decodeGenome } from '../engine/share';
 import { runGenerations, ZERO_PRESSURE, type Pressure } from '../engine/pressures';
 import type { LineageNode, LineageNodes } from '../engine/lineage';
 import { archiveAll, descriptorsOf, type Menagerie } from '../viewer/archive';
+import type { Trajectory } from '../physics/fitness';
 
 const LITTER = 9;
 const STORAGE_KEY = 'cambrian.session.v2c'; // bumped for the M12 covering genes
@@ -56,6 +58,9 @@ interface AppState extends Session {
   physicsDistance: number | null; // distance the latest evolved walker travelled (bu)
   /** Evolve for locomotion in a lazy-loaded physics sim; appends the path to the tree (M6). */
   runPhysics: (generations: number) => Promise<void>;
+  playback: (Trajectory & { seed: number }) | null; // the evolved walker's recorded gait
+  playbackOn: boolean; // play the recorded gait in the viewer instead of procedural motion
+  togglePlayback: () => void;
 }
 
 const seed32 = () => (Math.random() * 0xffffffff) >>> 0; // UI-layer only; engine RNG is seeded
@@ -130,8 +135,9 @@ function loadInitial(): Session {
 export const useStore = create<AppState>((set, get) => {
   const commit = (s: Session) => {
     persist(s);
-    set(s);
+    set({ ...s, playback: null, playbackOn: false }); // a new creature invalidates the recorded gait
   };
+  const CLEAR_GAIT = { playback: null, playbackOn: false } as const; // for the set-callback actions
   return {
     ...loadInitial(),
     pressure: ZERO_PRESSURE,
@@ -139,6 +145,10 @@ export const useStore = create<AppState>((set, get) => {
     morphoFilter: null,
     physicsRunning: false,
     physicsDistance: null,
+    playback: null,
+    playbackOn: false,
+
+    togglePlayback: () => set((s) => ({ playbackOn: !s.playbackOn })),
 
     setMorphoFilter: (id) => set({ morphoFilter: id }),
 
@@ -171,7 +181,7 @@ export const useStore = create<AppState>((set, get) => {
         const nodes = { ...state.nodes, [id]: node };
         const b = batch(nodes, id, state.counter + 1, state.symmetryMode, state.menagerie);
         persist(b);
-        return b;
+        return { ...b, ...CLEAR_GAIT };
       }),
 
     selectNode: (id) =>
@@ -179,7 +189,7 @@ export const useStore = create<AppState>((set, get) => {
         if (!state.nodes[id]) return state;
         const b = batch(state.nodes, id, state.counter, state.symmetryMode, state.menagerie);
         persist(b);
-        return b;
+        return { ...b, ...CLEAR_GAIT };
       }),
 
     reroll: () =>
@@ -223,7 +233,7 @@ export const useStore = create<AppState>((set, get) => {
         }
         const b = batch(nodes, parentId, counter, state.symmetryMode, state.menagerie);
         persist(b);
-        return b;
+        return { ...b, ...CLEAR_GAIT };
       }),
 
     loadCell: (key) => {
@@ -238,11 +248,13 @@ export const useStore = create<AppState>((set, get) => {
       const lock = get().symmetryMode !== 'auto';
       set({ physicsRunning: true });
       try {
-        // lazy import keeps the physics module + Rapier WASM out of the main bundle until now
-        const { runPhysicsGenerations } = await import('../physics/fitness');
+        // lazy import keeps the Rapier WASM chunk out of the main bundle until now
+        const { runPhysicsGenerations, simulateTrajectory } = await import('../physics/fitness');
         const { path, distances } = await runPhysicsGenerations(startNode.genome, generations, seed32(), {
           lockSymmetry: lock,
         });
+        const winner = path[path.length - 1];
+        const traj = await simulateTrajectory(grow(winner)); // record the best walker's gait for playback
         set((state) => {
           let nodes = state.nodes;
           let counter = state.counter;
@@ -254,7 +266,13 @@ export const useStore = create<AppState>((set, get) => {
           }
           const b = batch(nodes, parentId, counter, state.symmetryMode, state.menagerie);
           persist(b);
-          return { ...b, physicsRunning: false, physicsDistance: distances[distances.length - 1] };
+          return {
+            ...b,
+            physicsRunning: false,
+            physicsDistance: distances[distances.length - 1],
+            playback: { ...traj, seed: winner.seed },
+            playbackOn: true,
+          };
         });
       } catch (e) {
         set({ physicsRunning: false });

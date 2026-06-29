@@ -41,9 +41,32 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | UI / store | `src/ui/App.tsx`, `store.ts` | ✅ Zustand: lineage + current + litter + pressure, localStorage |
 | Test invariants | `tests/engine/invariants.ts` | ✅ shared phenotype + genome-bounds asserts |
 | glTF export (stretch) | `src/viewer/exportGltf.ts`, `src/viewer/ShareBar.tsx` | ✅ bakes capsule/smooth + features → binary `.glb` via GLTFExporter |
-| Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic |
+| Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic; **+ gait playback** |
 
 ---
+
+## Physics playback — watch the evolved gait · 2026-06-29 (post-roadmap)
+
+Closed the M6 loop: you could *evolve* a walker but only ever saw procedural motion, never the
+sim's actual gait. `fitness.ts` was refactored to a shared `simulate(p, opts, onStep?)` core;
+`simulateDistance` and a new **`simulateTrajectory`** both go through it. `simulateTrajectory` records
+node positions every `stride` steps (~120 frames), each frame **treadmill-centred** — the horizontal
+COM is removed so the creature walks *in place* (it doesn't wander off-camera) while keeping vertical
+motion (it visibly settles onto the ground and bounces). A pure `sampleTrajectory(traj, t, out)`
+interpolates + loops the frames. `CreatureMesh` gained a `trajectory` prop: when present it re-poses
+the capsules from the recorded frames each tick (forcing the capsule kit, since the smooth mesh is
+static) instead of `computeAnim`. After a physics run the store records the winner's gait and
+auto-plays it; a **▶ play gait / ■ stop gait** toggle swaps it against procedural motion, and the
+gait is keyed to the winner's seed so navigating to any other creature drops it.
+
+**Verified (2026-06-29):** `npm test` → **71/71** (2 new: the trajectory is deterministic + finite +
+treadmill-centred [every frame's xz COM ≈ 0]; `sampleTrajectory` interpolates and loops). `npm run
+build` → succeeds with **Rapier still its own lazy chunk** (CreatureMesh statically imports
+`fitness.ts`, but only the pure sampler — the dynamic Rapier `import()` boundary holds; main grew
+~4 KB). **In-browser:** an "Evolve to walk" run recorded a **120-frame** gait that auto-played
+(`__cambrian.gait = playback(120f)`), the ▶/■ toggle flips the viewer between the recorded gait and
+procedural motion, and navigating to another creature drops playback (seed guard); no console errors.
+(Seeing it actually stride is the human's call — the preview throttles rAF, as throughout.)
 
 ## M6 — Physics fitness (stretch) · built 2026-06-29 (awaiting test) — roadmap complete
 

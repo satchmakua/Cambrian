@@ -42,8 +42,18 @@ export interface FitnessOptions {
 const G_GROUND = 0x0001_0002;
 const G_CREATURE = 0x0002_0001;
 
-/** Drop the creature, drive its muscles, and return how far its centre of mass travels (bu). */
-export async function simulateDistance(p: Phenotype, opts: FitnessOptions = {}): Promise<number> {
+type RBody = ReturnType<InstanceType<Rapier['World']>['createRigidBody']>;
+
+/**
+ * The shared simulation core: build the ragdoll, drive it, step it, and return the COM distance
+ * travelled. `onStep(bodies, step)` (if given) fires after each `world.step()` — the trajectory
+ * recorder hooks it. Both `simulateDistance` and `simulateTrajectory` go through here.
+ */
+async function simulate(
+  p: Phenotype,
+  opts: FitnessOptions,
+  onStep?: (bodies: RBody[], step: number) => void,
+): Promise<number> {
   const R = await loadRapier();
   const steps = opts.steps ?? 240;
   const hz = opts.driveHz ?? 1.1;
@@ -85,7 +95,7 @@ export async function simulateDistance(p: Phenotype, opts: FitnessOptions = {}):
   });
 
   // spherical joints at each shared node; a per-edge muscle phase makes a travelling drive wave
-  const muscles: { body: (typeof bodies)[number]; ax: number; az: number; phase: number }[] = [];
+  const muscles: { body: RBody; ax: number; az: number; phase: number }[] = [];
   p.edges.forEach(([ia, ib], k) => {
     const a = bodies[ia];
     const b = bodies[ib];
@@ -111,6 +121,7 @@ export async function simulateDistance(p: Phenotype, opts: FitnessOptions = {}):
       m.body.applyTorqueImpulse({ x: torque * m.ax, y: 0, z: torque * m.az }, true);
     }
     world.step();
+    if (onStep) onStep(bodies, s);
   }
 
   let sx = 0;
@@ -128,6 +139,85 @@ export async function simulateDistance(p: Phenotype, opts: FitnessOptions = {}):
 
   if (!finite) return 0; // a blown-up sim earns nothing
   return Math.hypot(sx - comX0, sz - comZ0);
+}
+
+/** Drop the creature, drive its muscles, and return how far its centre of mass travels (bu). */
+export function simulateDistance(p: Phenotype, opts: FitnessOptions = {}): Promise<number> {
+  return simulate(p, opts);
+}
+
+/** A recorded gait: `frameCount` poses of `nodeCount` node positions (treadmill-centred in xz). */
+export interface Trajectory {
+  frames: Float32Array; // frameCount × nodeCount × 3
+  frameCount: number;
+  nodeCount: number;
+  dt: number; // seconds per recorded frame
+  distance: number;
+}
+
+/**
+ * Replay material for the viewer: run the same deterministic sim but record node positions every
+ * `stride` steps, with each frame's horizontal centre of mass removed so the creature walks **in
+ * place** (a treadmill view of the gait, rather than wandering out of frame). Vertical motion is
+ * kept, so it visibly settles onto the ground and bounces.
+ *
+ * The first `settleSteps` are skipped: the creature drops from a small height and settles, and that
+ * fall doesn't belong in a *looping* gait — including it makes every loop pop from the settled end
+ * pose back to the airborne start pose. Frames are written straight into a pre-sized buffer.
+ */
+export async function simulateTrajectory(
+  p: Phenotype,
+  opts: FitnessOptions & { stride?: number; settleSteps?: number } = {},
+): Promise<Trajectory> {
+  const stride = Math.max(1, opts.stride ?? 2);
+  const steps = opts.steps ?? 240; // must match `simulate`'s default
+  const settle = Math.max(0, opts.settleSteps ?? 36); // ~0.6 s drop+settle, dropped from the loop
+  const nodeCount = p.nodes.length;
+
+  const firstStep = Math.ceil(settle / stride) * stride;
+  const frameCount = firstStep < steps ? Math.floor((steps - 1 - firstStep) / stride) + 1 : 0;
+  const frames = new Float32Array(frameCount * nodeCount * 3);
+  let fi = 0;
+
+  const distance = await simulate(p, opts, (bodies, s) => {
+    if (s < settle || s % stride !== 0 || fi >= frameCount) return;
+    let cx = 0;
+    let cz = 0;
+    for (const b of bodies) {
+      const t = b.translation();
+      cx += t.x;
+      cz += t.z;
+    }
+    cx /= bodies.length;
+    cz /= bodies.length;
+    const base = fi * nodeCount * 3;
+    for (let i = 0; i < bodies.length; i++) {
+      const t = bodies[i].translation();
+      frames[base + i * 3] = t.x - cx; // treadmill: remove horizontal drift
+      frames[base + i * 3 + 1] = t.y;
+      frames[base + i * 3 + 2] = t.z - cz;
+    }
+    fi++;
+  });
+
+  return { frames, frameCount: fi, nodeCount, dt: (1 / 60) * stride, distance };
+}
+
+/** Sample a trajectory at time `t` (looping) into `out` (length ≥ nodeCount·3); returns `out`. */
+export function sampleTrajectory(traj: Trajectory, t: number, out: Float32Array): Float32Array {
+  const { frameCount: total, nodeCount: n, frames, dt } = traj;
+  if (total === 0) return out;
+  const fpos = t / dt;
+  const base = Math.floor(fpos);
+  const a = fpos - base;
+  const i0 = ((base % total) + total) % total;
+  const i1 = (i0 + 1) % total;
+  const o0 = i0 * n * 3;
+  const o1 = i1 * n * 3;
+  // clamp to the caller's buffer — defends against a trajectory/rig node-count mismatch
+  const count = Math.min(n * 3, out.length);
+  for (let i = 0; i < count; i++) out[i] = frames[o0 + i] + (frames[o1 + i] - frames[o0 + i]) * a;
+  return out;
 }
 
 export interface PhysicsRunOptions extends FitnessOptions {
