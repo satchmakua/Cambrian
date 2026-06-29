@@ -33,7 +33,7 @@ export function CreatureMesh({ phenotype, animate = true }: { phenotype: Phenoty
   );
   const finColor = useMemo(() => new THREE.Color().setHSL(pal.hueA, pal.sat, pal.light).getHex(), [pal]);
 
-  const rig = useMemo(() => buildRig(data), [data]);
+  const rig = useMemo(() => buildRig(data, phenotype), [data, phenotype]);
 
   // base capsule transforms for the initial (pre-animation) frame
   const baseCaps = useMemo(() => {

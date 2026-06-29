@@ -8,8 +8,9 @@ acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 **Current phase:** Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
-per-covering in-shader bump) built. Next: **M13 — motion styles** (gait/swim/flap/scuttle/
-slither/drift selected by morphotype).
+per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
+(the Menagerie — MAP-Elites archive + browser + novelty steer) built. Next: **M15 — smooth skin**
+(marching-cubes metaball surface over the node field, gated behind the capsule path).
 
 ### State of the tree
 
@@ -28,15 +29,75 @@ slither/drift selected by morphotype).
 | Sharing | `src/engine/share.ts` | ✅ `CAM1:` encode/decode/validate |
 | Lineage | `src/engine/lineage.ts`, `src/viewer/LineageTree.tsx` | ✅ tree model + SVG view |
 | Share bar | `src/viewer/ShareBar.tsx` | ✅ copy / paste-and-load |
-| Directed pressures | `src/engine/pressures.ts`, `src/viewer/PressurePanel.tsx` | ✅ scorePhenotype + runGenerations + panel |
+| Directed pressures | `src/engine/pressures.ts`, `src/viewer/PressurePanel.tsx` | ✅ scorePhenotype + runGenerations + panel + novelty steer |
+| Menagerie | `src/viewer/archive.ts`, `src/viewer/Menagerie.tsx` | ✅ MAP-Elites archive (limbs×elongation) + SVG browser, click-to-parent |
 | Skin material | `src/viewer/creatureMaterial.ts` | ✅ countershading + 8 patterns + per-covering bump + sheen + fresnel rim |
 | Covering | `src/engine/genome.ts` (`Covering`) | ✅ type/pattern/scale/contrast/sheen, per-morphotype, mutated, `CAM2:`-shared |
-| Procedural motion | `src/viewer/animation.ts` | ✅ undulation + gait (unit-tested) |
+| Procedural motion | `src/viewer/animation.ts` | ✅ 8 motion styles (walk/swim/slither/scuttle/flap/drift/ooze) by morphology, role-based (unit-tested) |
 | UI / store | `src/ui/App.tsx`, `store.ts` | ✅ Zustand: lineage + current + litter + pressure, localStorage |
 | Test invariants | `tests/engine/invariants.ts` | ✅ shared phenotype + genome-bounds asserts |
 | Physics fitness (stretch) | — | ⬜ M6 |
 
 ---
+
+## M14 — The Menagerie · built 2026-06-29 (awaiting test)
+
+The quality-diversity payoff (MORPHOLOGY §11.4–11.5): a **MAP-Elites archive** that turns a session
+into a living field guide, + a **novelty steer**. New `src/viewer/archive.ts` (UI layer, not the
+pure engine — but the binning/insert logic is pure & node-tested): a `GRID×GRID` (7×7) map over two
+morphospace axes (limb count × elongation); `archiveAll(menagerie, genomes)` bins each creature and
+keeps the **most-coherent** specimen per cell. The store folds the current creature + its 9-strong
+divergent litter into the archive on every action (`batch`), so it fills fast and **persists**
+across new-creature rolls (one accumulating field guide per session).
+
+`Menagerie.tsx` browses it as a lightweight **SVG grid** (no new WebGL contexts — same call as the
+lineage tree): each occupied cell is a swatch in its specimen's palette, titled with its
+morphotype + coherence; the current creature's bin is outlined ("you are here"); click a cell →
+`loadCell` roots a fresh lineage at that genome. It sits in a new bottom row beside the lineage.
+
+The **novelty steer** (§11.5): `Pressure` gained a `novelty` axis; `scorePhenotype(p, t, refs)` adds
+`novelty · tanh(min‖descriptor − ref‖ / 0.6)` and `runGenerations` threads `opts.refs`; the store
+passes the archive's descriptors, so a directed run with Novelty up hunts morphospace regions the
+menagerie hasn't covered. A "Novelty (familiar↔weird)" slider joins the pressure panel.
+
+**Verified (2026-06-29):** `npm run typecheck` clean; `npm test` → **57/57** (5 new: the novelty
+steer drives a lineage away from its reference form across a dozen roots, novelty degrades to 0
+without refs; binKey stays in-grid over 500 rolls, the archive spreads across ≥8 cells, keeps the
+max-coherence elite per bin, and re-inserting is idempotent). `npm run build` → succeeds.
+**In-browser:** the Menagerie filled **3 → 25 / 49** over 20 rolls; clicking a cell loaded that
+archived specimen as a new parent (generation → 0, seed drawn from the archive); the novelty slider
++ a 15-gen run advanced the lineage with no errors. (The multi-canvas page still defeats the preview
+screenshot tool, so verified via the DOM + the handle, as in M5/M12.)
+
+## M13 — Motion styles · built 2026-06-29 (awaiting test)
+
+Creatures now move *in character* (MORPHOLOGY §8). `animation.ts` generalized from M5's single
+"undulation + gait" into a **motion-style library**: `buildRig(data, phenotype)` reads the body
+plan — leg/fin/wing/tentacle counts, trunk length, symmetry — and `pickStyle` chooses one of
+**walk · swim · slither · scuttle · flap · drift · ooze**. Each style sets amplitudes on a shared
+set of additive oscillation terms (lateral body wave, leg lift/swing, wing flap, fin flutter,
+tentacle sway, whole-body bob/pulse), applied per node by **role** (spine / leg / wing / fin /
+tail / tentacle — derived from each node's `part.kind`/`terminal`, with a `limbNorm` so tips swing
+more than roots). So: a fish's caudal wave + fin sway, a crab's metachronal leg ripple (legs fire
+in sequence along the body), a bird's wing-beat + body-bob, a serpent's strong lateral wave, a
+cephalopod's tentacle drift + mantle pulse, a quadruped's diagonal trot (compact bodies bound).
+Still pure viewer math — `grow()` stays static & deterministic.
+
+Roles are size-invariant from the phenotype, and **trunk length** (spine-node count) — not the
+bounding box — is the "is it long?" signal, so a *coiled* serpent still reads as slither (its bbox
+isn't elongated). One bug fixed along the way: claw-terminal legs were double-counted, so a
+4-legged felid mis-read as 6+ legs → scuttle; now legs count once. `CreatureMesh` passes the
+phenotype to `buildRig`; the dev handle (`window.__cambrian`) gained `motion` + `covering`.
+
+**Verified (2026-06-29):** `npm run typecheck` clean; `npm test` → **52/52** — the animation suite
+(now 4 tests) keeps determinism + a tightened bound (displacement ≤ the rig's summed amplitudes,
+`maxDisp`) and adds a **style-classification** test: across 40 rolls each, the dominant style is
+swim for fish, scuttle for crab, flap for bird, slither for serpent, drift for cephalopod, walk for
+felid. `npm run build` → succeeds. **In-browser:** 8 random rolls came out slither (legless) /
+scuttle (6 legs) / drift (radial, 14 eyes) / flap (winged) / walk (legged) / swim (finned, legless)
+— each matching its body plan, no console errors. (Motion *plays* only in a foregrounded browser —
+the preview throttles rAF — so the live wiring is verified via the `motion` handle + the human's
+eyes, as in M5.)
 
 ## M12 — Covering & texture · built 2026-06-29 (awaiting test)
 

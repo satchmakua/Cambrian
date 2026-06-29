@@ -112,14 +112,34 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
   matte spotted fur, a roll came out wet glossy slime, another a hard scaled lizard — all distinct,
   shader compiles with no console errors; awaiting human visual confirmation)_
 
-- [ ] **M13 — Motion styles.** Gait/swim/flap/scuttle/slither/drift selected by morphotype.
+- [x] **M13 — Motion styles.** The animation rig generalized from "undulation + gait" to **8
+  styles** (walk / swim / slither / scuttle / flap / drift / ooze) picked from the creature's own
+  morphology (leg/fin/wing/tentacle counts + trunk length + symmetry), each parameterizing shared
+  per-node oscillation terms applied by **role** (spine/leg/wing/fin/tail/tentacle): a fish's caudal
+  body wave + fin sway, a crab's many-leg metachronal ripple, a bird's wing-beat + body-bob, a
+  serpent's lateral wave, a cephalopod's tentacle drift + mantle pulse. Still pure viewer math
+  (`grow()` stays static). MORPHOLOGY §8.
   **Test:** a fish swims, a crab scuttles, a bird flaps, a serpent slithers — in character.
+  _(built 2026-06-29, self-verified: 52 tests incl. a style-classification test (fish→swim · crab→
+  scuttle · bird→flap · serpent→slither · cephalopod→drift · felid→walk) + deterministic/bounded
+  motion; in-browser 8 rolls produced slither/scuttle/drift/flap/walk/swim each matching its body
+  plan, no console errors; awaiting human's visual read on the foregrounded animation)_
 
-- [ ] **M14 — The Menagerie.** A **MAP-Elites** archive grid over two morphospace axes that
-  fills with divergent specimens as you play; browse it, pull any cell as a parent; plus a
-  **novelty** axis in directed pressures. See MORPHOLOGY §11.4–11.5.
+- [x] **M14 — The Menagerie.** A **MAP-Elites** archive (`src/viewer/archive.ts`) over two
+  morphospace axes (limb count × elongation) — every creature that appears (the current one + its
+  9-strong divergent litter) is binned and each cell keeps its **most-coherent** specimen. A
+  browsable SVG grid (`Menagerie.tsx`, no extra WebGL) fills as you play; click a cell to pull that
+  creature as a fresh parent; "you are here" marks the current bin. Plus a **novelty** axis in the
+  pressure vector — `scorePhenotype`/`runGenerations` reward morphospace distance from the archive
+  (novelty search), so directed runs hunt forms unlike what's been seen. Archive lives in the store
+  (engine stays pure) + persists with the session. See MORPHOLOGY §11.4–11.5.
   **Test:** after a session the menagerie holds a wide grid of distinct creatures; the novelty
   steer reliably produces forms unlike what's already there.
+  _(built 2026-06-29, self-verified: 57 tests incl. a novelty-steer test (drives away from the
+  reference set) + archive tests (binning in-range, the grid spreads, highest-coherence elite per
+  cell, idempotent); in-browser the grid filled 3→25/49 over 20 rolls, clicking a cell loaded that
+  specimen (gen→0, seed from the archive), the novelty run advanced gen 0→15, no console errors;
+  awaiting human's read)_
 
 - [ ] **M15 — Smooth skin** *(elevated from far-stretch — biggest "less crude" win)*.
   Marching-cubes metaball surface over the node field, gated behind the robust capsule path;

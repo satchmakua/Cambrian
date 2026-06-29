@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
 import { grow } from '../engine/grow';
-import { coherence } from '../engine/morphospace';
+import { coherence, describe } from '../engine/morphospace';
 import { CreatureViewer } from '../viewer/CreatureViewer';
 import { OffspringGallery } from '../viewer/OffspringGallery';
 import { PressurePanel } from '../viewer/PressurePanel';
 import { ShareBar } from '../viewer/ShareBar';
 import { LineageTree } from '../viewer/LineageTree';
+import { Menagerie } from '../viewer/Menagerie';
+import { binKey, MENAGERIE_GRID } from '../viewer/archive';
 import { useStore } from './store';
 
 export function App() {
@@ -22,12 +24,16 @@ export function App() {
   const setSymmetryMode = useStore((s) => s.setSymmetryMode);
   const setPressure = useStore((s) => s.setPressure);
   const runDirected = useStore((s) => s.runDirected);
+  const menagerie = useStore((s) => s.menagerie);
+  const loadCell = useStore((s) => s.loadCell);
 
   const current = nodes[currentId];
   const genome = current.genome;
   const generation = current.generation;
   const phenotype = useMemo(() => grow(genome), [genome]);
   const vibe = useMemo(() => coherence(phenotype), [phenotype]);
+  const currentCell = useMemo(() => binKey(describe(phenotype)), [phenotype]);
+  const menagerieCount = Object.keys(menagerie).length;
 
   return (
     <div className="app">
@@ -77,10 +83,20 @@ export function App() {
         </aside>
       </div>
 
-      <section className="lineage">
-        <div className="lineage-head">Lineage — click a creature to revisit or branch a new line</div>
-        <div className="lineage-scroll">
-          <LineageTree nodes={nodes} currentId={currentId} onSelect={selectNode} />
+      <section className="bottom">
+        <div className="lineage">
+          <div className="lineage-head">Lineage — click a creature to revisit or branch a new line</div>
+          <div className="lineage-scroll">
+            <LineageTree nodes={nodes} currentId={currentId} onSelect={selectNode} />
+          </div>
+        </div>
+        <div className="menagerie">
+          <div className="lineage-head">
+            Menagerie — {menagerieCount} / {MENAGERIE_GRID * MENAGERIE_GRID}
+          </div>
+          <div className="menagerie-scroll">
+            <Menagerie entries={menagerie} currentKey={currentCell} onLoad={loadCell} />
+          </div>
         </div>
       </section>
     </div>

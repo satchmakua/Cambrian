@@ -12,6 +12,7 @@ const AXES: { key: keyof Pressure; label: string; lo: string; hi: string }[] = [
   { key: 'bodyLength', label: 'Body', lo: 'stubby', hi: 'long' },
   { key: 'aquatic', label: 'Locomotion', lo: 'legs', hi: 'fins' },
   { key: 'predator', label: 'Demeanor', lo: 'prey', hi: 'predator' },
+  { key: 'novelty', label: 'Novelty', lo: 'familiar', hi: 'weird' },
 ];
 
 export function PressurePanel({

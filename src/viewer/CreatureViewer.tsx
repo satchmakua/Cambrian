@@ -9,6 +9,8 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Stage } from '@react-three/drei';
 import type { Phenotype } from '../engine/grow';
 import { CreatureMesh } from './CreatureMesh';
+import { buildRig } from './animation';
+import { buildMeshData } from './meshData';
 
 export function CreatureViewer({ phenotype }: { phenotype: Phenotype }) {
   // Dev-only: freezing stops the auto-rotate and switches to on-demand rendering so the
@@ -35,6 +37,8 @@ export function CreatureViewer({ phenotype }: { phenotype: Phenotype }) {
       dims: dims.map((d) => +d.toFixed(2)),
       maxRadius: +Math.max(...phenotype.nodes.map((n) => n.radius)).toFixed(2),
       terminals,
+      covering: phenotype.genomeRef.covering.type,
+      motion: buildRig(buildMeshData(phenotype), phenotype).style,
     };
   }, [phenotype]);
 

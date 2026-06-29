@@ -390,15 +390,63 @@ body,
   cursor: default;
 }
 
-/* --- lineage strip --- */
+/* --- bottom strip: lineage + menagerie --- */
+
+.bottom {
+  flex: 0 0 196px;
+  display: flex;
+  min-height: 0;
+  border-top: 1px solid var(--line);
+}
 
 .lineage {
-  flex: 0 0 168px;
+  flex: 1;
+  min-width: 0;
   background: var(--panel);
-  border-top: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.menagerie {
+  flex: 0 0 230px;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.menagerie-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.men-svg {
+  display: block;
+}
+
+.men-cell.filled {
+  cursor: pointer;
+}
+
+.men-cell.filled rect {
+  transition: stroke 0.12s ease;
+}
+
+.men-cell.filled:hover rect {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.men-axis {
+  fill: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.04em;
 }
 
 .lineage-head {
