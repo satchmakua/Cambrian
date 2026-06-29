@@ -5,9 +5,9 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 2. M0–M4 built and self-verified (incl. in-browser); awaiting
-acceptance test. Creatures are steerable by hand (breeder) or by target (directed pressures),
-branchable, and shareable.
+**Current phase:** Phase 2. M0–M5 built and self-verified; awaiting acceptance test.
+Creatures are steerable by hand (breeder) or by target (directed pressures), branchable,
+shareable, and now **animated** (procedural undulation + gait).
 
 ### State of the tree
 
@@ -27,11 +27,79 @@ branchable, and shareable.
 | Lineage | `src/engine/lineage.ts`, `src/viewer/LineageTree.tsx` | ✅ tree model + SVG view |
 | Share bar | `src/viewer/ShareBar.tsx` | ✅ copy / paste-and-load |
 | Directed pressures | `src/engine/pressures.ts`, `src/viewer/PressurePanel.tsx` | ✅ scorePhenotype + runGenerations + panel |
+| Skin material | `src/viewer/creatureMaterial.ts` | ✅ countershading + pattern + fresnel rim |
+| Procedural motion | `src/viewer/animation.ts` | ✅ undulation + gait (unit-tested) |
 | UI / store | `src/ui/App.tsx`, `store.ts` | ✅ Zustand: lineage + current + litter + pressure, localStorage |
 | Test invariants | `tests/engine/invariants.ts` | ✅ shared phenotype + genome-bounds asserts |
-| Better bodies & motion | — | ⬜ M5 |
+| Physics fitness (stretch) | — | ⬜ M6 |
 
 ---
+
+## Divergence engine + prior-art research · 2026-06-28
+
+Researched the relevant prior art and folded it into the design (no code yet):
+
+- **Spore's tech** (Hecker's notes): metaball implicit-surface skin, parameterized **Rigblocks**,
+  and **morphology-independent motion retargeting**. Mapped each to a Cambrian analog in
+  MORPHOLOGY §6/§8/§14; added a note to borrow Spore's "author abstract gaits, retarget by limb
+  role" idea for richer motion.
+- **Games landscape:** Spore is still the creature-creator king ~17 yrs on; Species / Thrive /
+  The Sapling / Framsticks go further on *evolution*; our truest relative is Picbreeder /
+  EndlessForms (interactive CPPN/NEAT evolution of forms). Captured in §14.
+- **Attractor basins → a real divergence engine (MORPHOLOGY §11).** Formalized the human's
+  intuition with quality-diversity research: a computed **morphospace** with morphotypes as
+  **attractor centroids**, a **coherence field** (familiar near centroids, uncanny in the
+  valleys), **basin dynamics** (coherence pull / confluence / saltation), **niched litters**
+  (9 offspring spread across morphospace, not 9 near-clones), a **MAP-Elites "Menagerie"**
+  archive, and a **novelty** steer. This is the cure for premature convergence (collapse to one
+  morphotype) the human flagged.
+
+**Critical-review changes applied:** replaced the fixed `vibe` genome tag with a *computed*
+morphospace position (so a creature reports its true current form); re-cut the roadmap (M8 was
+overstuffed; added **M11 divergence engine** + **M14 Menagerie**; **elevated marching-cubes
+smooth skin to M15** since the capsule-kit look is the #1 thing keeping it crude; M7 stretch is
+now just glTF export). ROADMAP Phase 3 is now M8–M16.
+
+## Perf fix + creature-grammar spec · 2026-06-28
+
+Two things in response to feedback (creatures lag on click; too few distinct shapes):
+
+- **Perf:** the ~10s white-screen on every click was the offspring gallery **remounting all 9
+  WebGL canvases** each generation (their React key included the generation + seed, so React
+  destroyed and rebuilt them → GL-context thrash past the browser's ~16 limit). Fixed with a
+  **stable per-slot key** so the 9 canvases persist and just swap contents. (The proper
+  10→1-context consolidation via drei `<View>` is scheduled as M8.)
+- **Variety:** wrote **[MORPHOLOGY.md](MORPHOLOGY.md)** — a full spec for the variety system
+  the toy needs. A **genome v2** "creature grammar": ~24 **morphotypes** (priors, split into a
+  strong *familiar* and a strong *uncanny* cluster per the human's call), ~24 **trait axes**,
+  a ~25-part **vocabulary** (wings, tails, horns, fins, pincers, frills, carapace, every eye
+  style, every mouth style), and a **procedural covering/texture** system (in-shader patterns
+  + bump for scales/fur/feathers/chitin/slime — no asset files, the human chose procedural).
+  The key unlock is giving appendages a full **spherical aim** (azimuth + elevation + roll),
+  which is why v1 looks same-y (parts can only fan sideways today). Build plan = ROADMAP
+  Phase 3 (M8–M13), which takes priority over the M6/M7 stretch. Decisions locked: procedural
+  textures, familiar+uncanny both strong, clean v2 (old `CAM1:` strings dropped).
+
+## M5 — Procedural motion · built 2026-06-28 (awaiting test)
+
+Creatures move now. New `src/viewer/animation.ts` (pure math, no three) deforms the skeleton
+node positions each frame: a **traveling sine wave** along the body (undulation — amplitude
+scales with length and drops for ≥4-legged bodies, so serpents slither and quadrupeds sway
+gently) plus a **phased leg gait** (nodes below the body lift and swing on a diagonal phase).
+`CreatureMesh` re-poses the capsules/spheres/features from the animated positions in
+`useFrame`. Also: a distinct **claw** terminal (a dark talon cone vs. the foot's flat pad).
+Radial variety and the other distinct terminals (eyes/mouth/feet/fins) landed in the earlier
+look + generator passes, completing M5's scope.
+
+Motion is a *viewer* concern — `grow()` stays static/deterministic. The animation math was
+factored out so it's unit-testable headlessly (the preview throttles `requestAnimationFrame`,
+so it can't show motion — same limit as screenshots).
+
+**Verified (2026-06-28):** `npm run typecheck` clean; `npm test` → **39/39** (3 new: the pose
+visibly changes over time; deterministic + bounded — never exceeds the rig's amplitudes, no
+NaN — across 200 creatures × 4 times; serpents undulate more than the compact quadruped);
+`npm run build` → succeeds; no console errors in-browser (base pose renders; motion plays in
+a real foregrounded browser). Awaiting the human's visual read on the animation.
 
 ## M4 — Directed pressures · built 2026-06-28 (awaiting test)
 

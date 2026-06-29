@@ -124,6 +124,11 @@ overnight" possible.
 This is where the design earns its keep. Everything downstream (range, leaps, mesh safety,
 sharing, tests) depends on these definitions being precise.
 
+> **Note (2026-06-28):** the **genome v2** expansion — the morphotype/trait/part/covering
+> grammar that gives the real creature variety — is specified in its own doc,
+> **[MORPHOLOGY.md](MORPHOLOGY.md)**, and built in Phase 3 (ROADMAP M8–M13). The v1 schema
+> below is the foundation it generalizes (notably: appendages gain a full spherical aim).
+
 ### 4.1 Coordinate system & units (fixed, non-negotiable)
 
 - **Right-handed**, **+Y up**, **+Z forward** (the creature faces +Z), **+X to its right**.

@@ -25,8 +25,10 @@ export function OffspringGallery({ offspring, generation, onPick, onReroll }: Pr
       </div>
       <p className="gallery-hint">Pick the offspring you like — it becomes the next parent.</p>
       <div className="grid">
+        {/* Stable key by slot — the 9 canvases persist and just swap contents, instead
+            of remounting (which churned 9 WebGL contexts and white-screened the view). */}
         {offspring.map((g, i) => (
-          <OffspringThumb key={`${generation}-${i}-${g.seed}`} genome={g} onPick={() => onPick(g)} />
+          <OffspringThumb key={i} genome={g} onPick={() => onPick(g)} />
         ))}
       </div>
     </div>

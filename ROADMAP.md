@@ -57,18 +57,71 @@ unchecked milestone.
   rendered as distinct tips, procedural undulation/walk animation, palette/materials.
   **Test:** evolve a radial creature and a many-legged one; both animate plausibly
   (undulating spine, limbs in phase) without visual blow-ups.
+  _(built 2026-06-28: distinct terminals + countershaded skin + procedural motion;
+  awaiting human visual confirmation)_
 
-## Phase 3 — Stretch
+## Phase 3 — The creature grammar (v2)  ·  **next priority**
+
+The big variety push. Full spec in **[MORPHOLOGY.md](MORPHOLOGY.md)** — a genome v2 that
+throws out recognizable *and* uncanny creatures (cats, crabs, herons, dragons, aliens) from a
+morphotype → trait → part → covering grammar. Takes priority over the M6/M7 stretch below.
+
+- [ ] **M8 — Genome v2 + spherical aim.** New schema with **spherical part aim** (azimuth +
+  elevation + roll — unlocks tails/wings/horns/necks); migrate `grow` + the generator; bump
+  share to `CAM2:`; raise `NODE_MAX`. (Gallery `<View>` consolidation rides here if convenient;
+  the remount churn is already fixed by stable keys.)
+  **Test:** roll creatures with tails pointing back, fins up, horns forward — all expressible.
+
+- [ ] **M9 — Part vocabulary.** The ~25 parts (legs by posture, wings, fins, tails, horns,
+  spines, frills, ears, antennae, tentacles, pincers, carapace) with distinct crude geometry —
+  including **all eye styles and all mouth styles** (beak, maw, mandibles, sucker, baleen, …).
+  **Test:** build creatures with a beak vs. a fanged maw vs. pincers; each reads distinctly.
+
+- [ ] **M10 — Morphotype library + trait sampler.** The ~24 priors + ~24 trait axes +
+  ratio-based proportions + the bimodal (familiar/uncanny) sampler.
+  **Test:** random rolls read clearly as cat / crab / heron / dragon / cephalopod and keep
+  surprising over a long session.
+
+- [ ] **M11 — Divergence engine.** Morphospace descriptor + coherence field + basin dynamics
+  (coherence pull / confluence / saltation) + **niched litters** (the 9 offspring spread across
+  morphospace instead of 9 near-clones). See MORPHOLOGY §11.
+  **Test:** a lineage visibly drifts *between* morphotypes (e.g. felid→griffin→raptor) instead
+  of staying one shape; each litter offers genuinely divergent choices.
+
+- [ ] **M12 — Covering & texture.** Procedural color patterns (stripes/spots/ocelli/…) + in-
+  shader surface bump (scales/fur/feathers/chitin/slime) + per-covering materials.
+  **Test:** the same silhouette in fur vs. scales vs. chitin looks like a different animal.
+
+- [ ] **M13 — Motion styles.** Gait/swim/flap/scuttle/slither/drift selected by morphotype.
+  **Test:** a fish swims, a crab scuttles, a bird flaps, a serpent slithers — in character.
+
+- [ ] **M14 — The Menagerie.** A **MAP-Elites** archive grid over two morphospace axes that
+  fills with divergent specimens as you play; browse it, pull any cell as a parent; plus a
+  **novelty** axis in directed pressures. See MORPHOLOGY §11.4–11.5.
+  **Test:** after a session the menagerie holds a wide grid of distinct creatures; the novelty
+  steer reliably produces forms unlike what's already there.
+
+- [ ] **M15 — Smooth skin** *(elevated from far-stretch — biggest "less crude" win)*.
+  Marching-cubes metaball surface over the node field, gated behind the robust capsule path;
+  per-covering material carries over.
+  **Test:** toggle smooth skin → one organic surface replaces the capsule kit without breaking
+  on weird topologies; thumbnails still render at framerate.
+
+- [ ] **M16 — Dials & polish.** Surface new axes in the UI (more pressure sliders, a morphotype
+  filter); tune the distribution; expand the morphotype/part tables.
+  **Test:** the directed-evolution panel can steer toward "winged + long-necked + scaled".
+
+## Phase 4 — Stretch
 
 - [ ] **M6 — (stretch) Physics fitness.** `@dimforge/rapier3d-deterministic-compat`,
   lazy-loaded; oscillating muscle drive; distance-traveled fitness; select the movers.
   **Test:** run physics fitness for N generations → later creatures travel measurably
   farther than earlier ones; identical seed → identical run.
 
-- [ ] **M7 — (stretch) Metaball skin.** `MarchingCubes` smooth surface over the node
-  field, gated behind the robust capsule path; optional `.glb` export.
-  **Test:** toggle smooth skin → one organic surface replaces the capsule kit without
-  breaking on weird topologies; export opens in another glTF viewer.
+- [ ] **M7 — (stretch) glTF export.** Bake the current creature (capsule or smooth skin) to
+  `.glb` via three's `GLTFExporter`. _(The metaball/marching-cubes smooth skin itself was
+  pulled forward to **M15** — it's too central to the look to leave as a far-stretch.)_
+  **Test:** export a creature; it opens correctly in another glTF viewer.
 
 ---
 

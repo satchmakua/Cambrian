@@ -1,78 +1,65 @@
 /**
- * Render data for a Phenotype (DESIGN §6.3).
+ * Render data for a Phenotype (DESIGN §6.3). Pure data — no three.js.
  *
- * The skeleton splits into the **body** (spine + limb capsules and joint spheres,
- * drawn with the shared countershaded creature material) and **features** (eyes,
- * mouth, feet, claws, fins) — the bits that turn a blob into a face/limbs and get
- * special rendering. Pure data; CreatureMesh renders it.
+ * Exposes per-node positions/radii, the edges (capsules), which nodes are plain body
+ * spheres vs. **features** (eyes/mouth/feet/claws/fins), and the bounds center/size.
+ * CreatureMesh renders this and animates the node positions each frame (M5 motion).
  */
-import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
 import type { Terminal } from '../engine/genome';
 
-export interface CapsuleInst {
-  position: [number, number, number];
-  quaternion: [number, number, number, number];
-  length: number;
+export interface MeshNode {
+  pos: [number, number, number];
   radius: number;
 }
 
-export interface SphereInst {
-  position: [number, number, number];
+export interface MeshEdge {
+  a: number; // node index
+  b: number; // node index
   radius: number;
 }
 
-export interface FeatureInst {
+export interface MeshFeature {
   type: Exclude<Terminal, 'none'>;
-  position: [number, number, number];
-  quaternion: [number, number, number, number]; // node orientation; local +Z points outward
+  idx: number; // node index
   radius: number;
+  quat: [number, number, number, number]; // node orientation; local +Z points outward
 }
 
 export interface MeshData {
-  capsules: CapsuleInst[];
-  spheres: SphereInst[];
-  features: FeatureInst[];
+  nodes: MeshNode[];
+  edges: MeshEdge[];
+  bodySpheres: number[]; // node indices drawn with the body material
+  features: MeshFeature[];
+  center: [number, number, number];
+  size: [number, number, number]; // bounds dimensions
 }
 
-const Y = new THREE.Vector3(0, 1, 0);
-
 export function buildMeshData(p: Phenotype): MeshData {
-  const capsules: CapsuleInst[] = [];
-  const spheres: SphereInst[] = [];
-  const features: FeatureInst[] = [];
+  const nodes: MeshNode[] = p.nodes.map((n) => ({ pos: n.pos, radius: n.radius }));
+  const edges: MeshEdge[] = p.edges.map(([a, b]) => ({
+    a,
+    b,
+    radius: ((p.nodes[a].radius + p.nodes[b].radius) / 2) * 0.9,
+  }));
 
-  const a = new THREE.Vector3();
-  const b = new THREE.Vector3();
-  const dir = new THREE.Vector3();
-  const q = new THREE.Quaternion();
-
-  for (const [i, j] of p.edges) {
-    const na = p.nodes[i];
-    const nb = p.nodes[j];
-    a.fromArray(na.pos);
-    b.fromArray(nb.pos);
-    dir.subVectors(b, a);
-    const length = dir.length();
-    if (length < 1e-5) continue;
-    dir.normalize();
-    q.setFromUnitVectors(Y, dir);
-    const mid = a.clone().addScaledVector(dir, length / 2);
-    capsules.push({
-      position: [mid.x, mid.y, mid.z],
-      quaternion: [q.x, q.y, q.z, q.w],
-      length,
-      radius: ((na.radius + nb.radius) / 2) * 0.9,
-    });
-  }
-
-  for (const n of p.nodes) {
+  const bodySpheres: number[] = [];
+  const features: MeshFeature[] = [];
+  p.nodes.forEach((n, i) => {
     if (n.terminal && n.terminal !== 'none') {
-      features.push({ type: n.terminal, position: n.pos, quaternion: n.quat, radius: n.radius });
+      features.push({ type: n.terminal, idx: i, radius: n.radius, quat: n.quat });
     } else {
-      spheres.push({ position: n.pos, radius: n.radius });
+      bodySpheres.push(i);
     }
-  }
+  });
 
-  return { capsules, spheres, features };
+  const { min, max } = p.bounds;
+  return {
+    nodes,
+    edges,
+    bodySpheres,
+    features,
+    center: [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2],
+    size: [max[0] - min[0], max[1] - min[1], max[2] - min[2]],
+  };
 }

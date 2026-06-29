@@ -8,10 +8,10 @@ A 3D artificial-evolution toy: creatures are *grown* from a generative genome, m
 selected — by you (Biomorphs-style breeder) or by directed pressures — so you can walk a
 lineage from a scurrying blob to a finned giant to a striped quadruped.
 
-**Status:** 🟢 M4 (directed pressures) — steer evolution by hand (breeder grid) or by target
-(size / limbs / body length / aquatic↔terrestrial / predator↔prey, fast-forwarded K
-generations), branch from any ancestor, and share creatures as `CAM1:` strings (session
-persists). See [ROADMAP.md](ROADMAP.md) for what's next.
+**Status:** 🟢 M5 (better bodies & motion) — creatures have faces (eyes/mouth), countershaded
+patterned skin, distinct fins/claws/feet, and **procedural motion** (undulating spines,
+walking gaits). Steer them by hand (breeder grid) or by target (directed pressures), branch
+any ancestor, and share as `CAM1:` strings. See [ROADMAP.md](ROADMAP.md) for the stretch goals.
 
 ## Stack
 
@@ -45,6 +45,8 @@ tests/engine/ # determinism + bounds + 2000-genome fuzz + CAM1 round-trip
 ## Docs
 
 - [DESIGN.md](DESIGN.md) — vision, the genome/growth core, architecture, milestones.
+- [MORPHOLOGY.md](MORPHOLOGY.md) — the creature-variety system (genome v2: morphotypes →
+  traits → parts → covering); drives Phase 3.
 - [ROADMAP.md](ROADMAP.md) — milestone checklist with Test steps.
 - [PROGRESS.md](PROGRESS.md) — build log.
 - [CLAUDE.md](CLAUDE.md) — standing instructions for the AI build loop.
