@@ -8,6 +8,7 @@ import { ShareBar } from '../viewer/ShareBar';
 import { LineageTree } from '../viewer/LineageTree';
 import { Menagerie } from '../viewer/Menagerie';
 import { binKey, MENAGERIE_GRID } from '../viewer/archive';
+import { MORPHOTYPE_IDS } from '../engine/random';
 import { useStore } from './store';
 
 export function App() {
@@ -28,6 +29,8 @@ export function App() {
   const loadCell = useStore((s) => s.loadCell);
   const smoothSkin = useStore((s) => s.smoothSkin);
   const toggleSmooth = useStore((s) => s.toggleSmooth);
+  const morphoFilter = useStore((s) => s.morphoFilter);
+  const setMorphoFilter = useStore((s) => s.setMorphoFilter);
 
   const current = nodes[currentId];
   const genome = current.genome;
@@ -62,7 +65,22 @@ export function App() {
                 <dd>{phenotype.nodes.length}</dd>
               </div>
             </dl>
-            <button onClick={newCreature}>New random creature</button>
+            <div className="roll-row">
+              <button onClick={newCreature}>New random creature</button>
+              <select
+                className="morpho-filter"
+                value={morphoFilter ?? ''}
+                onChange={(e) => setMorphoFilter(e.target.value || null)}
+                title="Bias new rolls to one morphotype"
+              >
+                <option value="">any kind</option>
+                {MORPHOTYPE_IDS.map((id) => (
+                  <option key={id} value={id}>
+                    {id}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="modes">
               <span>symmetry</span>
               {(['auto', 'bilateral', 'radial'] as const).map((m) => (

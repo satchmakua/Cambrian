@@ -60,6 +60,33 @@ describe('directed pressures', () => {
     expect(wins).toBe(12); // elitism ⇒ always ≥ start
   });
 
+  it('the wings and neck steers move their own trait in most lineages (M16)', () => {
+    for (const axis of ['wings', 'neck'] as const) {
+      const t: Pressure = { ...ZERO_PRESSURE, [axis]: 1 };
+      let improved = 0;
+      for (let s = 0; s < 16; s++) {
+        const root = randomGenome(s);
+        const path = runGenerations(root, t, 45, s * 7 + 3);
+        const start = score(root, t);
+        const end = score(path[path.length - 1], t);
+        expect(end).toBeGreaterThanOrEqual(start - 1e-9); // monotonic by elitism
+        if (end > start + 1e-6) improved++;
+      }
+      expect(improved).toBeGreaterThan(8); // the steer reaches most roots
+    }
+  });
+
+  it('the covering steer holds the chosen skin through a run (M16)', () => {
+    for (let s = 0; s < 12; s++) {
+      const root = randomGenome(s);
+      root.covering.type = 'scales'; // (the store seeds this when a covering target is set)
+      const t: Pressure = { ...ZERO_PRESSURE, wings: 1, neck: 1, coveringTarget: 'scales' };
+      const path = runGenerations(root, t, 40, s * 9 + 1);
+      // the +1.5 match bonus + elitism keep the covering on target the whole way
+      expect(path[path.length - 1].covering.type).toBe('scales');
+    }
+  });
+
   it('the novelty steer drives toward forms far from the reference set (M14)', () => {
     const t: Pressure = { ...ZERO_PRESSURE, novelty: 1 };
     let moved = 0;

@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import { mix32 } from '../engine/rng';
 import { defaultGenome, type Genome } from '../engine/genome';
-import { randomGenome, type SymmetryMode } from '../engine/random';
+import { randomGenome, genomeOfMorphotype, type SymmetryMode } from '../engine/random';
 import { breederLitter } from '../engine/selection';
 import { decodeGenome } from '../engine/share';
 import { runGenerations, ZERO_PRESSURE, type Pressure } from '../engine/pressures';
@@ -39,6 +39,8 @@ interface AppState extends Session {
   pressure: Pressure; // directed-evolution target (M4)
   smoothSkin: boolean; // render a marching-cubes metaball surface instead of capsules (M15)
   toggleSmooth: () => void;
+  morphoFilter: string | null; // bias "New random creature" to one morphotype, or null for the full sampler (M16)
+  setMorphoFilter: (id: string | null) => void;
   newCreature: () => void;
   promote: (child: Genome) => void;
   selectNode: (id: string) => void; // revisit / branch from an ancestor
@@ -130,6 +132,9 @@ export const useStore = create<AppState>((set, get) => {
     ...loadInitial(),
     pressure: ZERO_PRESSURE,
     smoothSkin: loadSmooth(),
+    morphoFilter: null,
+
+    setMorphoFilter: (id) => set({ morphoFilter: id }),
 
     toggleSmooth: () =>
       set((state) => {
@@ -142,8 +147,11 @@ export const useStore = create<AppState>((set, get) => {
         return { smoothSkin: v };
       }),
 
-    newCreature: () =>
-      commit(rootedAt(randomGenome(seed32(), get().symmetryMode), get().symmetryMode, get().menagerie)),
+    newCreature: () => {
+      const { symmetryMode, menagerie, morphoFilter } = get();
+      const g = morphoFilter ? genomeOfMorphotype(seed32(), morphoFilter) : randomGenome(seed32(), symmetryMode);
+      commit(rootedAt(g, symmetryMode, menagerie));
+    },
 
     promote: (child) =>
       set((state) => {
@@ -188,7 +196,13 @@ export const useStore = create<AppState>((set, get) => {
     runDirected: (generations) =>
       set((state) => {
         const start = state.nodes[state.currentId];
-        const path = runGenerations(start.genome, state.pressure, generations, seed32(), {
+        // a covering target seeds the start skin so it's reachable + held through the run
+        let rootGenome = start.genome;
+        if (state.pressure.coveringTarget) {
+          rootGenome = structuredClone(start.genome);
+          rootGenome.covering.type = state.pressure.coveringTarget;
+        }
+        const path = runGenerations(rootGenome, state.pressure, generations, seed32(), {
           lockSymmetry: state.symmetryMode !== 'auto',
           refs: descriptorsOf(state.menagerie), // novelty steers away from what the menagerie holds
         });

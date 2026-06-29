@@ -180,7 +180,13 @@ function Feature({ f, footColor, finColor }: { f: MeshFeature; footColor: number
     case 'pincer':
       return <Pincer f={f} color={footColor} />;
     case 'fin':
-      return f.kind === 'wing' ? <Wing f={f} color={finColor} /> : <Fin f={f} color={finColor} />;
+      return f.kind === 'wing' ? (
+        <Wing f={f} color={finColor} />
+      ) : f.kind === 'frill' ? (
+        <Frill f={f} color={finColor} />
+      ) : (
+        <Fin f={f} color={finColor} />
+      );
     case 'claw':
       return f.kind === 'horn' ? <Horn f={f} color={footColor} /> : <Claw f={f} color={footColor} />;
     default:
@@ -387,6 +393,17 @@ function Fin({ f, color }: { f: MeshFeature; color: number }) {
     <mesh quaternion={f.quat} scale={[r * 0.32, r * 1.2, r * 1.6]}>
       <sphereGeometry args={[1, 12, 10]} />
       <meshStandardMaterial color={color} roughness={0.55} metalness={0.0} />
+    </mesh>
+  );
+}
+
+// A frill: a broad, thin fanned collar — wider and rounder than a fin.
+function Frill({ f, color }: { f: MeshFeature; color: number }) {
+  const r = Math.max(f.radius, 0.06);
+  return (
+    <mesh quaternion={f.quat} scale={[r * 2.1, r * 1.5, r * 0.16]} castShadow>
+      <sphereGeometry args={[1, 16, 12]} />
+      <meshStandardMaterial color={color} roughness={0.6} metalness={0.0} side={THREE.DoubleSide} />
     </mesh>
   );
 }

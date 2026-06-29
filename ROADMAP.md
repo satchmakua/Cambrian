@@ -157,9 +157,17 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
   a direct in-browser build of the default creature gave a 12,688-triangle surface in 84ms; awaiting
   the human's visual read on the organic look)_
 
-- [ ] **M16 — Dials & polish.** Surface new axes in the UI (more pressure sliders, a morphotype
-  filter); tune the distribution; expand the morphotype/part tables.
+- [x] **M16 — Dials & polish.** New directed-evolution axes — **Wings** (reward wing parts),
+  **Neck** (reward the head reaching forward of the bulk), and a categorical **Skin** steer (hold
+  a covering, e.g. scales; the store seeds the start skin so it's reachable). A **morphotype filter**
+  by the "New random creature" roll (bias to one of the 23 kinds). Realized the dormant **frill**
+  part (a fanned collar — distinct geometry) that the priors set but never built.
   **Test:** the directed-evolution panel can steer toward "winged + long-necked + scaled".
+  _(built 2026-06-29, self-verified: 63 tests incl. wings/neck steers moving their trait in most
+  lineages + the covering steer holding "scales" through a run; in-browser the Wings/Neck/Skin
+  controls + a 45-gen run took a furred creature → scales + a wing + a long forward reach, and the
+  morphotype filter rolled crab/cephalopod/bird/serpent correctly (right symmetry + motion), no
+  console errors. **Phase 3 complete.** Awaiting the human's read)_
 
 ## Phase 4 — Stretch
 

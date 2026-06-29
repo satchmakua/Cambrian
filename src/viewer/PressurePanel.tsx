@@ -5,15 +5,22 @@
  */
 import { useState } from 'react';
 import type { Pressure } from '../engine/pressures';
+import type { CoveringType } from '../engine/genome';
 
-const AXES: { key: keyof Pressure; label: string; lo: string; hi: string }[] = [
+// only the numeric [-1,1] axes render as sliders (coveringTarget is a separate categorical control)
+type NumAxis = Exclude<keyof Pressure, 'coveringTarget'>;
+const AXES: { key: NumAxis; label: string; lo: string; hi: string }[] = [
   { key: 'size', label: 'Size', lo: 'small', hi: 'big' },
   { key: 'limbCount', label: 'Limbs', lo: 'fewer', hi: 'more' },
   { key: 'bodyLength', label: 'Body', lo: 'stubby', hi: 'long' },
+  { key: 'neck', label: 'Neck', lo: 'short', hi: 'long' },
+  { key: 'wings', label: 'Wings', lo: 'none', hi: 'winged' },
   { key: 'aquatic', label: 'Locomotion', lo: 'legs', hi: 'fins' },
   { key: 'predator', label: 'Demeanor', lo: 'prey', hi: 'predator' },
   { key: 'novelty', label: 'Novelty', lo: 'familiar', hi: 'weird' },
 ];
+
+const COVERINGS: CoveringType[] = ['skin', 'scales', 'fur', 'feathers', 'chitin', 'slime', 'plates'];
 
 export function PressurePanel({
   pressure,
@@ -67,6 +74,20 @@ export function PressurePanel({
           </label>
         );
       })}
+      <label className="axis covering-steer">
+        <span className="axis-label">Skin{pressure.coveringTarget && <em>{pressure.coveringTarget}</em>}</span>
+        <select
+          value={pressure.coveringTarget ?? ''}
+          onChange={(e) => onChange({ coveringTarget: (e.target.value || null) as CoveringType | null })}
+        >
+          <option value="">any</option>
+          {COVERINGS.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="pressures-run">
         <label>
           gens

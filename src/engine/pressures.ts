@@ -11,19 +11,24 @@ import { grow, type Phenotype } from './grow';
 import { mix32 } from './rng';
 import { breederOffspring } from './selection';
 import { describe, distance } from './morphospace';
-import type { Genome } from './genome';
+import type { Genome, CoveringType } from './genome';
 
-/** Each component in [-1, 1]; 0 = "don't care". */
+/** Numeric components in [-1, 1] (0 = "don't care"); `coveringTarget` is a categorical steer. */
 export interface Pressure {
   size: number; // -1 smaller … +1 bigger
   limbCount: number; // -1 fewer … +1 more limbs
   bodyLength: number; // -1 stubby … +1 elongated
   aquatic: number; // -1 legs/terrestrial … +1 fins/streamlined
   predator: number; // -1 prey cues … +1 forward eyes + claws
+  wings: number; // -1 wingless … +1 winged (M16)
+  neck: number; // -1 short … +1 long-necked (head reaches far forward of the bulk) (M16)
   novelty: number; // -1 cling to known forms … +1 hunt morphospace far from what's seen (MORPHOLOGY §11.5)
+  coveringTarget: CoveringType | null; // steer the skin toward this covering (e.g. scales) (M16)
 }
 
-export const ZERO_PRESSURE: Pressure = { size: 0, limbCount: 0, bodyLength: 0, aquatic: 0, predator: 0, novelty: 0 };
+export const ZERO_PRESSURE: Pressure = {
+  size: 0, limbCount: 0, bodyLength: 0, aquatic: 0, predator: 0, wings: 0, neck: 0, novelty: 0, coveringTarget: null,
+};
 
 interface Metrics {
   size: number;
@@ -33,6 +38,8 @@ interface Metrics {
   fins: number;
   eyes: number;
   claws: number;
+  wings: number;
+  neck: number;
 }
 
 function metrics(p: Phenotype): Metrics {
@@ -40,11 +47,19 @@ function metrics(p: Phenotype): Metrics {
   let claw = 0;
   let fin = 0;
   let eye = 0;
+  let wings = 0;
+  let maxR = 0;
+  let coreZ = 0;
   for (const n of p.nodes) {
     if (n.terminal === 'foot') foot++;
     else if (n.terminal === 'claw') claw++;
     else if (n.terminal === 'fin') fin++;
     else if (n.terminal === 'eye') eye++;
+    if (n.part?.kind === 'wing' && n.terminal && n.terminal !== 'none') wings++;
+    if (n.radius > maxR) {
+      maxR = n.radius;
+      coreZ = n.pos[2]; // z of the bulkiest node — the body core
+    }
   }
   const dx = p.bounds.max[0] - p.bounds.min[0];
   const dy = p.bounds.max[1] - p.bounds.min[1];
@@ -58,6 +73,8 @@ function metrics(p: Phenotype): Metrics {
     fins: fin,
     eyes: eye,
     claws: claw,
+    wings,
+    neck: (p.bounds.max[2] - coreZ) / Math.max(maxR, 0.1), // forward reach beyond the bulk, in girths
   };
 }
 
@@ -93,8 +110,11 @@ export function scorePhenotype(p: Phenotype, t: Pressure, refs: number[][] = [])
     t.limbCount * soft(m.limbTips, 4) +
     t.bodyLength * soft(m.elong, 2) +
     t.aquatic * aquatic +
-    t.predator * predator;
+    t.predator * predator +
+    t.wings * soft(m.wings, 1.5) +
+    t.neck * soft(m.neck, 2.2);
   if (t.novelty !== 0) score += t.novelty * noveltyTerm(p, refs);
+  if (t.coveringTarget && p.genomeRef.covering.type === t.coveringTarget) score += 1.5; // hold the chosen skin
   return score;
 }
 

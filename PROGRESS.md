@@ -10,8 +10,9 @@ acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
 (the Menagerie — MAP-Elites archive + browser + novelty steer) + **M15** (smooth skin — marching-
-tetrahedra metaball surface, toggled, gated behind capsules) built. Next: **M16 — dials & polish**
-(surface the new axes in the UI; tune the distribution; grow the morphotype/part tables).
+tetrahedra metaball surface, toggled, gated behind capsules) + **M16** (dials & polish — wings/neck/
+covering steers, morphotype filter, frill part) built. **Phase 3 (the creature grammar, M8–M16) is
+complete.** Next: the **Phase 4 stretch** — M6 (physics fitness, Rapier) and M7 (glTF export).
 
 ### State of the tree
 
@@ -30,7 +31,7 @@ tetrahedra metaball surface, toggled, gated behind capsules) built. Next: **M16 
 | Sharing | `src/engine/share.ts` | ✅ `CAM1:` encode/decode/validate |
 | Lineage | `src/engine/lineage.ts`, `src/viewer/LineageTree.tsx` | ✅ tree model + SVG view |
 | Share bar | `src/viewer/ShareBar.tsx` | ✅ copy / paste-and-load |
-| Directed pressures | `src/engine/pressures.ts`, `src/viewer/PressurePanel.tsx` | ✅ scorePhenotype + runGenerations + panel + novelty steer |
+| Directed pressures | `src/engine/pressures.ts`, `src/viewer/PressurePanel.tsx` | ✅ scorePhenotype + runGenerations + panel; size/limbs/body/neck/wings/locomotion/demeanor/novelty + covering steer |
 | Menagerie | `src/viewer/archive.ts`, `src/viewer/Menagerie.tsx` | ✅ MAP-Elites archive (limbs×elongation) + SVG browser, click-to-parent |
 | Skin material | `src/viewer/creatureMaterial.ts` | ✅ countershading + 8 patterns + per-covering bump + sheen + fresnel rim |
 | Covering | `src/engine/genome.ts` (`Covering`) | ✅ type/pattern/scale/contrast/sheen, per-morphotype, mutated, `CAM2:`-shared |
@@ -41,6 +42,32 @@ tetrahedra metaball surface, toggled, gated behind capsules) built. Next: **M16 
 | Physics fitness (stretch) | — | ⬜ M6 |
 
 ---
+
+## M16 — Dials & polish · built 2026-06-29 (awaiting test) — Phase 3 complete
+
+The last Phase-3 milestone: surface the new axes, add a filter, grow the parts. Three new
+**directed-evolution steers** (`pressures.ts`): **Wings** (rewards `kind==='wing'` parts), **Neck**
+(rewards forward reach — the head/front extending beyond the bulkiest node, measured in girths, so
+it's distinct from plain elongation), and a categorical **Skin** target (`coveringTarget` — a +1.5
+score bonus for matching, e.g. scales). Covering is a paint choice, not an evolutionary struggle, so
+to make "scaled" *reachable* the store seeds the start creature's covering to the target before a
+run; the bonus + elitism then hold it the whole way. The pressure panel gained Neck/Wings sliders
+and a Skin `<select>`.
+
+A **morphotype filter** (`store.morphoFilter`) by the roll button — a `<select>` of all 23
+morphotypes; when set, "New random creature" calls `genomeOfMorphotype` for that kind instead of the
+bimodal sampler. And the dormant **frill** part is realized: the priors set `frill` on canid/lizard
+but `compile` never built it — now a `frill()` builder adds a fanned collar (aimed up-and-side,
+rolled flat) and `CreatureMesh` draws it as a broad thin membrane (wider/rounder than a fin).
+
+**Verified (2026-06-29):** `npm run typecheck` clean; `npm test` → **63/63** (2 new: the wings &
+neck steers improve their own metric in > half of a batch of roots [monotonic by elitism]; the
+covering steer holds "scales" through a 40-gen run; the frill change keeps the 2000-genome fuzz +
+morphospace coherence green). `npm run build` → succeeds. **In-browser:** the panel shows
+Neck/Wings/Skin controls + a 24-option morphotype filter; setting Wings + Neck + Skin=scales and
+running 45 gens took a furred creature → **scales covering + a wing part + a long forward reach**
+(the compound "winged + long-necked + scaled" target); the filter rolled crab (6 pincers, scuttle) /
+cephalopod (radial, drift) / bird (flap) / serpent (slither) — each true to kind; no console errors.
 
 ## M15 — Smooth skin · built 2026-06-29 (awaiting test)
 

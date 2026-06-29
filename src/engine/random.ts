@@ -175,6 +175,8 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
   if (chance(rng, m.tail ?? 0.5)) apps.push(tail(rng, girth, pick(rng, m.tailTerm ?? (['none', 'fin'] as const))));
   // dorsal spine ridge
   if (chance(rng, m.spines ?? 0)) for (let i = 0; i < 3; i++) apps.push(spine(rng, 0.2 + i * 0.25, girth));
+  // a collar / fanned frill near the head
+  if (chance(rng, m.frill ?? 0)) apps.push(frill(rng, range(rng, 0.7, 0.95), girth));
 
   const body: SegmentGene = {
     size: [girth, girth * height, girth * elong],
@@ -351,6 +353,21 @@ function antenna(rng: Rng, refGirth: number): AppendageGene {
     thickness: clamp(refGirth * range(rng, 0.06, 0.12), A.thickness),
     taper: range(rng, 0.7, 0.9),
     curl: [range(rng, -0.3, 0.3), 0],
+  });
+}
+
+// A frill: a broad fanned collar (lizard ruff / dragon crest), aimed up-and-side, rolled flat.
+function frill(rng: Rng, attachT: number, girth: number): AppendageGene {
+  return part('frill', 'fin', true, range(rng, 0, 1), {
+    attachT,
+    attachAzimuth: range(rng, 1.2, 1.9),
+    attachElevation: range(rng, -0.2, 0.15),
+    roll: range(rng, -0.4, 0.4),
+    segments: 1,
+    length: clamp(girth * range(rng, 0.7, 1.3), A.length),
+    thickness: clamp(girth * range(rng, 0.3, 0.5), A.thickness),
+    taper: range(rng, 0.7, 0.9),
+    curl: [0, 0],
   });
 }
 
