@@ -5,9 +5,10 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 3 (the creature grammar). M0–M5 built; **M8 (genome v2 + spherical
-aim)** and **M9 (part vocabulary — eye/mouth styles, horns, pincers, wings)** built. Parts aim
-anywhere and render with distinct geometry; next is **M10** (the morphotype library + sampler).
+**Current phase:** Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+(part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
+coherence labels, niched litters) built. Next: **M12 — covering & texture** (procedural
+patterns + in-shader bump for scales/fur/feathers/chitin/slime).
 
 ### State of the tree
 
@@ -34,6 +35,56 @@ anywhere and render with distinct geometry; next is **M10** (the morphotype libr
 | Physics fitness (stretch) | — | ⬜ M6 |
 
 ---
+
+## M11 — Divergence engine · built 2026-06-28 (awaiting test)
+
+The attractor-basin machinery (MORPHOLOGY §11), so evolution drifts *between* morphotypes
+instead of collapsing onto one. New `src/engine/morphospace.ts`: `describe()` reduces a grown
+creature to an **8-D descriptor** (elongation, limb count, finniness, bulk, eye count, winged,
+tailed, radial); each morphotype's **centroid** is sampled from the generator (memoized);
+`coherence()` reports the nearest morphotype + a 0..1 score (high near a centroid = a clear
+species, low in the valleys = an uncanny hybrid). **Niched litters** (`selection.ts::breederLitter`)
+replace the nine near-clones with a spread — ~3 conservative, ~3 exploratory, ~2 **saltation**
+(high-macro basin-hops), and 1 **confluence** (a `crossover` that grafts a random morphotype's
+head + a couple of its parts onto the parent → griffins and chimeras). The store's gallery now
+uses it; the HUD shows the live coherence label ("≈ shark · 96%" / "~ valley near …").
+
+**Verified (2026-06-28):** `npm run typecheck` clean; `npm test` → **47/47** (new: descriptor
+deterministic; creatures sit near an attractor — mean coherence > 0.45 with none in the void;
+serpent self-labels, dragon reads as a winged beast; the niched litter spreads across morphospace
+**more than a plain litter**; litter deterministic + growable). `npm run build` → succeeds.
+**In-browser:** rolls labelled ≈ shark 96% / serpent 89% / rodent 99% / cephalopod 71% / dragon
+92%; promote uses the niched litter; no console errors. _Coherence-pull-in-mutation deferred._
+
+## Fix: offspring thumbnails showed scattered blobs · 2026-06-28
+
+The breeder thumbnails ran the M5 animation, so drei `<Bounds observe>` kept re-fitting to a
+moving creature → parts scattered and the framing collapsed (tiny). Added an `animate` prop to
+`CreatureMesh` (default true); `OffspringThumb` passes `animate={false}` so thumbnails render the
+**static base pose**, and tightened the Bounds margin 1.2→1.05 so the creature fills the cell.
+
+## M10 — Morphotype library + sampler · built 2026-06-28 (awaiting test)
+
+The milestone that ties M8's aim + M9's parts into **coherent species**. Rewrote `random.ts`
+around a **morphotype library**: 24 terse priors — 16 familiar (felid, canid, rodent, ungulate,
+ursid, lizard, crocodilian, serpent, anuran, fish, shark, bird, raptor, crab, insectoid,
+arachnid) + 8 uncanny (dragon, wyvern, cephalopod, horror, slime, urchin, starfish, + the wild
+tail) — each a *multivariate prior* (coupled girth/length/leg/wing/fin/tail/horn/eye/mouth
+ranges, not a fixed mold). A generic `compile(morphotype → genome)` builds the body + parts via
+parameterized builders (legs by posture, wings, fins, tails, horns, spines, antennae, eyes by
+style, mouths by style, radial arms/tentacles). The **bimodal sampler**: 45% a Familiar
+morphotype, 35% Uncanny, 20% the free "wild" compositional generator (the in-between tail) — so
+the distribution has two strong modes, per the human's "familiar AND uncanny both strong" call.
+
+Also raised `GENE_BOUNDS`: `radialCount` 8→12 (many-tentacled cephalopods), `appendageCount`
+8→16 (legs+wings+fins+tail+spines stack; NODE_MAX is the real cap).
+
+**Verified (2026-06-28):** `npm run typecheck` clean; `npm test` → **42/42** (within-bounds +
+2000-genome fuzz + valid-phenotype + forced-mode + `CAM2:` round-trip all green on the new
+generator); `npm run build` → succeeds. **In-browser** (14-creature sample): 28% radial
+(cephalopods/horrors/urchins/starfish), fins/claws/horns/eyes/mouths spread across creatures,
+node range 12–51, **all finite, no console errors**. _The visual "reads clearly as a cat / crab
+/ heron / dragon" is the human's call._
 
 ## M9 — Part vocabulary (core) · built 2026-06-28 (awaiting test)
 

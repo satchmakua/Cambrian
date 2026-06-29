@@ -19,7 +19,7 @@ export const GENE_BOUNDS = {
     taper: [0.6, 1.15] as [number, number], // per-link size multiplier
     curvePitch: [-0.5, 0.5] as [number, number], // radians per link
     curveYaw: [-0.5, 0.5] as [number, number],
-    appendageCount: [0, 8] as [number, number],
+    appendageCount: [0, 16] as [number, number], // legs+wings+fins+tail+spines can stack (NODE_MAX is the real cap)
   },
   appendage: {
     style: [0, 1] as [number, number], // selects render variant (eye/mouth/etc. style)
@@ -34,7 +34,7 @@ export const GENE_BOUNDS = {
     curlPitch: [-0.6, 0.6] as [number, number], // radians per limb segment
     curlYaw: [-0.6, 0.6] as [number, number],
   },
-  radialCount: [3, 8] as [number, number],
+  radialCount: [3, 12] as [number, number], // up to 12 for many-tentacled cephalopods (v2)
   palette: {
     hue: [0, 1] as [number, number],
     sat: [0, 1] as [number, number],

@@ -8,10 +8,11 @@ A 3D artificial-evolution toy: creatures are *grown* from a generative genome, m
 selected — by you (Biomorphs-style breeder) or by directed pressures — so you can walk a
 lineage from a scurrying blob to a finned giant to a striped quadruped.
 
-**Status:** 🟢 Phase 3 underway — **M8 (genome v2 + spherical part aim)** built: parts can now
-aim anywhere (tails back, horns/fins up, wings out), the foundation for the big variety push in
-[MORPHOLOGY.md](MORPHOLOGY.md). M0–M5 done: faces, countershaded skin, procedural motion, the
-breeder + directed-evolution loops, lineage, and `CAM2:` sharing. See [ROADMAP.md](ROADMAP.md).
+**Status:** 🟢 Phase 3 underway — genome **v2 + spherical aim (M8)**, a **part vocabulary** with
+eye/mouth styles, horns, pincers, wings (M9), and **24 morphotype priors + a bimodal sampler**
+(M10) so rolls read as cat / crab / heron / dragon / cephalopod while staying surprising. M0–M5
+done: faces, countershaded skin, procedural motion, breeder + directed evolution, lineage,
+`CAM2:` sharing. Full variety spec in [MORPHOLOGY.md](MORPHOLOGY.md); see [ROADMAP.md](ROADMAP.md).
 
 ## Stack
 

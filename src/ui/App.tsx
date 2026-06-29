@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { grow } from '../engine/grow';
+import { coherence } from '../engine/morphospace';
 import { CreatureViewer } from '../viewer/CreatureViewer';
 import { OffspringGallery } from '../viewer/OffspringGallery';
 import { PressurePanel } from '../viewer/PressurePanel';
@@ -26,6 +27,7 @@ export function App() {
   const genome = current.genome;
   const generation = current.generation;
   const phenotype = useMemo(() => grow(genome), [genome]);
+  const vibe = useMemo(() => coherence(phenotype), [phenotype]);
 
   return (
     <div className="app">
@@ -34,7 +36,10 @@ export function App() {
           <CreatureViewer phenotype={phenotype} />
           <header className="hud">
             <h1>Cambrian</h1>
-            <p className="tag">grow · mutate · select — M9 part vocabulary</p>
+            <p className="tag">
+              {vibe.score > 0.55 ? '≈ ' : '~ valley near '}
+              {vibe.nearest} · {Math.round(vibe.score * 100)}%
+            </p>
             <dl className="stats">
               <div>
                 <dt>generation</dt>

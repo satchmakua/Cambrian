@@ -81,16 +81,25 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
   **Test:** build creatures with a beak vs. a fanged maw vs. pincers; each reads distinctly.
   _(built 2026-06-28, self-verified: 42 tests + in-browser pincers/styles + no errors; awaiting human)_
 
-- [ ] **M10 — Morphotype library + trait sampler.** The ~24 priors + ~24 trait axes +
-  ratio-based proportions + the bimodal (familiar/uncanny) sampler.
+- [x] **M10 — Morphotype library + trait sampler.** **24 morphotype priors** (16 familiar +
+  8 uncanny) as terse data tables, a generic compiler (morphotype → genome via the M9 parts),
+  and the **bimodal sampler** (45% familiar / 35% uncanny / 20% the wild compositional tail).
+  Each morphotype is a multivariate prior — coupled ranges + characteristic parts — so rolls
+  read as their kind but keep surprising.
   **Test:** random rolls read clearly as cat / crab / heron / dragon / cephalopod and keep
   surprising over a long session.
+  _(built 2026-06-28, self-verified: 42 tests + in-browser variety (28% radial, finite, no
+  errors); awaiting human's visual read on whether the species read clearly)_
 
-- [ ] **M11 — Divergence engine.** Morphospace descriptor + coherence field + basin dynamics
-  (coherence pull / confluence / saltation) + **niched litters** (the 9 offspring spread across
-  morphospace instead of 9 near-clones). See MORPHOLOGY §11.
-  **Test:** a lineage visibly drifts *between* morphotypes (e.g. felid→griffin→raptor) instead
-  of staying one shape; each litter offers genuinely divergent choices.
+- [x] **M11 — Divergence engine.** A computed **morphospace** (`morphospace.ts`: 8-D descriptor +
+  attractor centroids sampled per morphotype + a **coherence** label), and **niched litters**
+  — the 9 offspring spread across morphospace (conservative · exploratory · **saltation** ·
+  one **confluence** hybrid) instead of near-clones. HUD shows "≈ shark · 96%" / "~ valley near
+  X". _(Coherence-pull-in-mutation deferred — saltation + confluence + the spread deliver the
+  divergence; revisit if lineages don't settle.)_ See MORPHOLOGY §11.
+  **Test:** a lineage visibly drifts *between* morphotypes instead of staying one shape; each
+  litter offers genuinely divergent choices.
+  _(built 2026-06-28, self-verified: 47 tests + in-browser coherence labels; awaiting human)_
 
 - [ ] **M12 — Covering & texture.** Procedural color patterns (stripes/spots/ocelli/…) + in-
   shader surface bump (scales/fur/feathers/chitin/slime) + per-covering materials.

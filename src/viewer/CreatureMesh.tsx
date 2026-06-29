@@ -18,7 +18,7 @@ import { makeCreatureMaterial } from './creatureMaterial';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
-export function CreatureMesh({ phenotype }: { phenotype: Phenotype }) {
+export function CreatureMesh({ phenotype, animate = true }: { phenotype: Phenotype; animate?: boolean }) {
   const data = useMemo(() => buildMeshData(phenotype), [phenotype]);
   const pal = phenotype.genomeRef.palette;
   const seed = phenotype.genomeRef.seed;
@@ -65,6 +65,7 @@ export function CreatureMesh({ phenotype }: { phenotype: Phenotype }) {
   const q = useMemo(() => new THREE.Quaternion(), []);
 
   useFrame((st) => {
+    if (!animate) return; // thumbnails render the static base pose (set via JSX positions)
     const anim = computeAnim(rig, st.clock.elapsedTime);
     const { bodySpheres, edges, features } = data;
 

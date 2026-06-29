@@ -7,7 +7,7 @@ import { create } from 'zustand';
 import { mix32 } from '../engine/rng';
 import { defaultGenome, type Genome } from '../engine/genome';
 import { randomGenome, type SymmetryMode } from '../engine/random';
-import { breederOffspring } from '../engine/selection';
+import { breederLitter } from '../engine/selection';
 import { decodeGenome } from '../engine/share';
 import { runGenerations, ZERO_PRESSURE, type Pressure } from '../engine/pressures';
 import type { LineageNode, LineageNodes } from '../engine/lineage';
@@ -56,7 +56,7 @@ function batch(
     counter,
     streamSeed: ss,
     symmetryMode: mode,
-    offspring: breederOffspring(cur.genome, ss, LITTER, undefined, lock),
+    offspring: breederLitter(cur.genome, ss, LITTER, lock),
   };
 }
 

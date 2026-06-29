@@ -17,8 +17,9 @@ export function OffspringThumb({ genome, onPick }: { genome: Genome; onPick: () 
       <Canvas frameloop="demand" dpr={[1, 1.5]} camera={{ position: [3, 2.2, 4], fov: 42 }}>
         <ambientLight intensity={0.7} />
         <directionalLight position={[4, 6, 5]} intensity={1.1} />
-        <Bounds fit clip observe margin={1.2}>
-          <CreatureMesh phenotype={phenotype} />
+        <Bounds fit clip observe margin={1.05}>
+          {/* static base pose — animating here makes Bounds chase a moving target */}
+          <CreatureMesh phenotype={phenotype} animate={false} />
         </Bounds>
       </Canvas>
     </button>
