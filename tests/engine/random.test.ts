@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { randomGenome } from '../../src/engine/random';
 import { grow } from '../../src/engine/grow';
-import { expectValidPhenotype, expectGenomeWithinBounds } from './invariants';
+import { expectValidPhenotype, expectGenomeWithinBounds, expectBilateralSymmetry } from './invariants';
 
 describe('randomGenome', () => {
   it('is deterministic: the same seed regrows the same creature (Pillar 3)', () => {
@@ -40,6 +40,21 @@ describe('randomGenome', () => {
       expect(bilat.symmetry).toBe('bilateral');
       expectGenomeWithinBounds(bilat);
       expectValidPhenotype(grow(bilat));
+    }
+  });
+
+  it('grows exactly mirror-symmetric bodies in bilateral mode (M18)', () => {
+    for (let s = 0; s < 400; s++) expectBilateralSymmetry(grow(randomGenome(s, 'bilateral')));
+  });
+
+  it('every creature has a readable face — eyes and a mouth, eyes prominent (M19)', () => {
+    for (let s = 0; s < 200; s++) {
+      const p = grow(randomGenome(s));
+      const eyes = p.nodes.filter((n) => n.terminal === 'eye');
+      const mouths = p.nodes.filter((n) => n.terminal === 'mouth');
+      expect(eyes.length).toBeGreaterThan(0);
+      expect(mouths.length).toBeGreaterThan(0);
+      expect(Math.max(...eyes.map((e) => e.radius))).toBeGreaterThan(0.15); // floored — never tiny
     }
   });
 });

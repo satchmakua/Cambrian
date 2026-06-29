@@ -83,8 +83,11 @@ export function grow(genome: Genome): Phenotype {
       spine.push(idx);
       prev = idx;
 
-      // advance along local forward (+Z), bending by the per-link curve
-      quat = qMul(quat, qFromEuler(seg.curve[0], seg.curve[1]));
+      // advance along local forward (+Z), bending by the per-link curve. In bilateral mode the
+      // lateral (yaw) bend is dropped so the spine stays on the X=0 plane — a winding S-curve would
+      // make the static body asymmetric (the slither/undulation animation supplies the wind instead).
+      const yaw = genome.symmetry === 'bilateral' ? 0 : seg.curve[1];
+      quat = qMul(quat, qFromEuler(seg.curve[0], yaw));
       const fwd = qRotate([0, 0, 1], quat);
       const step = nodes[idx].radius * elong; // overlap-bounded stride → continuous body
       pos = [pos[0] + fwd[0] * step, pos[1] + fwd[1] * step, pos[2] + fwd[2] * step];
@@ -115,15 +118,47 @@ export function grow(genome: Genome): Phenotype {
     // toward the body axis (+forward / −back). This is what lets parts point anywhere.
     const aim = (a: number): Vec3 => norm([ce * Math.cos(a), ce * Math.sin(a), se]);
 
-    const dirs: Vec3[] = [];
     if (genome.symmetry === 'radial') {
-      for (let k = 0; k < genome.radialCount; k++) dirs.push(aim(az + (k * Math.PI * 2) / genome.radialCount));
-    } else {
-      const d = aim(az);
-      dirs.push(d);
-      if (app.pair && genome.symmetry === 'bilateral') dirs.push([-d[0], d[1], d[2]]); // mirror across X=0
+      for (let k = 0; k < genome.radialCount; k++) growLimb(app, base, aim(az + (k * Math.PI * 2) / genome.radialCount));
+      return;
     }
-    for (const dir of dirs) growLimb(app, base, dir);
+    // bilateral / none: grow one limb…
+    let d = aim(az);
+    // a non-paired part on a bilateral body must stay on the midline plane (X=0): aim it in the
+    // plane and drop the roll + lateral curl that would let a multi-segment part (a tail) wander off.
+    if (genome.symmetry === 'bilateral' && !app.pair) {
+      d = norm([0, d[1], d[2]]);
+      app = { ...app, roll: 0, curl: [app.curl[0], 0] };
+    }
+    const nStart = nodes.length;
+    const eStart = edges.length;
+    growLimb(app, base, d);
+    // …then a paired part is the *exact* reflection of that limb across X=0 (quaternions can't
+    // mirror, so growing the other side from a flipped aim drifts — reflect the grown nodes instead).
+    if (app.pair && genome.symmetry === 'bilateral') mirrorAcrossX(nStart, eStart, attachIdx);
+  }
+
+  /** Reflect the limb nodes/edges grown in [nStart,nEnd) across the X=0 plane (exact mirror). */
+  function mirrorAcrossX(nStart: number, eStart: number, baseIdx: number): void {
+    const nEnd = nodes.length;
+    const eEnd = edges.length;
+    const map = new Map<number, number>();
+    map.set(baseIdx, baseIdx); // the shared attach node sits on X=0
+    for (let i = nStart; i < nEnd; i++) {
+      if (atCap()) break;
+      const n = nodes[i];
+      // mirror position across X=0; mirror orientation about the YZ plane: (x,y,z,w) → (x,−y,−z,w),
+      // which flips the part's outward direction's X while keeping its forward/up read.
+      const mi = addNode([-n.pos[0], n.pos[1], n.pos[2]], [n.quat[0], -n.quat[1], -n.quat[2], n.quat[3]], n.radius, n.kind, n.terminal);
+      if (n.part) nodes[mi].part = n.part;
+      map.set(i, mi);
+    }
+    for (let e = eStart; e < eEnd; e++) {
+      const [a, b] = edges[e];
+      const ma = map.get(a);
+      const mb = map.get(b);
+      if (ma !== undefined && mb !== undefined) edges.push([ma, mb]);
+    }
   }
 
   function growLimb(app: AppendageGene, base: BodyNode, dir0: Vec3): void {
@@ -133,6 +168,7 @@ export function grow(genome: Genome): Phenotype {
     let pos: Vec3 = [base.pos[0] + dir[0] * base.radius, base.pos[1] + dir[1] * base.radius, base.pos[2] + dir[2] * base.radius];
     let prev = nodes.indexOf(base);
 
+    let pitch = app.curl[0];
     for (let j = 0; j < app.segments; j++) {
       if (atCap()) break;
       const last = j === app.segments - 1;
@@ -142,9 +178,12 @@ export function grow(genome: Genome): Phenotype {
       edges.push([prev, idx]);
       prev = idx;
 
-      quat = qMul(quat, qFromEuler(app.curl[0], app.curl[1]));
+      quat = qMul(quat, qFromEuler(pitch, app.curl[1]));
       dir = qRotate([0, 0, 1], quat);
       pos = [pos[0] + dir[0] * app.length, pos[1] + dir[1] * app.length, pos[2] + dir[2] * app.length];
+      // a real knee: legs fold (the shin bends back under the body) instead of sweeping in one arc,
+      // so a leg reads as a leg in a stance, not a curved tentacle. Other limbs keep the smooth curl.
+      if (app.kind === 'leg' && j === 0) pitch = -Math.abs(app.curl[0]) * 1.5;
     }
   }
 }

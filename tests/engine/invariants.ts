@@ -26,6 +26,22 @@ export function expectValidPhenotype(p: Phenotype): void {
   expect(p.bounds.max.every(Number.isFinite)).toBe(true);
 }
 
+/** Assert a bilateral phenotype is exactly mirror-symmetric across X=0 (M18). */
+export function expectBilateralSymmetry(p: Phenotype): void {
+  for (const n of p.nodes) {
+    let best = Infinity;
+    for (const m of p.nodes) {
+      const d =
+        Math.abs(m.pos[0] + n.pos[0]) + // mirror: m.x ≈ −n.x
+        Math.abs(m.pos[1] - n.pos[1]) +
+        Math.abs(m.pos[2] - n.pos[2]) +
+        Math.abs(m.radius - n.radius);
+      if (d < best) best = d;
+    }
+    expect(best).toBeLessThan(1e-4); // every node has a mirror partner
+  }
+}
+
 /** Assert every mutable gene in a genome sits inside GENE_BOUNDS (Pillar 1). */
 export function expectGenomeWithinBounds(g: Genome): void {
   inBounds(g.radialCount, GENE_BOUNDS.radialCount);

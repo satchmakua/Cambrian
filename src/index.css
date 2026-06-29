@@ -169,14 +169,14 @@ body,
   display: flex;
   flex-direction: column;
   gap: 14px;
-  overflow: hidden;
+  /* the rail scrolls: the panels (M16 sliders + M6 physics + share) no longer squeeze the
+     gallery so its rows clip — all nine thumbnails stay at a usable size (M20). */
+  overflow-y: auto;
 }
 
 .gallery-body {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
 }
 
 .gallery-head {
@@ -213,8 +213,7 @@ body,
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  flex: 1;
-  min-height: 0;
+  /* sizes to its three rows (each thumb is aspect-ratio 1/1) instead of being flex-squeezed */
 }
 
 .thumb {

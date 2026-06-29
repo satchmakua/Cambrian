@@ -46,7 +46,8 @@ interface Morpho {
   legPairs?: readonly number[]; // bilateral only
   legLen?: Rg; // ×girth
   legThick?: Rg; // ×girth
-  legAz?: Rg; // sprawl azimuth (4.7 ≈ straight down)
+  legAz?: Rg; // sprawl azimuth (4.7 ≈ straight down) — overrides the posture's default
+  posture?: Posture; // leg stance (§6.1): sprawling / digitigrade / plantigrade / hooved / upright
   legTerm?: readonly Terminal[];
   wings?: number;
   dorsal?: number;
@@ -73,25 +74,25 @@ interface Morpho {
 // Terse priors. Unspecified fields fall back to sensible defaults in `compile`.
 const MORPHOTYPES: readonly Morpho[] = [
   // --- familiar ---
-  { id: 'felid', cluster: 'familiar', weight: 1, girth: [0.45, 0.6], repeat: [3, 4], height: [0.85, 1.0], elong: [1.1, 1.4], legPairs: [2], legLen: [0.5, 0.66], legTerm: ['claw'], tail: 0.97, horns: 0.03, eyeStyle: [0, 0.15], mouthStyle: [0, 0.2], covering: ['fur'], pattern: ['spots', 'stripes', 'plain'], hue: [0.05, 0.12], sat: [0.4, 0.7] },
-  { id: 'canid', cluster: 'familiar', weight: 1, girth: [0.42, 0.56], repeat: [3, 4], elong: [1.15, 1.45], legPairs: [2], legLen: [0.55, 0.72], legTerm: ['foot'], tail: 0.95, frill: 0.4, eyeStyle: [0, 0.15], mouthStyle: [0.1, 0.3], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.05, 0.1] },
-  { id: 'rodent', cluster: 'familiar', weight: 0.9, girth: [0.3, 0.45], repeat: [2, 3], height: [0.9, 1.1], legPairs: [2], legLen: [0.4, 0.55], tail: 0.9, eyeStyle: [0, 0.15], eyeCount: [2], mouthStyle: [0, 0.15], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.04, 0.1] },
-  { id: 'ungulate', cluster: 'familiar', weight: 0.8, girth: [0.45, 0.62], repeat: [3, 4], legPairs: [2], legLen: [0.7, 0.95], legTerm: ['foot'], tail: 0.7, horns: 0.55, eyeStyle: [0, 0.1], eyeAz: [0.3, 0.6], mouthStyle: [0, 0.15], covering: ['fur'], pattern: ['plain', 'spots'], hue: [0.06, 0.11] },
-  { id: 'ursid', cluster: 'familiar', weight: 0.7, girth: [0.55, 0.78], repeat: [3, 4], legPairs: [2], legLen: [0.42, 0.55], legTerm: ['claw'], tail: 0.3, eyeStyle: [0, 0.15], mouthStyle: [0, 0.2], covering: ['fur'], pattern: ['plain'], hue: [0.04, 0.09] },
-  { id: 'lizard', cluster: 'familiar', weight: 0.9, girth: [0.32, 0.46], repeat: [4, 6], height: [0.6, 0.8], elong: [1.2, 1.5], legPairs: [2], legLen: [0.4, 0.55], legAz: [4.0, 4.3], legTerm: ['claw'], tail: 0.95, frill: 0.25, eyeStyle: [0.4, 0.6], mouthStyle: [0, 0.25], covering: ['scales'], pattern: ['bands', 'reticulate', 'mottle'], hue: [0.22, 0.42], sat: [0.5, 0.85] },
-  { id: 'crocodilian', cluster: 'familiar', weight: 0.6, girth: [0.4, 0.55], repeat: [5, 7], height: [0.55, 0.75], elong: [1.3, 1.6], legPairs: [2], legLen: [0.35, 0.48], legAz: [3.9, 4.2], legTerm: ['claw'], tail: 0.95, spines: 0.7, eyeStyle: [0.4, 0.6], eyeAz: [1.4, 1.7], mouthStyle: [0, 0.15], covering: ['plates', 'scales'], pattern: ['mottle', 'reticulate'], hue: [0.2, 0.35], sat: [0.3, 0.6] },
+  { id: 'felid', cluster: 'familiar', weight: 1, girth: [0.45, 0.6], repeat: [3, 4], height: [0.85, 1.0], elong: [1.1, 1.4], legPairs: [2], posture: 'digitigrade', legLen: [0.5, 0.66], legTerm: ['claw'], tail: 0.97, horns: 0.03, eyeStyle: [0, 0.15], mouthStyle: [0, 0.2], covering: ['fur'], pattern: ['spots', 'stripes', 'plain'], hue: [0.05, 0.12], sat: [0.4, 0.7] },
+  { id: 'canid', cluster: 'familiar', weight: 1, girth: [0.42, 0.56], repeat: [3, 4], elong: [1.15, 1.45], legPairs: [2], posture: 'digitigrade', legLen: [0.55, 0.72], legTerm: ['foot'], tail: 0.95, frill: 0.4, eyeStyle: [0, 0.15], mouthStyle: [0.1, 0.3], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.05, 0.1] },
+  { id: 'rodent', cluster: 'familiar', weight: 0.9, girth: [0.3, 0.45], repeat: [2, 3], height: [0.9, 1.1], legPairs: [2], posture: 'plantigrade', legLen: [0.4, 0.55], tail: 0.9, eyeStyle: [0, 0.15], eyeCount: [2], mouthStyle: [0, 0.15], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.04, 0.1] },
+  { id: 'ungulate', cluster: 'familiar', weight: 0.8, girth: [0.45, 0.62], repeat: [3, 4], legPairs: [2], posture: 'hooved', legLen: [0.7, 0.95], legTerm: ['foot'], tail: 0.7, horns: 0.55, eyeStyle: [0, 0.1], eyeAz: [0.3, 0.6], mouthStyle: [0, 0.15], covering: ['fur'], pattern: ['plain', 'spots'], hue: [0.06, 0.11] },
+  { id: 'ursid', cluster: 'familiar', weight: 0.7, girth: [0.55, 0.78], repeat: [3, 4], legPairs: [2], posture: 'plantigrade', legLen: [0.42, 0.55], legTerm: ['claw'], tail: 0.3, eyeStyle: [0, 0.15], mouthStyle: [0, 0.2], covering: ['fur'], pattern: ['plain'], hue: [0.04, 0.09] },
+  { id: 'lizard', cluster: 'familiar', weight: 0.9, girth: [0.32, 0.46], repeat: [4, 6], height: [0.6, 0.8], elong: [1.2, 1.5], legPairs: [2], posture: 'sprawling', legLen: [0.4, 0.55], legAz: [4.0, 4.3], legTerm: ['claw'], tail: 0.95, frill: 0.25, eyeStyle: [0.4, 0.6], mouthStyle: [0, 0.25], covering: ['scales'], pattern: ['bands', 'reticulate', 'mottle'], hue: [0.22, 0.42], sat: [0.5, 0.85] },
+  { id: 'crocodilian', cluster: 'familiar', weight: 0.6, girth: [0.4, 0.55], repeat: [5, 7], height: [0.55, 0.75], elong: [1.3, 1.6], legPairs: [2], posture: 'sprawling', legLen: [0.35, 0.48], legAz: [3.9, 4.2], legTerm: ['claw'], tail: 0.95, spines: 0.7, eyeStyle: [0.4, 0.6], eyeAz: [1.4, 1.7], mouthStyle: [0, 0.15], covering: ['plates', 'scales'], pattern: ['mottle', 'reticulate'], hue: [0.2, 0.35], sat: [0.3, 0.6] },
   { id: 'serpent', cluster: 'familiar', weight: 0.9, girth: [0.3, 0.44], repeat: [9, 16], wind: 0.9, legPairs: [0], tail: 0.0, eyeStyle: [0.4, 0.6], mouthStyle: [0, 0.2], covering: ['scales'], pattern: ['bands', 'stripes', 'reticulate'], hue: [0.1, 0.4], sat: [0.5, 0.85] },
-  { id: 'anuran', cluster: 'familiar', weight: 0.7, girth: [0.5, 0.7], repeat: [1, 2], height: [0.85, 1.05], legPairs: [2], legLen: [0.55, 0.8], tail: 0.0, eyeStyle: [0, 0.2], eyeAz: [1.3, 1.7], mouthStyle: [0, 0.15], covering: ['skin'], pattern: ['spots', 'mottle'], sheen: [0.55, 0.85], hue: [0.25, 0.45], sat: [0.5, 0.85] },
+  { id: 'anuran', cluster: 'familiar', weight: 0.7, girth: [0.5, 0.7], repeat: [1, 2], height: [0.85, 1.05], legPairs: [2], posture: 'sprawling', legLen: [0.55, 0.8], tail: 0.0, eyeStyle: [0, 0.2], eyeAz: [1.3, 1.7], mouthStyle: [0, 0.15], covering: ['skin'], pattern: ['spots', 'mottle'], sheen: [0.55, 0.85], hue: [0.25, 0.45], sat: [0.5, 0.85] },
   { id: 'fish', cluster: 'familiar', weight: 1, girth: [0.4, 0.58], repeat: [4, 6], height: [1.05, 1.45], elong: [1.3, 1.6], taper: [0.78, 0.9], legPairs: [0], dorsal: 0.95, pectoral: 0.9, tail: 0.9, tailTerm: ['fin'], head: 0.3, eyeStyle: [0, 0.2], eyeAz: [0.3, 0.6], mouthStyle: [0, 0.4], covering: ['scales'], pattern: ['plain', 'spots', 'stripes'], sheen: [0.35, 0.6], hue: [0.45, 0.65], sat: [0.4, 0.8] },
   { id: 'shark', cluster: 'familiar', weight: 0.7, girth: [0.45, 0.62], repeat: [5, 7], height: [0.95, 1.2], elong: [1.4, 1.7], taper: [0.78, 0.9], legPairs: [0], dorsal: 1, pectoral: 0.9, tail: 0.95, tailTerm: ['fin'], head: 0.3, eyeStyle: [0.1, 0.3], eyeAz: [0.3, 0.6], mouthStyle: [0, 0.15], covering: ['skin'], pattern: ['plain', 'gradient'], hue: [0.55, 0.62], sat: [0.2, 0.45] },
-  { id: 'bird', cluster: 'familiar', weight: 1, girth: [0.34, 0.5], repeat: [2, 3], height: [1.0, 1.3], legPairs: [1], legLen: [0.7, 1.0], legTerm: ['claw'], wings: 0.95, tail: 0.7, tailTerm: ['fin'], eyeStyle: [0, 0.2], mouthStyle: [0.2, 0.4], covering: ['feathers'], pattern: ['bands', 'plain', 'spots'], hue: [0.05, 0.65], sat: [0.5, 0.9] },
-  { id: 'raptor', cluster: 'familiar', weight: 0.7, girth: [0.4, 0.54], repeat: [2, 3], height: [1.0, 1.25], legPairs: [1], legLen: [0.7, 0.95], legTerm: ['claw'], wings: 1, tail: 0.7, tailTerm: ['fin'], eyeStyle: [0, 0.15], mouthStyle: [0.25, 0.4], covering: ['feathers'], pattern: ['bands', 'mottle'], hue: [0.06, 0.12] },
-  { id: 'crab', cluster: 'familiar', weight: 0.9, girth: [0.45, 0.62], repeat: [1, 2], height: [0.5, 0.7], elong: [0.7, 0.95], legPairs: [3], legLen: [0.6, 0.85], legAz: [3.6, 4.0], legTerm: ['pincer', 'claw'], tail: 0.0, antennae: 0.6, eyeStyle: [0, 0.3], eyeAz: [1.2, 1.6], mouthStyle: [0.4, 0.6], covering: ['chitin'], pattern: ['mottle', 'reticulate'], sheen: [0.3, 0.55], hue: [0.02, 0.1], sat: [0.5, 0.85] },
-  { id: 'insectoid', cluster: 'familiar', weight: 0.85, girth: [0.3, 0.44], repeat: [4, 6], height: [0.75, 0.95], legPairs: [3], legLen: [0.55, 0.8], legAz: [3.7, 4.1], legTerm: ['claw'], antennae: 0.9, eyeStyle: [0.6, 0.8], eyeCount: [2], mouthStyle: [0.4, 0.6], covering: ['chitin'], pattern: ['bands', 'reticulate'], sheen: [0.6, 0.95], hue: [0.1, 0.6], sat: [0.5, 0.9] },
-  { id: 'arachnid', cluster: 'familiar', weight: 0.6, girth: [0.36, 0.52], repeat: [1, 2], height: [0.8, 1.05], legPairs: [4], legLen: [0.7, 1.0], legAz: [3.6, 4.0], legTerm: ['claw'], eyeStyle: [0.2, 0.4], eyeCount: [4, 6], mouthStyle: [0.4, 0.6], covering: ['fur', 'chitin'], pattern: ['mottle', 'bands'], hue: [0.02, 0.09], sat: [0.3, 0.6] },
+  { id: 'bird', cluster: 'familiar', weight: 1, girth: [0.34, 0.5], repeat: [2, 3], height: [1.0, 1.3], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 1.0], legTerm: ['claw'], wings: 0.95, tail: 0.7, tailTerm: ['fin'], eyeStyle: [0, 0.2], mouthStyle: [0.2, 0.4], covering: ['feathers'], pattern: ['bands', 'plain', 'spots'], hue: [0.05, 0.65], sat: [0.5, 0.9] },
+  { id: 'raptor', cluster: 'familiar', weight: 0.7, girth: [0.4, 0.54], repeat: [2, 3], height: [1.0, 1.25], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 0.95], legTerm: ['claw'], wings: 1, tail: 0.7, tailTerm: ['fin'], eyeStyle: [0, 0.15], mouthStyle: [0.25, 0.4], covering: ['feathers'], pattern: ['bands', 'mottle'], hue: [0.06, 0.12] },
+  { id: 'crab', cluster: 'familiar', weight: 0.9, girth: [0.45, 0.62], repeat: [1, 2], height: [0.5, 0.7], elong: [0.7, 0.95], legPairs: [3], posture: 'sprawling', legLen: [0.6, 0.85], legAz: [3.6, 4.0], legTerm: ['pincer', 'claw'], tail: 0.0, antennae: 0.6, eyeStyle: [0, 0.3], eyeAz: [1.2, 1.6], mouthStyle: [0.4, 0.6], covering: ['chitin'], pattern: ['mottle', 'reticulate'], sheen: [0.3, 0.55], hue: [0.02, 0.1], sat: [0.5, 0.85] },
+  { id: 'insectoid', cluster: 'familiar', weight: 0.85, girth: [0.3, 0.44], repeat: [4, 6], height: [0.75, 0.95], legPairs: [3], posture: 'sprawling', legLen: [0.55, 0.8], legAz: [3.7, 4.1], legTerm: ['claw'], antennae: 0.9, eyeStyle: [0.6, 0.8], eyeCount: [2], mouthStyle: [0.4, 0.6], covering: ['chitin'], pattern: ['bands', 'reticulate'], sheen: [0.6, 0.95], hue: [0.1, 0.6], sat: [0.5, 0.9] },
+  { id: 'arachnid', cluster: 'familiar', weight: 0.6, girth: [0.36, 0.52], repeat: [1, 2], height: [0.8, 1.05], legPairs: [4], posture: 'sprawling', legLen: [0.7, 1.0], legAz: [3.6, 4.0], legTerm: ['claw'], eyeStyle: [0.2, 0.4], eyeCount: [4, 6], mouthStyle: [0.4, 0.6], covering: ['fur', 'chitin'], pattern: ['mottle', 'bands'], hue: [0.02, 0.09], sat: [0.3, 0.6] },
   // --- uncanny ---
-  { id: 'dragon', cluster: 'uncanny', weight: 1.2, girth: [0.5, 0.72], repeat: [4, 6], elong: [1.2, 1.5], legPairs: [2], legLen: [0.5, 0.68], legTerm: ['claw'], wings: 0.85, tail: 0.95, horns: 0.9, spines: 0.8, eyeStyle: [0.4, 0.9], mouthStyle: [0, 0.2], covering: ['scales', 'plates'], pattern: ['reticulate', 'bands', 'mottle'], sheen: [0.35, 0.8], hue: [0.0, 0.95], sat: [0.5, 0.9] },
-  { id: 'wyvern', cluster: 'uncanny', weight: 0.8, girth: [0.42, 0.58], repeat: [3, 5], elong: [1.2, 1.5], legPairs: [1], legLen: [0.55, 0.75], legTerm: ['claw'], wings: 1, tail: 0.95, tailTerm: ['claw'], horns: 0.8, spines: 0.6, eyeStyle: [0.4, 0.9], mouthStyle: [0, 0.3], covering: ['scales'], pattern: ['bands', 'reticulate'], sheen: [0.3, 0.7], hue: [0.0, 0.95], sat: [0.5, 0.9] },
+  { id: 'dragon', cluster: 'uncanny', weight: 1.2, girth: [0.5, 0.72], repeat: [4, 6], elong: [1.2, 1.5], legPairs: [2], posture: 'digitigrade', legLen: [0.5, 0.68], legTerm: ['claw'], wings: 0.85, tail: 0.95, horns: 0.9, spines: 0.8, eyeStyle: [0.4, 0.9], mouthStyle: [0, 0.2], covering: ['scales', 'plates'], pattern: ['reticulate', 'bands', 'mottle'], sheen: [0.35, 0.8], hue: [0.0, 0.95], sat: [0.5, 0.9] },
+  { id: 'wyvern', cluster: 'uncanny', weight: 0.8, girth: [0.42, 0.58], repeat: [3, 5], elong: [1.2, 1.5], legPairs: [1], posture: 'digitigrade', legLen: [0.55, 0.75], legTerm: ['claw'], wings: 1, tail: 0.95, tailTerm: ['claw'], horns: 0.8, spines: 0.6, eyeStyle: [0.4, 0.9], mouthStyle: [0, 0.3], covering: ['scales'], pattern: ['bands', 'reticulate'], sheen: [0.3, 0.7], hue: [0.0, 0.95], sat: [0.5, 0.9] },
   { id: 'cephalopod', cluster: 'uncanny', weight: 1, symmetry: 'radial', radialCount: [6, 10], girth: [0.5, 0.78], height: [0.7, 1.1], repeat: [1, 2], eyeStyle: [0.8, 1], covering: ['slime'], pattern: ['spots', 'ocelli', 'gradient'], sheen: [0.7, 1.0], hue: [0.6, 0.95], sat: [0.4, 0.85] },
   { id: 'horror', cluster: 'uncanny', weight: 0.9, symmetry: 'radial', radialCount: [5, 9], girth: [0.45, 0.75], repeat: [1, 2], eyeStyle: [0.7, 1], covering: ['skin', 'slime'], pattern: ['ocelli', 'mottle'], sheen: [0.4, 0.8], hue: [0.7, 1.0], sat: [0.3, 0.7] },
   { id: 'slime', cluster: 'uncanny', weight: 0.7, girth: [0.55, 0.85], repeat: [1, 2], height: [0.85, 1.1], legPairs: [0], tail: 0.0, head: 0.0, eyeStyle: [0.7, 1], covering: ['slime'], pattern: ['gradient', 'mottle'], sheen: [0.8, 1.0], hue: [0.25, 0.7], sat: [0.5, 0.9], light: [0.45, 0.7] },
@@ -165,7 +166,7 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
   const legTerm = pick(rng, m.legTerm ?? (['foot'] as const));
   for (let i = 0; i < lp; i++) {
     const t = lp === 1 ? range(rng, 0.4, 0.62) : (i / (lp - 1)) * 0.66 + 0.17;
-    apps.push(leg(rng, t, girth, { term: legTerm, lenMul: m.legLen, thickMul: m.legThick, azimuth: m.legAz }));
+    apps.push(leg(rng, t, girth, { term: legTerm, lenMul: m.legLen, thickMul: m.legThick, azimuth: m.legAz, posture: m.posture }));
   }
   // wings, fins
   if (chance(rng, m.wings ?? 0)) apps.push(wing(rng, range(rng, 0.3, 0.5), girth));
@@ -199,7 +200,11 @@ function compileRadial(rng: Rng, seed: number, m: Morpho, girth: number): Genome
   const height = rg(rng, m.height, [0.7, 1.1]);
   const apps: AppendageGene[] = [arm(rng, girth, range(rng, 0.3, 0.6), m)];
   if (chance(rng, 0.4)) apps.push(arm(rng, girth * 0.6, range(rng, 0.45, 0.75), m, true)); // a second ring
-  if (chance(rng, 0.6)) apps.push(eyes(rng, range(rng, 0.6, 0.95), false, girth, { style: m.eyeStyle, az: 1.5 })); // a crown of eyes
+  apps.push(eyes(rng, range(rng, 0.6, 0.95), false, girth, { style: m.eyeStyle, az: 1.5 })); // a crown of eyes (always — a face reads)
+  // a central maw at the front: elevation ≈ +Z so grow's radial array collapses it onto the axis
+  const mo = mouth(rng, girth, m.mouthStyle);
+  mo.attachElevation = 1.35;
+  apps.push(mo);
 
   const body: SegmentGene = {
     size: [girth, girth * height, girth * rg(rng, m.elong, [0.6, 0.95])],
@@ -218,7 +223,7 @@ function headSeg(rng: Rng, bodyGirth: number, m: Morpho): SegmentGene {
   for (let p = 0; p < Math.max(1, Math.round(eyeCount / 2)); p++) {
     apps.push(eyes(rng, range(rng, 0.7, 0.98), false, g, { style: m.eyeStyle, az: m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.7, 1.3) + p * 0.4 }));
   }
-  if (chance(rng, 0.85)) apps.push(mouth(rng, g, m.mouthStyle));
+  apps.push(mouth(rng, g, m.mouthStyle)); // every face has a mouth
   if (chance(rng, m.horns ?? 0)) apps.push(horns(rng, g));
   if (chance(rng, m.antennae ?? 0)) apps.push(antenna(rng, g));
   return {
@@ -232,7 +237,7 @@ function headSeg(rng: Rng, bodyGirth: number, m: Morpho): SegmentGene {
 
 function faceOnBody(rng: Rng, apps: AppendageGene[], girth: number, m: Morpho): void {
   apps.push(eyes(rng, range(rng, 0.85, 0.98), false, girth, { style: m.eyeStyle, az: m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.4, 0.7) }));
-  if (chance(rng, 0.8)) apps.push(mouth(rng, girth, m.mouthStyle));
+  apps.push(mouth(rng, girth, m.mouthStyle)); // every face has a mouth
 }
 
 function scaffold(rng: Rng, seed: number, symmetry: Symmetry, radialCount: number, body: SegmentGene, m: Morpho): Genome {
@@ -272,22 +277,38 @@ function covering(rng: Rng, m: Morpho): Genome['covering'] {
 // Part builders (parameterized)
 // =============================================================================
 
+// Leg posture (§5/§6.1) — the single biggest silhouette differentiator. Each gives the leg a
+// distinct stance: how far out it splays (azimuth, 4.71 ≈ straight down), how hard it folds at the
+// knee (curl), its articulation, and proportions. grow() folds the shin back at the knee, so these
+// read as a sprawl, a digitigrade tip-toe, a flat plantigrade foot, a straight hoof column, etc.
+type Posture = 'sprawling' | 'digitigrade' | 'plantigrade' | 'hooved' | 'upright';
+// curl stays ≤ the curlPitch bound (0.6); grow's knee amplifies it ×1.5 at runtime for the fold.
+const POSTURE: Record<Posture, { az: Rg; curl: Rg; segs: [number, number]; len: Rg; thick: Rg; term: Terminal }> = {
+  sprawling: { az: [3.5, 3.85], curl: [0.48, 0.58], segs: [3, 3], len: [0.42, 0.6], thick: [0.26, 0.4], term: 'claw' },
+  digitigrade: { az: [4.32, 4.6], curl: [0.46, 0.58], segs: [3, 4], len: [0.5, 0.74], thick: [0.24, 0.36], term: 'foot' },
+  plantigrade: { az: [4.45, 4.66], curl: [0.3, 0.48], segs: [3, 3], len: [0.42, 0.58], thick: [0.34, 0.48], term: 'foot' },
+  hooved: { az: [4.58, 4.74], curl: [0.1, 0.25], segs: [2, 3], len: [0.62, 0.92], thick: [0.2, 0.32], term: 'foot' },
+  upright: { az: [4.5, 4.7], curl: [0.18, 0.35], segs: [3, 3], len: [0.55, 0.82], thick: [0.3, 0.46], term: 'foot' },
+};
+
 interface LegOpts {
   term?: Terminal;
   lenMul?: Rg;
   thickMul?: Rg;
   azimuth?: Rg;
+  posture?: Posture;
 }
 function leg(rng: Rng, attachT: number, girth: number, o: LegOpts = {}): AppendageGene {
-  return part('leg', o.term ?? 'foot', true, range(rng, 0, 0.4), {
+  const p = POSTURE[o.posture ?? 'digitigrade'];
+  return part('leg', o.term ?? p.term, true, range(rng, 0, 0.4), {
     attachT: clamp(attachT, A.attachT),
-    attachAzimuth: rg(rng, o.azimuth, [4.0, 4.5]),
-    attachElevation: range(rng, -0.1, 0.1),
-    segments: 3,
-    length: clamp(girth * rg(rng, o.lenMul, [0.44, 0.64]), A.length),
-    thickness: clamp(girth * rg(rng, o.thickMul, [0.3, 0.46]), A.thickness),
+    attachAzimuth: rg(rng, o.azimuth ?? p.az),
+    attachElevation: range(rng, -0.12, 0.12),
+    segments: randint(rng, p.segs[0], p.segs[1]),
+    length: clamp(girth * rg(rng, o.lenMul ?? p.len), A.length),
+    thickness: clamp(girth * rg(rng, o.thickMul ?? p.thick), A.thickness),
     taper: range(rng, 0.7, 0.85),
-    curl: [range(rng, 0.4, 0.6), range(rng, -0.06, 0.06)],
+    curl: [clamp(rg(rng, p.curl), A.curlPitch), range(rng, -0.06, 0.06)],
   });
 }
 
@@ -409,7 +430,9 @@ function eyes(rng: Rng, attachT: number, antennae: boolean, refGirth: number, o:
     attachElevation: range(rng, 0.1, 0.4),
     segments: antennae ? randint(rng, 2, 3) : 1,
     length: clamp(refGirth * range(rng, 0.45, 0.7), A.length),
-    thickness: clamp(refGirth * range(rng, 0.24, 0.4), A.thickness),
+    // big eyes — the emotional anchor (§6.2). They were tiny (≈¼ head) and lost in the body mass;
+    // now sized to the head and floored at 0.16 bu so even a small-headed creature has a clear eye.
+    thickness: clamp(Math.max(0.16, refGirth * range(rng, 0.5, 0.68)), A.thickness),
     taper: range(rng, 0.85, 0.95),
     curl: [range(rng, -0.2, 0.1), 0],
   });
@@ -422,7 +445,7 @@ function mouth(rng: Rng, refGirth: number, style?: Rg): AppendageGene {
     attachElevation: range(rng, 0.0, 0.3),
     segments: 1,
     length: clamp(refGirth * range(rng, 0.4, 0.6), A.length),
-    thickness: clamp(refGirth * range(rng, 0.22, 0.38), A.thickness),
+    thickness: clamp(refGirth * range(rng, 0.36, 0.52), A.thickness), // a mouth you can actually see
     taper: 0.9,
     curl: [0, 0],
   });

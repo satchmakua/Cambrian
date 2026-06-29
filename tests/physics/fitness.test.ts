@@ -64,6 +64,22 @@ describe('physics fitness (M6)', () => {
     expect(t2.frames).toEqual(t.frames);
   });
 
+  it("aligns the gait's vertical centroid to the base pose (no jump on play/stop)", async () => {
+    const p = grow(defaultGenome());
+    let poseMeanY = 0;
+    for (const n of p.nodes) poseMeanY += n.pos[1];
+    poseMeanY /= p.nodes.length;
+
+    const t = await simulateTrajectory(p);
+    let sumY = 0;
+    let cnt = 0;
+    for (let i = 1; i < t.frameCount * t.nodeCount * 3; i += 3) {
+      sumY += t.frames[i];
+      cnt++;
+    }
+    expect(Math.abs(sumY / cnt - poseMeanY)).toBeLessThan(1e-3); // centroid matches → no vertical pop
+  });
+
   it('sampleTrajectory interpolates and loops (pure — no physics)', () => {
     // 2 frames, 1 node: A=(0,0,0) → B=(2,0,0); dt=1s
     const traj: Trajectory = {

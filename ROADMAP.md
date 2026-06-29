@@ -199,5 +199,119 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
 
 ---
 
+## Phase 5 — Fidelity & the full grammar (Part 2)
+
+Part 1 (M0–M16) shipped every *system* in [MORPHOLOGY.md](MORPHOLOGY.md), but **not the whole
+catalogue**, and playtesting surfaced real fidelity bugs. Part 2's mandate is blunt: **implement
+MORPHOLOGY.md in full — every morphotype, part, motion style, and body region the doc specifies —
+and fix the visual defects. No simplifying, no cheesing, no "folded into X".** Same rules of the
+road: each milestone is an independently-runnable, **tested** slice; the engine stays pure &
+deterministic; growth stays bounded & meshable; the 4000-genome fuzz test stays green.
+
+### 5.A — Reported defects (fix these first)
+
+- [x] **M17 — Textures welded to the body (stop the swimming).** The covering shader keyed patterns
+  on **world** position, so on a deforming/animated creature the pattern flowed across the skin.
+  `CreatureMesh` now bakes a per-vertex **`aBodyPos`** attribute (the vertex's rest-pose / body-space
+  position — `restTransform · localVertex`) onto every body geometry (spheres, capsules, and the
+  smooth surface), and the shader reads the colour pattern **and** the surface relief from `aBodyPos`
+  instead of world position. Because the attribute is fixed to the mesh, the texture is painted into
+  the body's own frame and rides the animation/rotation. (The Mikkelsen screen-space-derivative bump
+  is kept — it's view-*consistent*; what mattered was making its height field body-locked.) §7.
+  **Test:** a surface point keeps the same pattern/relief as the creature animates and the camera
+  orbits — the texture is fixed to the body, no swimming.
+  _(built 2026-06-29: typecheck + 72 tests + build green; in-browser the shader compiles across all
+  covering types (fur/slime/scales/chitin/skin) + the smooth path with no console errors; the
+  body-locked mechanism replaces the world-space sampling — awaiting the human's visual read that the
+  swimming is gone)_
+
+- [x] **M18 — Strict bilateral symmetry.** Bilateral creatures are now **exactly** mirror-symmetric.
+  Three breakers were fixed in `grow`: (1) the lateral (yaw) spine bend is dropped for bilateral, so
+  the trunk stays on the X=0 plane (the wind/S-curve now comes from the slither *animation*, not the
+  static body); (2) `pair:false` parts are snapped to the midline — aimed in the X=0 plane with their
+  roll + lateral curl zeroed so a multi-segment tail can't wander off; (3) paired parts are grown by
+  **exact reflection** of the first limb (position x→−x, orientation (x,−y,−z,w)) rather than
+  re-growing from a flipped aim — quaternion curl/roll don't mirror, so the old approach drifted.
+  **Test:** a new invariant — every bilateral phenotype is exactly symmetric under x→−x (each node has
+  a mirror within ε) — asserted over 400 forced-bilateral creatures.
+  _(built 2026-06-29: probe shows worst mirror error **0.0** across 300 creatures (was up to 2.0),
+  Σx ≈ 1e-17; 73 tests incl. the new invariant; morphospace coherence + motion classification stay
+  green despite the straighter spine)_
+
+- [x] **M19 — The face: eyes & mouth always read.** Eyes were tiny (≈¼ the head, mean r/bodyR ≈ 0.25)
+  and radial creatures only got eyes 60% of the time / never a mouth; ⅓ of all rolls had no mouth.
+  Now: eyes are **~2× bigger** (sized to the head, mean r/bodyR ≈ 0.43, **floored at 0.16 bu** so even
+  a small-headed creature has a clear eye), **guaranteed** on every creature (bilateral head/face +
+  radial crown, no more chance gate); the **mouth is guaranteed** everywhere (head, face-on-body, and
+  a new **central maw** for radials — aimed near the +Z axis so grow's radial array collapses it onto
+  the front centre) and enlarged.
+  **Test:** every creature has ≥1 eye and a mouth; the largest eye is ≥ 0.15 bu (never tiny).
+  _(built 2026-06-29: probe → eyes 200/200, mouths 200/200 (were 29/30 and 20/30), mean eye r/bodyR
+  0.25→0.43; 74 tests incl. the face invariant; in-browser every fresh roll shows 2 eyes + a mouth
+  (radial: a clustered central maw), no console errors — awaiting the human's read that the face pops)_
+
+- [x] **M20 — Right-rail / gallery layout.** The rail aside was `overflow: hidden` with the gallery as
+  `flex: 1`, so the M16 sliders + M6 physics panel squeezed it and the 3×3 grid's rows clipped.
+  Fixed in CSS: the rail is now `overflow-y: auto` (scrollable) and the gallery/grid size to their
+  content (the grid's three rows come from the thumbs' `aspect-ratio`), so all nine thumbnails stay
+  at a usable size and the panels coexist below.
+  **Test:** at the standard window size all nine thumbnails render distinctly with no clipping or
+  stacking, and every panel stays reachable.
+  _(built 2026-06-29: in-browser DOM geometry → 9 thumbnails, 3 rows, 92×92 px each, 0 overlaps, the
+  rail scrolls; no console errors)_
+
+- [x] **M21 — Silhouette differentiation (de-samey).** The "sheep with swept-back legs" came from one
+  uniform leg builder (azimuth ~4.2, single-direction curl → a back-swept arc). Two fixes: (1) `grow`
+  now folds legs at a **real knee** — the shin bends back (the curl reverses + amplifies ×1.5 after the
+  first joint) so a leg reads as a leg in a stance, not a curved tentacle; (2) a **posture** system
+  (§6.1) — sprawling / digitigrade / plantigrade / hooved / upright — sets each morphotype's leg
+  azimuth/curl/articulation/proportion/terminal, so a sprawled croc, a digitigrade cat, a hooved
+  ungulate, and a plantigrade bear stand differently. All 15 legged morphotypes assigned a posture.
+  (First-class body regions deepen this in M24.) MORPHOLOGY §1/§6/§10.
+  **Test:** a battery of morphotypes yields measurably distinct silhouettes (limb posture, stance
+  width), not variations on one body.
+  _(built 2026-06-29: probe → foot-spread varies by posture (croc 0.57 / lizard 0.45 sprawl vs
+  ungulate 0.23 / bird 0.30 tucked), feet reach below the torso; **bilateral symmetry stays exact
+  (0.0)** through the knee + mirror; 74 tests + build green — awaiting the human's read that creatures
+  now look distinct)_
+
+### 5.B — Complete the catalogue
+
+- [ ] **M22 — Full morphotype library (§4).** Add every named morphotype the doc lists and the build
+  lacks: **primate, mustelid, chelonian (turtle), ratite, chimera, arthro-alien, crystalline** (keep
+  urchin/starfish), each a real multivariate prior with characteristic parts, covering, and motion.
+  **Test:** each new morphotype reads clearly as its kind; coherence stays healthy (mean > 0.45, none
+  in the void) with the larger library.
+
+- [ ] **M23 — Full part vocabulary (§6).** Implement every deferred part with distinct crude geometry:
+  **ears, whiskers, gills, plate/scute/carapace** (a shell over a region), **crest, club/barb** tail
+  terminals; the missing **mouth styles** (lamprey, proboscis, tusked/fanged); a real **stalked eye**
+  on an eyestalk; **articulated wing struts**. Each reachable by the generator + mutation, bounded &
+  meshable.
+  **Test:** each new part renders distinctly and appears across a sample; the fuzz test stays green.
+
+- [ ] **M24 — Body regions + trait-vector layer (§2/§3.2/§5).** Add the doc's first-class **neck /
+  head / tail** regions (typed chains with their own genes) and the explicit **~24-axis trait vector**
+  between morphotype and genome (sample → jitter → compile down), so necks/tails are real evolvable
+  regions and the architecture matches §2's four layers.
+  **Test:** a long-necked heron / long-tailed monkey is expressible and steerable as a *region* (not
+  just the M16 forward-reach metric); `CAM2:` round-trips the regions; the fuzz test stays green.
+
+- [ ] **M25 — Full motion library (§8).** Add the gaits that were folded or missing: **hop**
+  (crouch→launch→land), **trot/gallop** (with a body bound), **glide** (wings held, slow bank),
+  **jet** (mantle pulse), **writhe/hover** (uncanny idles); and the Spore-style **motion primitives
+  keyed by limb role** (author abstract gaits, retarget per limb) for motion beyond pure sine math.
+  **Test:** a frog hops, a horse gallops, a jelly jets, a raptor glides — each distinct and in
+  character; the determinism + bounded-amplitude invariants hold.
+
+- [ ] **M26 — Divergence engine completion (§11.1–§11.2).** Bring the morphospace descriptor to the
+  doc's 8 dims (**add sheen + headedness**) and implement **coherence-pull-in-mutation** (the deferred
+  basin dynamic): a tunable, distance-weighted pull biases offspring toward the nearest centroid so
+  lineages *settle* into recognizable forms — and turning it down lets them wander the valleys.
+  **Test:** with the pull up, a lineage converges toward a centroid (rising coherence); with it down it
+  wanders; determinism holds.
+
+---
+
 **North star:** in ten clicks you can visibly steer a blob toward a shark — and share the
 result as a short string that regrows it exactly on someone else's machine.

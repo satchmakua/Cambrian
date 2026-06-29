@@ -20,6 +20,20 @@ import { sampleTrajectory, type Trajectory } from '../physics/fitness';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
+/** Bake an `aBodyPos` attribute = `matrix · localVertex` (the vertex's rest-pose body position). */
+function bakeBodyPos(geo: THREE.BufferGeometry, matrix: THREE.Matrix4): void {
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+  const arr = new Float32Array(pos.count * 3);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).applyMatrix4(matrix);
+    arr[i * 3] = v.x;
+    arr[i * 3 + 1] = v.y;
+    arr[i * 3 + 2] = v.z;
+  }
+  geo.setAttribute('aBodyPos', new THREE.BufferAttribute(arr, 3));
+}
+
 export function CreatureMesh({
   phenotype,
   animate = true,
@@ -45,7 +59,13 @@ export function CreatureMesh({
 
   // M15: one organic surface over the node field, built once (only when toggled on). The
   // smooth body is static, so motion is paused while it's shown (re-meshing per frame is dear).
-  const smoothGeo = useMemo(() => (showSmooth ? buildSmoothGeometry(phenotype) : null), [showSmooth, phenotype]);
+  const smoothGeo = useMemo(() => {
+    if (!showSmooth) return null;
+    const g = buildSmoothGeometry(phenotype);
+    // smooth mesh is untransformed, so its local position *is* the body-space coord (M17)
+    g.setAttribute('aBodyPos', (g.getAttribute('position') as THREE.BufferAttribute).clone());
+    return g;
+  }, [showSmooth, phenotype]);
   useEffect(() => () => smoothGeo?.dispose(), [smoothGeo]);
   const animateBody = !!trajectory || (animate && !showSmooth);
 
@@ -77,6 +97,36 @@ export function CreatureMesh({
       };
     });
   }, [data]);
+
+  // M17: body geometries with a baked `aBodyPos` attribute (the vertex's rest-pose / body-space
+  // position) so the covering shader can weld the texture to the skin even as the mesh animates.
+  const sphereGeos = useMemo(() => {
+    const m = new THREE.Matrix4();
+    return data.bodySpheres.map((i) => {
+      const g = new THREE.SphereGeometry(data.nodes[i].radius, 18, 14);
+      const p = data.nodes[i].pos;
+      bakeBodyPos(g, m.makeTranslation(p[0], p[1], p[2]));
+      return g;
+    });
+  }, [data]);
+  const capsuleGeos = useMemo(() => {
+    const m = new THREE.Matrix4();
+    const p = new THREE.Vector3();
+    const qq = new THREE.Quaternion();
+    const one = new THREE.Vector3(1, 1, 1);
+    return data.edges.map((e, k) => {
+      const g = new THREE.CapsuleGeometry(e.radius, baseCaps[k].len, 6, 14);
+      bakeBodyPos(g, m.compose(p.fromArray(baseCaps[k].pos), qq.fromArray(baseCaps[k].quat), one));
+      return g;
+    });
+  }, [data, baseCaps]);
+  useEffect(
+    () => () => {
+      sphereGeos.forEach((g) => g.dispose());
+      capsuleGeos.forEach((g) => g.dispose());
+    },
+    [sphereGeos, capsuleGeos],
+  );
 
   const sphereRefs = useRef<THREE.Mesh[]>([]);
   const capsuleRefs = useRef<THREE.Mesh[]>([]);
@@ -142,26 +192,24 @@ export function CreatureMesh({
               ref={(el) => {
                 if (el) sphereRefs.current[s] = el;
               }}
+              geometry={sphereGeos[s]}
               position={data.nodes[i].pos}
               material={bodyMat}
               castShadow
-            >
-              <sphereGeometry args={[data.nodes[i].radius, 18, 14]} />
-            </mesh>
+            />
           ))}
-          {data.edges.map((e, k) => (
+          {data.edges.map((_e, k) => (
             <mesh
               key={`c${k}`}
               ref={(el) => {
                 if (el) capsuleRefs.current[k] = el;
               }}
+              geometry={capsuleGeos[k]}
               position={baseCaps[k].pos}
               quaternion={baseCaps[k].quat}
               material={bodyMat}
               castShadow
-            >
-              <capsuleGeometry args={[e.radius, baseCaps[k].len, 6, 14]} />
-            </mesh>
+            />
           ))}
         </>
       )}

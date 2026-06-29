@@ -45,6 +45,103 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ---
 
+## M20 — gallery layout · M21 — silhouette differentiation · 2026-06-29 (Part 2)
+
+**M20 (gallery).** All 9 offspring rendered but the rail aside was `overflow: hidden` with the
+gallery `flex: 1`, so the M16 sliders + M6 physics panel squeezed it and the 3×3 grid's rows clipped
+(only ~3 showed). CSS fix: the rail is now `overflow-y: auto` and the gallery/grid size to content
+(the grid's three rows come from the thumbs' `aspect-ratio`). In-browser DOM geometry: 9 thumbnails,
+3 rows, 92×92 px, 0 overlaps, the rail scrolls, no errors.
+
+**M21 (silhouette / "swept-back legs").** The sameness came from one uniform leg builder. Two fixes:
+(1) `grow.growLimb` gives legs a **real knee** — after the first joint the curl pitch reverses and
+amplifies (`-1.5×`), so the shin folds back under the body instead of the whole leg arcing in one
+sweep; other limbs keep the smooth curl. (2) A **posture** system in `random.ts` (§6.1): a `Posture`
+table (sprawling / digitigrade / plantigrade / hooved / upright) drives each leg's azimuth, curl,
+articulation (segments), proportions, and terminal; all 15 legged morphotypes were assigned a posture
+(felid/canid/dragon → digitigrade, ungulate → hooved, ursid/rodent → plantigrade, lizard/croc/crab/
+insect/arachnid/frog → sprawling, …). One bound bug fixed: the posture curls exceeded the `curlPitch`
+bound (0.6) — capped the ranges ≤ 0.58 and clamped the gene (the knee's runtime ×1.5 keeps the fold
+dramatic without storing an out-of-bounds gene). Probe: foot-spread now varies by posture (sprawl
+0.45–0.57 wide vs hooved/upright 0.23–0.30 tucked), feet reach below the torso, and **bilateral
+symmetry stays exactly 0.0** through the knee + the M18 mirror. 74 tests + build green.
+
+## M19 — The face: eyes & mouth always read · 2026-06-29 (Part 2)
+
+Third reported defect. A probe found eyes present but tiny (mean r/bodyR ≈ 0.25, lost in the body),
+radial creatures got eyes only 60% of the time and **never a mouth**, and ⅓ of all rolls had no
+mouth at all. Fixes in `random.ts`: eyes are **guaranteed** (dropped the radial 0.6 chance) and
+**~2× bigger** (`thickness` 0.24–0.4 → 0.5–0.68 of head girth, **floored at 0.16 bu** so a
+small-headed creature still has a clear eye); the **mouth is guaranteed** on every face (head +
+face-on-body chances → always) and **enlarged** (0.22–0.38 → 0.36–0.52); and `compileRadial` now adds
+a **central maw** — a single `mouth` aimed near the +Z axis (`attachElevation` 1.35) so grow's radial
+array collapses the N copies onto the front centre instead of ringing the rim. Result: eyes 200/200,
+mouths 200/200 (were 29/30 and 20/30), mean eye r/bodyR 0.25 → 0.43. New `random.test` invariant
+asserts every creature has eyes + a mouth with the largest eye ≥ 0.15 bu; 74 tests green; in-browser
+every fresh roll shows the face (radial → a clustered central maw), no console errors.
+
+## M17 — Body-locked textures · M18 — strict bilateral symmetry · 2026-06-29 (Part 2)
+
+First two Part-2 milestones (the two defects that were genuine bugs).
+
+**M17 (texture swimming).** The covering shader sampled the colour pattern + surface relief from
+**world** position, so as the animated capsules moved through world space the texture flowed across
+the skin. `CreatureMesh` now bakes a per-vertex **`aBodyPos`** attribute = the vertex's rest-pose
+position (`restTransform·localVertex`) onto every body geometry — spheres (translation), capsules
+(the base-pose pos+quat), and the smooth surface (identity, since it's untransformed) — and the
+shader reads `patternField`/`surfaceHeight` from `aBodyPos`. The texture is now painted into the
+body's own frame and rides the animation/rotation; the Mikkelsen screen-space bump is kept (it's
+view-*consistent* — what mattered was making its height field body-locked). Verified: typecheck +
+72 tests + build green; in-browser the shader compiles across fur/slime/scales/chitin/skin + the
+smooth path with no console errors. (The "no swimming" itself is temporal — the human's visual call.)
+
+**M18 (bilateral symmetry).** Confirmed a real bug (a probe found rolls with a node 2.0 bu off its
+mirror). Fixed three breakers in `grow` for bilateral mode: the **yaw** spine bend is zeroed (trunk
+stays on X=0; the wind is now animation, not static structure); **`pair:false`** parts are snapped to
+the midline (aimed in-plane, roll + lateral curl zeroed so tails don't drift); and **paired** parts
+are grown by **exact reflection** of the first limb (`x→−x`, quat `(x,−y,−z,w)`) instead of
+re-growing from a flipped aim (quaternion curl/roll don't mirror, so the old way drifted). Result:
+worst mirror error **0.0** across 300 creatures (Σx ≈ 1e-17). New invariant `expectBilateralSymmetry`
+asserts exact x→−x symmetry over 400 forced-bilateral creatures; 73 tests green, morphospace +
+motion classification unaffected.
+
+## Roadmap Part 2 planned (Phase 5, M17–M26) · 2026-06-29
+
+The human reviewed the build against MORPHOLOGY.md and flagged that Part 1 shipped every *system* but
+not the whole *catalogue*, plus five visual defects — and directed: implement the doc **in full, no
+simplifying or cheesing**. Wrote **[ROADMAP.md](ROADMAP.md) Phase 5 (M17–M26)**. Root-caused the five
+defects with probes before planning (so the milestones are real, not guesses):
+
+- **Texture swimming (M17):** the covering shader keys patterns on **world** position and computes
+  relief from **screen-space** `dFdx/dFdy`; the animated mesh moves through world space each frame, so
+  the pattern crawls on the skin + shifts with the camera. Fix = bake a per-vertex **body-space**
+  coordinate attribute and read pattern + bump from it (analytic body-space gradient).
+- **Bilateral symmetry (M18):** confirmed a real bug — most bilateral rolls are near-symmetric but
+  some are badly lopsided (probe: Σx up to −7.5, a node with no mirror within 2 bu). The per-appendage
+  azimuth jitter + off-midline `pair:false` parts break the X=0 plane. Fix = enforce midline-or-mirror
+  in `grow` + a fuzz invariant.
+- **Eyes/mouth (M19):** eyes present (29/30) but tiny (r ≈ 0.15 vs body r ≈ 0.7) and buried; mouths
+  missing on ⅓ (20/30). Fix = big, hull-exterior, head-mounted, guaranteed face features.
+- **Gallery (M20):** all 9 render but the M16 sliders + M6 physics panel squeeze the rail so rows
+  clip. Fix = rail/grid layout.
+- **Sameness (M21):** uniform leg posture + tube-and-leg-belt body. Fix = distinct leg-posture
+  geometry + per-morphotype stance (deepened by M24 body regions).
+
+Catalogue completion: **M22** the 7 missing morphotypes (primate/mustelid/turtle/ratite/chimera/
+arthro-alien/crystalline), **M23** the deferred parts (ears/whiskers/gills/carapace/crest/club-barb +
+lamprey/proboscis/tusked mouths + stalked eye + wing struts), **M24** first-class neck/head/tail
+regions + the explicit trait-vector layer, **M25** the full motion library (hop/gallop/glide/jet/
+writhe + limb-role motion primitives), **M26** the 8-dim descriptor + coherence-pull-in-mutation.
+
+## Physics playback — vertical framing fix · 2026-06-29 (post-roadmap)
+
+Follow-up polish to the playback below: the recorded gait sat at the physics *rest* height (~0.6–1.1
+bu above the base pose), so toggling play/stop made the body visibly jump in frame. `simulateTrajectory`
+now shifts the whole gait by a **constant** so its vertical centroid matches the creature's base pose —
+the jump is gone, and because the shift is constant the gait's bounce is preserved. (xz is still
+per-frame treadmill-centred.) Verified: a probe measured the pre-fix jump at 0.64–1.06 bu across
+creatures; a new test asserts the post-fix centroid matches the base pose within 1e-3. 72/72 tests.
+
 ## Physics playback — watch the evolved gait · 2026-06-29 (post-roadmap)
 
 Closed the M6 loop: you could *evolve* a walker but only ever saw procedural motion, never the

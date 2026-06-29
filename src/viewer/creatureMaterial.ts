@@ -82,14 +82,14 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
     shader.uniforms.uBump = { value: preset.bump };
     shader.uniforms.uOff = { value: off };
 
-    // Compute world position/normal ourselves — three's `worldPosition` is only declared
-    // under certain defines (envmap/shadow), which don't hold for every body/thumbnail.
+    // Pattern + relief sample `aBodyPos` — a per-vertex *body-space* coordinate (the vertex's
+    // rest-pose position, baked into the geometry by CreatureMesh). Because it's fixed to the mesh,
+    // the texture stays welded to the skin as the body animates and the camera orbits (no swimming).
+    // World normal (for countershading) we still compute ourselves — three's `worldPosition` is only
+    // declared under certain defines (envmap/shadow), which don't hold for every body/thumbnail.
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNrm;')
-      .replace(
-        '#include <project_vertex>',
-        '  vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#include <project_vertex>',
-      )
+      .replace('#include <common>', '#include <common>\nattribute vec3 aBodyPos;\nvarying vec3 vBodyPos;\nvarying vec3 vWNrm;')
+      .replace('#include <project_vertex>', '  vBodyPos = aBodyPos;\n#include <project_vertex>')
       .replace(
         '#include <beginnormal_vertex>',
         '#include <beginnormal_vertex>\n  vWNrm = normalize(mat3(modelMatrix) * objectNormal);',
@@ -104,7 +104,7 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
         {
           float up = clamp(vWNrm.y * 0.5 + 0.5, 0.0, 1.0);
           vec3 skin = mix(uBelly, uBack, smoothstep(0.25, 0.78, up));
-          float pat = patternField(vWPos + uOff, uPType, uPScale);
+          float pat = patternField(vBodyPos + uOff, uPType, uPScale);
           skin = mix(skin, uPattern, pat * uContrast);
           diffuseColor.rgb = skin;
         }`,
@@ -114,7 +114,7 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
         '#include <normal_fragment_begin>',
         `#include <normal_fragment_begin>
         {
-          float h = surfaceHeight(vWPos + uOff, uCover);
+          float h = surfaceHeight(vBodyPos + uOff, uCover);
           vec3 P = -vViewPosition;
           vec3 sx = dFdx(P);
           vec3 sy = dFdy(P);
@@ -151,7 +151,7 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
 // =============================================================================
 
 const FRAG_HELPERS = /* glsl */ `
-varying vec3 vWPos;
+varying vec3 vBodyPos;
 varying vec3 vWNrm;
 uniform vec3 uBack; uniform vec3 uBelly; uniform vec3 uPattern; uniform vec3 uRim;
 uniform int uPType; uniform int uCover;

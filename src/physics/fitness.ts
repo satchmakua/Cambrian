@@ -164,6 +164,10 @@ export interface Trajectory {
  * The first `settleSteps` are skipped: the creature drops from a small height and settles, and that
  * fall doesn't belong in a *looping* gait — including it makes every loop pop from the settled end
  * pose back to the airborne start pose. Frames are written straight into a pre-sized buffer.
+ *
+ * The whole gait is shifted vertically by a constant so its centroid matches the creature's base
+ * pose — otherwise it sits at the physics rest height (≈1 bu higher) and toggling playback makes the
+ * body jump in frame. The shift is constant, so the gait's vertical bounce is preserved.
  */
 export async function simulateTrajectory(
   p: Phenotype,
@@ -174,10 +178,15 @@ export async function simulateTrajectory(
   const settle = Math.max(0, opts.settleSteps ?? 36); // ~0.6 s drop+settle, dropped from the loop
   const nodeCount = p.nodes.length;
 
+  let poseMeanY = 0;
+  for (const n of p.nodes) poseMeanY += n.pos[1];
+  poseMeanY /= Math.max(nodeCount, 1);
+
   const firstStep = Math.ceil(settle / stride) * stride;
   const frameCount = firstStep < steps ? Math.floor((steps - 1 - firstStep) / stride) + 1 : 0;
   const frames = new Float32Array(frameCount * nodeCount * 3);
   let fi = 0;
+  let sumY = 0;
 
   const distance = await simulate(p, opts, (bodies, s) => {
     if (s < settle || s % stride !== 0 || fi >= frameCount) return;
@@ -196,9 +205,14 @@ export async function simulateTrajectory(
       frames[base + i * 3] = t.x - cx; // treadmill: remove horizontal drift
       frames[base + i * 3 + 1] = t.y;
       frames[base + i * 3 + 2] = t.z - cz;
+      sumY += t.y;
     }
     fi++;
   });
+
+  // align the gait's vertical centroid to the base pose (a constant shift keeps the bounce)
+  const yOffset = fi > 0 ? sumY / (fi * nodeCount) - poseMeanY : 0;
+  if (yOffset !== 0) for (let i = 1; i < fi * nodeCount * 3; i += 3) frames[i] -= yOffset;
 
   return { frames, frameCount: fi, nodeCount, dt: (1 / 60) * stride, distance };
 }
