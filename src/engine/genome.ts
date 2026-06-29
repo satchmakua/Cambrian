@@ -27,12 +27,26 @@ export type PartKind =
   | 'maw';
 export type Vec3 = [number, number, number];
 
+/** What the skin is *made of* — drives surface relief (bump) + material (MORPHOLOGY §7.2). */
+export type CoveringType = 'skin' | 'scales' | 'fur' | 'feathers' | 'chitin' | 'slime' | 'plates';
+/** The color field painted over the skin (MORPHOLOGY §7.1). */
+export type PatternType =
+  | 'plain'
+  | 'stripes'
+  | 'bands'
+  | 'spots'
+  | 'ocelli'
+  | 'reticulate'
+  | 'mottle'
+  | 'gradient';
+
 export interface Genome {
   version: typeof GENOME_VERSION;
   seed: number; // uint32 — drives deterministic growth jitter
   symmetry: Symmetry;
   radialCount: number; // 3..8, used only when symmetry === 'radial'
   body: SegmentGene; // root of the recursive body description
+  covering: Covering;
   palette: Palette;
 }
 
@@ -68,6 +82,19 @@ export interface AppendageGene {
   pair: boolean; // mirror across X=0 (bilateral)
 }
 
+/**
+ * The procedural skin (MORPHOLOGY §7). `type` picks the surface relief + material
+ * preset; `pattern` picks the in-shader color field; the numeric genes tune both. No
+ * asset files — everything is generated in-shader from these + the seed.
+ */
+export interface Covering {
+  type: CoveringType;
+  pattern: PatternType;
+  patternScale: number; // spatial frequency of the pattern (bu⁻¹)
+  patternContrast: number; // 0 = invisible … 1 = bold
+  sheen: number; // 0 matte … 1 wet/iridescent
+}
+
 export interface Palette {
   hueA: number; // 0..1
   hueB: number; // 0..1
@@ -87,6 +114,7 @@ export function defaultGenome(seed = 0xc0ffee): Genome {
     seed,
     symmetry: 'bilateral',
     radialCount: 4,
+    covering: { type: 'fur', pattern: 'spots', patternScale: 3.5, patternContrast: 0.55, sheen: 0.12 },
     palette: { hueA: 0.08, hueB: 0.55, sat: 0.55, light: 0.5 },
     body: {
       size: [girth, girth * 0.92, girth * 1.0],

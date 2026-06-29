@@ -29,6 +29,9 @@ export function expectValidPhenotype(p: Phenotype): void {
 /** Assert every mutable gene in a genome sits inside GENE_BOUNDS (Pillar 1). */
 export function expectGenomeWithinBounds(g: Genome): void {
   inBounds(g.radialCount, GENE_BOUNDS.radialCount);
+  inBounds(g.covering.patternScale, GENE_BOUNDS.covering.patternScale);
+  inBounds(g.covering.patternContrast, GENE_BOUNDS.covering.patternContrast);
+  inBounds(g.covering.sheen, GENE_BOUNDS.covering.sheen);
   inBounds(g.palette.sat, GENE_BOUNDS.palette.sat);
   inBounds(g.palette.light, GENE_BOUNDS.palette.light);
   checkSegment(g.body);

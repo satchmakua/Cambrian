@@ -21,9 +21,10 @@ const UP = new THREE.Vector3(0, 1, 0);
 export function CreatureMesh({ phenotype, animate = true }: { phenotype: Phenotype; animate?: boolean }) {
   const data = useMemo(() => buildMeshData(phenotype), [phenotype]);
   const pal = phenotype.genomeRef.palette;
+  const cov = phenotype.genomeRef.covering;
   const seed = phenotype.genomeRef.seed;
 
-  const bodyMat = useMemo(() => makeCreatureMaterial(pal, seed), [pal, seed]);
+  const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed), [pal, cov, seed]);
   useEffect(() => () => bodyMat.dispose(), [bodyMat]);
 
   const footColor = useMemo(

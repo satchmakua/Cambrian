@@ -7,8 +7,9 @@ acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 
 **Current phase:** Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
-coherence labels, niched litters) built. Next: **M12 — covering & texture** (procedural
-patterns + in-shader bump for scales/fur/feathers/chitin/slime).
+coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
+per-covering in-shader bump) built. Next: **M13 — motion styles** (gait/swim/flap/scuttle/
+slither/drift selected by morphotype).
 
 ### State of the tree
 
@@ -28,13 +29,46 @@ patterns + in-shader bump for scales/fur/feathers/chitin/slime).
 | Lineage | `src/engine/lineage.ts`, `src/viewer/LineageTree.tsx` | ✅ tree model + SVG view |
 | Share bar | `src/viewer/ShareBar.tsx` | ✅ copy / paste-and-load |
 | Directed pressures | `src/engine/pressures.ts`, `src/viewer/PressurePanel.tsx` | ✅ scorePhenotype + runGenerations + panel |
-| Skin material | `src/viewer/creatureMaterial.ts` | ✅ countershading + pattern + fresnel rim |
+| Skin material | `src/viewer/creatureMaterial.ts` | ✅ countershading + 8 patterns + per-covering bump + sheen + fresnel rim |
+| Covering | `src/engine/genome.ts` (`Covering`) | ✅ type/pattern/scale/contrast/sheen, per-morphotype, mutated, `CAM2:`-shared |
 | Procedural motion | `src/viewer/animation.ts` | ✅ undulation + gait (unit-tested) |
 | UI / store | `src/ui/App.tsx`, `store.ts` | ✅ Zustand: lineage + current + litter + pressure, localStorage |
 | Test invariants | `tests/engine/invariants.ts` | ✅ shared phenotype + genome-bounds asserts |
 | Physics fitness (stretch) | — | ⬜ M6 |
 
 ---
+
+## M12 — Covering & texture · built 2026-06-29 (awaiting test)
+
+The skin finally varies *as a material*, not just a hue (MORPHOLOGY §7). New `Covering` in the
+genome (`type` ∈ skin/scales/fur/feathers/chitin/slime/plates · `pattern` ∈ plain/stripes/bands/
+spots/ocelli/reticulate/mottle/gradient · `patternScale`/`patternContrast`/`sheen`), bounded in
+`GENE_BOUNDS.covering`, sampled per-morphotype (the §4 "covering · pattern" column — felids furred &
+spotted, lizards scaled & banded, cephalopods wet slime, dragons reticulate scales, …), point- and
+structurally-mutated (a new `changeCovering` op re-skins type/pattern), and round-tripped through
+`CAM2:`. The wild tail scrambles it freely.
+
+`creatureMaterial.ts` was rebuilt around it. On top of the existing countershading + warm fresnel
+rim: an **8-pattern in-shader color field** over body space (voronoi for spots/ocelli/reticulate,
+fbm for mottle, sin bars for stripes/bands, a ramp for gradient), and **per-covering surface
+relief** — a procedural height `h(x)` (scales = row-offset voronoi lenses, fur = directional fbm
+streaks, feathers = shingled rows, chitin/plates = plated voronoi seams, slime = wet ripple, skin =
+faint mottle) perturbing the view-space normal via the Mikkelsen screen-space-derivative bump (no
+textures allocated). Per-covering roughness/metalness presets (fur matte → chitin glossy → slime
+wet) + a `sheen`→iridescent oil-film term. A per-seed spatial offset keeps two same-covering
+creatures from sharing a pattern phase. Store key bumped to `v2c`.
+
+**Bug found & fixed in-browser:** the world-position varying relied on three's `worldPosition`,
+which is only declared under certain defines (envmap/shadow) and was **undeclared** for our bodies
++ thumbnails → a vertex-shader compile failure (caught via the preview console). Now we compute it
+ourselves: `vWPos = (modelMatrix * vec4(transformed,1.0)).xyz`.
+
+**Verified (2026-06-29):** `npm run typecheck` clean; `npm test` → **51/51** (4 new: covering in
+bounds across 2000 rolls; `CAM2:` round-trips it; mutation keeps it valid; the sampler spreads ≥5
+coverings & ≥5 patterns); `npm run build` → succeeds. **In-browser:** default reads as matte
+spotted **fur**; a roll came out wet glossy **slime** (radial, ocelli, sheen 0.84); another a hard
+green **scaled** lizard (mottle) — three clearly different animals from similar primitives; the
+shader compiles for the main view + all 9 thumbnails with **no console errors**.
 
 ## M11 — Divergence engine · built 2026-06-28 (awaiting test)
 

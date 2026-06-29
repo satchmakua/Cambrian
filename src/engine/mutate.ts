@@ -13,7 +13,7 @@
  */
 import { mulberry32, mix32, range, type Rng } from './rng';
 import { GENE_BOUNDS, DEPTH_MAX, clamp } from './bounds';
-import type { Genome, SegmentGene, AppendageGene, Symmetry, Terminal, PartKind } from './genome';
+import type { Genome, SegmentGene, AppendageGene, Symmetry, Terminal, PartKind, CoveringType, PatternType } from './genome';
 
 const OP_SALT = 0x9e3779b9;
 
@@ -64,7 +64,11 @@ function applyPointMutations(g: Genome, rng: Rng, rates: MutationRates): void {
   const r = rates.point;
   const s = rates.pointSigma;
 
+  const C = GENE_BOUNDS.covering;
   g.radialCount = jitterInt(rng, g.radialCount, GENE_BOUNDS.radialCount, r, s);
+  g.covering.patternScale = jitter(rng, g.covering.patternScale, C.patternScale, r, s);
+  g.covering.patternContrast = jitter(rng, g.covering.patternContrast, C.patternContrast, r, s);
+  g.covering.sheen = jitter(rng, g.covering.sheen, C.sheen, r, s);
   g.palette.hueA = jitter(rng, g.palette.hueA, P.hue, r, s);
   g.palette.hueB = jitter(rng, g.palette.hueB, P.hue, r, s);
   g.palette.sat = jitter(rng, g.palette.sat, P.sat, r, s);
@@ -106,9 +110,15 @@ function jitterInt(rng: Rng, v: number, bound: readonly [number, number], rate: 
 // --- structural mutation -----------------------------------------------------
 
 function applyStructural(g: Genome, rng: Rng, lockSymmetry = false): void {
-  const ops = [bumpRepeat, addAppendage, removeAppendage, changeTerminal, changeKind, reaim, addChild, removeChild];
+  const ops = [bumpRepeat, addAppendage, removeAppendage, changeTerminal, changeKind, reaim, changeCovering, addChild, removeChild];
   if (!lockSymmetry) ops.push(flipSymmetry);
   pick(rng, ops)(g, rng);
+}
+
+// Re-skin: swap the covering type or the color pattern (a furred cat → a scaled one).
+function changeCovering(g: Genome, rng: Rng): void {
+  if (rng() < 0.5) g.covering.type = pick(rng, COVERING_TYPES);
+  else g.covering.pattern = pick(rng, PATTERN_TYPES);
 }
 
 function bumpRepeat(g: Genome, rng: Rng): void {
@@ -229,6 +239,10 @@ function freshSegment(rng: Rng): SegmentGene {
 const TERMINALS: readonly Terminal[] = ['none', 'foot', 'fin', 'claw', 'eye', 'mouth', 'pincer'];
 const KINDS: readonly PartKind[] = [
   'leg', 'arm', 'wing', 'fin', 'tail', 'horn', 'spine', 'frill', 'antenna', 'tentacle', 'eyestalk', 'maw',
+];
+const COVERING_TYPES: readonly CoveringType[] = ['skin', 'scales', 'fur', 'feathers', 'chitin', 'slime', 'plates'];
+const PATTERN_TYPES: readonly PatternType[] = [
+  'plain', 'stripes', 'bands', 'spots', 'ocelli', 'reticulate', 'mottle', 'gradient',
 ];
 
 /** The body's segment chain (each SegmentGene has at most one `child`). */

@@ -9,6 +9,7 @@ function aimed(azimuth: number, elevation: number): Genome {
     seed: 1,
     symmetry: 'none',
     radialCount: 4,
+    covering: { type: 'skin', pattern: 'plain', patternScale: 3, patternContrast: 0, sheen: 0.2 },
     palette: { hueA: 0, hueB: 0, sat: 0.5, light: 0.5 },
     body: {
       size: [0.4, 0.4, 0.4],

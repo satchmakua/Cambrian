@@ -101,9 +101,16 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
   litter offers genuinely divergent choices.
   _(built 2026-06-28, self-verified: 47 tests + in-browser coherence labels; awaiting human)_
 
-- [ ] **M12 — Covering & texture.** Procedural color patterns (stripes/spots/ocelli/…) + in-
-  shader surface bump (scales/fur/feathers/chitin/slime) + per-covering materials.
+- [x] **M12 — Covering & texture.** A `Covering` gene (type + pattern + scale/contrast/sheen),
+  sampled per-morphotype, mutated, and `CAM2:`-shared. The skin shader gained an 8-pattern color
+  field (plain/stripes/bands/spots/ocelli/reticulate/mottle/gradient) + a per-covering in-shader
+  surface bump (scales=lens cells · fur=streaks · feathers=shingles · chitin/plates=plated seams ·
+  slime=wet ripple) via screen-space-derivative normal perturbation, + per-covering roughness/
+  metalness presets + a sheen→iridescence term. No asset files. MORPHOLOGY §7.
   **Test:** the same silhouette in fur vs. scales vs. chitin looks like a different animal.
+  _(built 2026-06-29, self-verified: 51 tests + typecheck + build; in-browser the default reads as
+  matte spotted fur, a roll came out wet glossy slime, another a hard scaled lizard — all distinct,
+  shader compiles with no console errors; awaiting human visual confirmation)_
 
 - [ ] **M13 — Motion styles.** Gait/swim/flap/scuttle/slither/drift selected by morphotype.
   **Test:** a fish swims, a crab scuttles, a bird flaps, a serpent slithers — in character.

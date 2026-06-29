@@ -9,10 +9,12 @@ selected — by you (Biomorphs-style breeder) or by directed pressures — so yo
 lineage from a scurrying blob to a finned giant to a striped quadruped.
 
 **Status:** 🟢 Phase 3 underway — genome **v2 + spherical aim (M8)**, a **part vocabulary** with
-eye/mouth styles, horns, pincers, wings (M9), and **24 morphotype priors + a bimodal sampler**
-(M10) so rolls read as cat / crab / heron / dragon / cephalopod while staying surprising. M0–M5
-done: faces, countershaded skin, procedural motion, breeder + directed evolution, lineage,
-`CAM2:` sharing. Full variety spec in [MORPHOLOGY.md](MORPHOLOGY.md); see [ROADMAP.md](ROADMAP.md).
+eye/mouth styles, horns, pincers, wings (M9), **24 morphotype priors + a bimodal sampler** (M10)
+so rolls read as cat / crab / heron / dragon / cephalopod, a **divergence engine** (M11:
+morphospace + coherence labels + niched litters), and **procedural covering & texture** (M12:
+in-shader patterns + per-covering surface bump for fur / scales / chitin / slime / feathers /
+plates). M0–M5 done: faces, countershaded skin, procedural motion, breeder + directed evolution,
+lineage, `CAM2:` sharing. Full variety spec in [MORPHOLOGY.md](MORPHOLOGY.md); see [ROADMAP.md](ROADMAP.md).
 
 ## Stack
 

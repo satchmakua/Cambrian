@@ -47,6 +47,13 @@ function randomGenome(seed: number): Genome {
     seed: (rng() * 0xffffffff) >>> 0,
     symmetry: sym,
     radialCount: Math.round(range(rng, GENE_BOUNDS.radialCount[0], GENE_BOUNDS.radialCount[1])),
+    covering: {
+      type: (['skin', 'scales', 'fur', 'feathers', 'chitin', 'slime', 'plates'] as const)[Math.floor(rng() * 7)],
+      pattern: (['plain', 'stripes', 'bands', 'spots', 'ocelli', 'reticulate', 'mottle', 'gradient'] as const)[Math.floor(rng() * 8)],
+      patternScale: range(rng, ...GENE_BOUNDS.covering.patternScale),
+      patternContrast: rng(),
+      sheen: rng(),
+    },
     palette: { hueA: rng(), hueB: rng(), sat: rng(), light: range(rng, 0.2, 0.8) },
     body: randomSegment(rng, 0),
   };

@@ -21,6 +21,8 @@ import {
   type Symmetry,
   type Terminal,
   type PartKind,
+  type CoveringType,
+  type PatternType,
 } from './genome';
 
 export const SHARE_PREFIX = 'CAM2:'; // bumped for genome v2 (spherical aim + part kinds)
@@ -29,6 +31,10 @@ const SYMMETRIES: readonly Symmetry[] = ['bilateral', 'radial', 'none'];
 const TERMINALS: readonly Terminal[] = ['none', 'foot', 'fin', 'claw', 'eye', 'mouth', 'pincer'];
 const KINDS: readonly PartKind[] = [
   'leg', 'arm', 'wing', 'fin', 'tail', 'horn', 'spine', 'frill', 'antenna', 'tentacle', 'eyestalk', 'maw',
+];
+const COVERING_TYPES: readonly CoveringType[] = ['skin', 'scales', 'fur', 'feathers', 'chitin', 'slime', 'plates'];
+const PATTERN_TYPES: readonly PatternType[] = [
+  'plain', 'stripes', 'bands', 'spots', 'ocelli', 'reticulate', 'mottle', 'gradient',
 ];
 
 export function encodeGenome(g: Genome): string {
@@ -76,8 +82,20 @@ function validateGenome(o: unknown): Genome {
     seed: u32(g.seed, 'seed'),
     symmetry: oneOf(g.symmetry, SYMMETRIES, 'symmetry'),
     radialCount: num(g.radialCount, 'radialCount'),
+    covering: validateCovering(g.covering),
     palette: validatePalette(g.palette),
     body: validateSegment(g.body),
+  };
+}
+
+function validateCovering(o: unknown): Genome['covering'] {
+  const c = obj(o, 'covering');
+  return {
+    type: oneOf(c.type, COVERING_TYPES, 'covering.type'),
+    pattern: oneOf(c.pattern, PATTERN_TYPES, 'covering.pattern'),
+    patternScale: num(c.patternScale, 'patternScale'),
+    patternContrast: num(c.patternContrast, 'patternContrast'),
+    sheen: num(c.sheen, 'sheen'),
   };
 }
 
