@@ -13,7 +13,7 @@
  */
 import { mulberry32, mix32, range, type Rng } from './rng';
 import { GENE_BOUNDS, DEPTH_MAX, clamp } from './bounds';
-import type { Genome, SegmentGene, AppendageGene, Symmetry, Terminal } from './genome';
+import type { Genome, SegmentGene, AppendageGene, Symmetry, Terminal, PartKind } from './genome';
 
 const OP_SALT = 0x9e3779b9;
 
@@ -79,8 +79,11 @@ function applyPointMutations(g: Genome, rng: Rng, rates: MutationRates): void {
     seg.curve[0] = jitter(rng, seg.curve[0], B.curvePitch, r, s);
     seg.curve[1] = jitter(rng, seg.curve[1], B.curveYaw, r, s);
     for (const a of seg.appendages) {
+      a.style = jitter(rng, a.style, A.style, r, s);
       a.attachT = jitter(rng, a.attachT, A.attachT, r, s);
       a.attachAzimuth = jitter(rng, a.attachAzimuth, A.attachAzimuth, r, s);
+      a.attachElevation = jitter(rng, a.attachElevation, A.attachElevation, r, s);
+      a.roll = jitter(rng, a.roll, A.roll, r, s);
       a.segments = jitterInt(rng, a.segments, A.segments, r, s);
       a.length = jitter(rng, a.length, A.length, r, s);
       a.thickness = jitter(rng, a.thickness, A.thickness, r, s);
@@ -103,7 +106,7 @@ function jitterInt(rng: Rng, v: number, bound: readonly [number, number], rate: 
 // --- structural mutation -----------------------------------------------------
 
 function applyStructural(g: Genome, rng: Rng, lockSymmetry = false): void {
-  const ops = [bumpRepeat, addAppendage, removeAppendage, changeTerminal, addChild, removeChild];
+  const ops = [bumpRepeat, addAppendage, removeAppendage, changeTerminal, changeKind, reaim, addChild, removeChild];
   if (!lockSymmetry) ops.push(flipSymmetry);
   pick(rng, ops)(g, rng);
 }
@@ -130,6 +133,21 @@ function changeTerminal(g: Genome, rng: Rng): void {
   const apps = allAppendages(g);
   if (apps.length === 0) return;
   pick(rng, apps).terminal = pick(rng, TERMINALS);
+}
+
+function changeKind(g: Genome, rng: Rng): void {
+  const apps = allAppendages(g);
+  if (apps.length === 0) return;
+  pick(rng, apps).kind = pick(rng, KINDS);
+}
+
+// Re-aim a part: swing it to a new direction (a side fin can become a tail, a leg a horn).
+function reaim(g: Genome, rng: Rng): void {
+  const apps = allAppendages(g);
+  if (apps.length === 0) return;
+  const a = pick(rng, apps);
+  a.attachAzimuth = range(rng, 0, Math.PI * 2);
+  a.attachElevation = range(rng, GENE_BOUNDS.appendage.attachElevation[0], GENE_BOUNDS.appendage.attachElevation[1]);
 }
 
 function addChild(g: Genome, rng: Rng): void {
@@ -180,8 +198,12 @@ function duplicateSegment(g: Genome, rng: Rng): void {
 function freshAppendage(rng: Rng): AppendageGene {
   const A = GENE_BOUNDS.appendage;
   return {
+    kind: pick(rng, KINDS),
+    style: range(rng, 0, 1),
     attachT: range(rng, 0, 1),
     attachAzimuth: range(rng, 0, Math.PI * 2),
+    attachElevation: range(rng, A.attachElevation[0], A.attachElevation[1]),
+    roll: range(rng, A.roll[0], A.roll[1]),
     segments: randint(rng, 1, 4),
     length: range(rng, 0.3, 0.9),
     thickness: range(rng, A.thickness[0], 0.3),
@@ -204,7 +226,10 @@ function freshSegment(rng: Rng): SegmentGene {
 
 // --- helpers -----------------------------------------------------------------
 
-const TERMINALS: readonly Terminal[] = ['none', 'foot', 'fin', 'claw', 'eye', 'mouth'];
+const TERMINALS: readonly Terminal[] = ['none', 'foot', 'fin', 'claw', 'eye', 'mouth', 'pincer'];
+const KINDS: readonly PartKind[] = [
+  'leg', 'arm', 'wing', 'fin', 'tail', 'horn', 'spine', 'frill', 'antenna', 'tentacle', 'eyestalk', 'maw',
+];
 
 /** The body's segment chain (each SegmentGene has at most one `child`). */
 function segments(g: Genome): SegmentGene[] {

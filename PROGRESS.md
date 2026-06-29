@@ -5,9 +5,9 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 2. M0–M5 built and self-verified; awaiting acceptance test.
-Creatures are steerable by hand (breeder) or by target (directed pressures), branchable,
-shareable, and now **animated** (procedural undulation + gait).
+**Current phase:** Phase 3 (the creature grammar). M0–M5 built; **M8 (genome v2 + spherical
+aim)** and **M9 (part vocabulary — eye/mouth styles, horns, pincers, wings)** built. Parts aim
+anywhere and render with distinct geometry; next is **M10** (the morphotype library + sampler).
 
 ### State of the tree
 
@@ -34,6 +34,57 @@ shareable, and now **animated** (procedural undulation + gait).
 | Physics fitness (stretch) | — | ⬜ M6 |
 
 ---
+
+## M9 — Part vocabulary (core) · built 2026-06-28 (awaiting test)
+
+Distinct geometry per part, driven by a new **`style` gene** (0..1) that selects render
+variants. The high-impact set (the face + the test's named items):
+
+- **Eyes — 5 styles** by `style`: round (sclera+pupil+highlight), beady, slit (vertical
+  reptile pupil), compound (faceted icosahedron dome), glowing (emissive alien).
+- **Mouths — 5 styles**: maw (cavity + teeth), beak (two cones), mandibles (converging
+  prongs), sucker (torus ring), baleen (fringe). The face finally varies.
+- **Horns** (smooth keratin spikes, by `kind==='horn'`), **pincers** (new `pincer` terminal —
+  two converging prongs, so radial creatures become **crabs**), **wings** (crude membranes by
+  `kind==='wing'`), improved fins.
+
+Plumbing: `style` added to `AppendageGene` (+ bounds/random/mutate/share/invariants); grow
+tags each appendage node with `{kind, style}` so the renderer can pick variants;
+`changeKind`/`reaim`/style-jitter already drift them. `pincer` added to the Terminal enum +
+all validators. Session key bumped to `v2b`.
+
+**Verified (2026-06-28):** `npm run typecheck` clean; `npm test` → **42/42** (style now in the
+within-bounds + 2000-genome fuzz; `CAM2:` round-trip covers the new fields); `npm run build` →
+succeeds. **In-browser:** default loads with horns; an 8-creature sample produced **pincers**
+(a radial **crab** with 4; bilaterals with 6), mouths, eyes, fins, horns — all finite, the new
+geometry (icosahedron/torus/cone/box) renders with **no console errors**. _Deferred to polish:
+frills, ears, antennae, carapace, articulated wings, leg-posture geometry._
+
+## M8 — Genome v2 + spherical part aim · built 2026-06-28 (awaiting test)
+
+The foundation of the creature grammar (MORPHOLOGY). Migrated the whole engine to **genome
+v2**. The headline unlock: every part now has a full **spherical aim** — `attachElevation`
+(tilt forward/back) + `roll`, on top of `attachAzimuth` — plus a `kind` (leg/wing/tail/horn/
+fin/…). The v1 model could only fan parts sideways with a fixed tiny back-tilt, which is *why*
+everything looked same-y; now tails point back, fins/horns up, wings out-and-back.
+
+- **`grow.ts`:** appendage direction is now `cos(elev)·(cos(az)·X + sin(az)·Y) + sin(elev)·Z`
+  (MORPHOLOGY §3.1); bilateral mirror negates X; radial arrays the azimuth; `roll` rotates the
+  part frame. Shoulder bulge keys on `kind==='leg'`.
+- **`random.ts`:** v2 generator places **tails** (aimed back, ~50%), **horns** (up-forward on
+  heads, ~30%), and dorsal/pectoral fins — via aim, not just splay.
+- **`mutate.ts`:** jitters elevation/roll; new `changeKind` + `reaim` structural operators let
+  a part swing to a new direction (a side fin → a tail) — drift toward the divergence engine.
+- **`share.ts`:** `CAM2:` prefix + validates kind/elevation/roll; old `CAM1:` strings rejected.
+  `bounds.ts`: `attachElevation` `[-π/2,π/2]`, `roll` `[-π,π]`, `NODE_MAX` 512→640. Store
+  `STORAGE_KEY` bumped to v2 (old sessions dropped). Default creature is a horned, tailed quadruped.
+
+**Verified (2026-06-28):** `npm run typecheck` clean; `npm test` → **42/42** — new `aim.test.ts`
+*proves the unlock* (elevation places a part behind/ahead of the trunk, azimuth above/below; the
+default creature's tail extends behind the origin), plus the 2000-genome v2 fuzz and 300-genome
+`CAM2:` round-trip stay green. `npm run build` → succeeds. **In-browser:** clean load; the
+default creature gained horns + a tail (Z-extent 3.4→4.6); a random roll came out a
+horned/finned/4-legged/tailed creature, all-finite, `CAM2:` share, no console errors.
 
 ## Divergence engine + prior-art research · 2026-06-28
 

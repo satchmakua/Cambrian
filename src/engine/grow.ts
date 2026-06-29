@@ -12,7 +12,7 @@
  */
 import { mulberry32 } from './rng';
 import { R_MIN, NODE_MAX, DEPTH_MAX } from './bounds';
-import type { Genome, SegmentGene, AppendageGene, Terminal, Vec3 } from './genome';
+import type { Genome, SegmentGene, AppendageGene, Terminal, PartKind, Vec3 } from './genome';
 
 export type Quat = [number, number, number, number]; // [x, y, z, w]
 
@@ -25,6 +25,7 @@ export interface BodyNode {
   radius: number; // always ≥ R_MIN
   kind: 'spine' | 'limb' | 'terminal';
   terminal?: Terminal;
+  part?: { kind: PartKind; style: number }; // which genome part grew this node (for render variants)
 }
 
 export interface Phenotype {
@@ -94,7 +95,7 @@ export function grow(genome: Genome): Phenotype {
       const ai = clampInt(Math.round(app.attachT * (spine.length - 1)), 0, spine.length - 1);
       // shoulder / haunch: legs thicken the spine node they attach to, giving the
       // body muscular structure instead of a uniform tube.
-      if (app.terminal === 'foot' || app.terminal === 'claw') {
+      if (app.kind === 'leg') {
         nodes[spine[ai]].radius = Math.min(nodes[spine[ai]].radius * 1.22, nodes[spine[ai]].radius + 0.35);
       }
       growAppendage(app, spine[ai]);
@@ -107,27 +108,27 @@ export function grow(genome: Genome): Phenotype {
 
   function growAppendage(app: AppendageGene, attachIdx: number): void {
     const base = nodes[attachIdx];
-    const jitter = (rng() - 0.5) * 0.15; // seed perturbs limb angle deterministically
-    const az = app.attachAzimuth + jitter;
+    const az = app.attachAzimuth + (rng() - 0.5) * 0.12; // seed perturbs the aim a touch
+    const ce = Math.cos(app.attachElevation);
+    const se = Math.sin(app.attachElevation);
+    // spherical aim (MORPHOLOGY §3.1): az sweeps the cross-section, elevation tilts
+    // toward the body axis (+forward / −back). This is what lets parts point anywhere.
+    const aim = (a: number): Vec3 => norm([ce * Math.cos(a), ce * Math.sin(a), se]);
 
-    // outward directions in the body cross-section, with a slight backward/down tilt
     const dirs: Vec3[] = [];
     if (genome.symmetry === 'radial') {
-      for (let k = 0; k < genome.radialCount; k++) {
-        const a = az + (k * Math.PI * 2) / genome.radialCount;
-        dirs.push(norm([Math.cos(a), Math.sin(a), -0.15]));
-      }
+      for (let k = 0; k < genome.radialCount; k++) dirs.push(aim(az + (k * Math.PI * 2) / genome.radialCount));
     } else {
-      dirs.push(norm([Math.cos(az), Math.sin(az), -0.15]));
-      if (app.pair && genome.symmetry === 'bilateral') {
-        dirs.push(norm([-Math.cos(az), Math.sin(az), -0.15])); // mirror across X=0
-      }
+      const d = aim(az);
+      dirs.push(d);
+      if (app.pair && genome.symmetry === 'bilateral') dirs.push([-d[0], d[1], d[2]]); // mirror across X=0
     }
     for (const dir of dirs) growLimb(app, base, dir);
   }
 
   function growLimb(app: AppendageGene, base: BodyNode, dir0: Vec3): void {
-    let quat = qFromTo([0, 0, 1], dir0);
+    // orient +Z → aim direction, then roll about that axis (orients flat parts)
+    let quat = qMul(qFromAxisAngle(dir0, app.roll), qFromTo([0, 0, 1], dir0));
     let dir = dir0;
     let pos: Vec3 = [base.pos[0] + dir[0] * base.radius, base.pos[1] + dir[1] * base.radius, base.pos[2] + dir[2] * base.radius];
     let prev = nodes.indexOf(base);
@@ -137,6 +138,7 @@ export function grow(genome: Genome): Phenotype {
       const last = j === app.segments - 1;
       const r = app.thickness * Math.pow(app.taper, j);
       const idx = addNode(pos, quat, r, last ? 'terminal' : 'limb', last ? app.terminal : undefined);
+      nodes[idx].part = { kind: app.kind, style: app.style };
       edges.push([prev, idx]);
       prev = idx;
 

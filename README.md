@@ -8,10 +8,10 @@ A 3D artificial-evolution toy: creatures are *grown* from a generative genome, m
 selected — by you (Biomorphs-style breeder) or by directed pressures — so you can walk a
 lineage from a scurrying blob to a finned giant to a striped quadruped.
 
-**Status:** 🟢 M5 (better bodies & motion) — creatures have faces (eyes/mouth), countershaded
-patterned skin, distinct fins/claws/feet, and **procedural motion** (undulating spines,
-walking gaits). Steer them by hand (breeder grid) or by target (directed pressures), branch
-any ancestor, and share as `CAM1:` strings. See [ROADMAP.md](ROADMAP.md) for the stretch goals.
+**Status:** 🟢 Phase 3 underway — **M8 (genome v2 + spherical part aim)** built: parts can now
+aim anywhere (tails back, horns/fins up, wings out), the foundation for the big variety push in
+[MORPHOLOGY.md](MORPHOLOGY.md). M0–M5 done: faces, countershaded skin, procedural motion, the
+breeder + directed-evolution loops, lineage, and `CAM2:` sharing. See [ROADMAP.md](ROADMAP.md).
 
 ## Stack
 

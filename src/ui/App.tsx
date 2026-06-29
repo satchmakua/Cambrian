@@ -34,7 +34,7 @@ export function App() {
           <CreatureViewer phenotype={phenotype} />
           <header className="hud">
             <h1>Cambrian</h1>
-            <p className="tag">grow · mutate · select — M3 lineage + sharing</p>
+            <p className="tag">grow · mutate · select — M9 part vocabulary</p>
             <dl className="stats">
               <div>
                 <dt>generation</dt>

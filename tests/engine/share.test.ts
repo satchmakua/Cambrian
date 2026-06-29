@@ -5,7 +5,7 @@ import { mutate } from '../../src/engine/mutate';
 import { defaultGenome } from '../../src/engine/genome';
 import { grow } from '../../src/engine/grow';
 
-describe('genome string (CAM1)', () => {
+describe('genome string (CAM2)', () => {
   it('round-trips: decode(encode(g)) reproduces the exact creature', () => {
     for (let s = 0; s < 300; s++) {
       const g = s % 2 === 0 ? randomGenome(s) : mutate(randomGenome(s), s * 7, s % 9);
@@ -22,8 +22,8 @@ describe('genome string (CAM1)', () => {
   });
 
   it('rejects junk gracefully', () => {
-    expect(() => decodeGenome('hello world')).toThrow(/CAM1/);
-    expect(() => decodeGenome('CAM1:not-valid-base64!!')).toThrow(/Corrupt|bad/i);
+    expect(() => decodeGenome('hello world')).toThrow(/CAM2/);
+    expect(() => decodeGenome('CAM2:not-valid-base64!!')).toThrow(/Corrupt|bad/i);
     expect(() => decodeGenome(SHARE_PREFIX + btoa('{"not":"a genome"}'))).toThrow();
   });
 

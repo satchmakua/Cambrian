@@ -66,16 +66,20 @@ The big variety push. Full spec in **[MORPHOLOGY.md](MORPHOLOGY.md)** — a geno
 throws out recognizable *and* uncanny creatures (cats, crabs, herons, dragons, aliens) from a
 morphotype → trait → part → covering grammar. Takes priority over the M6/M7 stretch below.
 
-- [ ] **M8 — Genome v2 + spherical aim.** New schema with **spherical part aim** (azimuth +
+- [x] **M8 — Genome v2 + spherical aim.** New schema with **spherical part aim** (azimuth +
   elevation + roll — unlocks tails/wings/horns/necks); migrate `grow` + the generator; bump
   share to `CAM2:`; raise `NODE_MAX`. (Gallery `<View>` consolidation rides here if convenient;
   the remount churn is already fixed by stable keys.)
   **Test:** roll creatures with tails pointing back, fins up, horns forward — all expressible.
+  _(built 2026-06-28, self-verified: aim test + 2000-genome v2 fuzz + in-browser; awaiting human)_
 
-- [ ] **M9 — Part vocabulary.** The ~25 parts (legs by posture, wings, fins, tails, horns,
-  spines, frills, ears, antennae, tentacles, pincers, carapace) with distinct crude geometry —
-  including **all eye styles and all mouth styles** (beak, maw, mandibles, sucker, baleen, …).
+- [x] **M9 — Part vocabulary (core).** A `style` gene (0..1) selects render variants per
+  part. Built the high-impact set: **5 eye styles** (round/beady/slit/compound/glowing),
+  **5 mouth styles** (maw/beak/mandibles/sucker/baleen), **horns** (smooth spikes), **pincers**
+  (new terminal — crabs!), **wings** (crude membranes), and fins. _Deferred to polish (M16):
+  frills, ears, antennae, carapace, articulated wing struts, leg-posture geometry._
   **Test:** build creatures with a beak vs. a fanged maw vs. pincers; each reads distinctly.
+  _(built 2026-06-28, self-verified: 42 tests + in-browser pincers/styles + no errors; awaiting human)_
 
 - [ ] **M10 — Morphotype library + trait sampler.** The ~24 priors + ~24 trait axes +
   ratio-based proportions + the bimodal (familiar/uncanny) sampler.

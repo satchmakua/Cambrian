@@ -13,7 +13,7 @@ import { runGenerations, ZERO_PRESSURE, type Pressure } from '../engine/pressure
 import type { LineageNode, LineageNodes } from '../engine/lineage';
 
 const LITTER = 9;
-const STORAGE_KEY = 'cambrian.session.v1';
+const STORAGE_KEY = 'cambrian.session.v2b'; // bumped again for the M9 `style` gene
 
 interface Session {
   nodes: LineageNodes; // the family tree

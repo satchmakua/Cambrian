@@ -6,7 +6,7 @@
  * CreatureMesh renders this and animates the node positions each frame (M5 motion).
  */
 import type { Phenotype } from '../engine/grow';
-import type { Terminal } from '../engine/genome';
+import type { Terminal, PartKind } from '../engine/genome';
 
 export interface MeshNode {
   pos: [number, number, number];
@@ -24,6 +24,8 @@ export interface MeshFeature {
   idx: number; // node index
   radius: number;
   quat: [number, number, number, number]; // node orientation; local +Z points outward
+  kind?: PartKind; // which genome part this is (eye-vs-horn etc.)
+  style: number; // 0..1 — selects the render variant
 }
 
 export interface MeshData {
@@ -47,7 +49,7 @@ export function buildMeshData(p: Phenotype): MeshData {
   const features: MeshFeature[] = [];
   p.nodes.forEach((n, i) => {
     if (n.terminal && n.terminal !== 'none') {
-      features.push({ type: n.terminal, idx: i, radius: n.radius, quat: n.quat });
+      features.push({ type: n.terminal, idx: i, radius: n.radius, quat: n.quat, kind: n.part?.kind, style: n.part?.style ?? 0.5 });
     } else {
       bodySpheres.push(i);
     }

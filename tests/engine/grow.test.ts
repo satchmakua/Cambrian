@@ -43,7 +43,7 @@ function randomGenome(seed: number): Genome {
   const rng = mulberry32(seed >>> 0);
   const sym: Symmetry = (['bilateral', 'radial', 'none'] as const)[Math.floor(rng() * 3)];
   return {
-    version: 1,
+    version: 2,
     seed: (rng() * 0xffffffff) >>> 0,
     symmetry: sym,
     radialCount: Math.round(range(rng, GENE_BOUNDS.radialCount[0], GENE_BOUNDS.radialCount[1])),
@@ -70,9 +70,14 @@ function randomSegment(rng: Rng, depth: number): SegmentGene {
 function randomAppendage(rng: Rng) {
   const A = GENE_BOUNDS.appendage;
   const terminals = ['none', 'foot', 'fin', 'claw', 'eye'] as const;
+  const kinds = ['leg', 'fin', 'tail', 'horn', 'wing', 'tentacle', 'antenna'] as const;
   return {
+    kind: kinds[Math.floor(rng() * kinds.length)],
+    style: range(rng, ...A.style),
     attachT: range(rng, ...A.attachT),
     attachAzimuth: range(rng, ...A.attachAzimuth),
+    attachElevation: range(rng, ...A.attachElevation),
+    roll: range(rng, ...A.roll),
     segments: Math.round(range(rng, A.segments[0], A.segments[1])),
     length: range(rng, ...A.length),
     thickness: range(rng, ...A.thickness),

@@ -8,7 +8,7 @@
 
 /** Hard growth invariants — enforced by grow(), asserted by the fuzz test. */
 export const R_MIN = 0.04; // minimum capsule radius (bu); no node may be thinner
-export const NODE_MAX = 512; // total skeleton nodes; expansion stops if this is hit
+export const NODE_MAX = 640; // total skeleton nodes; expansion stops if this is hit
 export const DEPTH_MAX = 4; // maximum SegmentGene `child` recursion depth
 
 /** Inclusive numeric bounds for every mutable gene. [min, max]. */
@@ -22,8 +22,11 @@ export const GENE_BOUNDS = {
     appendageCount: [0, 8] as [number, number],
   },
   appendage: {
+    style: [0, 1] as [number, number], // selects render variant (eye/mouth/etc. style)
     attachT: [0, 1] as [number, number], // position along the segment chain
     attachAzimuth: [0, Math.PI * 2] as [number, number], // angle around the body axis
+    attachElevation: [-Math.PI / 2, Math.PI / 2] as [number, number], // tilt fwd/back (v2 aim)
+    roll: [-Math.PI, Math.PI] as [number, number], // roll about the part axis (v2 aim)
     segments: [1, 6] as [number, number], // limb length (its own recursion depth)
     length: [0.2, 2.0] as [number, number], // per limb-segment (bu)
     thickness: [0.05, 0.6] as [number, number], // limb radius (bu)

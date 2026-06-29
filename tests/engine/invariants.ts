@@ -48,8 +48,11 @@ function checkSegment(seg: SegmentGene): void {
 
 function checkAppendage(app: AppendageGene): void {
   const A = GENE_BOUNDS.appendage;
+  inBounds(app.style, A.style);
   inBounds(app.attachT, A.attachT);
   inBounds(app.attachAzimuth, A.attachAzimuth);
+  inBounds(app.attachElevation, A.attachElevation);
+  inBounds(app.roll, A.roll);
   inBounds(app.segments, A.segments);
   inBounds(app.length, A.length);
   inBounds(app.thickness, A.thickness);

@@ -1,17 +1,12 @@
 /**
- * Random genome generation (DESIGN §4, ROADMAP M1).
+ * Random genome generation (DESIGN §4, MORPHOLOGY). Composed from independent traits
+ * (body continuum + leg pairs + fins + head), not fixed molds. **v2** parts carry a
+ * full spherical aim, so the generator can place **tails** (aimed back), **horns**
+ * (up-forward), and **dorsal fins** (up) — not just sideways splay. Every draw flows
+ * from the seed (Pillar 3); every gene stays within `GENE_BOUNDS` (Pillar 1).
  *
- * NOT five fixed archetypes — that over-fits creatures to a handful of molds. Instead a
- * creature is **composed from independent traits**: a body on a length/girth continuum,
- * 0–3 leg pairs, optional dorsal/pectoral fins, an optional head + face. The familiar
- * forms emerge as *common cases* (compact body + 2 legs + head = quadruped; deep body +
- * 0 legs + fins = fish; long body + 3 legs = centipede) but so do hybrids in between.
- * Proportions stay animal-like (fat overlapping body, legs sized to the body, reaching
- * down). Every draw flows from the seed (Pillar 3); every gene stays within
- * `GENE_BOUNDS` (Pillar 1).
- *
- * Coordinate reminder (DESIGN §4.1): +Y up, +Z forward, +X right. An appendage's
- * `attachAzimuth` sweeps the cross-section: ~π/2 = up, ~4.2 = down, ~0/π = out to the sides.
+ * Aim reminder (MORPHOLOGY §3.1): azimuth sweeps the cross-section (π/2 = up, ~4.2 =
+ * down, ~π = side); elevation tilts toward the body axis (+forward / −back).
  */
 import { mulberry32, range, type Rng } from './rng';
 import { GENE_BOUNDS, clamp } from './bounds';
@@ -22,6 +17,8 @@ import {
   type AppendageGene,
   type Palette,
   type Symmetry,
+  type Terminal,
+  type PartKind,
 } from './genome';
 
 export type SymmetryMode = 'auto' | 'bilateral' | 'radial';
@@ -34,7 +31,7 @@ export function randomGenome(seed: number, mode: SymmetryMode = 'auto'): Genome 
   return symmetry === 'radial' ? radial(rng, s) : bilateral(rng, s);
 }
 
-// --- bilateral: compose body + limbs + fins + head from independent traits ----
+// --- bilateral: compose body + limbs + fins + tail + head from independent traits ---
 
 function bilateral(rng: Rng, seed: number): Genome {
   const girth = range(rng, 0.32, 0.72);
@@ -53,15 +50,18 @@ function bilateral(rng: Rng, seed: number): Genome {
     [2, 0.38],
     [3, 0.2],
   ]);
-  const legTerm = pick(rng, ['foot', 'claw'] as const);
+  const legTerm = pick(rng, ['foot', 'foot', 'claw', 'pincer'] as const);
   for (let i = 0; i < legPairs; i++) {
     const t = legPairs === 1 ? range(rng, 0.35, 0.6) : (i / (legPairs - 1)) * 0.68 + 0.16;
     appendages.push(leg(rng, t, girth, legTerm));
   }
 
-  // fins — independent of legs (a creature can have both, either, or neither)
+  // fins — independent of legs
   if (chance(rng, legPairs === 0 ? 0.62 : 0.3)) appendages.push(dorsalFin(rng, range(rng, 0.3, 0.6), girth));
   if (chance(rng, legPairs === 0 ? 0.55 : 0.25)) appendages.push(pectoralFin(rng, range(rng, 0.25, 0.45), girth));
+
+  // tail — a backward-aimed part (the v2 unlock); legged + non-windy bodies usually get one
+  if (chance(rng, legPairs > 0 ? 0.65 : 0.4)) appendages.push(tail(rng, girth, lengthClass));
 
   const body: SegmentGene = {
     size: [girth, girth * heightRatio, girth * elong],
@@ -88,7 +88,6 @@ function radial(rng: Rng, seed: number): Genome {
   const girth = range(rng, 0.45, 0.85);
   const dome = range(rng, 0.55, 1.15);
   const apps: AppendageGene[] = [arm(rng, girth, range(rng, 0.3, 0.6))];
-  // sometimes a second, smaller ring (spikes / eye-tips) for variety
   if (chance(rng, 0.35)) apps.push(arm(rng, girth * 0.6, range(rng, 0.45, 0.75), true));
 
   const body: SegmentGene = {
@@ -114,6 +113,7 @@ function head(rng: Rng, bodyGirth: number, antennae: boolean): SegmentGene {
   const apps: AppendageGene[] = [];
   if (chance(rng, 0.92)) apps.push(eyes(rng, range(rng, 0.7, 0.98), antennae, g));
   if (chance(rng, 0.85)) apps.push(mouth(rng, g));
+  if (chance(rng, 0.3)) apps.push(horns(rng, g)); // up-and-forward (v2 aim)
   return {
     size: [g, g * range(rng, 0.85, 1.05), g * range(rng, 0.8, 1.1)],
     repeat: randint(rng, 1, 2),
@@ -124,89 +124,114 @@ function head(rng: Rng, bodyGirth: number, antennae: boolean): SegmentGene {
 }
 
 // A leg: down-and-out with a knee, sized so it reaches the ground for this body.
-function leg(rng: Rng, attachT: number, girth: number, terminal: 'foot' | 'claw'): AppendageGene {
-  return {
+function leg(rng: Rng, attachT: number, girth: number, terminal: 'foot' | 'claw' | 'pincer'): AppendageGene {
+  return part('leg', terminal, true, {
     attachT: clamp(attachT, GENE_BOUNDS.appendage.attachT),
     attachAzimuth: range(rng, 4.0, 4.5),
-    segments: 3, // thigh → shin → foot
+    attachElevation: range(rng, -0.1, 0.1),
+    segments: 3,
     length: clamp(girth * range(rng, 0.44, 0.64), GENE_BOUNDS.appendage.length),
     thickness: clamp(girth * range(rng, 0.3, 0.46), GENE_BOUNDS.appendage.thickness),
     taper: range(rng, 0.7, 0.85),
     curl: [range(rng, 0.4, 0.6), range(rng, -0.06, 0.06)],
-    terminal,
-    pair: true,
-  };
+  });
+}
+
+// A tail: aimed BACK and down — only expressible with v2 elevation.
+function tail(rng: Rng, girth: number, lengthClass: number): AppendageGene {
+  return part('tail', pick(rng, ['none', 'fin', 'claw'] as const), false, {
+    attachT: range(rng, 0.0, 0.06),
+    attachAzimuth: range(rng, 4.4, 5.0), // down...
+    attachElevation: range(rng, -1.25, -0.75), // ...and back
+    segments: randint(rng, 3, 6),
+    length: clamp(girth * range(rng, 0.6, 1.2) * (0.7 + lengthClass), GENE_BOUNDS.appendage.length),
+    thickness: clamp(girth * range(rng, 0.18, 0.34), GENE_BOUNDS.appendage.thickness),
+    taper: range(rng, 0.62, 0.82),
+    curl: [range(rng, -0.1, 0.15), range(rng, -0.05, 0.05)],
+  });
+}
+
+// Horns: up-and-forward on the head.
+function horns(rng: Rng, refGirth: number): AppendageGene {
+  return part('horn', 'claw', true, {
+    style: range(rng, 0, 0.6), // straight … curved
+    attachAzimuth: range(rng, 1.0, 1.7),
+    attachElevation: range(rng, 0.3, 0.7),
+    segments: randint(rng, 1, 2),
+    length: clamp(refGirth * range(rng, 0.5, 1.0), GENE_BOUNDS.appendage.length),
+    thickness: clamp(refGirth * range(rng, 0.18, 0.32), GENE_BOUNDS.appendage.thickness),
+    taper: range(rng, 0.5, 0.7),
+    curl: [range(rng, -0.1, 0.25), 0],
+  });
 }
 
 function dorsalFin(rng: Rng, attachT: number, girth: number): AppendageGene {
-  return {
+  return part('fin', 'fin', false, {
     attachT,
-    attachAzimuth: Math.PI / 2,
+    attachAzimuth: Math.PI / 2, // straight up
+    attachElevation: range(rng, -0.15, 0.05),
     segments: randint(rng, 1, 2),
     length: clamp(girth * range(rng, 0.7, 1.3), GENE_BOUNDS.appendage.length),
     thickness: clamp(girth * range(rng, 0.22, 0.4), GENE_BOUNDS.appendage.thickness),
     taper: range(rng, 0.5, 0.75),
     curl: [range(rng, -0.1, 0.2), 0],
-    terminal: 'fin',
-    pair: false,
-  };
+  });
 }
 
 function pectoralFin(rng: Rng, attachT: number, girth: number): AppendageGene {
-  return {
+  return part('fin', 'fin', true, {
     attachT,
     attachAzimuth: range(rng, 2.9, 3.5), // out to the sides
+    attachElevation: range(rng, -0.2, 0.0),
+    roll: range(rng, -0.4, 0.4),
     segments: randint(rng, 1, 2),
     length: clamp(girth * range(rng, 0.8, 1.4), GENE_BOUNDS.appendage.length),
     thickness: clamp(girth * range(rng, 0.16, 0.3), GENE_BOUNDS.appendage.thickness),
     taper: range(rng, 0.5, 0.75),
     curl: [range(rng, -0.1, 0.1), range(rng, -0.1, 0.1)],
-    terminal: 'fin',
-    pair: true,
-  };
+  });
 }
 
 function eyes(rng: Rng, attachT: number, antennae: boolean, refGirth: number): AppendageGene {
-  return {
+  return part('eyestalk', 'eye', true, {
+    style: range(rng, 0, 1), // round / beady / slit / compound / glowing
     attachT: clamp(attachT, GENE_BOUNDS.appendage.attachT),
     attachAzimuth: range(rng, 0.7, 1.3),
+    attachElevation: range(rng, 0.1, 0.4),
     segments: antennae ? randint(rng, 2, 3) : 1,
     length: clamp(refGirth * range(rng, antennae ? 0.8 : 0.45, antennae ? 1.4 : 0.7), GENE_BOUNDS.appendage.length),
     thickness: clamp(refGirth * range(rng, antennae ? 0.14 : 0.24, antennae ? 0.22 : 0.4), GENE_BOUNDS.appendage.thickness),
     taper: range(rng, 0.85, 0.95),
     curl: [range(rng, -0.2, 0.1), 0],
-    terminal: 'eye',
-    pair: true,
-  };
+  });
 }
 
 function mouth(rng: Rng, refGirth: number): AppendageGene {
-  return {
+  return part('maw', 'mouth', false, {
+    style: range(rng, 0, 1), // maw / beak / mandibles / sucker / baleen
     attachT: range(rng, 0.85, 1.0),
-    attachAzimuth: range(rng, 4.4, 5.0), // underside, facing down-forward
+    attachAzimuth: range(rng, 4.4, 5.0), // underside
+    attachElevation: range(rng, 0.0, 0.3), // slightly forward
     segments: 1,
     length: clamp(refGirth * range(rng, 0.4, 0.6), GENE_BOUNDS.appendage.length),
     thickness: clamp(refGirth * range(rng, 0.22, 0.38), GENE_BOUNDS.appendage.thickness),
     taper: 0.9,
     curl: [0, 0],
-    terminal: 'mouth',
-    pair: false,
-  };
+  });
 }
 
 // A radial arm; grow arrays it `radialCount` times around the body axis.
 function arm(rng: Rng, girth: number, attachT: number, spiky = false): AppendageGene {
-  return {
+  return part('tentacle', spiky ? pick(rng, ['eye', 'claw'] as const) : pick(rng, ['claw', 'fin', 'none', 'pincer'] as const), false, {
     attachT: clamp(attachT, GENE_BOUNDS.appendage.attachT),
     attachAzimuth: range(rng, 0, 0.4),
+    attachElevation: range(rng, -0.3, 0.3),
     segments: spiky ? randint(rng, 1, 2) : randint(rng, 2, 4),
     length: clamp(girth * range(rng, spiky ? 0.4 : 0.6, spiky ? 0.8 : 1.4), GENE_BOUNDS.appendage.length),
     thickness: clamp(girth * range(rng, 0.16, 0.34), GENE_BOUNDS.appendage.thickness),
     taper: range(rng, 0.6, 0.88),
     curl: [range(rng, -0.3, 0.4), range(rng, -0.1, 0.1)],
-    terminal: spiky ? pick(rng, ['eye', 'claw'] as const) : pick(rng, ['claw', 'fin', 'none'] as const),
-    pair: false,
-  };
+  });
 }
 
 function randomPalette(rng: Rng): Palette {
@@ -214,6 +239,25 @@ function randomPalette(rng: Rng): Palette {
 }
 
 // --- helpers -----------------------------------------------------------------
+
+/** Build an AppendageGene with v2 defaults (elevation 0, roll 0) overridden by `o`. */
+function part(
+  kind: PartKind,
+  terminal: Terminal,
+  pair: boolean,
+  o: Partial<AppendageGene> & Pick<AppendageGene, 'attachAzimuth' | 'segments' | 'length' | 'thickness' | 'taper' | 'curl'>,
+): AppendageGene {
+  return {
+    kind,
+    style: 0.5,
+    attachT: 0.5,
+    attachElevation: 0,
+    roll: 0,
+    terminal,
+    pair,
+    ...o,
+  };
+}
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;

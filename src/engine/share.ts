@@ -20,12 +20,16 @@ import {
   type AppendageGene,
   type Symmetry,
   type Terminal,
+  type PartKind,
 } from './genome';
 
-export const SHARE_PREFIX = 'CAM1:';
+export const SHARE_PREFIX = 'CAM2:'; // bumped for genome v2 (spherical aim + part kinds)
 
 const SYMMETRIES: readonly Symmetry[] = ['bilateral', 'radial', 'none'];
-const TERMINALS: readonly Terminal[] = ['none', 'foot', 'fin', 'claw', 'eye', 'mouth'];
+const TERMINALS: readonly Terminal[] = ['none', 'foot', 'fin', 'claw', 'eye', 'mouth', 'pincer'];
+const KINDS: readonly PartKind[] = [
+  'leg', 'arm', 'wing', 'fin', 'tail', 'horn', 'spine', 'frill', 'antenna', 'tentacle', 'eyestalk', 'maw',
+];
 
 export function encodeGenome(g: Genome): string {
   return SHARE_PREFIX + toBase64Url(JSON.stringify(canonicalize(g)));
@@ -34,7 +38,7 @@ export function encodeGenome(g: Genome): string {
 export function decodeGenome(input: string): Genome {
   const s = input.trim();
   if (!s.startsWith(SHARE_PREFIX)) {
-    throw new Error('Not a Cambrian creature string (missing "CAM1:" prefix).');
+    throw new Error('Not a Cambrian v2 creature string (missing "CAM2:" prefix).');
   }
   let parsed: unknown;
   try {
@@ -98,8 +102,12 @@ function validateSegment(o: unknown): SegmentGene {
 function validateAppendage(o: unknown): AppendageGene {
   const a = obj(o, 'appendage');
   return {
+    kind: oneOf(a.kind, KINDS, 'kind'),
+    style: num(a.style, 'style'),
     attachT: num(a.attachT, 'attachT'),
     attachAzimuth: num(a.attachAzimuth, 'attachAzimuth'),
+    attachElevation: num(a.attachElevation, 'attachElevation'),
+    roll: num(a.roll, 'roll'),
     segments: num(a.segments, 'segments'),
     length: num(a.length, 'length'),
     thickness: num(a.thickness, 'thickness'),

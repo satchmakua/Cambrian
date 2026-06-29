@@ -1,15 +1,30 @@
 /**
- * The generative genome (DESIGN §4.3).
+ * The generative genome (DESIGN §4.3, MORPHOLOGY §3).
  *
- * The genome stores *growth rules*, not vertex positions — a one-gene change
- * ("repeat this segment 3 more times", "recurse this limb deeper") restructures the
- * whole body. This is the encoding that makes "wildly different forms" reachable.
+ * The genome stores *growth rules*, not vertex positions. **v2** gives every part a
+ * full **spherical aim** (azimuth + elevation + roll) and a `kind`, so parts can point
+ * anywhere — tails back, fins/horns up, wings out-and-back — which the v1 sideways-only
+ * splay could not express. This is the foundation of the creature grammar (MORPHOLOGY).
  */
 
-export const GENOME_VERSION = 1 as const;
+export const GENOME_VERSION = 2 as const;
 
 export type Symmetry = 'bilateral' | 'radial' | 'none';
-export type Terminal = 'none' | 'foot' | 'fin' | 'claw' | 'eye' | 'mouth';
+export type Terminal = 'none' | 'foot' | 'fin' | 'claw' | 'eye' | 'mouth' | 'pincer';
+/** What a part *is* (semantic). Tip shape is `terminal`; geometry per kind lands in M9. */
+export type PartKind =
+  | 'leg'
+  | 'arm'
+  | 'wing'
+  | 'fin'
+  | 'tail'
+  | 'horn'
+  | 'spine'
+  | 'frill'
+  | 'antenna'
+  | 'tentacle'
+  | 'eyestalk'
+  | 'maw';
 export type Vec3 = [number, number, number];
 
 export interface Genome {
@@ -30,14 +45,25 @@ export interface SegmentGene {
   child?: SegmentGene; // next body section (head / tail) — recursion
 }
 
+/**
+ * A part attached along a segment chain. Its base direction is the spherical aim
+ * (MORPHOLOGY §3.1):
+ *   dir = cos(elev)·(cos(az)·X + sin(az)·Y) + sin(elev)·Z
+ * az sweeps the cross-section (π/2 = up, 3π/2 = down, 0/π = sides); elev tilts toward
+ * the body axis (+π/2 = forward, −π/2 = back); roll orients flat parts.
+ */
 export interface AppendageGene {
-  attachT: number; // 0..1 — position along the segment chain it sprouts from
+  kind: PartKind;
+  style: number; // 0..1 — selects among that kind/terminal's render variants (MORPHOLOGY §6)
+  attachT: number; // 0..1 — position along the segment chain
   attachAzimuth: number; // 0..2π — angle around the body axis
-  segments: number; // limb length (its own recursion depth)
-  length: number; // per limb-segment (bu)
-  thickness: number; // limb radius (bu)
-  taper: number; // limb thinning toward the tip
-  curl: [number, number]; // [pitchPerSeg, yawPerSeg] radians — bend / curl
+  attachElevation: number; // -π/2..π/2 — tilt toward the body axis (+forward / −back)
+  roll: number; // -π..π — roll about the part's own axis (flat parts)
+  segments: number; // articulation depth
+  length: number; // per segment (bu)
+  thickness: number; // radius (bu)
+  taper: number; // thinning toward the tip
+  curl: [number, number]; // [pitchPerSeg, yawPerSeg] radians — joints / bend
   terminal: Terminal;
   pair: boolean; // mirror across X=0 (bilateral)
 }
@@ -50,9 +76,9 @@ export interface Palette {
 }
 
 /**
- * A hand-tuned demo creature for M0: a short-bodied quadruped-ish critter with two
- * mirrored leg pairs and stubby fins. Deterministic — `seed` only perturbs jitter.
- * (M1 replaces this with bounds-driven random genomes; M2 adds mutation.)
+ * A hand-tuned demo creature: a short-bodied quadruped with two leg pairs, a tail
+ * (now aimed *backward* — the v2 unlock), a head with eyes + mouth, and a pair of
+ * horns aimed up-and-forward. Deterministic — `seed` only perturbs jitter.
  */
 export function defaultGenome(seed = 0xc0ffee): Genome {
   const girth = 0.6;
@@ -63,41 +89,31 @@ export function defaultGenome(seed = 0xc0ffee): Genome {
     radialCount: 4,
     palette: { hueA: 0.08, hueB: 0.55, sat: 0.55, light: 0.5 },
     body: {
-      size: [girth, girth * 0.92, girth * 1.0], // width, height, forward stretch
+      size: [girth, girth * 0.92, girth * 1.0],
       repeat: 3,
       taper: 0.95,
       curve: [-0.03, 0],
-      appendages: [legPair(0.18), legPair(0.82)], // front + hind legs
-      // a distinct head with eyes and a mouth
+      appendages: [legPair(0.2), legPair(0.82), tail(0.0)],
       child: {
         size: [0.45, 0.46, 0.42],
         repeat: 2,
         taper: 0.9,
         curve: [0.1, 0],
-        appendages: [
-          eyePair(0.85),
-          {
-            attachT: 0.95,
-            attachAzimuth: 4.71, // straight down — under the snout
-            segments: 1,
-            length: 0.24,
-            thickness: 0.16,
-            taper: 0.9,
-            curl: [0, 0],
-            terminal: 'mouth',
-            pair: false,
-          },
-        ],
+        appendages: [eyePair(0.85), mouthPart(0.95), hornPair(0.5)],
       },
     },
   };
 }
 
-// Legs aim down-and-out (azimuth ≈ 4.2 rad is the lower hemisphere) with a knee bend.
+// Legs: down-and-out (azimuth ≈ 4.2, lower hemisphere), elevation 0, knee bend.
 function legPair(attachT: number): AppendageGene {
   return {
+    kind: 'leg',
+    style: 0.3,
     attachT,
     attachAzimuth: 4.2,
+    attachElevation: 0,
+    roll: 0,
     segments: 3,
     length: 0.36,
     thickness: 0.2,
@@ -108,11 +124,53 @@ function legPair(attachT: number): AppendageGene {
   };
 }
 
-// Eyes aim up-and-forward (azimuth ≈ 1.0 rad) on the head.
+// Tail: aimed BACK and slightly down — only expressible with v2 elevation.
+function tail(attachT: number): AppendageGene {
+  return {
+    kind: 'tail',
+    style: 0.2,
+    attachT,
+    attachAzimuth: 4.71, // down...
+    attachElevation: -1.0, // ...and back (the unlock)
+    roll: 0,
+    segments: 5,
+    length: 0.34,
+    thickness: 0.18,
+    taper: 0.7,
+    curl: [0.05, 0],
+    terminal: 'none',
+    pair: false,
+  };
+}
+
+// Horns: up-and-forward on the head.
+function hornPair(attachT: number): AppendageGene {
+  return {
+    kind: 'horn',
+    style: 0.2,
+    attachT,
+    attachAzimuth: 1.4, // up, slightly to the side
+    attachElevation: 0.5, // forward
+    roll: 0,
+    segments: 2,
+    length: 0.26,
+    thickness: 0.12,
+    taper: 0.55,
+    curl: [0.1, 0],
+    terminal: 'claw',
+    pair: true,
+  };
+}
+
+// Eyes: up-and-forward on the head.
 function eyePair(attachT: number): AppendageGene {
   return {
+    kind: 'eyestalk',
+    style: 0.0, // round eye
     attachT,
     attachAzimuth: 1.0,
+    attachElevation: 0.3,
+    roll: 0,
     segments: 1,
     length: 0.22,
     thickness: 0.13,
@@ -120,5 +178,24 @@ function eyePair(attachT: number): AppendageGene {
     curl: [-0.15, 0],
     terminal: 'eye',
     pair: true,
+  };
+}
+
+// Mouth: underside-front of the snout.
+function mouthPart(attachT: number): AppendageGene {
+  return {
+    kind: 'maw',
+    style: 0.1, // a toothed maw
+    attachT,
+    attachAzimuth: 4.71, // straight down
+    attachElevation: 0.2, // slightly forward
+    roll: 0,
+    segments: 1,
+    length: 0.24,
+    thickness: 0.16,
+    taper: 0.9,
+    curl: [0, 0],
+    terminal: 'mouth',
+    pair: false,
   };
 }
