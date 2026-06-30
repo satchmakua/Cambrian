@@ -277,6 +277,12 @@ function Feature({
       return <Carapace f={f} color={finColor} />;
     case 'whisker':
       return <Whisker f={f} color={footColor} />;
+    case 'paw':
+      return <Paw f={f} color={footColor} />;
+    case 'hoof':
+      return <Hoof f={f} color={footColor} />;
+    case 'hand':
+      return <Hand f={f} color={footColor} />;
     default:
       return <Foot f={f} color={footColor} />;
   }
@@ -547,6 +553,73 @@ function Foot({ f, color }: { f: MeshFeature; color: number }) {
       <sphereGeometry args={[1, 14, 12]} />
       <meshStandardMaterial color={color} roughness={0.7} metalness={0.0} />
     </mesh>
+  );
+}
+
+// A paw: a soft padded foot — a sole pad, toe pads, and small claws (cat / dog / bear).
+function Paw({ f, color }: { f: MeshFeature; color: number }) {
+  const r = Math.max(f.radius, 0.06);
+  const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.6).getHex(), [color]);
+  return (
+    <group>
+      <mesh scale={[r * 1.3, r * 0.62, r * 1.45]} castShadow>
+        <sphereGeometry args={[1, 16, 12]} />
+        <meshStandardMaterial color={color} roughness={0.78} />
+      </mesh>
+      {[-0.55, 0, 0.55].map((x, i) => (
+        <mesh key={`t${i}`} position={[x * r * 0.7, -r * 0.08, r * 1.0]} scale={[r * 0.34, r * 0.42, r * 0.5]} castShadow>
+          <sphereGeometry args={[1, 10, 8]} />
+          <meshStandardMaterial color={color} roughness={0.78} />
+        </mesh>
+      ))}
+      {[-0.55, 0, 0.55].map((x, i) => (
+        <mesh key={`c${i}`} position={[x * r * 0.7, -r * 0.02, r * 1.35]} rotation={[Math.PI / 2 + 0.4, 0, 0]} scale={[r * 0.1, r * 0.32, r * 0.1]} castShadow>
+          <coneGeometry args={[1, 1, 6]} />
+          <meshStandardMaterial color={dark} roughness={0.5} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// A hoof: a solid keratin block, flat on the ground, with a cleft (ungulate).
+function Hoof({ f, color }: { f: MeshFeature; color: number }) {
+  const r = Math.max(f.radius, 0.06);
+  const horn = useMemo(() => new THREE.Color(color).multiplyScalar(0.4).getHex(), [color]);
+  return (
+    <group>
+      <mesh position={[0, -r * 0.15, r * 0.05]} scale={[r * 1.0, r * 1.0, r * 1.15]} castShadow>
+        <cylinderGeometry args={[0.78, 1.0, 1, 12]} />
+        <meshStandardMaterial color={horn} roughness={0.42} metalness={0.06} />
+      </mesh>
+      <mesh position={[0, -r * 0.62, r * 0.25]} scale={[r * 0.07, r * 0.55, r * 0.95]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={0x0e0a07} roughness={0.6} />
+      </mesh>
+    </group>
+  );
+}
+
+// A hand: a palm + four fingers and a thumb, oriented along the arm (primate).
+function Hand({ f, color }: { f: MeshFeature; color: number }) {
+  const r = Math.max(f.radius, 0.06);
+  return (
+    <group quaternion={f.quat}>
+      <mesh scale={[r * 0.95, r * 0.42, r * 0.85]} castShadow>
+        <sphereGeometry args={[1, 12, 10]} />
+        <meshStandardMaterial color={color} roughness={0.72} />
+      </mesh>
+      {[-0.5, -0.17, 0.17, 0.5].map((x, i) => (
+        <mesh key={i} position={[x * r * 0.85, 0, r * 0.95]} rotation={[Math.PI / 2 - 0.2, 0, 0]} scale={[r * 0.13, r * 0.13, r * 0.95]} castShadow>
+          <cylinderGeometry args={[1, 0.8, 1, 6]} />
+          <meshStandardMaterial color={color} roughness={0.72} />
+        </mesh>
+      ))}
+      <mesh position={[-r * 0.6, 0, r * 0.3]} rotation={[Math.PI / 2, 0, 0.7]} scale={[r * 0.13, r * 0.13, r * 0.6]} castShadow>
+        <cylinderGeometry args={[1, 0.8, 1, 6]} />
+        <meshStandardMaterial color={color} roughness={0.72} />
+      </mesh>
+    </group>
   );
 }
 

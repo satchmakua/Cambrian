@@ -197,8 +197,8 @@ export function grow(genome: Genome): Phenotype {
       // a real jointed leg: thigh → (knee folds the shin sharply back under the body) → (ankle swings
       // the foot forward) — a clear Z stance, not one gentle curved sweep. Other limbs keep their curl.
       if (app.kind === 'leg') {
-        if (j === 0) pitch = -Math.abs(app.curl[0]) * 2.4; // knee — a hard backward fold
-        else if (j === 1) pitch = Math.abs(app.curl[0]) * 1.8; // ankle — swing the foot forward
+        if (j === 0) pitch = -Math.abs(app.curl[0]) * 3.0 - 0.3; // knee — a hard ~90° backward fold (clear joint)
+        else if (j === 1) pitch = Math.abs(app.curl[0]) * 2.0 + 0.2; // ankle — swing the foot forward
       }
     }
   }
@@ -305,7 +305,7 @@ function ensureFace(apps: AppendageGene[], girth: number): void {
   if (mouths.length === 0) apps.push(faceMouth(girth));
   else
     for (const m of mouths) {
-      m.thickness = clamp(Math.max(m.thickness, 0.2, girth * 0.36), AP.thickness);
+      m.thickness = clamp(Math.max(m.thickness, 0.26, girth * 0.46), AP.thickness); // a big, clearly-read mouth
       m.attachElevation = clamp(Math.max(m.attachElevation, 0.4), AP.attachElevation);
     }
 }

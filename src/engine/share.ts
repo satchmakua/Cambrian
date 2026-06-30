@@ -29,7 +29,8 @@ export const SHARE_PREFIX = 'CAM2:'; // bumped for genome v2 (spherical aim + pa
 
 const SYMMETRIES: readonly Symmetry[] = ['bilateral', 'radial', 'none'];
 const TERMINALS: readonly Terminal[] = [
-  'none', 'foot', 'fin', 'claw', 'eye', 'mouth', 'pincer', 'club', 'barb', 'ear', 'gill', 'crest', 'carapace', 'whisker',
+  'none', 'foot', 'fin', 'claw', 'eye', 'mouth', 'pincer', 'paw', 'hoof', 'hand',
+  'club', 'barb', 'ear', 'gill', 'crest', 'carapace', 'whisker',
 ];
 const KINDS: readonly PartKind[] = [
   'leg', 'arm', 'wing', 'fin', 'tail', 'horn', 'spine', 'frill', 'antenna', 'tentacle', 'eyestalk', 'maw',

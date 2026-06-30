@@ -66,6 +66,12 @@ describe('randomGenome', () => {
       expect(Math.max(...eyes.map((e) => e.radius))).toBeGreaterThan(0.1); // floored — never tiny
     }
   });
+
+  it('at least half of all creatures have eyes (the M24 face guarantee — in practice ~all)', () => {
+    let withEyes = 0;
+    for (let s = 0; s < 300; s++) if (grow(randomGenome(s)).nodes.some((n) => n.terminal === 'eye')) withEyes++;
+    expect(withEyes).toBeGreaterThanOrEqual(150); // ≥ 50%
+  });
 });
 
 describe('morphotype library (M22 — full catalogue §4)', () => {
@@ -88,12 +94,13 @@ describe('morphotype library (M22 — full catalogue §4)', () => {
 
   it('each new morphotype reads structurally as its kind', () => {
     for (let s = 0; s < 8; s++) {
-      // primate / mustelid / chelonian — four-legged
-      for (const id of ['primate', 'mustelid', 'chelonian'] as const) {
+      // mustelid / chelonian — four-legged
+      for (const id of ['mustelid', 'chelonian'] as const) {
         expect(legCount(grow(genomeOfMorphotype(s * 11 + 3, id)))).toBe(4);
       }
-      // ratite — a biped (one leg pair)
+      // ratite + primate — bipeds (one leg pair; the primate also carries grasping arms)
       expect(legCount(grow(genomeOfMorphotype(s * 11 + 3, 'ratite')))).toBe(2);
+      expect(legCount(grow(genomeOfMorphotype(s * 11 + 3, 'primate')))).toBe(2);
       // arthro-alien — ten-plus legs, a true many-legged body
       expect(legCount(grow(genomeOfMorphotype(s * 11 + 3, 'arthro-alien')))).toBeGreaterThanOrEqual(8);
       // chimera — a winged, tailed mishmash

@@ -49,6 +49,13 @@ describe('part vocabulary (M23 — §6)', () => {
     expect(new Set([0.1, 0.5, 0.9].map(earVariant)).size).toBe(3);
   });
 
+  it('all 5 eye styles appear across a sample of creatures', () => {
+    const seen = new Set<string>();
+    for (let s = 0; s < 600; s++)
+      for (const n of grow(randomGenome(s)).nodes) if (n.terminal === 'eye') seen.add(eyeVariant(n.part?.style ?? 0));
+    expect(seen.size).toBe(5); // round · beady · slit · compound · glowing
+  });
+
   it('grows each deferred part for the morphotype that should have it', () => {
     expect(morphoHasKind('felid', 'ear')).toBe(true);
     expect(morphoHasKind('felid', 'whisker')).toBe(true);

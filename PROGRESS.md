@@ -45,6 +45,69 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ---
 
+## Visual refinement round 4 — bigger legs, wide stance, limb terminators · 2026-06-29 (Part 2)
+
+Feedback: arachnid legs look great but **quadruped/biped legs are vestigial** — need to be bigger,
+stronger, **spaced wider** (too close together / under the centreline), and **angled per bauplan**; and
+**distinct limb terminators** (hand/paw/hoof/claw).
+
+- **Limb terminators (new).** Added three `Terminal`s — **paw** (soft sole + toe pads + small claws),
+  **hoof** (a solid keratin block with a cleft), **hand** (palm + four fingers + a thumb) — joining
+  foot/claw/pincer, each with its own crude render. Cascaded the leg-count through the engine so paw/
+  hoof still read as legs everywhere: `morphospace.describe` (a `LEG_TIPS` set), `pressures.metrics`,
+  the `share`/`mutate` terminal tables (reachable + round-trips). Assigned per animal: felid/canid/
+  ursid → **paw**, ungulate → **hoof**, the primate's grasp-arms → **hand** (its feet stay `foot`),
+  sprawlers (lizard/croc/insect/arachnid) → **claw**. Verified in-browser (felid paw:4, ungulate hoof:4,
+  primate foot:2 + hand:2, …).
+- **Bigger, stronger legs.** `POSTURE.thick`×girth raised across the board (digitigrade 0.3–0.44 →
+  0.44–0.6, plantigrade → 0.52–0.68) and segment length up — probe: a felid thigh is now **~40% of the
+  body radius** (was thread-thin), a bear thigh thicker still.
+- **Wider, bauplan-correct stance.** Lowered the leg azimuths so limbs **splay out to the shoulders**
+  instead of hanging from the midline: probe stance went felid **0.58 → 1.53** (vs body 1.38), ungulate
+  **0.47 → 1.32** (≈ body width), bear → 1.98 (≈ body width). Per-posture angles: sprawlers widest,
+  hooved near-vertical columns, digitigrade/plantigrade a natural splay, the biped primate narrow
+  (correct).
+
+**Verified (2026-06-29):** typecheck clean; `npm test` → **93/93** (the paw/hoof leg-count cascade keeps
+morphospace/animation/pressures green); `npm run build` → succeeds; in-browser the Paw/Hoof/Hand renders
+compile with the right terminator per animal, no console errors. Stance/thickness confirmed by probe;
+the *look* is the human's call.
+
+## Visual refinement round 3 — camera, boob-heads, stronger signals · 2026-06-29 (Part 2)
+
+Feedback: the camera is off-centre and the creature **lists off-screen**; legs need a **stronger knee
+signal**; bigger / more distinct mouths; **5 eye styles + a test that ≥half of gens have eyes**;
+stronger limb signal; **diverse head shapes** (every skull was a "boob-head" — one lower lobe + two
+upper); **upright primates**; a **better bear**. Probed the geometry first (no WebGL screenshots).
+
+- **Camera (bug).** `<Stage adjustCamera>` and our `<OrbitControls autoRotate makeDefault>` fought over
+  the camera, and auto-rotate orbited the origin — but a creature grows from the origin at its *back*
+  (extending +Z), so its centre is far from there → it swung off-frame. Rewrote `CreatureViewer`:
+  explicit studio lights + `Environment` + `ContactShadows`, the creature **offset by −bboxCentre** so
+  its middle sits at the origin, the orbit **target pinned to the origin**, and a `Framer` that
+  re-frames the camera distance/clip-planes whenever the creature's size changes. Centred by
+  construction — it can't list off now.
+- **Boob-heads (bug).** Eyes attached at **azimuth 0.7–1.3 = the top of the skull** → "two upper lobes."
+  Moved them to the **front-sides** (azimuth 0.18–0.55) facing **forward** (elevation 0.45–0.82): probe
+  confirms a felid/primate/ursid eye is now front/side, never on top. Plus head-shape variety
+  (`headWide`/`headDome` genes — flat↔domed cranium, narrow↔broad) so skulls differ.
+- **Stronger knees.** Folds sharpened again (knee ×2.4→**×3.0+0.3**, ankle ×1.8→×2.0): probe shows a
+  felid knee bending **110°** (was 75°), ursid 93° — a clear joint.
+- **Bigger mouths** (thickness ×girth 0.44–0.62 → 0.52–0.74, guaranteed-mouth floor up) and the full
+  type set still verified (herbivore/maw/fanged/beak/mandibles/… per morphotype).
+- **5 eye styles + eye guarantee tested.** New tests: **≥50%** of 300 random creatures have eyes (the
+  M24 guarantee → ~all), and **all 5 eye styles** (round/beady/slit/compound/glowing) appear across a
+  sample.
+- **Upright primate.** Now a **biped** (legPairs 1) with **forward-reaching grasping arms** (a new
+  `graspArm`), a tall torso + domed flat-faced skull. Probe: 2 legs + 2 arms.
+- **Bear.** Ursid stockier + a **broad low skull** (headWide 1.1–1.32, headDome 0.82–1.02), thick legs,
+  beady eyes, a short broad muzzle, bigger body.
+
+**Verified (2026-06-29):** typecheck clean; `npm test` → **93/93** (2 new); `npm run build` → succeeds;
+in-browser felid/primate/ursid/croc/serpent (sizes z 2.2→6.9) all roll centred with faces + reframe, no
+console errors. Geometry confirmed by probe; the *look* is the human's call. (Other-bug pass: the camera
+fight + the off-top eyes were the two real bugs found.)
+
 ## Visual refinement round 2 — eye visibility/size, leg joints, snouts · 2026-06-29 (Part 2)
 
 Follow-up to the feedback below: legs "still have no visible joints"; in **capsule mode you can't see the

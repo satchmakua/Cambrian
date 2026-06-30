@@ -13,6 +13,9 @@ import { genomeOfMorphotype, MORPHOTYPE_IDS } from './random';
 
 const DIMS = 8;
 
+/** Terminals that cap a locomotor leg (so legged creatures count their limbs). */
+const LEG_TIPS = new Set(['foot', 'claw', 'pincer', 'paw', 'hoof']);
+
 /** [elongation, limbCount, finniness, bulk, eyeCount, winged, tailed, radial] — each ~[0,1]. */
 export function describe(p: Phenotype): number[] {
   const { min, max } = p.bounds;
@@ -29,7 +32,7 @@ export function describe(p: Phenotype): number[] {
   let rMax = 0;
   for (const n of p.nodes) {
     if (n.radius > rMax) rMax = n.radius;
-    if (n.terminal === 'foot' || n.terminal === 'claw' || n.terminal === 'pincer') legs++;
+    if (LEG_TIPS.has(n.terminal as string)) legs++;
     else if (n.terminal === 'eye') eyes++;
     const k = n.part?.kind;
     if (k === 'fin') fins++;

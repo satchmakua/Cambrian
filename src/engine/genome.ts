@@ -23,6 +23,9 @@ export type Terminal =
   | 'eye'
   | 'mouth'
   | 'pincer'
+  | 'paw' // a soft padded paw + small claws (cat/dog/bear)
+  | 'hoof' // a solid hoof (horse/deer)
+  | 'hand' // a grasping hand with fingers (primate)
   | 'club' // a tail mace
   | 'barb' // a tail sting
   | 'ear' // a mammal ear (pointed / leaf / round by style)

@@ -51,7 +51,7 @@ function metrics(p: Phenotype): Metrics {
   let maxR = 0;
   let coreZ = 0;
   for (const n of p.nodes) {
-    if (n.terminal === 'foot') foot++;
+    if (n.terminal === 'foot' || n.terminal === 'paw' || n.terminal === 'hoof') foot++;
     else if (n.terminal === 'claw') claw++;
     else if (n.terminal === 'fin') fin++;
     else if (n.terminal === 'eye') eye++;
