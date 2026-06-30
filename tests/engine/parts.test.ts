@@ -44,7 +44,7 @@ function dominantMouth(id: string): string {
 
 describe('part vocabulary (M23 — §6)', () => {
   it('style bands cover every variant across 0..1', () => {
-    expect(new Set([0, 0.13, 0.3, 0.44, 0.56, 0.7, 0.81, 0.95].map(mouthVariant)).size).toBe(8);
+    expect(new Set([0.03, 0.09, 0.18, 0.31, 0.44, 0.56, 0.69, 0.8, 0.89, 0.97].map(mouthVariant)).size).toBe(10);
     expect(new Set([0, 0.3, 0.5, 0.7, 0.95].map(eyeVariant)).size).toBe(5);
     expect(new Set([0.1, 0.5, 0.9].map(earVariant)).size).toBe(3);
   });
@@ -68,13 +68,16 @@ describe('part vocabulary (M23 — §6)', () => {
     expect(stalked).toBe(true);
   });
 
-  it('the re-banded mouths read on their morphotypes; the new styles stay reachable', () => {
+  it('the mouths read on their morphotypes — herbivore vs predator, beaks, mandibles, …', () => {
+    expect(dominantMouth('ungulate')).toBe('herbivore'); // grazer
+    expect(dominantMouth('felid')).toBe('fanged'); // predator
     expect(dominantMouth('bird')).toBe('beak');
     expect(dominantMouth('crab')).toBe('mandibles');
     expect(dominantMouth('cephalopod')).toBe('beak');
     expect(dominantMouth('shark')).toBe('fanged');
     expect(morphoReachesMouth('horror', 'lamprey')).toBe(true);
-    expect(morphoReachesMouth('chimera', 'proboscis')).toBe(true);
+    // the new styles (proboscis / trunk) stay reachable via the clashing chimera + the wild tail
+    expect(morphoReachesMouth('chimera', 'trunk', 80)).toBe(true);
   });
 
   it('mutation can reach the new kinds and terminals (evolvability — Pillar 1)', () => {

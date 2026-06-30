@@ -45,6 +45,81 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ---
 
+## Visual refinement round 2 — eye visibility/size, leg joints, snouts · 2026-06-29 (Part 2)
+
+Follow-up to the feedback below: legs "still have no visible joints"; in **capsule mode you can't see the
+eyes** (the body swallows them); in **smooth mode the eyes are too big**; animal types need to read better
+(a chicken-like roll delighted); mouths want more types (snout/trunk/herbivore/…). Probed the real geometry
+first (I can't screenshot WebGL) and found: a felid eye was **r=0.28** (half the head!) with its centre
+**exactly on the head surface** → half-buried under the bulged capsule head; leg joints existed but were
+**gentle (31°/50°)** off a thin thread from a fat hip → read as a curved noodle.
+
+- **Eyes — visible + smaller.** `grow` now pushes face features **proud of the body** (eye centre out an
+  extra 0.5× the head radius, mouth 0.28×) so they sit on top instead of half-sunk — probe: a felid eye is
+  now **93% above the surface** (was ~50%). And eyes are **smaller** (head-girth mult 0.5–0.68 → 0.34–0.5,
+  floor 0.16→**0.11**, grown `EYE_R_MIN` 0.16→0.11): felid eye **0.28 → 0.21**. Fixes both complaints at once
+  (lost-in-capsule-mode *and* too-big-in-smooth-mode). (Test eye-size floors relaxed to 0.11 to match.)
+- **Legs — real joints.** Sharpened the grow folds (knee ×1.6→**2.4**, ankle ×1.25→**1.8**) and gave legs
+  **4 segments + thicker thighs** (POSTURE `thick`/`segs` up): probe shows a leg chain bending **75° at the
+  knee + 56° at the ankle** (was 31°/50°), feet still reaching y≈−1.4. A jointed Z-stance, not a noodle.
+- **Snouts (mammals/reptiles read better).** New per-morphotype `snout` gene elongates the head into a
+  **tapering muzzle/jaw** with the mouth at the tip — canid/ungulate long, **crocodilian a full jaw** (body
+  z 4.4→5.3), rodent/ursid/lizard/mustelid medium, felid flat. A big "reads as a dog/horse/croc" win and
+  the first cut at the "snout" mouth-type ask.
+
+**Verified (2026-06-29):** typecheck clean; `npm test` → **91/91**; `npm run build` → succeeds. **In-browser:**
+felid/canid/croc/ungulate/bird all roll with faces + canonical legs (croc's long jaw shows), no console
+errors. Geometry confirmed by probe (eye protrusion %, joint angles, snout length); the *look* is the
+human's call.
+
+**Mouths — herbivore vs predator + a trunk (10 styles).** Followed up the snout with the rest of the
+mouth-type ask. `mouthVariant` (`partStyles.ts`) went 8→**10** via **non-uniform bands** so the existing
+styles keep their positions: a thin **herbivore** slice splits off the bottom of the maw range (a soft
+grazing mouth — flat lip line + blunt incisors, no fangs) and a **trunk** slice the top (a long
+forward-then-drooping tapered prehensile tube). Re-pointed the priors so grazers read herbivore
+(ungulate/rodent), predators fanged (felid/croc/serpent/dragon/wyvern/shark), omnivores a toothed maw,
+birds/turtles/cephalopods a beak, arthropods mandibles — **verified headlessly** (the parts.test mouth
+map now asserts ungulate→herbivore, felid→fanged, …, and chimera reaches trunk). 91/91 + build green;
+in-browser the herbivore/trunk renders compile with no console errors. **Still open (with the human's
+eyes):** per-morphotype representation tuning (tails, characteristic silhouettes) and a look-pass on the
+new mouth renders.
+
+## Visual refinement pass — textures, eyes, mouths, legs, less "balloon" · 2026-06-29 (Part 2)
+
+Playtest feedback (aesthetic): creatures read as glossy "balloon animals"; some textures look like "static";
+eyes are "wide-eye cartoon"; mouths look like "duck bills"; legs want more realistic articulation. (The
+slither motion was praised — left untouched.) A viewer/shader pass, no engine-logic change except leg shape.
+
+**Skin material (`creatureMaterial.ts`) — less balloon, richer textures.** (1) **Domain warping** — every
+noise pattern now samples a `warp()`-ed coordinate (an fbm-displaced position), turning "static" into
+flowing, cohesive markings (the #1 fix). Stripes wave + branch (tiger/zebra), spots became **rosettes** (a
+soft fill + a darker ring), ocelli concentric eye-spots, reticulate a crisp net. (2) A **third accent
+colour** (`uPattern2`, a deeper hue-shifted tone) bleeds into the cores of strong markings + a fine fbm
+**tonal break-up**, so skin isn't flat plastic. (3) A shared **sub-surface musculature** relief (`muscle()`,
+ridged fbm) rides under *every* covering + drives a **fake AO** (creases darken) — so no body reads as a
+smooth balloon. (4) The **fresnel rim** was tightened + dimmed (pow 3→4, 0.55→0.3) — the balloon halo is
+gone, leaving a subtle backlit edge. fbm deepened to 5 octaves. (Applies to capsule *and* smooth modes.)
+
+**Eyes (`CreatureMesh`) — set-in, not stuck-on.** Every eye now sits in an **orbital socket** (a torus rim
+= the "receptacle"); the round/beady eye gained a **coloured iris** (derived from the creature's hue), a
+proper pupil, a **small sharp catchlight** (was a big cartoon glint), and a **skin-toned upper eyelid**
+hood. Slit eyes got a metallic iris sheen. Less ping-pong-ball, more refined.
+
+**Mouths (`CreatureMesh`) — a mouth, not a bill.** The maw/fanged was a pair of forward-jutting flattened
+jaws (the "duck bill"); rebuilt as a mouth **set into the face** — a recessed cavity framed by thin **lips**
+with **mouth corners**, the tongue + teeth pulled back behind the lip line. Reads as an opening on the face.
+
+**Legs (`grow.ts`) — a real jointed stance.** The single knee-fold became a **multi-joint Z**: thigh →
+(knee folds the shin back under the body) → (ankle swings the foot forward), so a leg reads as a jointed
+limb in a stance, not one curved sweep. Deterministic + exactly mirror-symmetric (unchanged invariants).
+
+**Verified (2026-06-29):** `npm run typecheck` clean; `npm test` → **91/91** (the leg-shape change keeps
+determinism + exact symmetry + the fuzz green); `npm run build` → succeeds. **In-browser:** the rebuilt
+shader **compiles across all 7 coverings** (fur/scales/chitin/slime/plates/feathers/skin) and the new
+eye/mouth/leg geometry renders, with **no console/GLSL errors**; every creature still shows its face. The
+actual *look* (the textures, the eyes, the de-ballooning) is the human's visual call — the multi-canvas
+WebGL page can't be screenshotted, as throughout.
+
 ## M24 — Bauplan: structural attractor basins + the guaranteed face · 2026-06-29 (Part 2)
 
 Playtest feedback: creatures were drifting into **mouthless, eyeless, scatter-limbed blobs** — limbs

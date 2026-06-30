@@ -55,6 +55,8 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
   const back = main.clone().multiplyScalar(0.6); // dorsal — darker
   const belly = main.clone().lerp(new THREE.Color(0xffffff), 0.42); // ventral — lighter
   const pattern = new THREE.Color().setHSL(pal.hueB, Math.min(1, pal.sat * 1.1), pal.light * 0.5);
+  // a deeper, slightly hue-shifted accent — outlines rosettes/ocelli and adds depth inside markings
+  const accent = new THREE.Color().setHSL((pal.hueB + 0.08) % 1, Math.min(1, pal.sat * 1.2), pal.light * 0.34);
   const rim = main.clone().lerp(new THREE.Color(0xffe2b8), 0.5); // warm backlight
 
   const preset = PRESET[cov.type];
@@ -73,6 +75,7 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
     shader.uniforms.uBack = { value: back };
     shader.uniforms.uBelly = { value: belly };
     shader.uniforms.uPattern = { value: pattern };
+    shader.uniforms.uPattern2 = { value: accent };
     shader.uniforms.uRim = { value: rim };
     shader.uniforms.uPType = { value: PATTERN_INDEX[cov.pattern] };
     shader.uniforms.uCover = { value: COVERING_INDEX[cov.type] };
@@ -104,8 +107,15 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
         {
           float up = clamp(vWNrm.y * 0.5 + 0.5, 0.0, 1.0);
           vec3 skin = mix(uBelly, uBack, smoothstep(0.25, 0.78, up));
-          float pat = patternField(vBodyPos + uOff, uPType, uPScale);
-          skin = mix(skin, uPattern, pat * uContrast);
+          vec3 bp = vBodyPos + uOff;
+          float pat = patternField(bp, uPType, uPScale);
+          skin = mix(skin, uPattern, clamp(pat * uContrast, 0.0, 1.0));
+          // a deeper accent in the cores of strong markings (rosette rings, ocelli) → richness
+          skin = mix(skin, uPattern2, smoothstep(0.55, 0.95, pat) * uContrast * 0.4);
+          // subtle tonal break-up so the surface never reads as flat plastic
+          skin *= 0.9 + 0.18 * fbm(bp * uPScale * 1.6);
+          // fake AO from the sub-surface musculature: creases darken → the form reads (less balloon)
+          skin *= mix(0.72, 1.0, smoothstep(-0.22, 0.22, muscle(bp)));
           diffuseColor.rgb = skin;
         }`,
       )
@@ -114,7 +124,8 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
         '#include <normal_fragment_begin>',
         `#include <normal_fragment_begin>
         {
-          float h = surfaceHeight(vBodyPos + uOff, uCover);
+          // every covering rides on a shared sub-surface musculature relief, so no body is a smooth balloon
+          float h = surfaceHeight(vBodyPos + uOff, uCover) + muscle(vBodyPos + uOff) * 0.7;
           vec3 P = -vViewPosition;
           vec3 sx = dFdx(P);
           vec3 sy = dFdy(P);
@@ -132,8 +143,9 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
         {
-          float fres = pow(1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition))), 3.0);
-          totalEmissiveRadiance += uRim * fres * 0.55;
+          // a tighter, dimmer rim than before — a subtle backlit edge, not a glossy balloon halo
+          float fres = pow(1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition))), 4.0);
+          totalEmissiveRadiance += uRim * fres * 0.3;
           if (uSheen > 0.01) {
             float vd = abs(dot(normalize(normal), normalize(vViewPosition)));
             vec3 irid = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + vd));
@@ -153,7 +165,7 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
 const FRAG_HELPERS = /* glsl */ `
 varying vec3 vBodyPos;
 varying vec3 vWNrm;
-uniform vec3 uBack; uniform vec3 uBelly; uniform vec3 uPattern; uniform vec3 uRim;
+uniform vec3 uBack; uniform vec3 uBelly; uniform vec3 uPattern; uniform vec3 uPattern2; uniform vec3 uRim;
 uniform int uPType; uniform int uCover;
 uniform float uPScale; uniform float uContrast; uniform float uSheen; uniform float uBump;
 uniform vec3 uOff;
@@ -185,8 +197,23 @@ float vnoise(vec3 x) {
 }
 float fbm(vec3 p) {
   float a = 0.5; float v = 0.0;
-  for (int i = 0; i < 4; i++) { v += a * vnoise(p); p *= 2.02; a *= 0.5; }
+  for (int i = 0; i < 5; i++) { v += a * vnoise(p); p = p * 2.02 + 7.3; a *= 0.5; }
   return v;
+}
+// ridged multifractal — sharp veins/fibres (muscle striations, scale keels, bark)
+float ridged(vec3 p) {
+  float a = 0.5; float v = 0.0;
+  for (int i = 0; i < 4; i++) { float n = 1.0 - abs(2.0 * vnoise(p) - 1.0); v += a * n * n; p = p * 2.03 + 3.7; a *= 0.5; }
+  return v;
+}
+// domain warp — turns static noise into flowing, organic, cohesive structure (the #1 "less static" fix)
+vec3 warp(vec3 p, float amt) {
+  vec3 q = vec3(fbm(p), fbm(p + 5.2), fbm(p + 9.7));
+  return p + amt * (q - 0.5);
+}
+// a shared sub-surface musculature relief in [-~0.25, ~0.25] (so nothing reads as a smooth balloon)
+float muscle(vec3 p) {
+  return (ridged(vec3(p.x * 3.4, p.y * 3.0, p.z * 1.7)) - 0.45) * 0.5;
 }
 // returns (F1, F2) — distances to the nearest two feature points
 vec2 voronoi(vec3 p) {
@@ -204,36 +231,39 @@ vec2 voronoi(vec3 p) {
   return vec2(sqrt(f1), sqrt(f2));
 }
 
-// --- color pattern field p(x) in [0,1] (MORPHOLOGY §7.1) ---------------------
-float patternField(vec3 p, int type, float scale) {
+// --- color pattern field p(x) in [0,1] (MORPHOLOGY §7.1) — domain-warped for organic flow --------
+float patternField(vec3 p0, int type, float scale) {
   if (type == 0) return 0.0;                                    // plain
-  if (type == 1) {                                              // stripes (thin transverse)
-    float s = sin((p.z * 1.6 + p.y * 0.6) * scale);
-    return smoothstep(0.1, 0.45, abs(s));
+  vec3 p = warp(p0, 0.5);                                       // a flowing coordinate — no more static
+  if (type == 1) {                                              // stripes — wavy transverse (tiger/zebra)
+    float coord = (p.z * 1.5 + p.y * 0.45) * scale + 1.8 * fbm(p0 * 0.85);
+    return smoothstep(0.04, 0.5, abs(sin(coord)));
   }
-  if (type == 2) {                                              // bands (bold transverse)
-    float s = sin(p.z * scale * 0.8);
-    return smoothstep(-0.05, 0.05, s);
+  if (type == 2) {                                              // bands — bold transverse
+    float s = sin(p.z * scale * 0.8 + 0.6 * fbm(p0));
+    return smoothstep(-0.06, 0.06, s);
   }
-  if (type == 3) {                                              // spots
+  if (type == 3) {                                              // spots / rosettes (leopard)
     vec2 F = voronoi(p * scale * 0.55);
-    return 1.0 - smoothstep(0.18, 0.34, F.x);
+    float fill = 1.0 - smoothstep(0.14, 0.3, F.x);
+    float ring = smoothstep(0.06, 0.0, abs(F.x - 0.27));        // a darker rosette outline
+    return clamp(max(fill * 0.7, ring), 0.0, 1.0);
   }
-  if (type == 4) {                                              // ocelli (ringed spots)
+  if (type == 4) {                                              // ocelli — concentric eye-spots (peacock)
     vec2 F = voronoi(p * scale * 0.5);
-    float center = 1.0 - smoothstep(0.1, 0.16, F.x);
-    float ring = smoothstep(0.07, 0.0, abs(F.x - 0.4));
-    return clamp(max(center, ring * 0.85), 0.0, 1.0);
+    float center = 1.0 - smoothstep(0.07, 0.13, F.x);
+    float ring = smoothstep(0.055, 0.0, abs(F.x - 0.4));
+    return clamp(max(center, ring * 0.9), 0.0, 1.0);
   }
-  if (type == 5) {                                              // reticulate (net edges)
+  if (type == 5) {                                              // reticulate — crisp net (giraffe/croc)
     vec2 F = voronoi(p * scale * 0.5);
-    return 1.0 - smoothstep(0.0, 0.07, F.y - F.x);
+    return 1.0 - smoothstep(0.0, 0.05, F.y - F.x);
   }
-  if (type == 6) {                                              // mottle (camo)
-    return smoothstep(0.4, 0.62, fbm(p * scale * 0.5));
+  if (type == 6) {                                              // mottle — flowing camo
+    return smoothstep(0.34, 0.66, fbm(p * scale * 0.5));
   }
-  // gradient — a smooth head→tail ramp
-  return smoothstep(-1.6, 1.6, p.z);
+  // gradient — a head→tail ramp, softly broken by low-freq noise
+  return smoothstep(-1.6, 1.6, p0.z * 0.9 + (fbm(p0 * 0.6) - 0.5));
 }
 
 // --- surface relief height h(x) per covering (MORPHOLOGY §7.2) ----------------

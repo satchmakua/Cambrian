@@ -20,7 +20,7 @@ export type Quat = [number, number, number, number]; // [x, y, z, w]
 const BODY_BULGE = 0.35;
 
 /** Minimum grown radius for an eye bulb (bu) — the face must always read (M19/M24). */
-const EYE_R_MIN = 0.16;
+const EYE_R_MIN = 0.11;
 
 export interface BodyNode {
   pos: Vec3;
@@ -171,7 +171,11 @@ export function grow(genome: Genome): Phenotype {
     // orient +Z → aim direction, then roll about that axis (orients flat parts)
     let quat = qMul(qFromAxisAngle(dir0, app.roll), qFromTo([0, 0, 1], dir0));
     let dir = dir0;
-    let pos: Vec3 = [base.pos[0] + dir[0] * base.radius, base.pos[1] + dir[1] * base.radius, base.pos[2] + dir[2] * base.radius];
+    // push the face features proud of the body so they aren't swallowed by the (bulged) head surface:
+    // an eye half-buried at the surface reads as nothing, especially in capsule mode.
+    const faceMargin = app.terminal === 'eye' ? 0.5 : app.terminal === 'mouth' ? 0.28 : 0;
+    const startOut = base.radius * (1 + faceMargin);
+    let pos: Vec3 = [base.pos[0] + dir[0] * startOut, base.pos[1] + dir[1] * startOut, base.pos[2] + dir[2] * startOut];
     let prev = nodes.indexOf(base);
 
     let pitch = app.curl[0];
@@ -190,9 +194,12 @@ export function grow(genome: Genome): Phenotype {
       quat = qMul(quat, qFromEuler(pitch, app.curl[1]));
       dir = qRotate([0, 0, 1], quat);
       pos = [pos[0] + dir[0] * app.length, pos[1] + dir[1] * app.length, pos[2] + dir[2] * app.length];
-      // a real knee: legs fold (the shin bends back under the body) instead of sweeping in one arc,
-      // so a leg reads as a leg in a stance, not a curved tentacle. Other limbs keep the smooth curl.
-      if (app.kind === 'leg' && j === 0) pitch = -Math.abs(app.curl[0]) * 1.5;
+      // a real jointed leg: thigh → (knee folds the shin sharply back under the body) → (ankle swings
+      // the foot forward) — a clear Z stance, not one gentle curved sweep. Other limbs keep their curl.
+      if (app.kind === 'leg') {
+        if (j === 0) pitch = -Math.abs(app.curl[0]) * 2.4; // knee — a hard backward fold
+        else if (j === 1) pitch = Math.abs(app.curl[0]) * 1.8; // ankle — swing the foot forward
+      }
     }
   }
 }

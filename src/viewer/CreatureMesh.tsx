@@ -75,6 +75,11 @@ export function CreatureMesh({
     [pal],
   );
   const finColor = useMemo(() => new THREE.Color().setHSL(pal.hueA, pal.sat, pal.light).getHex(), [pal]);
+  // a warm-ish iris derived from the creature's own hue (M-refine: a real coloured iris, not just black)
+  const irisColor = useMemo(
+    () => new THREE.Color().setHSL((pal.hueA + 0.08) % 1, Math.min(1, pal.sat * 0.7 + 0.18), 0.42).getHex(),
+    [pal],
+  );
 
   const rig = useMemo(() => buildRig(data, phenotype), [data, phenotype]);
 
@@ -222,7 +227,7 @@ export function CreatureMesh({
           }}
           position={data.nodes[f.idx].pos}
         >
-          <Feature f={f} footColor={footColor} finColor={finColor} />
+          <Feature f={f} footColor={footColor} finColor={finColor} irisColor={irisColor} />
         </group>
       ))}
     </group>
@@ -230,10 +235,20 @@ export function CreatureMesh({
 }
 
 // Features render at the local origin of their (animated) parent group.
-function Feature({ f, footColor, finColor }: { f: MeshFeature; footColor: number; finColor: number }) {
+function Feature({
+  f,
+  footColor,
+  finColor,
+  irisColor,
+}: {
+  f: MeshFeature;
+  footColor: number;
+  finColor: number;
+  irisColor: number;
+}) {
   switch (f.type) {
     case 'eye':
-      return <Eye f={f} />;
+      return <Eye f={f} socket={footColor} iris={irisColor} lid={finColor} />;
     case 'mouth':
       return <Mouth f={f} dark={footColor} />;
     case 'pincer':
@@ -269,54 +284,69 @@ function Feature({ f, footColor, finColor }: { f: MeshFeature; footColor: number
 
 // --- eyes (5 styles by `style`) — the emotional anchor -----------------------
 
-function Eye({ f }: { f: MeshFeature }) {
+function Eye({ f, socket, iris, lid }: { f: MeshFeature; socket: number; iris: number; lid: number }) {
   const r = Math.max(f.radius, 0.06);
   const v = eyeVariant(f.style);
   return (
     <group quaternion={f.quat}>
+      {/* orbital rim — every eye is set INTO a socket (the receptacle), so it reads as part of the
+          head, not a ball stuck on top. The lidless styles (slit/compound) keep just this bony ring. */}
+      <mesh position={[0, 0, r * 0.12]}>
+        <torusGeometry args={[r * 0.95, r * 0.26, 10, 22]} />
+        <meshStandardMaterial color={socket} roughness={0.8} metalness={0.0} />
+      </mesh>
       {v === 'round' || v === 'beady' ? (
-        // round (sclera + pupil + highlight) / beady (smaller, darker sclera)
+        // a real eyeball: off-white sclera · coloured iris · pupil · a small sharp catchlight · a lid
         <>
-          <mesh>
-            <sphereGeometry args={[r, 16, 12]} />
-            <meshStandardMaterial color={v === 'round' ? 0xe8e6dc : 0x14141a} roughness={0.16} metalness={0.0} />
+          <mesh position={[0, 0, r * 0.05]}>
+            <sphereGeometry args={[r * 0.92, 18, 14]} />
+            <meshStandardMaterial color={v === 'round' ? 0xd8d4c4 : 0x0e0e12} roughness={0.32} metalness={0.0} />
           </mesh>
-          <mesh position={[0, 0, r * 0.6]}>
-            <sphereGeometry args={[r * (v === 'round' ? 0.55 : 0.4), 14, 12]} />
-            <meshStandardMaterial color={0x07070a} roughness={0.08} />
+          <mesh position={[0, 0, r * 0.64]}>
+            <sphereGeometry args={[r * 0.5, 18, 14]} />
+            <meshStandardMaterial color={iris} roughness={0.35} metalness={0.12} />
           </mesh>
-          <mesh position={[r * 0.26, r * 0.3, r * 0.78]}>
-            <sphereGeometry args={[r * 0.16, 8, 8]} />
+          <mesh position={[0, 0, r * 0.86]}>
+            <sphereGeometry args={[r * (v === 'round' ? 0.24 : 0.32), 14, 12]} />
+            <meshStandardMaterial color={0x05050a} roughness={0.1} />
+          </mesh>
+          <mesh position={[r * 0.2, r * 0.24, r * 0.92]}>
+            <sphereGeometry args={[r * 0.08, 8, 8]} />
             <meshBasicMaterial color={0xffffff} />
+          </mesh>
+          {/* upper eyelid — a skin-toned hood over the top third (no more full bulging ball) */}
+          <mesh position={[0, r * 0.34, r * 0.28]} rotation={[-0.5, 0, 0]} scale={[r * 1.04, r * 0.95, r * 0.95]}>
+            <sphereGeometry args={[1, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.42]} />
+            <meshStandardMaterial color={lid} roughness={0.7} side={THREE.DoubleSide} />
           </mesh>
         </>
       ) : v === 'slit' ? (
-        // slit (sclera + a vertical-slit pupil)
+        // slit — a reptile vertical-pupil eye with a metallic iris sheen
         <>
-          <mesh>
-            <sphereGeometry args={[r, 16, 12]} />
-            <meshStandardMaterial color={0xe9c14a} roughness={0.2} metalness={0.0} />
+          <mesh position={[0, 0, r * 0.05]}>
+            <sphereGeometry args={[r * 0.92, 16, 12]} />
+            <meshStandardMaterial color={0xc9a23e} roughness={0.22} metalness={0.18} />
           </mesh>
-          <mesh position={[0, 0, r * 0.7]} scale={[0.18, 0.95, 0.4]}>
-            <sphereGeometry args={[r * 0.7, 10, 10]} />
-            <meshStandardMaterial color={0x07070a} roughness={0.1} />
+          <mesh position={[0, 0, r * 0.72]} scale={[0.16, 0.95, 0.4]}>
+            <sphereGeometry args={[r * 0.8, 10, 12]} />
+            <meshStandardMaterial color={0x06060a} roughness={0.1} />
           </mesh>
         </>
       ) : v === 'compound' ? (
-        // compound (a dark faceted dome)
-        <mesh>
-          <icosahedronGeometry args={[r * 1.05, 1]} />
+        // compound — a dark faceted dome (insect)
+        <mesh position={[0, 0, r * 0.1]}>
+          <icosahedronGeometry args={[r * 0.98, 1]} />
           <meshStandardMaterial color={0x161a22} roughness={0.25} metalness={0.6} flatShading />
         </mesh>
       ) : (
-        // glowing (emissive alien eye)
+        // glowing — emissive alien eye
         <>
-          <mesh>
-            <sphereGeometry args={[r, 14, 12]} />
+          <mesh position={[0, 0, r * 0.08]}>
+            <sphereGeometry args={[r * 0.9, 14, 12]} />
             <meshStandardMaterial color={0x0a1410} emissive={0x55ffcc} emissiveIntensity={1.6} roughness={0.3} />
           </mesh>
-          <mesh position={[0, 0, r * 0.6]}>
-            <sphereGeometry args={[r * 0.4, 10, 10]} />
+          <mesh position={[0, 0, r * 0.62]}>
+            <sphereGeometry args={[r * 0.38, 10, 10]} />
             <meshBasicMaterial color={0xd9fff2} />
           </mesh>
         </>
@@ -330,46 +360,81 @@ function Eye({ f }: { f: MeshFeature }) {
 function Mouth({ f, dark }: { f: MeshFeature; dark: number }) {
   const r = Math.max(f.radius, 0.06);
   const v = mouthVariant(f.style);
-  if (v === 'maw' || v === 'fanged') {
-    // an open mouth organ (M24): a red cavity between an upper + lower jaw, a tongue, and tooth rows
-    // — oriented along the part's aim so it reads on the face. fanged adds two protruding tusks.
+  if (v === 'herbivore') {
+    // a soft grazing mouth — a flat closed lip line + blunt incisors, no fangs (cow/horse/rodent)
     return (
       <group quaternion={f.quat}>
-        {/* dark-red oral cavity, slightly recessed */}
-        <mesh position={[0, 0, r * 0.3]} scale={[r * 1.45, r * 0.95, r * 0.7]}>
+        {/* the mouth slot (dark, thin) */}
+        <mesh position={[0, 0, r * 0.22]} scale={[r * 1.25, r * 0.16, r * 0.38]}>
+          <sphereGeometry args={[1, 16, 8]} />
+          <meshStandardMaterial color={0x3a1418} roughness={0.62} />
+        </mesh>
+        {/* upper + lower lips */}
+        <mesh position={[0, r * 0.24, r * 0.24]} scale={[r * 1.32, r * 0.2, r * 0.5]}>
+          <sphereGeometry args={[1, 16, 8]} />
+          <meshStandardMaterial color={dark} roughness={0.6} />
+        </mesh>
+        <mesh position={[0, -r * 0.24, r * 0.24]} scale={[r * 1.24, r * 0.2, r * 0.46]}>
+          <sphereGeometry args={[1, 16, 8]} />
+          <meshStandardMaterial color={dark} roughness={0.6} />
+        </mesh>
+        {/* a pair of blunt flat incisors */}
+        {[-0.2, 0.2].map((x, i) => (
+          <mesh key={i} position={[x * r, r * 0.02, r * 0.44]} scale={[r * 0.16, r * 0.2, r * 0.08]}>
+            <boxGeometry args={[1, 1, 1]} />
+            <meshStandardMaterial color={0xeae6d8} roughness={0.45} />
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+  if (v === 'maw' || v === 'fanged') {
+    // a mouth set INTO the face (M-refine): a recessed cavity framed by thin lips, teeth pulled back —
+    // reads as a real mouth, not a protruding duck-bill. fanged adds two corner tusks.
+    return (
+      <group quaternion={f.quat}>
+        {/* recessed dark-red oral cavity (sits back in the face, not jutting forward) */}
+        <mesh position={[0, 0, r * 0.16]} scale={[r * 1.32, r * 0.8, r * 0.5]}>
           <sphereGeometry args={[1, 16, 12]} />
-          <meshStandardMaterial color={0x5a1418} roughness={0.55} side={THREE.DoubleSide} />
+          <meshStandardMaterial color={0x4a1014} roughness={0.62} side={THREE.DoubleSide} />
         </mesh>
-        {/* upper + lower jaw — flattened wedges leaving an open gap */}
-        <mesh position={[0, r * 0.46, r * 0.5]} rotation={[-0.35, 0, 0]} scale={[r * 1.6, r * 0.3, r * 1.15]}>
-          <sphereGeometry args={[1, 14, 10]} />
-          <meshStandardMaterial color={dark} roughness={0.5} />
+        {/* upper + lower LIPS — thin rims framing the opening (a mouth line, not a bill) */}
+        <mesh position={[0, r * 0.4, r * 0.28]} rotation={[-0.18, 0, 0]} scale={[r * 1.42, r * 0.22, r * 0.62]}>
+          <sphereGeometry args={[1, 18, 8]} />
+          <meshStandardMaterial color={dark} roughness={0.55} />
         </mesh>
-        <mesh position={[0, -r * 0.46, r * 0.5]} rotation={[0.35, 0, 0]} scale={[r * 1.5, r * 0.3, r * 1.05]}>
-          <sphereGeometry args={[1, 14, 10]} />
-          <meshStandardMaterial color={dark} roughness={0.5} />
+        <mesh position={[0, -r * 0.4, r * 0.28]} rotation={[0.18, 0, 0]} scale={[r * 1.3, r * 0.22, r * 0.56]}>
+          <sphereGeometry args={[1, 18, 8]} />
+          <meshStandardMaterial color={dark} roughness={0.55} />
         </mesh>
-        {/* tongue */}
-        <mesh position={[0, -r * 0.12, r * 0.72]} scale={[r * 0.5, r * 0.22, r * 0.62]}>
+        {/* the mouth corners — little wedges that close the line at the sides */}
+        {[-1, 1].map((s) => (
+          <mesh key={`c${s}`} position={[s * r * 0.62, 0, r * 0.24]} scale={[r * 0.2, r * 0.5, r * 0.4]}>
+            <sphereGeometry args={[1, 8, 8]} />
+            <meshStandardMaterial color={dark} roughness={0.55} />
+          </mesh>
+        ))}
+        {/* tongue, deeper in the cavity */}
+        <mesh position={[0, -r * 0.06, r * 0.42]} scale={[r * 0.44, r * 0.18, r * 0.48]}>
           <sphereGeometry args={[1, 12, 10]} />
-          <meshStandardMaterial color={0xb0606a} roughness={0.6} />
+          <meshStandardMaterial color={0xa85560} roughness={0.6} />
         </mesh>
-        {/* upper tooth row (pointing down) + a sparser lower row */}
-        {[-0.6, -0.2, 0.2, 0.6].map((x, i) => (
-          <mesh key={`u${i}`} position={[x * r, r * 0.26, r * 0.96]} rotation={[Math.PI, 0, 0]} scale={[r * 0.12, r * 0.3, r * 0.12]}>
+        {/* upper tooth row (pointing down) + a sparser lower row, set back behind the lips */}
+        {[-0.52, -0.18, 0.18, 0.52].map((x, i) => (
+          <mesh key={`u${i}`} position={[x * r, r * 0.2, r * 0.54]} rotation={[Math.PI, 0, 0]} scale={[r * 0.1, r * 0.26, r * 0.1]}>
             <coneGeometry args={[1, 1.4, 5]} />
             <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
           </mesh>
         ))}
-        {[-0.42, 0, 0.42].map((x, i) => (
-          <mesh key={`l${i}`} position={[x * r, -r * 0.26, r * 0.96]} scale={[r * 0.1, r * 0.24, r * 0.1]}>
+        {[-0.36, 0, 0.36].map((x, i) => (
+          <mesh key={`l${i}`} position={[x * r, -r * 0.2, r * 0.54]} scale={[r * 0.09, r * 0.2, r * 0.09]}>
             <coneGeometry args={[1, 1.2, 5]} />
             <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
           </mesh>
         ))}
         {v === 'fanged' &&
           [-1, 1].map((side) => (
-            <mesh key={`fang${side}`} position={[side * r * 0.56, -r * 0.08, r * 1.02]} rotation={[0.3, 0, 0]} scale={[r * 0.17, r * 0.66, r * 0.17]}>
+            <mesh key={`fang${side}`} position={[side * r * 0.5, -r * 0.04, r * 0.6]} rotation={[0.28, 0, 0]} scale={[r * 0.15, r * 0.58, r * 0.15]}>
               <coneGeometry args={[1, 1.5, 6]} />
               <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
             </mesh>
@@ -435,6 +500,25 @@ function Mouth({ f, dark }: { f: MeshFeature; dark: number }) {
           <cylinderGeometry args={[r * 0.15, r * 0.24, r * 2.2, 8]} />
           <meshStandardMaterial color={dark} roughness={0.5} />
         </mesh>
+      </group>
+    );
+  }
+  if (v === 'trunk') {
+    // a long prehensile trunk that reaches forward then droops + tapers (elephant / tapir)
+    return (
+      <group quaternion={f.quat}>
+        {[0, 1, 2, 3, 4].map((i) => {
+          const t = i / 4;
+          const z = r * (0.45 + t * 0.95); // forward
+          const y = -r * (t * t * 1.5); // droops down, accelerating
+          const w = r * (0.34 - t * 0.18); // tapers
+          return (
+            <mesh key={i} position={[0, y, z]} rotation={[Math.PI / 2 - t * 0.5, 0, 0]} scale={[w, w, r * 0.5]}>
+              <cylinderGeometry args={[1, 0.85, 1, 8]} />
+              <meshStandardMaterial color={dark} roughness={0.6} />
+            </mesh>
+          );
+        })}
       </group>
     );
   }

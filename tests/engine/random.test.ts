@@ -63,7 +63,7 @@ describe('randomGenome', () => {
       const mouths = p.nodes.filter((n) => n.terminal === 'mouth');
       expect(eyes.length).toBeGreaterThan(0);
       expect(mouths.length).toBeGreaterThan(0);
-      expect(Math.max(...eyes.map((e) => e.radius))).toBeGreaterThan(0.15); // floored — never tiny
+      expect(Math.max(...eyes.map((e) => e.radius))).toBeGreaterThan(0.1); // floored — never tiny
     }
   });
 });
