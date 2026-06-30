@@ -14,10 +14,18 @@
  * from the phenotype; bounded & finite on any topology (asserted by the test).
  */
 import * as THREE from 'three';
-import type { Phenotype } from '../engine/grow';
+import type { Phenotype, BodyNode } from '../engine/grow';
 
 // keep grid_samples × primitives under this, so the (one-time, off-render-loop) build is quick
-const BUDGET = 7e5;
+const BUDGET = 1e6;
+
+// The smooth body meshes only the locomotor silhouette — trunk + these limb kinds. Eyes, mouth,
+// horns, wings, fins, ears, whiskers, etc. are drawn as solid features on top, so meshing them into
+// the field only made thin floating lumps + gaps (M24 fix).
+const BODY_PART_KINDS = new Set(['leg', 'tail', 'arm', 'tentacle', 'neck']);
+function isBodyNode(n: BodyNode): boolean {
+  return n.kind === 'spine' || (n.part != null && BODY_PART_KINDS.has(n.part.kind));
+}
 
 export function buildSmoothGeometry(p: Phenotype): THREE.BufferGeometry {
   // primitives as flat typed arrays (capsule a→b, radius r) — a hot-loop win over objects.
@@ -25,8 +33,8 @@ export function buildSmoothGeometry(p: Phenotype): THREE.BufferGeometry {
   const { ax, ay, az, bx, by, bz, pr, count: np } = primitives(p);
 
   let meanR = 0;
-  for (const n of p.nodes) meanR += n.radius;
-  meanR = meanR / Math.max(p.nodes.length, 1);
+  for (let i = 0; i < np; i++) meanR += pr[i];
+  meanR = meanR / Math.max(np, 1);
   const k = 0.5 * meanR; // smooth-union blend radius (rounds the joints)
 
   // grid bounds: the body bounds padded so the inflated surface stays inside
@@ -44,6 +52,11 @@ export function buildSmoothGeometry(p: Phenotype): THREE.BufferGeometry {
   const dx = ext[0] / nx;
   const dy = ext[1] / ny;
   const dz = ext[2] / nz;
+
+  // M24: floor every primitive radius at ~0.6 of a grid cell, so a thin limb (a leg, a tail tip) is
+  // always at least one cell thick and can't be missed/fragmented by the marching tets (the gaps).
+  const rFloor = 0.6 * Math.max(dx, dy, dz);
+  for (let m = 0; m < np; m++) if (pr[m] < rFloor) pr[m] = rFloor;
 
   // sample the field once at every grid corner: (nx+1)(ny+1)(nz+1) values.
   // sdf = smooth-union of every capsule, inlined over the flat prim arrays.
@@ -214,8 +227,12 @@ interface FlatPrims {
 
 function primitives(p: Phenotype): FlatPrims {
   // one capsule per edge (a capsule round-caps its ends, so joints/leaves need no spheres);
-  // a lone node with no edges falls back to a degenerate a→a capsule (a sphere).
-  const edges = p.edges.length > 0 ? p.edges : null;
+  // a lone node with no edges falls back to a degenerate a→a capsule (a sphere). Mesh only the body
+  // skeleton (trunk + locomotor limbs); feature tips are drawn as solids (M24). Fall back to all
+  // edges if a creature somehow has no body edges, so the surface is never empty.
+  let bodyEdges = p.edges.filter(([a, b]) => isBodyNode(p.nodes[a]) && isBodyNode(p.nodes[b]));
+  if (bodyEdges.length === 0) bodyEdges = p.edges;
+  const edges = bodyEdges.length > 0 ? bodyEdges : null;
   const count = edges ? edges.length : p.nodes.length;
   const ax = new Float64Array(count), ay = new Float64Array(count), az = new Float64Array(count);
   const bx = new Float64Array(count), by = new Float64Array(count), bz = new Float64Array(count);

@@ -28,9 +28,12 @@ import {
 export const SHARE_PREFIX = 'CAM2:'; // bumped for genome v2 (spherical aim + part kinds)
 
 const SYMMETRIES: readonly Symmetry[] = ['bilateral', 'radial', 'none'];
-const TERMINALS: readonly Terminal[] = ['none', 'foot', 'fin', 'claw', 'eye', 'mouth', 'pincer'];
+const TERMINALS: readonly Terminal[] = [
+  'none', 'foot', 'fin', 'claw', 'eye', 'mouth', 'pincer', 'club', 'barb', 'ear', 'gill', 'crest', 'carapace', 'whisker',
+];
 const KINDS: readonly PartKind[] = [
   'leg', 'arm', 'wing', 'fin', 'tail', 'horn', 'spine', 'frill', 'antenna', 'tentacle', 'eyestalk', 'maw',
+  'plate', 'ear', 'gill', 'crest', 'whisker',
 ];
 const COVERING_TYPES: readonly CoveringType[] = ['skin', 'scales', 'fur', 'feathers', 'chitin', 'slime', 'plates'];
 const PATTERN_TYPES: readonly PatternType[] = [
@@ -82,6 +85,8 @@ function validateGenome(o: unknown): Genome {
     seed: u32(g.seed, 'seed'),
     symmetry: oneOf(g.symmetry, SYMMETRIES, 'symmetry'),
     radialCount: num(g.radialCount, 'radialCount'),
+    // coherence is optional (M24); absent ⇒ fully coherent. Clamp anything present into [0,1].
+    coherence: typeof g.coherence === 'number' && Number.isFinite(g.coherence) ? Math.min(1, Math.max(0, g.coherence)) : 1,
     covering: validateCovering(g.covering),
     palette: validatePalette(g.palette),
     body: validateSegment(g.body),

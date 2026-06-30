@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildSmoothGeometry } from '../../src/viewer/smoothSkin';
 import { grow } from '../../src/engine/grow';
-import { randomGenome } from '../../src/engine/random';
+import { randomGenome, genomeOfMorphotype } from '../../src/engine/random';
 import { defaultGenome } from '../../src/engine/genome';
 
 // scan an attribute once in a plain loop (per-vertex expect() is far too slow at this scale)
@@ -59,6 +59,17 @@ describe('smooth skin (M15)', () => {
     let identical = true;
     for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) identical = false;
     expect(identical).toBe(true);
+  });
+
+  it('meshes thin limbs into the body — legs reach the surface, not float above it (M24)', () => {
+    for (let s = 0; s < 8; s++) {
+      const p = grow(genomeOfMorphotype(s * 5 + 1, 'felid')); // a clearly-legged quadruped
+      const legNodes = p.nodes.filter((n) => n.part?.kind === 'leg');
+      const feetY = Math.min(...legNodes.map((n) => n.pos[1]));
+      const { min } = scan(buildSmoothGeometry(p).getAttribute('position').array);
+      // the surface descends to within ~0.5 bu of the lowest leg node (the legs are meshed, not dropped)
+      expect(min[1]).toBeLessThan(feetY + 0.5);
+    }
   });
 
   it('survives extreme topologies (serpent, radial) without exploding', () => {

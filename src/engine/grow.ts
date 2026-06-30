@@ -11,13 +11,16 @@
  * out of the headless core so it runs in a plain Node test.
  */
 import { mulberry32 } from './rng';
-import { R_MIN, NODE_MAX, DEPTH_MAX } from './bounds';
+import { R_MIN, NODE_MAX, DEPTH_MAX, GENE_BOUNDS, clamp } from './bounds';
 import type { Genome, SegmentGene, AppendageGene, Terminal, PartKind, Vec3 } from './genome';
 
 export type Quat = [number, number, number, number]; // [x, y, z, w]
 
 /** Fusiform bulge: how much fatter the middle of a body chain is than its ends. */
 const BODY_BULGE = 0.35;
+
+/** Minimum grown radius for an eye bulb (bu) — the face must always read (M19/M24). */
+const EYE_R_MIN = 0.16;
 
 export interface BodyNode {
   pos: Vec3;
@@ -36,7 +39,10 @@ export interface Phenotype {
 }
 
 export function grow(genome: Genome): Phenotype {
-  const rng = mulberry32(genome.seed);
+  // M24: the bauplan pass pulls limbs onto a canonical layout + guarantees the face before building,
+  // so every grown creature reads as a real body plan. The raw genome is kept as genomeRef (share/seed).
+  const dev = developBauplan(genome);
+  const rng = mulberry32(dev.seed);
   const nodes: BodyNode[] = [];
   const edges: [number, number][] = [];
   const min: Vec3 = [Infinity, Infinity, Infinity];
@@ -53,7 +59,7 @@ export function grow(genome: Genome): Phenotype {
   }
   const atCap = () => nodes.length >= NODE_MAX;
 
-  growSegment(genome.body, [0, 0, 0], [0, 0, 0, 1], 0, -1);
+  growSegment(dev.body, [0, 0, 0], [0, 0, 0, 1], 0, -1);
 
   if (nodes.length === 0) addNode([0, 0, 0], [0, 0, 0, 1], R_MIN, 'spine'); // never empty
 
@@ -86,7 +92,7 @@ export function grow(genome: Genome): Phenotype {
       // advance along local forward (+Z), bending by the per-link curve. In bilateral mode the
       // lateral (yaw) bend is dropped so the spine stays on the X=0 plane — a winding S-curve would
       // make the static body asymmetric (the slither/undulation animation supplies the wind instead).
-      const yaw = genome.symmetry === 'bilateral' ? 0 : seg.curve[1];
+      const yaw = dev.symmetry === 'bilateral' ? 0 : seg.curve[1];
       quat = qMul(quat, qFromEuler(seg.curve[0], yaw));
       const fwd = qRotate([0, 0, 1], quat);
       const step = nodes[idx].radius * elong; // overlap-bounded stride → continuous body
@@ -118,15 +124,15 @@ export function grow(genome: Genome): Phenotype {
     // toward the body axis (+forward / −back). This is what lets parts point anywhere.
     const aim = (a: number): Vec3 => norm([ce * Math.cos(a), ce * Math.sin(a), se]);
 
-    if (genome.symmetry === 'radial') {
-      for (let k = 0; k < genome.radialCount; k++) growLimb(app, base, aim(az + (k * Math.PI * 2) / genome.radialCount));
+    if (dev.symmetry === 'radial') {
+      for (let k = 0; k < dev.radialCount; k++) growLimb(app, base, aim(az + (k * Math.PI * 2) / dev.radialCount));
       return;
     }
     // bilateral / none: grow one limb…
     let d = aim(az);
     // a non-paired part on a bilateral body must stay on the midline plane (X=0): aim it in the
     // plane and drop the roll + lateral curl that would let a multi-segment part (a tail) wander off.
-    if (genome.symmetry === 'bilateral' && !app.pair) {
+    if (dev.symmetry === 'bilateral' && !app.pair) {
       d = norm([0, d[1], d[2]]);
       app = { ...app, roll: 0, curl: [app.curl[0], 0] };
     }
@@ -135,7 +141,7 @@ export function grow(genome: Genome): Phenotype {
     growLimb(app, base, d);
     // …then a paired part is the *exact* reflection of that limb across X=0 (quaternions can't
     // mirror, so growing the other side from a flipped aim drifts — reflect the grown nodes instead).
-    if (app.pair && genome.symmetry === 'bilateral') mirrorAcrossX(nStart, eStart, attachIdx);
+    if (app.pair && dev.symmetry === 'bilateral') mirrorAcrossX(nStart, eStart, attachIdx);
   }
 
   /** Reflect the limb nodes/edges grown in [nStart,nEnd) across the X=0 plane (exact mirror). */
@@ -172,7 +178,10 @@ export function grow(genome: Genome): Phenotype {
     for (let j = 0; j < app.segments; j++) {
       if (atCap()) break;
       const last = j === app.segments - 1;
-      const r = app.thickness * Math.pow(app.taper, j);
+      let r = app.thickness * Math.pow(app.taper, j);
+      // the eye is the emotional anchor — floor the grown bulb so even a tapered/stalked eye on a
+      // small head always reads (M19/M24), regardless of how the gene tapered down its tip.
+      if (last && app.terminal === 'eye') r = Math.max(r, EYE_R_MIN);
       const idx = addNode(pos, quat, r, last ? 'terminal' : 'limb', last ? app.terminal : undefined);
       nodes[idx].part = { kind: app.kind, style: app.style };
       edges.push([prev, idx]);
@@ -186,6 +195,140 @@ export function grow(genome: Genome): Phenotype {
       if (app.kind === 'leg' && j === 0) pitch = -Math.abs(app.curl[0]) * 1.5;
     }
   }
+}
+
+// =============================================================================
+// Bauplan pass (M24) — the structural attractor basin
+// =============================================================================
+
+/**
+ * Canonical leg-pair `attachT` positions per pair-count — the bilateral limb attractor basins.
+ * index = number of leg pairs (1=biped · 2=quadruped · 3=hexapod · 4=octopod · 5=decapod). Each leg
+ * part is `pair:true`, so grow's exact X=0 mirror keeps the arrangement symmetric.
+ */
+export const LEG_SLOTS: readonly (readonly number[])[] = [
+  [],
+  [0.55],
+  [0.2, 0.8],
+  [0.18, 0.5, 0.82],
+  [0.12, 0.37, 0.63, 0.88],
+  [0.1, 0.3, 0.5, 0.7, 0.9],
+];
+
+/** Canonical attachT slots for `pairs` leg-pairs (≥6 spread evenly across the trunk). */
+export function legSlots(pairs: number): readonly number[] {
+  if (pairs <= 0) return [];
+  if (pairs < LEG_SLOTS.length) return LEG_SLOTS[pairs];
+  const out: number[] = [];
+  for (let i = 0; i < pairs; i++) out.push(((i + 0.5) / pairs) * 0.8 + 0.1);
+  return out;
+}
+
+/**
+ * The bauplan pass: pure, deterministic structural normalization (M24). Pulls the legs onto the
+ * canonical layout for their count (lerped by `coherence`) and guarantees a prominent face — so a
+ * creature reads as a real body plan no matter how far mutation has wandered. Decorative parts and
+ * proportions are left alone (that is the "coherent weird"). Operates on a clone — the input is pure.
+ */
+export function developBauplan(genome: Genome): Genome {
+  const g = structuredClone(genome) as Genome;
+  const coh = clamp(g.coherence ?? 1, [0, 1]);
+  if (g.symmetry === 'radial') {
+    ensureRadialFace(g);
+  } else {
+    normalizeLegs(g, coh);
+    ensureBilateralFace(g);
+  }
+  return g;
+}
+
+const AP = GENE_BOUNDS.appendage;
+const LEG_AZ_LO = 3.3;
+const LEG_AZ_HI = 4.95;
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+/** Pull a leg's azimuth into the down-and-out band — folding any up-pointing aim down first, so a
+ *  leg is never broken (pointing up); `coherence` then snaps it toward the canonical band. */
+function pullLegAzimuth(az: number, coh: number): number {
+  let a = az % (Math.PI * 2);
+  if (a < 0) a += Math.PI * 2;
+  if (a < Math.PI) a = Math.PI * 2 - a; // up → down
+  const canon = a < LEG_AZ_LO ? LEG_AZ_LO : a > LEG_AZ_HI ? LEG_AZ_HI : a;
+  return lerp(a, canon, coh);
+}
+
+function normalizeLegs(g: Genome, coh: number): void {
+  const legs = g.body.appendages.filter((p) => p.kind === 'leg');
+  const pairs = legs.length;
+  if (pairs === 0) return;
+  const slots = legSlots(pairs);
+  legs.sort((x, y) => x.attachT - y.attachT); // front-to-back; assign slots in order
+  legs.forEach((leg, i) => {
+    leg.pair = true; // legs are always mirrored
+    leg.attachT = clamp(lerp(leg.attachT, slots[i], coh), AP.attachT);
+    leg.attachAzimuth = pullLegAzimuth(leg.attachAzimuth, coh);
+    leg.attachElevation = lerp(leg.attachElevation, 0, coh); // legs don't tilt fore/aft
+    leg.roll = lerp(leg.roll, 0, coh);
+  });
+}
+
+/** The head = the front-most body section (the deepest `child`), or the trunk if there is none. */
+function frontSegment(g: Genome): SegmentGene {
+  let s = g.body;
+  while (s.child) s = s.child;
+  return s;
+}
+
+function ensureBilateralFace(g: Genome): void {
+  const head = frontSegment(g);
+  ensureFace(head.appendages, (head.size[0] + head.size[1]) / 2);
+}
+
+/** Guarantee a prominent eye-set + a mouth (M24/M19): synthesize them if mutation deleted them,
+ *  and floor the sizes so they always read. The mouth is kept on the face front. */
+function ensureFace(apps: AppendageGene[], girth: number): void {
+  const eyes = apps.filter((p) => p.terminal === 'eye');
+  if (eyes.length === 0) apps.push(faceEye(girth));
+  else for (const e of eyes) e.thickness = clamp(Math.max(e.thickness, 0.16, girth * 0.45), AP.thickness);
+
+  const mouths = apps.filter((p) => p.terminal === 'mouth');
+  if (mouths.length === 0) apps.push(faceMouth(girth));
+  else
+    for (const m of mouths) {
+      m.thickness = clamp(Math.max(m.thickness, 0.2, girth * 0.36), AP.thickness);
+      m.attachElevation = clamp(Math.max(m.attachElevation, 0.4), AP.attachElevation);
+    }
+}
+
+function ensureRadialFace(g: Genome): void {
+  const apps = g.body.appendages;
+  const girth = (g.body.size[0] + g.body.size[1]) / 2;
+  if (!apps.some((p) => p.terminal === 'eye')) apps.push(radialEyeCrown(girth));
+  if (!apps.some((p) => p.terminal === 'mouth')) apps.push(radialMaw(girth));
+}
+
+function faceEye(girth: number): AppendageGene {
+  return facePart('eyestalk', 'eye', true, 0, 0.85, 0.95, 0.3, clamp(girth * 0.55, AP.length), clamp(Math.max(0.16, girth * 0.5), AP.thickness));
+}
+function faceMouth(girth: number): AppendageGene {
+  return facePart('maw', 'mouth', false, 0.05, 0.92, 4.71, 0.65, clamp(girth * 0.5, AP.length), clamp(Math.max(0.2, girth * 0.42), AP.thickness));
+}
+function radialEyeCrown(girth: number): AppendageGene {
+  // pair:false but grow arrays it radialCount× → a ring of eyes around the crown
+  return facePart('eyestalk', 'eye', false, 0.85, 0.8, 0, 0.2, clamp(girth * 0.5, AP.length), clamp(Math.max(0.16, girth * 0.4), AP.thickness));
+}
+function radialMaw(girth: number): AppendageGene {
+  // elevation ≈ +Z so grow's radial array collapses the copies onto the front centre (a central maw)
+  return facePart('maw', 'mouth', false, 0.05, 0.7, 0, 1.35, clamp(girth * 0.45, AP.length), clamp(Math.max(0.2, girth * 0.4), AP.thickness));
+}
+function facePart(
+  kind: PartKind, terminal: Terminal, pair: boolean, style: number,
+  attachT: number, attachAzimuth: number, attachElevation: number, length: number, thickness: number,
+): AppendageGene {
+  return { kind, style, attachT, attachAzimuth, attachElevation, roll: 0, segments: 1, length, thickness, taper: 0.9, curl: [0, 0], terminal, pair };
 }
 
 // --- tiny vec/quat helpers (kept inline to keep the engine dependency-free) ----

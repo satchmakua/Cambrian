@@ -40,6 +40,12 @@ function aimed(azimuth: number, elevation: number): Genome {
 const UP = Math.PI / 2;
 const DOWN = (3 * Math.PI) / 2;
 
+// the tail's tip (grow's bauplan pass now also adds a guaranteed face, so find the part by kind)
+function tailTip(g: ReturnType<typeof grow>) {
+  const tail = g.nodes.filter((n) => n.part?.kind === 'tail');
+  return tail[tail.length - 1].pos;
+}
+
 describe('spherical part aim (v2 unlock)', () => {
   it('elevation aims a part backward / forward along the body axis', () => {
     // the trunk runs along +Z from the origin
@@ -47,11 +53,8 @@ describe('spherical part aim (v2 unlock)', () => {
     const fwd = grow(aimed(DOWN, 1.3)); // elevation +1.3 ⇒ mostly +Z (ahead)
     const spineZ = (g: ReturnType<typeof grow>) => g.nodes.filter((n) => n.kind === 'spine').map((n) => n.pos[2]);
 
-    const backTip = back.nodes[back.nodes.length - 1].pos[2];
-    const fwdTip = fwd.nodes[fwd.nodes.length - 1].pos[2];
-
-    expect(backTip).toBeLessThan(Math.min(...spineZ(back))); // behind the whole trunk
-    expect(fwdTip).toBeGreaterThan(Math.max(...spineZ(fwd))); // ahead of the whole trunk
+    expect(tailTip(back)[2]).toBeLessThan(Math.min(...spineZ(back))); // behind the whole trunk
+    expect(tailTip(fwd)[2]).toBeGreaterThan(Math.max(...spineZ(fwd))); // ahead of the whole trunk
   });
 
   it('azimuth aims a part up / down across the body', () => {
@@ -59,8 +62,8 @@ describe('spherical part aim (v2 unlock)', () => {
     const down = grow(aimed(DOWN, 0));
     const spineY = (g: ReturnType<typeof grow>) => g.nodes.filter((n) => n.kind === 'spine').map((n) => n.pos[1]);
 
-    expect(up.nodes[up.nodes.length - 1].pos[1]).toBeGreaterThan(Math.max(...spineY(up))); // above
-    expect(down.nodes[down.nodes.length - 1].pos[1]).toBeLessThan(Math.min(...spineY(down))); // below
+    expect(tailTip(up)[1]).toBeGreaterThan(Math.max(...spineY(up))); // above
+    expect(tailTip(down)[1]).toBeLessThan(Math.min(...spineY(down))); // below
   });
 
   it('the default creature has a tail behind the body (it grows backward)', () => {

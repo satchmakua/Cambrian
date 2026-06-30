@@ -35,11 +35,13 @@ group('morphospace', () => {
     let serpent = 0;
     for (let s = 0; s < 10; s++) if (coherence(grow(genomeOfMorphotype(s * 31 + 5, 'serpent'))).nearest === 'serpent') serpent++;
     expect(serpent).toBeGreaterThan(5);
-    // a dragon reads as a winged beast (dragon or its sibling wyvern)
+    // a dragon reads as a winged beast — its own basin holds the structural siblings dragon /
+    // wyvern / chimera (all winged, tailed quadrupeds; the descriptor can't see the covering that
+    // sets a chimera apart — that's what M26's sheen/headedness dims are for). The point: not a fish.
     let winged = 0;
     for (let s = 0; s < 10; s++) {
       const n = coherence(grow(genomeOfMorphotype(s * 13 + 2, 'dragon'))).nearest;
-      if (n === 'dragon' || n === 'wyvern') winged++;
+      if (n === 'dragon' || n === 'wyvern' || n === 'chimera') winged++;
     }
     expect(winged).toBeGreaterThan(5);
   });

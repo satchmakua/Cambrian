@@ -108,6 +108,30 @@ export function buildExportGroup(phenotype: Phenotype, smooth: boolean): THREE.G
       const m = new THREE.Mesh(new THREE.ConeGeometry(r * 0.9, r * (f.kind === 'horn' ? 3.2 : 1.6), 8), featMat);
       m.quaternion.copy(q);
       node.add(m);
+    } else if (f.type === 'carapace') {
+      // a domed shell over the body region (world-aligned, capping the back)
+      const m = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), bodyMat);
+      m.position.y = -r * 0.5;
+      m.scale.set(r * 3.2, r * 2.2, r * 4.0);
+      node.add(m);
+    } else if (f.type === 'club') {
+      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r * 1.5, 0), featMat);
+      m.quaternion.copy(q);
+      node.add(m);
+    } else if (f.type === 'barb') {
+      const m = new THREE.Mesh(new THREE.ConeGeometry(r * 0.5, r * 3.0, 8), featMat);
+      m.quaternion.copy(q);
+      node.add(m);
+    } else if (f.type === 'ear' || f.type === 'crest') {
+      // a thin upright plate (ear) / fan (crest)
+      const m = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), f.type === 'crest' ? finMat : featMat);
+      m.scale.set(r * 0.3, r * 1.6, r * (f.type === 'crest' ? 1.3 : 0.9));
+      m.quaternion.copy(q);
+      node.add(m);
+    } else if (f.type === 'gill' || f.type === 'whisker') {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(r * 0.8, r * 0.8, r * 0.3), featMat);
+      m.quaternion.copy(q);
+      node.add(m);
     } else {
       // foot / pad
       const m = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 10), featMat);

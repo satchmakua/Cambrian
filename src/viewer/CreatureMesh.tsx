@@ -13,6 +13,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
 import { buildMeshData, type MeshFeature } from './meshData';
+import { eyeVariant, mouthVariant, earVariant } from './partStyles';
 import { buildRig, computeAnim } from './animation';
 import { makeCreatureMaterial } from './creatureMaterial';
 import { buildSmoothGeometry } from './smoothSkin';
@@ -247,6 +248,20 @@ function Feature({ f, footColor, finColor }: { f: MeshFeature; footColor: number
       );
     case 'claw':
       return f.kind === 'horn' ? <Horn f={f} color={footColor} /> : <Claw f={f} color={footColor} />;
+    case 'club':
+      return <Club f={f} color={footColor} />;
+    case 'barb':
+      return <Barb f={f} color={footColor} />;
+    case 'ear':
+      return <Ear f={f} color={footColor} />;
+    case 'gill':
+      return <Gill f={f} color={footColor} />;
+    case 'crest':
+      return <Crest f={f} color={finColor} />;
+    case 'carapace':
+      return <Carapace f={f} color={finColor} />;
+    case 'whisker':
+      return <Whisker f={f} color={footColor} />;
     default:
       return <Foot f={f} color={footColor} />;
   }
@@ -256,18 +271,18 @@ function Feature({ f, footColor, finColor }: { f: MeshFeature; footColor: number
 
 function Eye({ f }: { f: MeshFeature }) {
   const r = Math.max(f.radius, 0.06);
-  const s = f.style;
+  const v = eyeVariant(f.style);
   return (
     <group quaternion={f.quat}>
-      {s < 0.4 ? (
+      {v === 'round' || v === 'beady' ? (
         // round (sclera + pupil + highlight) / beady (smaller, darker sclera)
         <>
           <mesh>
             <sphereGeometry args={[r, 16, 12]} />
-            <meshStandardMaterial color={s < 0.2 ? 0xe8e6dc : 0x14141a} roughness={0.16} metalness={0.0} />
+            <meshStandardMaterial color={v === 'round' ? 0xe8e6dc : 0x14141a} roughness={0.16} metalness={0.0} />
           </mesh>
           <mesh position={[0, 0, r * 0.6]}>
-            <sphereGeometry args={[r * (s < 0.2 ? 0.55 : 0.4), 14, 12]} />
+            <sphereGeometry args={[r * (v === 'round' ? 0.55 : 0.4), 14, 12]} />
             <meshStandardMaterial color={0x07070a} roughness={0.08} />
           </mesh>
           <mesh position={[r * 0.26, r * 0.3, r * 0.78]}>
@@ -275,7 +290,7 @@ function Eye({ f }: { f: MeshFeature }) {
             <meshBasicMaterial color={0xffffff} />
           </mesh>
         </>
-      ) : s < 0.6 ? (
+      ) : v === 'slit' ? (
         // slit (sclera + a vertical-slit pupil)
         <>
           <mesh>
@@ -287,7 +302,7 @@ function Eye({ f }: { f: MeshFeature }) {
             <meshStandardMaterial color={0x07070a} roughness={0.1} />
           </mesh>
         </>
-      ) : s < 0.8 ? (
+      ) : v === 'compound' ? (
         // compound (a dark faceted dome)
         <mesh>
           <icosahedronGeometry args={[r * 1.05, 1]} />
@@ -310,29 +325,59 @@ function Eye({ f }: { f: MeshFeature }) {
   );
 }
 
-// --- mouths (5 styles) — beak, maw, mandibles, sucker, baleen ----------------
+// --- mouths (8 styles §6.3) — maw · fanged · beak · mandibles · sucker · lamprey · baleen · proboscis
 
 function Mouth({ f, dark }: { f: MeshFeature; dark: number }) {
   const r = Math.max(f.radius, 0.06);
-  const s = f.style;
-  if (s < 0.2) {
-    // maw: a dark cavity + a row of little teeth
+  const v = mouthVariant(f.style);
+  if (v === 'maw' || v === 'fanged') {
+    // an open mouth organ (M24): a red cavity between an upper + lower jaw, a tongue, and tooth rows
+    // — oriented along the part's aim so it reads on the face. fanged adds two protruding tusks.
     return (
-      <group>
-        <mesh scale={[r * 1.7, r * 0.6, r * 1.0]}>
-          <sphereGeometry args={[1, 16, 10]} />
-          <meshStandardMaterial color={0x180a0c} roughness={0.5} />
+      <group quaternion={f.quat}>
+        {/* dark-red oral cavity, slightly recessed */}
+        <mesh position={[0, 0, r * 0.3]} scale={[r * 1.45, r * 0.95, r * 0.7]}>
+          <sphereGeometry args={[1, 16, 12]} />
+          <meshStandardMaterial color={0x5a1418} roughness={0.55} side={THREE.DoubleSide} />
         </mesh>
+        {/* upper + lower jaw — flattened wedges leaving an open gap */}
+        <mesh position={[0, r * 0.46, r * 0.5]} rotation={[-0.35, 0, 0]} scale={[r * 1.6, r * 0.3, r * 1.15]}>
+          <sphereGeometry args={[1, 14, 10]} />
+          <meshStandardMaterial color={dark} roughness={0.5} />
+        </mesh>
+        <mesh position={[0, -r * 0.46, r * 0.5]} rotation={[0.35, 0, 0]} scale={[r * 1.5, r * 0.3, r * 1.05]}>
+          <sphereGeometry args={[1, 14, 10]} />
+          <meshStandardMaterial color={dark} roughness={0.5} />
+        </mesh>
+        {/* tongue */}
+        <mesh position={[0, -r * 0.12, r * 0.72]} scale={[r * 0.5, r * 0.22, r * 0.62]}>
+          <sphereGeometry args={[1, 12, 10]} />
+          <meshStandardMaterial color={0xb0606a} roughness={0.6} />
+        </mesh>
+        {/* upper tooth row (pointing down) + a sparser lower row */}
         {[-0.6, -0.2, 0.2, 0.6].map((x, i) => (
-          <mesh key={i} position={[x * r, r * 0.18, r * 0.5]} rotation={[Math.PI, 0, 0]} scale={[r * 0.12, r * 0.22, r * 0.12]}>
+          <mesh key={`u${i}`} position={[x * r, r * 0.26, r * 0.96]} rotation={[Math.PI, 0, 0]} scale={[r * 0.12, r * 0.3, r * 0.12]}>
             <coneGeometry args={[1, 1.4, 5]} />
             <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
           </mesh>
         ))}
+        {[-0.42, 0, 0.42].map((x, i) => (
+          <mesh key={`l${i}`} position={[x * r, -r * 0.26, r * 0.96]} scale={[r * 0.1, r * 0.24, r * 0.1]}>
+            <coneGeometry args={[1, 1.2, 5]} />
+            <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
+          </mesh>
+        ))}
+        {v === 'fanged' &&
+          [-1, 1].map((side) => (
+            <mesh key={`fang${side}`} position={[side * r * 0.56, -r * 0.08, r * 1.02]} rotation={[0.3, 0, 0]} scale={[r * 0.17, r * 0.66, r * 0.17]}>
+              <coneGeometry args={[1, 1.5, 6]} />
+              <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
+            </mesh>
+          ))}
       </group>
     );
   }
-  if (s < 0.4) {
+  if (v === 'beak') {
     // beak: two hard cones meeting, pointing forward
     return (
       <group quaternion={f.quat}>
@@ -347,7 +392,7 @@ function Mouth({ f, dark }: { f: MeshFeature; dark: number }) {
       </group>
     );
   }
-  if (s < 0.6) {
+  if (v === 'mandibles') {
     // mandibles: two side prongs that converge in front
     return (
       <group quaternion={f.quat}>
@@ -360,8 +405,8 @@ function Mouth({ f, dark }: { f: MeshFeature; dark: number }) {
       </group>
     );
   }
-  if (s < 0.8) {
-    // sucker: a ring disc with a dark center
+  if (v === 'sucker' || v === 'lamprey') {
+    // sucker: a ring disc with a dark center. lamprey adds concentric rasping tooth rings.
     return (
       <group quaternion={f.quat}>
         <mesh position={[0, 0, r * 0.2]} rotation={[Math.PI / 2, 0, 0]}>
@@ -371,6 +416,24 @@ function Mouth({ f, dark }: { f: MeshFeature; dark: number }) {
         <mesh position={[0, 0, r * 0.2]} scale={[r, r, r * 0.4]}>
           <sphereGeometry args={[0.7, 12, 10]} />
           <meshStandardMaterial color={0x130809} roughness={0.5} />
+        </mesh>
+        {v === 'lamprey' &&
+          [0.62, 0.42, 0.24].map((rad, i) => (
+            <mesh key={i} position={[0, 0, r * 0.34]} rotation={[Math.PI / 2, 0, 0]}>
+              <torusGeometry args={[r * rad, r * 0.07, 6, 14]} />
+              <meshStandardMaterial color={0xe7ddca} roughness={0.45} />
+            </mesh>
+          ))}
+      </group>
+    );
+  }
+  if (v === 'proboscis') {
+    // proboscis: a thin tube extending forward (butterfly / mosquito)
+    return (
+      <group quaternion={f.quat}>
+        <mesh position={[0, -r * 0.05, r * 1.0]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[r * 0.15, r * 0.24, r * 2.2, 8]} />
+          <meshStandardMaterial color={dark} roughness={0.5} />
         </mesh>
       </group>
     );
@@ -466,13 +529,156 @@ function Frill({ f, color }: { f: MeshFeature; color: number }) {
   );
 }
 
-// A wing: a large thin membrane spanning out along the aim.
+// A wing: a thin membrane spanning out along the aim, braced by a few articulated struts
+// (finger-bones radiating into the web — bat/dragon/raptor read).
 function Wing({ f, color }: { f: MeshFeature; color: number }) {
   const r = Math.max(f.radius, 0.06);
+  const strut = useMemo(() => new THREE.Color(color).multiplyScalar(0.6).getHex(), [color]);
   return (
-    <mesh quaternion={f.quat} scale={[r * 0.18, r * 2.6, r * 3.2]} castShadow>
-      <sphereGeometry args={[1, 10, 8]} />
-      <meshStandardMaterial color={color} roughness={0.6} metalness={0.0} side={THREE.DoubleSide} />
+    <group quaternion={f.quat}>
+      <mesh scale={[r * 0.16, r * 2.6, r * 3.2]} castShadow>
+        <sphereGeometry args={[1, 10, 8]} />
+        <meshStandardMaterial color={color} roughness={0.6} metalness={0.0} side={THREE.DoubleSide} />
+      </mesh>
+      {/* struts fan within the membrane (the local YZ plane) — rotate the +Z bone about local X */}
+      {[-0.55, -0.18, 0.2, 0.6].map((ang, i) => (
+        <group key={i} rotation={[ang, 0, 0]}>
+          <mesh position={[0, 0, r * 1.5]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <cylinderGeometry args={[r * 0.06, r * 0.11, r * 3.0, 6]} />
+            <meshStandardMaterial color={strut} roughness={0.5} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// A tail club: a knobbed mace with short spikes (ankylosaur / dragon).
+function Club({ f, color }: { f: MeshFeature; color: number }) {
+  const r = Math.max(f.radius, 0.06);
+  const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.8).getHex(), [color]);
+  const spikes: [number[], [number, number, number]][] = [
+    [[0, r * 1.5, 0], [0, 0, 0]],
+    [[0, -r * 1.5, 0], [Math.PI, 0, 0]],
+    [[r * 1.5, 0, 0], [0, 0, -Math.PI / 2]],
+    [[-r * 1.5, 0, 0], [0, 0, Math.PI / 2]],
+    [[0, 0, r * 1.5], [Math.PI / 2, 0, 0]],
+  ];
+  return (
+    <group quaternion={f.quat}>
+      <mesh castShadow>
+        <icosahedronGeometry args={[r * 1.5, 0]} />
+        <meshStandardMaterial color={dark} roughness={0.6} metalness={0.05} flatShading />
+      </mesh>
+      {spikes.map(([pos, rot], i) => (
+        <mesh key={i} position={pos as [number, number, number]} rotation={rot} castShadow>
+          <coneGeometry args={[r * 0.34, r * 1.1, 6]} />
+          <meshStandardMaterial color={dark} roughness={0.55} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// A tail barb: a single sharp, slightly hooked sting (scorpion / wyvern).
+function Barb({ f, color }: { f: MeshFeature; color: number }) {
+  const r = Math.max(f.radius, 0.06);
+  const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.65).getHex(), [color]);
+  return (
+    <group quaternion={f.quat}>
+      <mesh position={[0, r * 0.4, r * 1.1]} rotation={[Math.PI / 2 - 0.6, 0, 0]} castShadow>
+        <coneGeometry args={[r * 0.5, r * 3.0, 8]} />
+        <meshStandardMaterial color={dark} roughness={0.45} metalness={0.1} />
+      </mesh>
+    </group>
+  );
+}
+
+// An ear (pointed / leaf / round by style). Aimed up; the part frame's +Z points up.
+function Ear({ f, color }: { f: MeshFeature; color: number }) {
+  const r = Math.max(f.radius, 0.06);
+  const v = earVariant(f.style);
+  if (v === 'pointed') {
+    // a triangular cat/fox ear standing up
+    return (
+      <group quaternion={f.quat}>
+        <mesh position={[0, 0, r * 0.9]} rotation={[Math.PI / 2, 0, 0]} scale={[r * 0.95, r * 1.9, r * 0.3]} castShadow>
+          <coneGeometry args={[1, 1, 5]} />
+          <meshStandardMaterial color={color} roughness={0.7} side={THREE.DoubleSide} />
+        </mesh>
+      </group>
+    );
+  }
+  // round (mouse/bear) vs leaf (rabbit/fox) — a flat upright plate, thin side-to-side (local X)
+  const scale: [number, number, number] = v === 'round' ? [r * 0.3, r * 1.3, r * 1.3] : [r * 0.28, r * 1.0, r * 2.1];
+  return (
+    <mesh quaternion={f.quat} position={[0, 0, r * 0.8]} scale={scale} castShadow>
+      <sphereGeometry args={[1, 12, 12]} />
+      <meshStandardMaterial color={color} roughness={0.7} side={THREE.DoubleSide} />
     </mesh>
+  );
+}
+
+// Gills: a rake of dark slits on the side of the neck. Aimed sideways; +Z points outward.
+function Gill({ f, color }: { f: MeshFeature; color: number }) {
+  const r = Math.max(f.radius, 0.06);
+  const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.5).getHex(), [color]);
+  return (
+    <group quaternion={f.quat}>
+      {[-0.55, -0.18, 0.18, 0.55].map((off, i) => (
+        <mesh key={i} position={[off * r, 0, r * 0.15]} scale={[r * 0.1, r * 0.9, r * 0.4]}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial color={dark} roughness={0.65} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// A crest: a fan of thin feathered/membranous blades (songbird / basilisk).
+function Crest({ f, color }: { f: MeshFeature; color: number }) {
+  const r = Math.max(f.radius, 0.06);
+  return (
+    <group quaternion={f.quat}>
+      {[-0.6, -0.2, 0.2, 0.6].map((ang, i) => (
+        <group key={i} rotation={[0, 0, ang]}>
+          <mesh position={[0, r * 0.9, 0]} scale={[r * 0.7, r * 1.8, r * 0.07]} castShadow>
+            <sphereGeometry args={[1, 8, 8]} />
+            <meshStandardMaterial color={color} roughness={0.6} side={THREE.DoubleSide} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// A carapace: a big domed shell over a body region (turtle / crab / armadillo). World-aligned
+// (broad in X·Z, domed in Y) and shifted down so it caps the back rather than floating.
+function Carapace({ f, color }: { f: MeshFeature; color: number }) {
+  const r = Math.max(f.radius, 0.06);
+  const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.85).getHex(), [color]);
+  return (
+    <mesh position={[0, -r * 0.5, 0]} scale={[r * 3.2, r * 2.2, r * 4.0]} castShadow receiveShadow>
+      <sphereGeometry args={[1, 20, 16]} />
+      <meshStandardMaterial color={dark} roughness={0.5} metalness={0.05} side={THREE.DoubleSide} />
+    </mesh>
+  );
+}
+
+// Whiskers: a small fan of fine pale filaments off the snout.
+function Whisker({ f, color }: { f: MeshFeature; color: number }) {
+  const r = Math.max(f.radius, 0.06);
+  const pale = useMemo(() => new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.45).getHex(), [color]);
+  return (
+    <group quaternion={f.quat}>
+      {[-0.35, 0, 0.35].map((ang, i) => (
+        <group key={i} rotation={[0, ang, 0]}>
+          <mesh position={[0, -r * 0.1, r * 1.5]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[r * 0.03, r * 0.07, r * 3.0, 4]} />
+            <meshStandardMaterial color={pale} roughness={0.5} />
+          </mesh>
+        </group>
+      ))}
+    </group>
   );
 }

@@ -26,6 +26,7 @@ export function App() {
   const importString = useStore((s) => s.importString);
   const setSymmetryMode = useStore((s) => s.setSymmetryMode);
   const setPressure = useStore((s) => s.setPressure);
+  const setCoherence = useStore((s) => s.setCoherence);
   const runDirected = useStore((s) => s.runDirected);
   const menagerie = useStore((s) => s.menagerie);
   const loadCell = useStore((s) => s.loadCell);
@@ -114,7 +115,13 @@ export function App() {
 
         <aside className="gallery">
           <OffspringGallery offspring={offspring} generation={generation} onPick={promote} onReroll={reroll} />
-          <PressurePanel pressure={pressure} onChange={setPressure} onRun={runDirected} />
+          <PressurePanel
+            pressure={pressure}
+            onChange={setPressure}
+            onRun={runDirected}
+            coherence={genome.coherence ?? 1}
+            onCoherence={setCoherence}
+          />
           <PhysicsPanel
             running={physicsRunning}
             distance={physicsDistance}

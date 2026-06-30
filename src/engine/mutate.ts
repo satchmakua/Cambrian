@@ -66,6 +66,7 @@ function applyPointMutations(g: Genome, rng: Rng, rates: MutationRates): void {
 
   const C = GENE_BOUNDS.covering;
   g.radialCount = jitterInt(rng, g.radialCount, GENE_BOUNDS.radialCount, r, s);
+  g.coherence = jitter(rng, g.coherence ?? 1, COH_BOUND, r, s); // the weirdness dial drifts too (M24)
   g.covering.patternScale = jitter(rng, g.covering.patternScale, C.patternScale, r, s);
   g.covering.patternContrast = jitter(rng, g.covering.patternContrast, C.patternContrast, r, s);
   g.covering.sheen = jitter(rng, g.covering.sheen, C.sheen, r, s);
@@ -110,9 +111,47 @@ function jitterInt(rng: Rng, v: number, bound: readonly [number, number], rate: 
 // --- structural mutation -----------------------------------------------------
 
 function applyStructural(g: Genome, rng: Rng, lockSymmetry = false): void {
-  const ops = [bumpRepeat, addAppendage, removeAppendage, changeTerminal, changeKind, reaim, changeCovering, addChild, removeChild];
+  const ops = [bumpRepeat, addAppendage, removeAppendage, changeTerminal, changeKind, reaim, changeBauplan, changeCovering, addChild, removeChild];
   if (!lockSymmetry) ops.push(flipSymmetry);
   pick(rng, ops)(g, rng);
+}
+
+/** Is this part the face? — eyes/mouth are protected from removal/retyping so a lineage keeps its
+ *  face (M24); even if one slips through, grow's bauplan pass re-guarantees it. */
+function isFace(a: AppendageGene): boolean {
+  return a.terminal === 'eye' || a.terminal === 'mouth';
+}
+function isLeg(a: AppendageGene): boolean {
+  return a.kind === 'leg';
+}
+
+/**
+ * Basin-hop the limb count to an adjacent canonical value (M24) — add or drop a leg *pair*, never a
+ * lone scattered leg. The bauplan pass then snaps the legs onto the new layout's slots.
+ */
+function changeBauplan(g: Genome, rng: Rng): void {
+  if (g.symmetry === 'radial') return; // radialCount is the radial bauplan; point-mutated already
+  const legs = g.body.appendages.filter(isLeg);
+  const grow = rng() < 0.5 ? -1 : 1;
+  const target = clampInt(legs.length + grow, [0, 5]);
+  if (target === legs.length) return;
+  if (target < legs.length) {
+    const idx = g.body.appendages.indexOf(legs[Math.floor(rng() * legs.length)]);
+    if (idx >= 0) g.body.appendages.splice(idx, 1);
+  } else {
+    if (g.body.appendages.length >= GENE_BOUNDS.segment.appendageCount[1]) return;
+    g.body.appendages.push(legs.length > 0 ? structuredClone(legs[0]) : freshLeg(rng));
+  }
+}
+
+function freshLeg(rng: Rng): AppendageGene {
+  const A = GENE_BOUNDS.appendage;
+  return {
+    kind: 'leg', style: range(rng, 0, 0.4), attachT: 0.5, attachAzimuth: range(rng, 3.8, 4.6),
+    attachElevation: 0, roll: 0, segments: randint(rng, 2, 4),
+    length: range(rng, 0.3, 0.6), thickness: range(rng, A.thickness[0], 0.3), taper: range(rng, 0.7, 0.85),
+    curl: [range(rng, 0.2, 0.55), 0], terminal: pick(rng, ['foot', 'claw'] as const), pair: true,
+  };
 }
 
 // Re-skin: swap the covering type or the color pattern (a furred cat → a scaled one).
@@ -133,27 +172,30 @@ function addAppendage(g: Genome, rng: Rng): void {
 }
 
 function removeAppendage(g: Genome, rng: Rng): void {
-  const withApps = segments(g).filter((s) => s.appendages.length > 0);
-  if (withApps.length === 0) return;
-  const seg = pick(rng, withApps);
-  seg.appendages.splice(Math.floor(rng() * seg.appendages.length), 1);
+  // never remove the face — only non-face parts (M24)
+  const segs = segments(g).filter((s) => s.appendages.some((a) => !isFace(a)));
+  if (segs.length === 0) return;
+  const seg = pick(rng, segs);
+  const idx = seg.appendages.indexOf(pick(rng, seg.appendages.filter((a) => !isFace(a))));
+  if (idx >= 0) seg.appendages.splice(idx, 1);
 }
 
 function changeTerminal(g: Genome, rng: Rng): void {
-  const apps = allAppendages(g);
+  const apps = allAppendages(g).filter((a) => !isFace(a)); // don't retype eyes/mouth away
   if (apps.length === 0) return;
   pick(rng, apps).terminal = pick(rng, TERMINALS);
 }
 
 function changeKind(g: Genome, rng: Rng): void {
-  const apps = allAppendages(g);
+  const apps = allAppendages(g).filter((a) => !isFace(a));
   if (apps.length === 0) return;
-  pick(rng, apps).kind = pick(rng, KINDS);
+  pick(rng, apps).kind = pick(rng, DECOR_KINDS); // not → leg (legs are bauplan-managed, M24)
 }
 
-// Re-aim a part: swing it to a new direction (a side fin can become a tail, a leg a horn).
+// Re-aim a *decorative* part: swing it to a new direction (a side fin → a tail, a horn back). Legs
+// and the face are off-limits — legs follow the bauplan slots, the face stays on the head (M24).
 function reaim(g: Genome, rng: Rng): void {
-  const apps = allAppendages(g);
+  const apps = allAppendages(g).filter((a) => !isFace(a) && !isLeg(a));
   if (apps.length === 0) return;
   const a = pick(rng, apps);
   a.attachAzimuth = range(rng, 0, Math.PI * 2);
@@ -208,7 +250,7 @@ function duplicateSegment(g: Genome, rng: Rng): void {
 function freshAppendage(rng: Rng): AppendageGene {
   const A = GENE_BOUNDS.appendage;
   return {
-    kind: pick(rng, KINDS),
+    kind: pick(rng, DECOR_KINDS), // not → leg: legs are added as pairs via changeBauplan (M24)
     style: range(rng, 0, 1),
     attachT: range(rng, 0, 1),
     attachAzimuth: range(rng, 0, Math.PI * 2),
@@ -236,10 +278,16 @@ function freshSegment(rng: Rng): SegmentGene {
 
 // --- helpers -----------------------------------------------------------------
 
-const TERMINALS: readonly Terminal[] = ['none', 'foot', 'fin', 'claw', 'eye', 'mouth', 'pincer'];
+const TERMINALS: readonly Terminal[] = [
+  'none', 'foot', 'fin', 'claw', 'eye', 'mouth', 'pincer', 'club', 'barb', 'ear', 'gill', 'crest', 'carapace', 'whisker',
+];
 const KINDS: readonly PartKind[] = [
   'leg', 'arm', 'wing', 'fin', 'tail', 'horn', 'spine', 'frill', 'antenna', 'tentacle', 'eyestalk', 'maw',
+  'plate', 'ear', 'gill', 'crest', 'whisker',
 ];
+/** Kinds a free/changed appendage may become — everything but `leg` (legs are bauplan-managed, M24). */
+const DECOR_KINDS: readonly PartKind[] = KINDS.filter((k) => k !== 'leg');
+const COH_BOUND: readonly [number, number] = [0, 1];
 const COVERING_TYPES: readonly CoveringType[] = ['skin', 'scales', 'fur', 'feathers', 'chitin', 'slime', 'plates'];
 const PATTERN_TYPES: readonly PatternType[] = [
   'plain', 'stripes', 'bands', 'spots', 'ocelli', 'reticulate', 'mottle', 'gradient',

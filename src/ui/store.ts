@@ -50,6 +50,8 @@ interface AppState extends Session {
   importString: (s: string) => void; // CAM1: → new lineage rooted at that creature
   setSymmetryMode: (mode: SymmetryMode) => void;
   setPressure: (patch: Partial<Pressure>) => void;
+  /** Live "weirdness" dial: set the current creature's structural coherence and regrow (M24). */
+  setCoherence: (coherence: number) => void;
   /** Fast-forward `generations` of directed selection; appends the path to the tree. */
   runDirected: (generations: number) => void;
   /** Pull a Menagerie cell back as a fresh parent (M14). */
@@ -208,6 +210,17 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     setPressure: (patch) => set((state) => ({ pressure: { ...state.pressure, ...patch } })),
+
+    setCoherence: (coherence) =>
+      set((state) => {
+        const cur = state.nodes[state.currentId];
+        const genome: Genome = { ...structuredClone(cur.genome), coherence: Math.min(1, Math.max(0, coherence)) };
+        const nodes = { ...state.nodes, [cur.id]: { ...cur, genome } };
+        // re-batch from the same streamSeed so the offspring track the new coherence too
+        const b = batch(nodes, cur.id, state.counter, state.symmetryMode, state.menagerie, state.streamSeed);
+        persist(b);
+        return { ...b, ...CLEAR_GAIT };
+      }),
 
     runDirected: (generations) =>
       set((state) => {

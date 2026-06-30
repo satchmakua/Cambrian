@@ -26,10 +26,14 @@ export function PressurePanel({
   pressure,
   onChange,
   onRun,
+  coherence,
+  onCoherence,
 }: {
   pressure: Pressure;
   onChange: (patch: Partial<Pressure>) => void;
   onRun: (generations: number) => void;
+  coherence: number;
+  onCoherence: (coherence: number) => void;
 }) {
   const [gens, setGens] = useState(30);
   const [running, setRunning] = useState(false);
@@ -46,6 +50,24 @@ export function PressurePanel({
   return (
     <div className="pressures">
       <div className="pressures-head">Directed evolution</div>
+      {/* live structural-coherence dial (M24): 1 = a clean canonical body plan, 0 = let it wander */}
+      <label className="axis coherence-steer">
+        <span className="axis-label">
+          Coherence<em>{coherence.toFixed(2)}</em>
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={coherence}
+          onChange={(e) => onCoherence(parseFloat(e.target.value))}
+        />
+        <span className="axis-ends">
+          <i>wild</i>
+          <i>canonical</i>
+        </span>
+      </label>
       {AXES.map((a) => {
         const v = pressure[a.key];
         return (

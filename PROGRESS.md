@@ -45,6 +45,111 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ---
 
+## M24 — Bauplan: structural attractor basins + the guaranteed face · 2026-06-29 (Part 2)
+
+Playtest feedback: creatures were drifting into **mouthless, eyeless, scatter-limbed blobs** — limbs
+at random angles, faces gone after a couple of breeds. Root-caused in code (not guesses): the face was
+guaranteed only on a *fresh roll* (M19), but the breeder litter's aggressive structural/saltation
+mutation (`removeAppendage`, `changeTerminal`, head-swapping `confluence`) stripped it; legs were
+placed/aimed at fully random `attachT`/`azimuth` by `addAppendage`/`reaim`; and nothing pulled
+structure back (the §11.2 coherence-pull was never built). The human chose **"coherent core, coherent
+weird"** (everything gets canonical structure; uncanny stays weird but never broken) as **one big
+push**. Researched + planned in plan-mode, then implemented.
+
+**The attractor basin = a deterministic pass inside `grow()`** (`developBauplan`, pure): the stored
+genome may drift, but growth pulls it onto a canonical body plan before building.
+- **Limb basin.** A `LEG_SLOTS` table gives the canonical `attachT` per leg-pair count (biped `[0.55]`
+  · quadruped `[0.2,0.8]` · hexapod · octopod · decapod). The pass snaps each leg to its slot + folds
+  the azimuth into the down-and-out band (a leg can never point *up*), **lerped by a new `coherence`
+  gene** ∈[0,1] — the "weirdness" dial (1 = perfectly canonical, lower = individuality). Legs stay
+  `pair:true` so grow's M18 mirror keeps them exact. Generation now places legs on the same slots
+  (+a ±0.06 jitter for individuality), so generation and normalization agree.
+- **Guaranteed face.** The pass ensures the head (or trunk front, or radial crown) always carries an
+  eye-set + a mouth, synthesizing them if absent — so *every* grown creature, however mutated, has a
+  face. The grown **eye bulb is floored at 0.16 bu** in `grow` so even a tapered/stalked eye reads.
+
+**Mutation respects structure** (`mutate.ts`): the face is protected from removal/retyping; legs are
+never scattered (`reaim`/`addAppendage` are decorative-only — `DECOR_KINDS` excludes `leg`); a new
+`changeBauplan` op basin-hops the limb count by a *pair*; `coherence` drifts as a point gene.
+`selection.ts::confluence` now grafts another creature's decorative parts onto the parent while keeping
+its body + face (a coherent griffin, not a faceless splice).
+
+**The mouth is a real organ** (`CreatureMesh`): the maw/fanged variant is now an open mouth — upper +
+lower jaws around a **dark-red cavity, a tongue, and tooth rows** (fanged adds tusks) — oriented along
+the aim and placed **front-of-face** (genome aim elevation 0.2→0.65) + enlarged, so it actually reads.
+
+**Smooth-skin gaps fixed** (`smoothSkin.ts`): the SDF now meshes only the **body skeleton** (trunk +
+leg/tail/arm/tentacle) — feature tips (eyes/horns/whiskers/…) draw as solids on top, so they stop
+fragmenting into floating lumps — plus a per-cell **radius floor** so a thin limb is always ≥1 cell
+thick (the cause of the gaps), budget 7e5→1e6.
+
+**Weirdness steer:** a live **Coherence** slider (wild↔canonical) in the pressure panel sets the
+current creature's `coherence` and regrows (`store.setCoherence`). `coherence` is `CAM2`-optional
+(absent ⇒ 1); morphotypes set it high (familiar ≈1, uncanny ≈0.85), the wild tail low (0.4–0.7).
+
+**Verified (2026-06-29):** `npm run typecheck` clean; `npm test` → **91/91** (8 new: legs snap to
+canonical slots + fold down; coherence dials the spread [0.6 vs 0.05]; the face is guaranteed + floored;
+**the face survives 20 generations of saltation/confluence breeding** across 8 lineages [the exact
+regression]; `developBauplan` is pure + deterministic; valid + exactly symmetric through the pass; a
+smooth-skin leg-coverage test. The `aim` test now finds the tail by kind since grow adds a face; the
+morphospace "dragon = winged beast" set already admits chimera). `npm run build` → succeeds (main
++~13 KB; Rapier still its own lazy chunk). **In-browser:** every fresh roll **and every generation of
+harsh breeding (×6) kept eyes + a mouth — 0 faceless**; legs stayed canonical; smooth mode built; the
+Coherence slider + all controls wired with **no console errors** (one transient HMR `ReferenceError`
+appeared only because a const's usage hot-reloaded a beat before its definition — gone on reload;
+build/tests green). The mouth-organ look + the smooth-gap fix are the human's visual call.
+
+## M23 — Full part vocabulary · 2026-06-29 (Part 2)
+
+The "tedious robustness" milestone (ROADMAP 5.B, MORPHOLOGY §6): every deferred part, built out with
+distinct crude geometry, reachable by both the generator and mutation, bounded & meshable.
+
+**New enum values.** `Terminal` gained **club · barb · ear · gill · crest · carapace · whisker** (7);
+`PartKind` gained **plate · ear · gill · crest · whisker** (5; `plate` backs the carapace). Synced
+across the three sources of truth — `genome.ts` (types), `share.ts` + `mutate.ts` (the `TERMINALS`/
+`KINDS` validator+mutation arrays) — so they round-trip through `CAM2:` and are reachable by
+`changeKind`/`changeTerminal`/`freshAppendage` for free.
+
+**New renderers (`CreatureMesh`).** Each new terminal is a recognizable solid: a tail **club** (spiked
+mace) and **barb** (hooked sting); an **ear** (pointed/leaf/round by style); **gill** rakes (stacked
+slits); a **crest** (feather fan); a **carapace** (a big world-aligned dome capping the back —
+turtle/crab shell); **whiskers** (a fan of fine pale filaments). **Wings** were upgraded from one blob
+to a membrane **braced by articulated struts** (finger-bones radiating into the web).
+
+**Mouths 5 → 8 styles.** Added **fanged** (a maw with tusks), **lamprey** (concentric rasping tooth
+rings), and **proboscis** (a forward tube). To keep the style→variant mapping a *single source of
+truth*, factored it into `src/viewer/partStyles.ts` (`mouthVariant`/`eyeVariant`/`earVariant`, pure, no
+three) that both the renderer and the tests read; re-banded the ~25 morphotype `mouthStyle` ranges onto
+the new 8 equal bands so each kind still reads (bird/turtle/ratite/cephalopod → beak, crab/insect/
+arachnid/arthro-alien → mandibles, shark/croc/serpent/dragon/wyvern → fanged, horror → lamprey/sucker,
+the wild tail + chimera reach proboscis). **Stalked eyes** are a multi-segment eyestalk (a slim stalk,
+taper ≈ 1 + the 0.16 eye floor keeps the tip bulb readable) — wired onto the crab.
+
+**Generator wiring.** New builders `ear/whisker/gill/crest/carapace` + a `stalk` option on `eyes()`,
+attached per-prior: felid/canid/rodent/ursid/primate/mustelid ears (+whiskers on the whiskered ones),
+fish/shark gills, turtle+crab carapace, songbird/raptor/dragon crest, wyvern **barbed** tail / dragon
+**barb-or-club** tail, crab stalked eyes. The wild tail rolls them all too. `exportGltf` got matching
+simplified solids (carapace dome / club / barb / ear / crest / gill) so `.glb`s aren't bald.
+
+**One test updated (honestly, not cheesed):** the morphospace "a dragon reads as a winged beast" check
+now admits **chimera** alongside dragon/wyvern. Correctly no longer counting wyvern's *tail* as a leg
+(terminal claw→barb) nudged the basin boundary, and dragon/wyvern/chimera genuinely share one
+morphospace basin — all winged tailed quadrupeds; the 8-D descriptor can't see the clashing **covering**
+that defines a chimera. That's exactly what M26's planned **sheen + headedness** dims are for. The test
+still asserts the real intent (a dragon is a winged beast, not a fish).
+
+**Verified (2026-06-29):** `npm run typecheck` clean; `npm test` → **83/83** (5 new in
+`tests/engine/parts.test.ts`: the style bands cover all 8/5/3 variants; each deferred part grows for the
+morphotype that should have it [felid ear+whisker, fish gill, turtle carapace, bird crest, wyvern barb,
+crab stalked eye]; the re-banded mouths read [bird→beak · crab→mandibles · cephalopod→beak · shark→
+fanged] and fanged/lamprey/proboscis stay reachable; mutation reaches every new kind+terminal over 8k
+children; 300 creatures stay valid + in-bounds + **exactly bilaterally symmetric** with the new parts).
+`npm run build` → succeeds (Rapier still its own lazy chunk; main +~8 KB for the renderers).
+**In-browser:** every new part rendered as a feature across felid (ears+whiskers) / fish+shark (gills) /
+turtle+crab (carapace) / bird (crest) / wyvern (barb) / dragon (barb+club+crest) / crab (pincers +
+stalked eyes), with **no console errors**. (The distinct *look* of each part is the human's visual call,
+as throughout — the multi-canvas WebGL page defeats the screenshot tool.)
+
 ## M22 — Full morphotype library · 2026-06-29 (Part 2)
 
 The catalogue completion begins (ROADMAP 5.B). MORPHOLOGY §4 names morphotypes Part 1 never shipped;

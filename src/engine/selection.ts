@@ -43,16 +43,17 @@ export function breederLitter(parent: Genome, streamSeed: number, count = 9, loc
 }
 
 /**
- * Confluence: blend the parent with a fresh random-morphotype creature — take its head/face
- * and a couple of its body parts (wings, fins, …). Produces griffins and stranger chimeras.
+ * Confluence: graft a couple of another creature's **decorative** parts (wings, fins, horns, a tail)
+ * onto the parent, keeping the parent's own body and **face** — a coherent hybrid (griffin), not a
+ * faceless splice (M24). The bauplan pass keeps the result symmetric and faced.
  */
 function confluence(parent: Genome, seed: number, lockSymmetry: boolean): Genome {
   const child = structuredClone(parent);
   const mode = lockSymmetry ? (parent.symmetry === 'radial' ? 'radial' : 'bilateral') : 'auto';
   const other = randomGenome(seed, mode);
 
-  if (other.body.child) child.body.child = structuredClone(other.body.child); // a different face / horns
-  for (const a of other.body.appendages.slice(0, 2)) {
+  const donor = other.body.appendages.filter((a) => a.kind !== 'leg' && a.terminal !== 'eye' && a.terminal !== 'mouth');
+  for (const a of donor.slice(0, 2)) {
     if (child.body.appendages.length < 14) child.body.appendages.push(structuredClone(a)); // borrow wings/fins/…
   }
   child.seed = mix32(parent.seed, seed); // reproducible growth jitter

@@ -10,8 +10,27 @@
 export const GENOME_VERSION = 2 as const;
 
 export type Symmetry = 'bilateral' | 'radial' | 'none';
-export type Terminal = 'none' | 'foot' | 'fin' | 'claw' | 'eye' | 'mouth' | 'pincer';
-/** What a part *is* (semantic). Tip shape is `terminal`; geometry per kind lands in M9. */
+/**
+ * The tip cap of a part — drives its distinct feature geometry (MORPHOLOGY §6). The M9 core
+ * (foot/fin/claw/eye/mouth/pincer) is joined in M23 by tail terminals (club/barb) and the
+ * deferred decorative parts (ear/gill/crest/carapace/whisker), each a recognizable crude solid.
+ */
+export type Terminal =
+  | 'none'
+  | 'foot'
+  | 'fin'
+  | 'claw'
+  | 'eye'
+  | 'mouth'
+  | 'pincer'
+  | 'club' // a tail mace
+  | 'barb' // a tail sting
+  | 'ear' // a mammal ear (pointed / leaf / round by style)
+  | 'gill' // a rake of slits
+  | 'crest' // a feathered fan
+  | 'carapace' // a domed shell over a region
+  | 'whisker'; // a fan of fine filaments
+/** What a part *is* (semantic). Tip shape is `terminal`; geometry per kind lands in M9/M23. */
 export type PartKind =
   | 'leg'
   | 'arm'
@@ -24,7 +43,12 @@ export type PartKind =
   | 'antenna'
   | 'tentacle'
   | 'eyestalk'
-  | 'maw';
+  | 'maw'
+  | 'plate' // a scute / carapace shell
+  | 'ear'
+  | 'gill'
+  | 'crest'
+  | 'whisker';
 export type Vec3 = [number, number, number];
 
 /** What the skin is *made of* — drives surface relief (bump) + material (MORPHOLOGY §7.2). */
@@ -48,6 +72,12 @@ export interface Genome {
   body: SegmentGene; // root of the recursive body description
   covering: Covering;
   palette: Palette;
+  /**
+   * Structural coherence ∈ [0,1] — the "weirdness" dial (M24). Growth's bauplan pass pulls limbs onto
+   * a canonical body-plan layout and guarantees the face, lerped by this: 1 = perfectly canonical, low
+   * = the limbs/proportions wander (deliberate uncanny). Optional; absent ⇒ fully coherent (1).
+   */
+  coherence?: number;
 }
 
 export interface SegmentGene {
@@ -114,6 +144,7 @@ export function defaultGenome(seed = 0xc0ffee): Genome {
     seed,
     symmetry: 'bilateral',
     radialCount: 4,
+    coherence: 1,
     covering: { type: 'fur', pattern: 'spots', patternScale: 3.5, patternContrast: 0.55, sheen: 0.12 },
     palette: { hueA: 0.08, hueB: 0.55, sat: 0.55, light: 0.5 },
     body: {
@@ -209,18 +240,18 @@ function eyePair(attachT: number): AppendageGene {
   };
 }
 
-// Mouth: underside-front of the snout.
+// Mouth: on the front of the face (down-and-forward), big enough to read as an organ.
 function mouthPart(attachT: number): AppendageGene {
   return {
     kind: 'maw',
     style: 0.1, // a toothed maw
     attachT,
-    attachAzimuth: 4.71, // straight down
-    attachElevation: 0.2, // slightly forward
+    attachAzimuth: 4.71, // down…
+    attachElevation: 0.65, // …and well forward, so it sits on the face, not the underside
     roll: 0,
     segments: 1,
-    length: 0.24,
-    thickness: 0.16,
+    length: 0.26,
+    thickness: 0.28,
     taper: 0.9,
     curl: [0, 0],
     terminal: 'mouth',

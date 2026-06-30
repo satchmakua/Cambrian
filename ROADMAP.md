@@ -296,19 +296,49 @@ deterministic; growth stays bounded & meshable; the 4000-genome fuzz test stays 
   nit found in-browser: turtle/ostrich stub tails no longer render a fish-fin tip. Awaiting the human's
   visual read that each new kind reads clearly.)_
 
-- [ ] **M23 — Full part vocabulary (§6).** Implement every deferred part with distinct crude geometry:
+- [x] **M23 — Full part vocabulary (§6).** Implement every deferred part with distinct crude geometry:
   **ears, whiskers, gills, plate/scute/carapace** (a shell over a region), **crest, club/barb** tail
   terminals; the missing **mouth styles** (lamprey, proboscis, tusked/fanged); a real **stalked eye**
   on an eyestalk; **articulated wing struts**. Each reachable by the generator + mutation, bounded &
   meshable.
   **Test:** each new part renders distinctly and appears across a sample; the fuzz test stays green.
+  _(built 2026-06-29: 7 new `Terminal`s (club/barb/ear/gill/crest/carapace/whisker) + 5 new `PartKind`s
+  (plate/ear/gill/crest/whisker), each with a crude distinct renderer; the mouth went 5→**8 styles**
+  (added fanged/lamprey/proboscis) via a centralized `partStyles.ts` band lookup (single source of
+  truth, re-banded the ~25 morphotype `mouthStyle` ranges to match); stalked eyes = multi-segment
+  eyestalks (crab); **articulated wing struts** (finger-bones into the membrane). New builders wired
+  into the priors (felid ears+whiskers, fish/shark gills, turtle/crab carapace, songbird crest, wyvern
+  barb / dragon barb+club tails, crab stalked eyes) + the wild tail + reachable by mutation. typecheck +
+  **83 tests** (5 new: style bands cover all variants · each deferred part grows for its morphotype ·
+  re-banded mouths read [bird→beak, crab→mandibles, shark→fanged, …] + the new styles reachable ·
+  mutation reaches every new kind/terminal · 300-creature validity+bounds+exact-symmetry) + build green;
+  in-browser every new part rendered as a feature across felid/fish/turtle/bird/wyvern/crab/shark/dragon
+  with no console errors. (Updated the morphospace "dragon reads as a winged beast" test to admit chimera
+  as a basin sibling — the descriptor can't see covering; M26's sheen/headedness dims separate them.)
+  Awaiting the human's visual read.)_
 
-- [ ] **M24 — Body regions + trait-vector layer (§2/§3.2/§5).** Add the doc's first-class **neck /
-  head / tail** regions (typed chains with their own genes) and the explicit **~24-axis trait vector**
-  between morphotype and genome (sample → jitter → compile down), so necks/tails are real evolvable
-  regions and the architecture matches §2's four layers.
-  **Test:** a long-necked heron / long-tailed monkey is expressible and steerable as a *region* (not
-  just the M16 forward-reach metric); `CAM2:` round-trips the regions; the fuzz test stays green.
+- [x] **M24 — Bauplan: structural attractor basins, the guaranteed face & the mouth organ.**
+  _(Re-scoped from "body regions" per playtest feedback — creatures were drifting into mouthless,
+  eyeless, scatter-limbed blobs.)_ A pure, deterministic **bauplan pass inside `grow()`**
+  (`developBauplan`) pulls the legs onto a canonical body-plan layout (biped/quadruped/hexapod/octopod
+  slot table, lerped by a new **`coherence`** gene — the "weirdness" dial) and **guarantees a prominent
+  face** (eye-set + mouth) on every creature, synthesizing it if mutation deleted it. Mutation now
+  **respects structure**: the face is protected from removal/retyping, legs are never scattered
+  (`reaim`/`addAppendage` are decorative-only; a new `changeBauplan` adds/drops a leg *pair*), and
+  `confluence` grafts decorative parts while keeping the parent's face. The **mouth is a real organ**
+  (open jaws, red interior, tongue, teeth — front-facing); the grown **eye bulb is floored** so it
+  always reads. The **smooth surface** meshes only the body skeleton (features draw as solids) with a
+  per-cell **radius floor**, fixing the floating/shredded thin-part gaps. A live **Coherence** slider
+  (wild↔canonical) dials it. _(Neck/tail as first-class typed regions + the explicit trait-vector
+  layer are deferred — not part of the reported defect.)_
+  **Test:** legs land on canonical slots (symmetric); the face survives 20 generations of breeding (no
+  eyeless/mouthless blobs); coherence dials the limb pull; smooth legs reach the body; fuzz + exact
+  symmetry stay green.
+  _(built 2026-06-29: typecheck + **91 tests** (8 new in `bauplan.test.ts` + a smooth-skin leg-coverage
+  test; the `aim`/`morphospace` tests adjusted for the guaranteed face) + build green; in-browser every
+  fresh roll AND every generation of harsh breeding (saltation/confluence ×6) kept eyes + a mouth (0
+  faceless), legs stayed canonical, smooth mode built, the Coherence slider + all controls wired with
+  no console errors. Awaiting the human's visual read on the mouth organ + smooth fix.)_
 
 - [ ] **M25 — Full motion library (§8).** Add the gaits that were folded or missing: **hop**
   (crouch→launch→land), **trot/gallop** (with a body bound), **glide** (wings held, slow bank),
@@ -317,12 +347,13 @@ deterministic; growth stays bounded & meshable; the 4000-genome fuzz test stays 
   **Test:** a frog hops, a horse gallops, a jelly jets, a raptor glides — each distinct and in
   character; the determinism + bounded-amplitude invariants hold.
 
-- [ ] **M26 — Divergence engine completion (§11.1–§11.2).** Bring the morphospace descriptor to the
-  doc's 8 dims (**add sheen + headedness**) and implement **coherence-pull-in-mutation** (the deferred
-  basin dynamic): a tunable, distance-weighted pull biases offspring toward the nearest centroid so
-  lineages *settle* into recognizable forms — and turning it down lets them wander the valleys.
-  **Test:** with the pull up, a lineage converges toward a centroid (rising coherence); with it down it
-  wanders; determinism holds.
+- [ ] **M26 — Morphospace descriptor dims (§11.1).** Bring the descriptor to the doc's 8 dims
+  (**add sheen + headedness**) so the coherence labels separate look-alike basins (e.g. chimera vs.
+  dragon, which the current 8-D descriptor can't tell apart — they only differ by covering).
+  _(The structural **coherence pull** the original M26 specced was implemented in M24 as the bauplan
+  pass + the tunable `coherence` gene, so this milestone is now just the descriptor dims.)_
+  **Test:** chimera and dragon get distinct nearest-centroid labels more often; determinism holds; the
+  morphospace coherence test stays green.
 
 ---
 
