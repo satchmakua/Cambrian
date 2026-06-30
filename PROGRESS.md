@@ -45,6 +45,31 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ---
 
+## Mouth jaw builds — 5 fitted constructions across the maw bands · 2026-06-29 (Part 2)
+
+The standard "sandwich" mouth (top oval + bottom oval) was replaced. Mocked up **6 schematics** (current
++ 5 new) with the visualize tool; the human picked "build all five and let the style band pick which."
+Five new jaw components in `CreatureMesh`, each fitted from many distinct pieces (not 2 ovals):
+- **SnarlMouth (#2)** — a soft mammal muzzle: rounded snout, nose pad, lips framing a dark slit, blunt
+  teeth, tongue. → the **herbivore** band.
+- **AnatomicalJaw (#3)** — a maxilla + a separate mandible with a chin + jaw-joint condyles + a throat +
+  upper/lower tooth rows in gum ridges + tongue. → the **maw** band (the general toothed mouth).
+- **HingedJaw (#1)** — long tapering upper/lower jaws (cones) that open at hinge balls, tooth rows down
+  both, big canines + a throat. → the **fanged** band (style < 0.22) — predators/dragons/crocs.
+- **UnderbiteJaw (#5)** — a big lower jaw thrust past a small upper with long upturned teeth. → the
+  **fanged** band (style ≥ 0.22), and chimera/wild.
+- **RingMaw (#4)** — a fleshy lip ring + a circle of 9 radial fangs around a deep throat + a tongue plug.
+  → the **lamprey** band (horror, chimera). The old **sucker** keeps its torus ring.
+
+So the maw-family render is now **band-driven** (herbivore→snarl · maw→anatomical · fanged→hinged/
+underbite · lamprey→ring), and since the `style` gene point-mutates, a lineage's mouth **drifts between
+builds** as it evolves. Everything scales with the mouth radius (→ animal size). The mouth-variant *names*
+are unchanged, so the variant-mapping test is untouched.
+
+**Verified (2026-06-29):** typecheck clean; `npm test` → **95/95**; `npm run build` → succeeds; in-browser
+ungulate/ursid/felid/croc/horror/chimera each roll their build (snarl/anatomical/hinged/ring) with **no
+console errors**. The *look* is the human's call.
+
 ## Visual refinement round 5 — shoulder legs + level feet, forward eyes, jaw, hybrid skin · 2026-06-29 (Part 2)
 
 Image-driven feedback. Probed the geometry first (no WebGL screenshots).

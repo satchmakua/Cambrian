@@ -368,98 +368,11 @@ function Eye({ f, socket, iris, lid }: { f: MeshFeature; socket: number; iris: n
 function Mouth({ f, dark }: { f: MeshFeature; dark: number }) {
   const r = Math.max(f.radius, 0.06);
   const v = mouthVariant(f.style);
-  if (v === 'herbivore') {
-    // a soft grazing mouth — a flat closed lip line + blunt incisors, no fangs (cow/horse/rodent)
-    return (
-      <group quaternion={f.quat}>
-        {/* the mouth slot (dark, thin) */}
-        <mesh position={[0, 0, r * 0.22]} scale={[r * 1.25, r * 0.16, r * 0.38]}>
-          <sphereGeometry args={[1, 16, 8]} />
-          <meshStandardMaterial color={0x3a1418} roughness={0.62} />
-        </mesh>
-        {/* upper + lower lips */}
-        <mesh position={[0, r * 0.24, r * 0.24]} scale={[r * 1.32, r * 0.2, r * 0.5]}>
-          <sphereGeometry args={[1, 16, 8]} />
-          <meshStandardMaterial color={dark} roughness={0.6} />
-        </mesh>
-        <mesh position={[0, -r * 0.24, r * 0.24]} scale={[r * 1.24, r * 0.2, r * 0.46]}>
-          <sphereGeometry args={[1, 16, 8]} />
-          <meshStandardMaterial color={dark} roughness={0.6} />
-        </mesh>
-        {/* a pair of blunt flat incisors */}
-        {[-0.2, 0.2].map((x, i) => (
-          <mesh key={i} position={[x * r, r * 0.02, r * 0.44]} scale={[r * 0.16, r * 0.2, r * 0.08]}>
-            <boxGeometry args={[1, 1, 1]} />
-            <meshStandardMaterial color={0xeae6d8} roughness={0.45} />
-          </mesh>
-        ))}
-      </group>
-    );
-  }
-  if (v === 'maw' || v === 'fanged') {
-    // a proper jaw (not a torpedo): an upper muzzle + a hinged lower mandible parted around a dark
-    // throat, cheek hinges at the corners, upper + lower tooth rows of varied length, and a tongue.
-    // fanged adds prominent canines. Everything scales with `r` (the mouth gene → animal size).
-    return (
-      <group quaternion={f.quat}>
-        {/* dark throat / interior */}
-        <mesh position={[0, -r * 0.02, r * 0.12]} scale={[r * 1.05, r * 0.72, r * 0.55]}>
-          <sphereGeometry args={[1, 16, 12]} />
-          <meshStandardMaterial color={0x35090d} roughness={0.62} side={THREE.DoubleSide} />
-        </mesh>
-        {/* upper muzzle/jaw — a wedge over the top with a slight overhang */}
-        <mesh position={[0, r * 0.33, r * 0.46]} rotation={[-0.22, 0, 0]} scale={[r * 1.14, r * 0.46, r * 1.05]} castShadow>
-          <sphereGeometry args={[1, 18, 14]} />
-          <meshStandardMaterial color={dark} roughness={0.55} />
-        </mesh>
-        {/* lower mandible — hinged below, parted open */}
-        <mesh position={[0, -r * 0.36, r * 0.4]} rotation={[0.3, 0, 0]} scale={[r * 0.98, r * 0.38, r * 0.92]} castShadow>
-          <sphereGeometry args={[1, 18, 14]} />
-          <meshStandardMaterial color={dark} roughness={0.58} />
-        </mesh>
-        {/* cheek hinges at the corners of the mouth */}
-        {[-1, 1].map((side) => (
-          <mesh key={`h${side}`} position={[side * r * 0.56, -r * 0.04, r * 0.05]} scale={[r * 0.34, r * 0.52, r * 0.5]}>
-            <sphereGeometry args={[1, 12, 10]} />
-            <meshStandardMaterial color={dark} roughness={0.6} />
-          </mesh>
-        ))}
-        {/* tongue */}
-        <mesh position={[0, -r * 0.16, r * 0.5]} scale={[r * 0.42, r * 0.15, r * 0.5]}>
-          <sphereGeometry args={[1, 12, 10]} />
-          <meshStandardMaterial color={0xa85560} roughness={0.6} />
-        </mesh>
-        {/* upper tooth row (pointing down), varied lengths */}
-        {[-0.62, -0.38, -0.13, 0.13, 0.38, 0.62].map((x, i) => (
-          <mesh key={`u${i}`} position={[x * r, r * 0.14, r * 0.9]} rotation={[Math.PI, 0, 0]} scale={[r * 0.085, r * (0.2 + 0.12 * Math.cos(x * 2.5)), r * 0.085]}>
-            <coneGeometry args={[1, 1.4, 6]} />
-            <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
-          </mesh>
-        ))}
-        {/* lower tooth row (pointing up) */}
-        {[-0.5, -0.25, 0, 0.25, 0.5].map((x, i) => (
-          <mesh key={`l${i}`} position={[x * r, -r * 0.16, r * 0.82]} scale={[r * 0.075, r * 0.17, r * 0.075]}>
-            <coneGeometry args={[1, 1.3, 6]} />
-            <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
-          </mesh>
-        ))}
-        {/* fanged: prominent canines, upper + lower, each side */}
-        {v === 'fanged' &&
-          [-1, 1].map((side) => (
-            <group key={`fang${side}`}>
-              <mesh position={[side * r * 0.4, r * 0.06, r * 0.92]} rotation={[Math.PI - 0.2, 0, 0]} scale={[r * 0.13, r * 0.55, r * 0.13]} castShadow>
-                <coneGeometry args={[1, 1.5, 6]} />
-                <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
-              </mesh>
-              <mesh position={[side * r * 0.34, -r * 0.1, r * 0.86]} rotation={[0.2, 0, 0]} scale={[r * 0.11, r * 0.42, r * 0.11]} castShadow>
-                <coneGeometry args={[1, 1.5, 6]} />
-                <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
-              </mesh>
-            </group>
-          ))}
-      </group>
-    );
-  }
+  // The maw family is built from several fitted pieces (not a top+bottom oval), and the style band picks
+  // which build — so a lineage's mouth can drift between them as it evolves.
+  if (v === 'herbivore') return <SnarlMouth f={f} dark={dark} />; // a soft lipped mammal muzzle, blunt teeth
+  if (v === 'maw') return <AnatomicalJaw f={f} dark={dark} />; // maxilla + mandible + chin + jaw-joint
+  if (v === 'fanged') return f.style < 0.22 ? <HingedJaw f={f} dark={dark} /> : <UnderbiteJaw f={f} dark={dark} />;
   if (v === 'beak') {
     // beak: two hard cones meeting, pointing forward
     return (
@@ -488,8 +401,9 @@ function Mouth({ f, dark }: { f: MeshFeature; dark: number }) {
       </group>
     );
   }
-  if (v === 'sucker' || v === 'lamprey') {
-    // sucker: a ring disc with a dark center. lamprey adds concentric rasping tooth rings.
+  if (v === 'lamprey') return <RingMaw f={f} dark={dark} />; // a gaping fleshy ring of radial fangs
+  if (v === 'sucker') {
+    // sucker: a ring disc with a dark center (suction)
     return (
       <group quaternion={f.quat}>
         <mesh position={[0, 0, r * 0.2]} rotation={[Math.PI / 2, 0, 0]}>
@@ -500,13 +414,6 @@ function Mouth({ f, dark }: { f: MeshFeature; dark: number }) {
           <sphereGeometry args={[0.7, 12, 10]} />
           <meshStandardMaterial color={0x130809} roughness={0.5} />
         </mesh>
-        {v === 'lamprey' &&
-          [0.62, 0.42, 0.24].map((rad, i) => (
-            <mesh key={i} position={[0, 0, r * 0.34]} rotation={[Math.PI / 2, 0, 0]}>
-              <torusGeometry args={[r * rad, r * 0.07, 6, 14]} />
-              <meshStandardMaterial color={0xe7ddca} roughness={0.45} />
-            </mesh>
-          ))}
       </group>
     );
   }
@@ -553,6 +460,203 @@ function Mouth({ f, dark }: { f: MeshFeature; dark: number }) {
           <meshStandardMaterial color={0x9a8d72} roughness={0.7} />
         </mesh>
       ))}
+    </group>
+  );
+}
+
+// --- the maw family: several fitted jaw builds, chosen by the maw/fanged/herbivore/lamprey style band,
+// so a lineage's mouth can drift between forms as it evolves (the standard mouth, no longer a "sandwich").
+
+// #2 a soft mammal muzzle — rounded snout, nose pad, lips framing a dark slit, blunt teeth, a tongue.
+function SnarlMouth({ f, dark }: { f: MeshFeature; dark: number }) {
+  const r = Math.max(f.radius, 0.06);
+  return (
+    <group quaternion={f.quat}>
+      <mesh position={[0, r * 0.04, r * 0.32]} scale={[r * 1.05, r * 0.82, r * 0.95]} castShadow>
+        <sphereGeometry args={[1, 16, 14]} />
+        <meshStandardMaterial color={dark} roughness={0.6} />
+      </mesh>
+      <mesh position={[0, r * 0.42, r * 0.74]} scale={[r * 0.36, r * 0.28, r * 0.26]}>
+        <sphereGeometry args={[1, 12, 10]} />
+        <meshStandardMaterial color={0x18120e} roughness={0.45} />
+      </mesh>
+      <mesh position={[0, -r * 0.16, r * 0.7]} scale={[r * 0.8, r * 0.18, r * 0.34]}>
+        <sphereGeometry args={[1, 14, 10]} />
+        <meshStandardMaterial color={0x35090d} roughness={0.62} />
+      </mesh>
+      <mesh position={[0, r * 0.02, r * 0.72]} scale={[r * 0.92, r * 0.16, r * 0.32]}>
+        <sphereGeometry args={[1, 14, 8]} />
+        <meshStandardMaterial color={dark} roughness={0.55} />
+      </mesh>
+      <mesh position={[0, -r * 0.32, r * 0.66]} scale={[r * 0.82, r * 0.18, r * 0.3]}>
+        <sphereGeometry args={[1, 14, 8]} />
+        <meshStandardMaterial color={dark} roughness={0.55} />
+      </mesh>
+      {[-0.3, 0, 0.3].map((x, i) => (
+        <mesh key={i} position={[x * r, -r * 0.08, r * 0.82]} rotation={[Math.PI, 0, 0]} scale={[r * 0.08, r * 0.14, r * 0.08]}>
+          <coneGeometry args={[1, 1.1, 5]} />
+          <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
+        </mesh>
+      ))}
+      <mesh position={[0, -r * 0.2, r * 0.68]} scale={[r * 0.3, r * 0.1, r * 0.32]}>
+        <sphereGeometry args={[1, 10, 8]} />
+        <meshStandardMaterial color={0xb0606a} roughness={0.6} />
+      </mesh>
+    </group>
+  );
+}
+
+// #3 an anatomical jaw — a maxilla + a separate mandible with a chin + a jaw-joint, teeth in gum ridges.
+function AnatomicalJaw({ f, dark }: { f: MeshFeature; dark: number }) {
+  const r = Math.max(f.radius, 0.06);
+  return (
+    <group quaternion={f.quat}>
+      <mesh position={[0, -r * 0.02, r * 0.14]} scale={[r * 0.9, r * 0.66, r * 0.5]}>
+        <sphereGeometry args={[1, 14, 12]} />
+        <meshStandardMaterial color={0x35090d} roughness={0.62} side={THREE.DoubleSide} />
+      </mesh>
+      {/* maxilla (upper, fixed) */}
+      <mesh position={[0, r * 0.28, r * 0.52]} rotation={[-0.16, 0, 0]} scale={[r * 1.0, r * 0.4, r * 1.0]} castShadow>
+        <sphereGeometry args={[1, 16, 12]} />
+        <meshStandardMaterial color={dark} roughness={0.56} />
+      </mesh>
+      {/* mandible (lower) + a chin bump */}
+      <mesh position={[0, -r * 0.34, r * 0.46]} rotation={[0.22, 0, 0]} scale={[r * 0.9, r * 0.34, r * 0.95]} castShadow>
+        <sphereGeometry args={[1, 16, 12]} />
+        <meshStandardMaterial color={dark} roughness={0.58} />
+      </mesh>
+      <mesh position={[0, -r * 0.42, r * 0.82]} scale={[r * 0.5, r * 0.3, r * 0.34]} castShadow>
+        <sphereGeometry args={[1, 12, 10]} />
+        <meshStandardMaterial color={dark} roughness={0.58} />
+      </mesh>
+      {/* jaw-joint condyles */}
+      {[-1, 1].map((s) => (
+        <mesh key={s} position={[s * r * 0.46, 0, r * 0.1]} scale={[r * 0.22, r * 0.3, r * 0.26]}>
+          <sphereGeometry args={[1, 10, 10]} />
+          <meshStandardMaterial color={dark} roughness={0.6} />
+        </mesh>
+      ))}
+      <mesh position={[0, -r * 0.2, r * 0.56]} scale={[r * 0.36, r * 0.12, r * 0.42]}>
+        <sphereGeometry args={[1, 10, 8]} />
+        <meshStandardMaterial color={0xb0606a} roughness={0.6} />
+      </mesh>
+      {[-0.5, -0.25, 0, 0.25, 0.5].map((x, i) => (
+        <mesh key={`u${i}`} position={[x * r, r * 0.08, r * 0.9]} rotation={[Math.PI, 0, 0]} scale={[r * 0.08, r * 0.2, r * 0.08]}>
+          <coneGeometry args={[1, 1.3, 6]} />
+          <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
+        </mesh>
+      ))}
+      {[-0.4, -0.13, 0.13, 0.4].map((x, i) => (
+        <mesh key={`l${i}`} position={[x * r, -r * 0.18, r * 0.86]} scale={[r * 0.07, r * 0.16, r * 0.07]}>
+          <coneGeometry args={[1, 1.2, 6]} />
+          <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// #1 a hinged predator jaw — long tapering upper + lower jaws that open, tooth rows, big canines.
+function HingedJaw({ f, dark }: { f: MeshFeature; dark: number }) {
+  const r = Math.max(f.radius, 0.06);
+  return (
+    <group quaternion={f.quat}>
+      <mesh position={[0, 0, r * 0.1]} scale={[r * 0.7, r * 0.56, r * 0.42]}>
+        <sphereGeometry args={[1, 14, 12]} />
+        <meshStandardMaterial color={0x33090c} roughness={0.6} side={THREE.DoubleSide} />
+      </mesh>
+      {/* upper jaw — a long tapering snout (cone, tip → front) */}
+      <mesh position={[0, r * 0.24, r * 0.62]} rotation={[Math.PI / 2 - 0.06, 0, 0]} scale={[r * 0.58, r * 1.55, r * 0.32]} castShadow>
+        <coneGeometry args={[1, 1, 12]} />
+        <meshStandardMaterial color={dark} roughness={0.55} />
+      </mesh>
+      {/* lower jaw — hinged, angled open */}
+      <mesh position={[0, -r * 0.3, r * 0.56]} rotation={[Math.PI / 2 + 0.22, 0, 0]} scale={[r * 0.52, r * 1.45, r * 0.28]} castShadow>
+        <coneGeometry args={[1, 1, 12]} />
+        <meshStandardMaterial color={dark} roughness={0.58} />
+      </mesh>
+      {[-1, 1].map((s) => (
+        <mesh key={s} position={[s * r * 0.34, -r * 0.02, r * 0.06]} scale={[r * 0.24, r * 0.32, r * 0.28]}>
+          <sphereGeometry args={[1, 10, 10]} />
+          <meshStandardMaterial color={dark} roughness={0.6} />
+        </mesh>
+      ))}
+      {[0.0, 0.3, 0.6, 0.9, 1.2].map((z, i) => (
+        <mesh key={`u${i}`} position={[(i % 2 ? 0.07 : -0.07) * r, r * 0.05, r * (0.18 + z)]} rotation={[Math.PI, 0, 0]} scale={[r * 0.06, r * 0.18, r * 0.06]}>
+          <coneGeometry args={[1, 1.3, 6]} />
+          <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
+        </mesh>
+      ))}
+      {[0.1, 0.4, 0.7, 1.0].map((z, i) => (
+        <mesh key={`l${i}`} position={[(i % 2 ? 0.06 : -0.06) * r, -r * 0.16, r * (0.2 + z)]} scale={[r * 0.06, r * 0.16, r * 0.06]}>
+          <coneGeometry args={[1, 1.3, 6]} />
+          <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
+        </mesh>
+      ))}
+      {[-1, 1].map((s) => (
+        <mesh key={`c${s}`} position={[s * r * 0.18, 0, r * 1.0]} rotation={[Math.PI - 0.08, 0, 0]} scale={[r * 0.1, r * 0.46, r * 0.1]} castShadow>
+          <coneGeometry args={[1, 1.5, 6]} />
+          <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// #5 a jutting underbite — a big lower jaw thrust past a small upper, with long upturned teeth.
+function UnderbiteJaw({ f, dark }: { f: MeshFeature; dark: number }) {
+  const r = Math.max(f.radius, 0.06);
+  return (
+    <group quaternion={f.quat}>
+      <mesh position={[0, 0, r * 0.12]} scale={[r * 0.8, r * 0.6, r * 0.45]}>
+        <sphereGeometry args={[1, 14, 12]} />
+        <meshStandardMaterial color={0x33090c} roughness={0.6} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh position={[0, r * 0.26, r * 0.4]} rotation={[-0.1, 0, 0]} scale={[r * 0.82, r * 0.34, r * 0.7]} castShadow>
+        <sphereGeometry args={[1, 14, 12]} />
+        <meshStandardMaterial color={dark} roughness={0.56} />
+      </mesh>
+      <mesh position={[0, -r * 0.26, r * 0.66]} rotation={[0.34, 0, 0]} scale={[r * 1.0, r * 0.42, r * 1.05]} castShadow>
+        <sphereGeometry args={[1, 16, 12]} />
+        <meshStandardMaterial color={dark} roughness={0.58} />
+      </mesh>
+      {[-0.5, -0.2, 0.1, 0.4].map((x, i) => (
+        <mesh key={i} position={[x * r, r * 0.06, r * 0.96]} scale={[r * 0.08, r * 0.34, r * 0.08]} castShadow>
+          <coneGeometry args={[1, 1.5, 6]} />
+          <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// #4 a gaping ring maw — a fleshy lip ring + a circle of radial fangs around a deep throat (lamprey).
+function RingMaw({ f, dark }: { f: MeshFeature; dark: number }) {
+  const r = Math.max(f.radius, 0.06);
+  const lip = useMemo(() => new THREE.Color(dark).lerp(new THREE.Color(0x7a2f33), 0.5).getHex(), [dark]);
+  return (
+    <group quaternion={f.quat}>
+      <mesh position={[0, 0, r * 0.5]}>
+        <torusGeometry args={[r * 0.78, r * 0.3, 10, 20]} />
+        <meshStandardMaterial color={lip} roughness={0.58} />
+      </mesh>
+      <mesh position={[0, 0, r * 0.2]} scale={[r * 0.7, r * 0.7, r * 0.6]}>
+        <sphereGeometry args={[1, 14, 12]} />
+        <meshStandardMaterial color={0x230507} roughness={0.6} side={THREE.DoubleSide} />
+      </mesh>
+      {Array.from({ length: 9 }).map((_, i) => {
+        const a = (i / 9) * Math.PI * 2;
+        return (
+          <mesh key={i} position={[Math.cos(a) * r * 0.62, Math.sin(a) * r * 0.62, r * 0.56]} rotation={[0, 0, a + Math.PI / 2]} scale={[r * 0.08, r * 0.34, r * 0.08]}>
+            <coneGeometry args={[1, 1, 6]} />
+            <meshStandardMaterial color={0xf2efe6} roughness={0.42} />
+          </mesh>
+        );
+      })}
+      <mesh position={[0, -r * 0.1, r * 0.5]} scale={[r * 0.22, r * 0.18, r * 0.2]}>
+        <sphereGeometry args={[1, 10, 8]} />
+        <meshStandardMaterial color={0xb0606a} roughness={0.6} />
+      </mesh>
     </group>
   );
 }
