@@ -45,6 +45,56 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ---
 
+## M22 — Full morphotype library · 2026-06-29 (Part 2)
+
+The catalogue completion begins (ROADMAP 5.B). MORPHOLOGY §4 names morphotypes Part 1 never shipped;
+M22 adds the seven the build lacked, taking the library from 23 → **30** (20 familiar + 10 uncanny).
+Each is a real *multivariate prior* (coupled trait ranges + characteristic parts + covering), terse
+data in `random.ts::MORPHOTYPES` — **no new compiler code needed**, the existing part builders + the
+M21 posture table express them:
+
+- **primate** (familiar) — upright posture, long grasping limbs (`claw` terminals = hands), a deep
+  compact torso, a big expressive head with forward-ish eyes, fur. Reads as an ape/monkey; walks/ambles.
+- **mustelid** (familiar) — a long tube body (repeat 6–9) on short plantigrade legs, small head, long
+  tail, fur. Reads as a weasel/otter (z-extent ~4.9 vs girth ~0.35).
+- **chelonian** (familiar) — a deep **domed** body (height 1.15–1.45, round elong), short stumpy
+  sprawled legs, a small **beaked** head, **plates** covering + reticulate net. Reads as a turtle
+  (the real carapace shell is M23).
+- **ratite** (familiar) — a feathered **biped** on long stilt legs (legPairs 1, upright, legLen
+  1.2–1.7×girth), small beaked head. Reads as an ostrich/emu (the long neck is M24's region work).
+- **chimera** (uncanny) — a deliberately mismatched winged + horned + tailed quadruped wearing
+  **spliced fins** (dorsal + pectoral) and a **clashing covering/pattern** (any of 6 skins × 6
+  patterns), odd eye counts. Structurally consistent (so it stays coherent) but visually a griffin/
+  manticore mishmash; flaps.
+- **arthro-alien** (uncanny) — a wrong-arthropod with **ten** sprawled legs (legPairs 5), a cluster of
+  4–6 compound/glowing eyes, mandibles, iridescent chitin. Scuttles (metachronal ripple).
+- **crystalline** (uncanny) — angular rigid limbs (upright), a full **spike ridge** + horns, **glowing**
+  facet eyes (the "core"), hard **plated/metallic** gradient skin.
+
+Everything downstream is data-driven off `MORPHOTYPE_IDS`: the morphospace **centroids** (M11) and the
+**morphotype filter** `<select>` (M16) pick the seven up with no other changes. Motion is auto-chosen
+from body plan (M13), so each moves plausibly now (walk/flap/scuttle); the *specialized* gaits the doc
+pairs with them (trundle/run/hop/jet/hover) are M25.
+
+One brittle test surfaced & fixed along the way: `animation.test`'s "serpents undulate more than
+quads" **fished auto-roll seeds** for the first legless long body — my larger pool shifted that seed
+onto a *winged* legless creature (a wyvern → `flap`, waveAmp 0.04), which isn't the undulation under
+test. Replaced the seed-fishing with a **forced serpent** (`genomeOfMorphotype('serpent')`, mean
+waveAmp 0.379 vs quad 0.179) — deterministic and faithful to intent. Also fixed a fidelity nit found
+in-browser: turtle/ostrich stub tails defaulted to a fish-`fin` tip — set their `tailTerm: ['none']`.
+
+**Verified (2026-06-29):** `npm run typecheck` clean; `npm test` → **78/78** (4 new M22 tests: the
+catalogue ships ≥30 incl. all 7 names; every new morphotype grows valid + in-bounds over 280 seeds;
+each reads structurally as its kind — primate/mustelid/chelonian 4-legged, ratite a biped, arthro-alien
+≥8 legs, chimera winged+tailed, crystalline spiked+plated; each stays coherent > 0.3 — and the existing
+morphospace test's **mean > 0.45 / min > 0.2** holds over the now-30-type library). `npm run build` →
+succeeds (Rapier still its own lazy chunk). **In-browser:** each new kind, driven through the filter,
+rolled a distinctive valid creature — primate (4 hands, deep body), mustelid (z 4.9 tube), chelonian
+(domed plates, 3.4×3.1 wide), ratite (feathered biped, tall), chimera (3 spliced fins + 4 eyes, flap),
+arthro-alien (10 legs + 6 eyes, scuttle), crystalline (9 spike tips, plated) — coverings
+fur/plates/feathers/chitin/skin all compile, motions in character, **no console errors**. (Whether each
+*reads clearly as its kind* is the human's visual call, as throughout.)
+
 ## M20 — gallery layout · M21 — silhouette differentiation · 2026-06-29 (Part 2)
 
 **M20 (gallery).** All 9 offspring rendered but the rail aside was `overflow: hidden` with the

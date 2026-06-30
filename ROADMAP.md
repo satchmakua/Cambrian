@@ -277,11 +277,24 @@ deterministic; growth stays bounded & meshable; the 4000-genome fuzz test stays 
 
 ### 5.B — Complete the catalogue
 
-- [ ] **M22 — Full morphotype library (§4).** Add every named morphotype the doc lists and the build
+- [x] **M22 — Full morphotype library (§4).** Add every named morphotype the doc lists and the build
   lacks: **primate, mustelid, chelonian (turtle), ratite, chimera, arthro-alien, crystalline** (keep
   urchin/starfish), each a real multivariate prior with characteristic parts, covering, and motion.
   **Test:** each new morphotype reads clearly as its kind; coherence stays healthy (mean > 0.45, none
   in the void) with the larger library.
+  _(built 2026-06-29: 7 new priors → **30 morphotypes** (20 familiar + 10 uncanny); each a coupled
+  multivariate prior (primate = upright grasping ape · mustelid = long tube + short legs · chelonian =
+  deep domed plated body + beak · ratite = feathered biped on stilt legs · chimera = winged horned
+  tailed mishmash with spliced fins + clashing skin · arthro-alien = 10-leg compound-eyed scuttler ·
+  crystalline = spiked glowing-eyed plated rigid form). Centroids + the morphotype filter are
+  data-driven off `MORPHOTYPE_IDS`, so they wire in automatically. typecheck + **78 tests** (4 new
+  M22 tests: catalogue present ≥30 · all new types grow valid/in-bounds over 280 seeds · each reads
+  structurally as its kind [4-leg/2-leg/10-leg/winged/spiked] · each stays coherent > 0.3; the
+  existing morphospace test's mean > 0.45 / min > 0.2 holds over the 30-type library) + build green;
+  in-browser each new kind rolled a distinctive valid creature (motions walk/flap/scuttle in character;
+  coverings fur/plates/feathers/chitin/skin all compile) with no console errors. Fixed one fidelity
+  nit found in-browser: turtle/ostrich stub tails no longer render a fish-fin tip. Awaiting the human's
+  visual read that each new kind reads clearly.)_
 
 - [ ] **M23 — Full part vocabulary (§6).** Implement every deferred part with distinct crude geometry:
   **ears, whiskers, gills, plate/scute/carapace** (a shell over a region), **crest, club/barb** tail

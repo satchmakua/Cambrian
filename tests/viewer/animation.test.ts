@@ -43,15 +43,13 @@ describe('procedural animation', () => {
   });
 
   it('serpents (legless, long) undulate more than compact legged bodies', () => {
+    // force a serpent (legless slither) rather than fishing auto-roll seeds — the latter can
+    // surface a *winged* legless body (a wyvern → flap), which isn't the undulation being tested.
     let serpentAmp = 0;
-    for (let s = 0; s < 60 && serpentAmp === 0; s++) {
-      const p = grow(randomGenome(s));
-      const legs = p.nodes.filter((n) => n.terminal === 'foot' || n.terminal === 'claw').length;
-      const dz = p.bounds.max[2] - p.bounds.min[2];
-      if (legs === 0 && dz > 5) serpentAmp = rigOf(p).waveAmp;
-    }
+    for (let s = 0; s < 12; s++) serpentAmp += rigOf(grow(genomeOfMorphotype(s * 13 + 1, 'serpent'))).waveAmp;
+    serpentAmp /= 12;
     const quadAmp = rigOf(grow(defaultGenome())).waveAmp;
-    if (serpentAmp > 0) expect(serpentAmp).toBeGreaterThan(quadAmp);
+    expect(serpentAmp).toBeGreaterThan(quadAmp);
   });
 
   it('picks a motion style in character with the body plan (MORPHOLOGY §8)', () => {
