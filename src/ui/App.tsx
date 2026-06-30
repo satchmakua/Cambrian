@@ -30,8 +30,8 @@ export function App() {
   const runDirected = useStore((s) => s.runDirected);
   const menagerie = useStore((s) => s.menagerie);
   const loadCell = useStore((s) => s.loadCell);
-  const smoothSkin = useStore((s) => s.smoothSkin);
-  const toggleSmooth = useStore((s) => s.toggleSmooth);
+  const skinMode = useStore((s) => s.skinMode);
+  const setSkinMode = useStore((s) => s.setSkinMode);
   const morphoFilter = useStore((s) => s.morphoFilter);
   const setMorphoFilter = useStore((s) => s.setMorphoFilter);
   const physicsRunning = useStore((s) => s.physicsRunning);
@@ -55,7 +55,7 @@ export function App() {
     <div className="app">
       <div className="top">
         <main className="stage-wrap">
-          <CreatureViewer phenotype={phenotype} smooth={smoothSkin} trajectory={activeGait} />
+          <CreatureViewer phenotype={phenotype} skinMode={skinMode} trajectory={activeGait} />
           <header className="hud">
             <h1>Cambrian</h1>
             <p className="tag">
@@ -106,9 +106,11 @@ export function App() {
             </div>
             <div className="modes">
               <span>skin</span>
-              <button className={smoothSkin ? 'active' : ''} onClick={toggleSmooth}>
-                {smoothSkin ? 'smooth' : 'capsules'}
-              </button>
+              {(['capsules', 'smooth', 'hybrid'] as const).map((m) => (
+                <button key={m} className={skinMode === m ? 'active' : ''} onClick={() => setSkinMode(m)}>
+                  {m}
+                </button>
+              ))}
             </div>
           </header>
         </main>
@@ -133,7 +135,7 @@ export function App() {
           <ShareBar
           genome={genome}
           onImport={importString}
-          onExport={() => downloadCreatureGlb(phenotype, smoothSkin, `cambrian-${hex(genome.seed)}.glb`)}
+          onExport={() => downloadCreatureGlb(phenotype, skinMode !== 'capsules', `cambrian-${hex(genome.seed)}.glb`)}
         />
         </aside>
       </div>

@@ -18,6 +18,7 @@ import { buildRig, computeAnim } from './animation';
 import { makeCreatureMaterial } from './creatureMaterial';
 import { buildSmoothGeometry } from './smoothSkin';
 import { sampleTrajectory, type Trajectory } from '../physics/fitness';
+import type { SkinMode } from '../ui/store';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -38,12 +39,12 @@ function bakeBodyPos(geo: THREE.BufferGeometry, matrix: THREE.Matrix4): void {
 export function CreatureMesh({
   phenotype,
   animate = true,
-  smooth = false,
+  skinMode = 'capsules',
   trajectory = null,
 }: {
   phenotype: Phenotype;
   animate?: boolean;
-  smooth?: boolean;
+  skinMode?: SkinMode;
   trajectory?: Trajectory | null;
 }) {
   const data = useMemo(() => buildMeshData(phenotype), [phenotype]);
@@ -56,17 +57,18 @@ export function CreatureMesh({
 
   // physics playback (post-roadmap): when a recorded gait is present, capsules re-pose from it
   // each frame — so the body must be the capsule kit (the smooth mesh is static), and it animates.
-  const showSmooth = smooth && !trajectory;
+  const showSmooth = skinMode !== 'capsules' && !trajectory;
+  const full = skinMode === 'hybrid'; // hybrid meshes every part; smooth just the locomotor body
 
   // M15: one organic surface over the node field, built once (only when toggled on). The
   // smooth body is static, so motion is paused while it's shown (re-meshing per frame is dear).
   const smoothGeo = useMemo(() => {
     if (!showSmooth) return null;
-    const g = buildSmoothGeometry(phenotype);
+    const g = buildSmoothGeometry(phenotype, full);
     // smooth mesh is untransformed, so its local position *is* the body-space coord (M17)
     g.setAttribute('aBodyPos', (g.getAttribute('position') as THREE.BufferAttribute).clone());
     return g;
-  }, [showSmooth, phenotype]);
+  }, [showSmooth, full, phenotype]);
   useEffect(() => () => smoothGeo?.dispose(), [smoothGeo]);
   const animateBody = !!trajectory || (animate && !showSmooth);
 
@@ -395,55 +397,65 @@ function Mouth({ f, dark }: { f: MeshFeature; dark: number }) {
     );
   }
   if (v === 'maw' || v === 'fanged') {
-    // a mouth set INTO the face (M-refine): a recessed cavity framed by thin lips, teeth pulled back —
-    // reads as a real mouth, not a protruding duck-bill. fanged adds two corner tusks.
+    // a proper jaw (not a torpedo): an upper muzzle + a hinged lower mandible parted around a dark
+    // throat, cheek hinges at the corners, upper + lower tooth rows of varied length, and a tongue.
+    // fanged adds prominent canines. Everything scales with `r` (the mouth gene → animal size).
     return (
       <group quaternion={f.quat}>
-        {/* recessed dark-red oral cavity (sits back in the face, not jutting forward) */}
-        <mesh position={[0, 0, r * 0.16]} scale={[r * 1.32, r * 0.8, r * 0.5]}>
+        {/* dark throat / interior */}
+        <mesh position={[0, -r * 0.02, r * 0.12]} scale={[r * 1.05, r * 0.72, r * 0.55]}>
           <sphereGeometry args={[1, 16, 12]} />
-          <meshStandardMaterial color={0x4a1014} roughness={0.62} side={THREE.DoubleSide} />
+          <meshStandardMaterial color={0x35090d} roughness={0.62} side={THREE.DoubleSide} />
         </mesh>
-        {/* upper + lower LIPS — thin rims framing the opening (a mouth line, not a bill) */}
-        <mesh position={[0, r * 0.4, r * 0.28]} rotation={[-0.18, 0, 0]} scale={[r * 1.42, r * 0.22, r * 0.62]}>
-          <sphereGeometry args={[1, 18, 8]} />
+        {/* upper muzzle/jaw — a wedge over the top with a slight overhang */}
+        <mesh position={[0, r * 0.33, r * 0.46]} rotation={[-0.22, 0, 0]} scale={[r * 1.14, r * 0.46, r * 1.05]} castShadow>
+          <sphereGeometry args={[1, 18, 14]} />
           <meshStandardMaterial color={dark} roughness={0.55} />
         </mesh>
-        <mesh position={[0, -r * 0.4, r * 0.28]} rotation={[0.18, 0, 0]} scale={[r * 1.3, r * 0.22, r * 0.56]}>
-          <sphereGeometry args={[1, 18, 8]} />
-          <meshStandardMaterial color={dark} roughness={0.55} />
+        {/* lower mandible — hinged below, parted open */}
+        <mesh position={[0, -r * 0.36, r * 0.4]} rotation={[0.3, 0, 0]} scale={[r * 0.98, r * 0.38, r * 0.92]} castShadow>
+          <sphereGeometry args={[1, 18, 14]} />
+          <meshStandardMaterial color={dark} roughness={0.58} />
         </mesh>
-        {/* the mouth corners — little wedges that close the line at the sides */}
-        {[-1, 1].map((s) => (
-          <mesh key={`c${s}`} position={[s * r * 0.62, 0, r * 0.24]} scale={[r * 0.2, r * 0.5, r * 0.4]}>
-            <sphereGeometry args={[1, 8, 8]} />
-            <meshStandardMaterial color={dark} roughness={0.55} />
+        {/* cheek hinges at the corners of the mouth */}
+        {[-1, 1].map((side) => (
+          <mesh key={`h${side}`} position={[side * r * 0.56, -r * 0.04, r * 0.05]} scale={[r * 0.34, r * 0.52, r * 0.5]}>
+            <sphereGeometry args={[1, 12, 10]} />
+            <meshStandardMaterial color={dark} roughness={0.6} />
           </mesh>
         ))}
-        {/* tongue, deeper in the cavity */}
-        <mesh position={[0, -r * 0.06, r * 0.42]} scale={[r * 0.44, r * 0.18, r * 0.48]}>
+        {/* tongue */}
+        <mesh position={[0, -r * 0.16, r * 0.5]} scale={[r * 0.42, r * 0.15, r * 0.5]}>
           <sphereGeometry args={[1, 12, 10]} />
           <meshStandardMaterial color={0xa85560} roughness={0.6} />
         </mesh>
-        {/* upper tooth row (pointing down) + a sparser lower row, set back behind the lips */}
-        {[-0.52, -0.18, 0.18, 0.52].map((x, i) => (
-          <mesh key={`u${i}`} position={[x * r, r * 0.2, r * 0.54]} rotation={[Math.PI, 0, 0]} scale={[r * 0.1, r * 0.26, r * 0.1]}>
-            <coneGeometry args={[1, 1.4, 5]} />
+        {/* upper tooth row (pointing down), varied lengths */}
+        {[-0.62, -0.38, -0.13, 0.13, 0.38, 0.62].map((x, i) => (
+          <mesh key={`u${i}`} position={[x * r, r * 0.14, r * 0.9]} rotation={[Math.PI, 0, 0]} scale={[r * 0.085, r * (0.2 + 0.12 * Math.cos(x * 2.5)), r * 0.085]}>
+            <coneGeometry args={[1, 1.4, 6]} />
             <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
           </mesh>
         ))}
-        {[-0.36, 0, 0.36].map((x, i) => (
-          <mesh key={`l${i}`} position={[x * r, -r * 0.2, r * 0.54]} scale={[r * 0.09, r * 0.2, r * 0.09]}>
-            <coneGeometry args={[1, 1.2, 5]} />
+        {/* lower tooth row (pointing up) */}
+        {[-0.5, -0.25, 0, 0.25, 0.5].map((x, i) => (
+          <mesh key={`l${i}`} position={[x * r, -r * 0.16, r * 0.82]} scale={[r * 0.075, r * 0.17, r * 0.075]}>
+            <coneGeometry args={[1, 1.3, 6]} />
             <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
           </mesh>
         ))}
+        {/* fanged: prominent canines, upper + lower, each side */}
         {v === 'fanged' &&
           [-1, 1].map((side) => (
-            <mesh key={`fang${side}`} position={[side * r * 0.5, -r * 0.04, r * 0.6]} rotation={[0.28, 0, 0]} scale={[r * 0.15, r * 0.58, r * 0.15]}>
-              <coneGeometry args={[1, 1.5, 6]} />
-              <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
-            </mesh>
+            <group key={`fang${side}`}>
+              <mesh position={[side * r * 0.4, r * 0.06, r * 0.92]} rotation={[Math.PI - 0.2, 0, 0]} scale={[r * 0.13, r * 0.55, r * 0.13]} castShadow>
+                <coneGeometry args={[1, 1.5, 6]} />
+                <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
+              </mesh>
+              <mesh position={[side * r * 0.34, -r * 0.1, r * 0.86]} rotation={[0.2, 0, 0]} scale={[r * 0.11, r * 0.42, r * 0.11]} castShadow>
+                <coneGeometry args={[1, 1.5, 6]} />
+                <meshStandardMaterial color={0xf2efe6} roughness={0.4} />
+              </mesh>
+            </group>
           ))}
       </group>
     );
@@ -582,17 +594,17 @@ function Paw({ f, color }: { f: MeshFeature; color: number }) {
   );
 }
 
-// A hoof: a solid keratin block, flat on the ground, with a cleft (ungulate).
+// A hoof: a big solid keratin block, flat on the ground, with a cleft (ungulate).
 function Hoof({ f, color }: { f: MeshFeature; color: number }) {
   const r = Math.max(f.radius, 0.06);
   const horn = useMemo(() => new THREE.Color(color).multiplyScalar(0.4).getHex(), [color]);
   return (
     <group>
-      <mesh position={[0, -r * 0.15, r * 0.05]} scale={[r * 1.0, r * 1.0, r * 1.15]} castShadow>
+      <mesh position={[0, -r * 0.2, r * 0.05]} scale={[r * 1.45, r * 1.35, r * 1.6]} castShadow>
         <cylinderGeometry args={[0.78, 1.0, 1, 12]} />
         <meshStandardMaterial color={horn} roughness={0.42} metalness={0.06} />
       </mesh>
-      <mesh position={[0, -r * 0.62, r * 0.25]} scale={[r * 0.07, r * 0.55, r * 0.95]}>
+      <mesh position={[0, -r * 0.85, r * 0.4]} scale={[r * 0.1, r * 0.7, r * 1.3]}>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color={0x0e0a07} roughness={0.6} />
       </mesh>

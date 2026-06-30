@@ -45,6 +45,39 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ---
 
+## Visual refinement round 5 — shoulder legs + level feet, forward eyes, jaw, hybrid skin · 2026-06-29 (Part 2)
+
+Image-driven feedback. Probed the geometry first (no WebGL screenshots).
+
+- **Legs — shoulder attach + level feet.** Legs no longer sprout from the underbelly midline: in `grow`
+  a leg now starts at the body's **side (shoulder/hip)** — `start = spine ± 0.92·radius`, a touch above
+  the belly — and **descends** (the knee/ankle folds shape it). Probe: a felid hip sits at x=−0.57 (the
+  flank), foot at −0.88; stance widened to **1.76 vs body 1.38** (canid 1.69, ungulate 1.89, bear 2.14 —
+  all ≥ body width). A new `levelFeet` post-pass **drops every foot to a common ground Y** (hip fixed,
+  lower leg stretches): probe feet-Y spread **0.000** across felid/canid/ungulate/bear, and bilateral
+  symmetry stays **exact** (left/right share a Y by mirror). Bounds recomputed after. Hooves enlarged.
+- **Eyes — one type, gazing forward.** All eyes on a creature now share **one style** (picked once per
+  creature; radial spiky-arms no longer sprout extra random-styled eyes) — real animals have a single
+  eye type. New test asserts ≤1 eye style/creature over 200 rolls. And eyes sit on the **front of the
+  face gazing forward** (elevation 0.45→**0.85–1.2**, the aim/normal points +Z) instead of bulging
+  outward/up — kills the googly-derpy look. Count still varies (2/4/6/8) and ≥50%-have-eyes is tested.
+- **Standard mouth — a real jaw, not a "torpedo sub".** Rebuilt the maw/fanged from a lipped capsule into
+  a proper jaw: a dark throat, an upper muzzle + a hinged lower mandible parted open, **cheek hinges**,
+  upper + lower **tooth rows of varied length**, a tongue, and (fanged) prominent upper+lower canines —
+  ~16 pieces. Scales with `r` (the mouth gene → animal size), and the style gene still point-mutates
+  across types (mouth↔beak↔mandibles↔…), so mouths evolve.
+- **Hybrid skin mode (new, third option).** `skinMode` is now **capsules · smooth · hybrid** (a 3-way
+  control, persisted; replaces the boolean). Hybrid meshes the organic SDF over **every part** (not just
+  the locomotor body like `smooth`) with a **tighter blend** — best of both: organic *and* nothing
+  drops out. Eyes/mouth always draw as solids on top (never melted/covered); face features are pushed
+  further proud of the body (eye margin 0.5→0.7×radius) so the body can't overlap them.
+
+**Verified (2026-06-29):** typecheck clean; `npm test` → **95/95** (3 new: one-eye-style, ≥50%-have-eyes,
+hybrid surface; the leg leveling keeps exact symmetry + fuzz + bounds green); `npm run build` → succeeds;
+in-browser the 3-way skin control switches capsules↔smooth↔hybrid and every mode + the new jaw/legs/eyes
+render with **no console errors**. Geometry (stance, foot-level, shoulder attach, eye gaze) confirmed by
+probe; the *look* is the human's call.
+
 ## Visual refinement round 4 — bigger legs, wide stance, limb terminators · 2026-06-29 (Part 2)
 
 Feedback: arachnid legs look great but **quadruped/biped legs are vestigial** — need to be bigger,

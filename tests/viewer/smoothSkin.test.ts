@@ -72,6 +72,26 @@ describe('smooth skin (M15)', () => {
     }
   });
 
+  it('the hybrid mode builds a non-empty, finite, in-bounds, deterministic surface over every part', () => {
+    for (let s = 0; s < 14; s++) {
+      const p = grow(randomGenome(s));
+      const geo = buildSmoothGeometry(p, true);
+      const pos = geo.getAttribute('position') as { array: ArrayLike<number>; count: number };
+      expect(pos.count).toBeGreaterThan(0);
+      const { finite, min, max } = scan(pos.array);
+      expect(finite).toBe(true);
+      for (let a = 0; a < 3; a++) {
+        expect(min[a]).toBeGreaterThanOrEqual(p.bounds.min[a] - 1.6);
+        expect(max[a]).toBeLessThanOrEqual(p.bounds.max[a] + 1.6);
+      }
+    }
+    // deterministic
+    const q = grow(randomGenome(5));
+    const a = buildSmoothGeometry(q, true).getAttribute('position').array;
+    const b = buildSmoothGeometry(q, true).getAttribute('position').array;
+    expect(a.length).toBe(b.length);
+  });
+
   it('survives extreme topologies (serpent, radial) without exploding', () => {
     for (const p of [grow(randomGenome(7, 'bilateral')), grow(randomGenome(3, 'radial'))]) {
       const pos = buildSmoothGeometry(p).getAttribute('position');

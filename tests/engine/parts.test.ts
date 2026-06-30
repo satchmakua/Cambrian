@@ -56,6 +56,15 @@ describe('part vocabulary (M23 — §6)', () => {
     expect(seen.size).toBe(5); // round · beady · slit · compound · glowing
   });
 
+  it('each creature has a single eye style (one eye type per animal, the norm)', () => {
+    for (let s = 0; s < 200; s++) {
+      const styles = new Set(
+        grow(randomGenome(s)).nodes.filter((n) => n.terminal === 'eye').map((n) => eyeVariant(n.part?.style ?? 0)),
+      );
+      expect(styles.size).toBeLessThanOrEqual(1);
+    }
+  });
+
   it('grows each deferred part for the morphotype that should have it', () => {
     expect(morphoHasKind('felid', 'ear')).toBe(true);
     expect(morphoHasKind('felid', 'whisker')).toBe(true);

@@ -224,10 +224,12 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
     appendages: apps,
   };
 
+  // ONE eye style per creature — real animals have a single eye type, not a mix (a clear win).
+  const eyeStyle = clamp(rg(rng, m.eyeStyle, [0, 0.95]), [0, 1]);
   if (chance(rng, m.head ?? 0.9)) {
-    body.child = headSeg(rng, girth, m);
+    body.child = headSeg(rng, girth, m, eyeStyle);
   } else {
-    faceOnBody(rng, apps, girth, m);
+    faceOnBody(rng, apps, girth, m, eyeStyle);
   }
   return scaffold(rng, seed, 'bilateral', 4, body, m);
 }
@@ -253,13 +255,13 @@ function compileRadial(rng: Rng, seed: number, m: Morpho, girth: number): Genome
   return scaffold(rng, seed, 'radial', n, body, m);
 }
 
-function headSeg(rng: Rng, bodyGirth: number, m: Morpho): SegmentGene {
+function headSeg(rng: Rng, bodyGirth: number, m: Morpho, eyeStyle: number): SegmentGene {
   const g = bodyGirth * range(rng, 0.7, 1.05);
   const apps: AppendageGene[] = [];
   const stalk = chance(rng, m.stalkEyes ?? 0);
   const eyeCount = pick(rng, m.eyeCount ?? ([2] as const));
   for (let p = 0; p < Math.max(1, Math.round(eyeCount / 2)); p++) {
-    apps.push(eyes(rng, range(rng, 0.7, 0.98), false, g, { style: m.eyeStyle, az: m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.18, 0.55) + p * 0.32, stalk }));
+    apps.push(eyes(rng, range(rng, 0.7, 0.98), false, g, { style: [eyeStyle, eyeStyle], az: m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.18, 0.5) + p * 0.3, stalk }));
   }
   apps.push(mouth(rng, g, m.mouthStyle)); // every face has a mouth
   if (chance(rng, m.horns ?? 0)) apps.push(horns(rng, g));
@@ -282,8 +284,8 @@ function headSeg(rng: Rng, bodyGirth: number, m: Morpho): SegmentGene {
   };
 }
 
-function faceOnBody(rng: Rng, apps: AppendageGene[], girth: number, m: Morpho): void {
-  apps.push(eyes(rng, range(rng, 0.85, 0.98), false, girth, { style: m.eyeStyle, az: m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.2, 0.5) }));
+function faceOnBody(rng: Rng, apps: AppendageGene[], girth: number, m: Morpho, eyeStyle: number): void {
+  apps.push(eyes(rng, range(rng, 0.85, 0.98), false, girth, { style: [eyeStyle, eyeStyle], az: m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.2, 0.5) }));
   apps.push(mouth(rng, girth, m.mouthStyle)); // every face has a mouth
 }
 
@@ -494,9 +496,9 @@ function eyes(rng: Rng, attachT: number, antennae: boolean, refGirth: number, o:
   return part('eyestalk', 'eye', true, rg(rng, o.style, [0, 1]), {
     attachT: clamp(attachT, A.attachT),
     attachAzimuth: o.az ?? range(rng, 0.7, 1.3),
-    // eyes face forward on the front of the face (high elevation), not perched on top of the skull —
-    // the old low elevation + top azimuth is what made every head a "boob-head" (sphere + 2 top lobes).
-    attachElevation: range(rng, stalk ? 0.3 : 0.45, stalk ? 0.7 : 0.82),
+    // eyes sit on the FRONT of the face and gaze forward (high elevation → the aim/normal points +Z),
+    // not perched on top of the skull staring outward (the old "boob-head" + googly-derpy look).
+    attachElevation: range(rng, stalk ? 0.4 : 0.85, stalk ? 0.8 : 1.2),
     segments: stalk || antennae ? randint(rng, 2, 3) : 1,
     length: clamp(refGirth * (stalk ? range(rng, 0.55, 0.9) : range(rng, 0.45, 0.7)), A.length),
     // eyes sized smaller relative to the head than before (they read as big cartoon eyes otherwise);
@@ -595,7 +597,7 @@ function mouth(rng: Rng, refGirth: number, style?: Rg): AppendageGene {
 // A radial arm; grow arrays it `radialCount` times around the body axis.
 function arm(rng: Rng, girth: number, attachT: number, m: Morpho, spiky = false): AppendageGene {
   const term: Terminal =
-    m.id === 'urchin' ? 'claw' : m.id === 'cephalopod' ? pick(rng, ['none', 'fin'] as const) : spiky ? pick(rng, ['eye', 'claw'] as const) : pick(rng, ['claw', 'fin', 'none'] as const);
+    m.id === 'urchin' ? 'claw' : m.id === 'cephalopod' ? pick(rng, ['none', 'fin'] as const) : spiky ? pick(rng, ['claw', 'fin'] as const) : pick(rng, ['claw', 'fin', 'none'] as const);
   const long = m.id === 'cephalopod' || m.id === 'horror';
   return part(long ? 'tentacle' : 'spine', term, false, range(rng, 0, 1), {
     attachT: clamp(attachT, A.attachT),

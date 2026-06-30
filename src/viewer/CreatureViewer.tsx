@@ -31,17 +31,18 @@ function Framer({ size }: { size: number }) {
 }
 import type { Phenotype } from '../engine/grow';
 import type { Trajectory } from '../physics/fitness';
+import type { SkinMode } from '../ui/store';
 import { CreatureMesh } from './CreatureMesh';
 import { buildRig } from './animation';
 import { buildMeshData } from './meshData';
 
 export function CreatureViewer({
   phenotype,
-  smooth = false,
+  skinMode = 'capsules',
   trajectory = null,
 }: {
   phenotype: Phenotype;
-  smooth?: boolean;
+  skinMode?: SkinMode;
   trajectory?: Trajectory | null;
 }) {
   // Dev-only: freezing stops the auto-rotate and switches to on-demand rendering so the
@@ -70,10 +71,10 @@ export function CreatureViewer({
       terminals,
       covering: phenotype.genomeRef.covering.type,
       motion: buildRig(buildMeshData(phenotype), phenotype).style,
-      skin: smooth ? 'smooth' : 'capsules',
+      skin: skinMode,
       gait: trajectory ? `playback(${trajectory.frameCount}f)` : 'procedural',
     };
-  }, [phenotype, smooth, trajectory]);
+  }, [phenotype, skinMode, trajectory]);
 
   // explicit framing from the creature's bounds
   const { center, size, groundY } = useMemo(() => {
@@ -109,7 +110,7 @@ export function CreatureViewer({
 
       {/* centre the creature at the origin so the auto-rotate orbits its middle, not its tail */}
       <group position={[-center[0], -center[1], -center[2]]}>
-        <CreatureMesh phenotype={phenotype} smooth={smooth} trajectory={trajectory} />
+        <CreatureMesh phenotype={phenotype} skinMode={skinMode} trajectory={trajectory} />
       </group>
       <ContactShadows position={[0, groundY, 0]} scale={size * 2.4} blur={2.2} opacity={0.5} far={size} resolution={512} />
 

@@ -63,6 +63,9 @@ export function grow(genome: Genome): Phenotype {
 
   if (nodes.length === 0) addNode([0, 0, 0], [0, 0, 0, 1], R_MIN, 'spine'); // never empty
 
+  levelFeet(); // drop every foot to a common ground level (the creature stands), then refresh bounds
+  recomputeBounds();
+
   return { nodes, edges, bounds: { min, max }, genomeRef: genome };
 
   // --- recursive growth -------------------------------------------------------
@@ -167,15 +170,65 @@ export function grow(genome: Genome): Phenotype {
     }
   }
 
+  /** Drop every foot to the lowest foot's Y so the creature stands level (the hip stays put, the lower
+   *  leg stretches to reach). Left/right feet share a Y by mirror, so exact symmetry is preserved. */
+  function levelFeet(): void {
+    if (dev.symmetry === 'radial') return;
+    const feet: number[] = [];
+    for (let i = 0; i < nodes.length; i++) if (nodes[i].kind === 'terminal' && nodes[i].part?.kind === 'leg') feet.push(i);
+    if (feet.length < 2) return;
+    const groundY = Math.min(...feet.map((i) => nodes[i].pos[1]));
+    const parentOf = new Int32Array(nodes.length).fill(-1);
+    for (const [a, b] of edges) parentOf[b] = a;
+    for (const footIdx of feet) {
+      const chain: number[] = [footIdx];
+      let cur = footIdx;
+      while (true) {
+        const p = parentOf[cur];
+        if (p < 0 || nodes[p].part?.kind !== 'leg') break; // stop at the hip (first non-leg ancestor)
+        chain.unshift(p);
+        cur = p;
+      }
+      const k = chain.length - 1;
+      if (k < 1) continue;
+      const dy = groundY - nodes[footIdx].pos[1];
+      if (dy > -1e-3) continue;
+      for (let i = 1; i <= k; i++) nodes[chain[i]].pos[1] += dy * (i / k); // hip fixed, foot → ground
+    }
+  }
+
+  function recomputeBounds(): void {
+    min[0] = min[1] = min[2] = Infinity;
+    max[0] = max[1] = max[2] = -Infinity;
+    for (const n of nodes) {
+      for (let a = 0; a < 3; a++) {
+        min[a] = Math.min(min[a], n.pos[a] - n.radius);
+        max[a] = Math.max(max[a], n.pos[a] + n.radius);
+      }
+    }
+  }
+
   function growLimb(app: AppendageGene, base: BodyNode, dir0: Vec3): void {
+    let dir = dir0;
+    let startPos: Vec3;
+    if (app.kind === 'leg' && dev.symmetry !== 'radial') {
+      // Legs attach at the shoulder/hip — the body's *side*, a touch above the belly — not the
+      // underbelly midline, then descend. This widens the stance and puts the limb's top where it
+      // belongs. The growth heads down with a slight outward splay; the knee/ankle folds do the rest.
+      const sideX = dir0[0] >= 0 ? 1 : -1; // which flank (the X=0 mirror makes the other side)
+      startPos = [base.pos[0] + sideX * base.radius * 0.92, base.pos[1] + base.radius * 0.2, base.pos[2]];
+      dir = norm([sideX * 0.32, -1, 0]);
+      dir0 = dir;
+    } else {
+      // push face features proud of the body so they aren't swallowed by the (bulged) head surface —
+      // an eye half-buried at the surface reads as nothing, especially in capsule mode.
+      const faceMargin = app.terminal === 'eye' ? 0.7 : app.terminal === 'mouth' ? 0.34 : 0;
+      const out = base.radius * (1 + faceMargin);
+      startPos = [base.pos[0] + dir[0] * out, base.pos[1] + dir[1] * out, base.pos[2] + dir[2] * out];
+    }
     // orient +Z → aim direction, then roll about that axis (orients flat parts)
     let quat = qMul(qFromAxisAngle(dir0, app.roll), qFromTo([0, 0, 1], dir0));
-    let dir = dir0;
-    // push the face features proud of the body so they aren't swallowed by the (bulged) head surface:
-    // an eye half-buried at the surface reads as nothing, especially in capsule mode.
-    const faceMargin = app.terminal === 'eye' ? 0.5 : app.terminal === 'mouth' ? 0.28 : 0;
-    const startOut = base.radius * (1 + faceMargin);
-    let pos: Vec3 = [base.pos[0] + dir[0] * startOut, base.pos[1] + dir[1] * startOut, base.pos[2] + dir[2] * startOut];
+    let pos: Vec3 = startPos;
     let prev = nodes.indexOf(base);
 
     let pitch = app.curl[0];

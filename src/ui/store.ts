@@ -17,14 +17,19 @@ import type { Trajectory } from '../physics/fitness';
 
 const LITTER = 9;
 const STORAGE_KEY = 'cambrian.session.v2c'; // bumped for the M12 covering genes
-const SMOOTH_KEY = 'cambrian.smoothSkin.v1'; // a render preference, persisted on its own
+const SKIN_KEY = 'cambrian.skinMode.v1'; // a render preference, persisted on its own
 
-function loadSmooth(): boolean {
+/** capsules (the kit) · smooth (organic SDF, body only) · hybrid (organic SDF over every part). */
+export type SkinMode = 'capsules' | 'smooth' | 'hybrid';
+
+function loadSkinMode(): SkinMode {
   try {
-    return typeof localStorage !== 'undefined' && localStorage.getItem(SMOOTH_KEY) === '1';
+    const v = typeof localStorage !== 'undefined' ? localStorage.getItem(SKIN_KEY) : null;
+    if (v === 'smooth' || v === 'hybrid' || v === 'capsules') return v;
   } catch {
-    return false;
+    /* ignore */
   }
+  return 'capsules';
 }
 
 interface Session {
@@ -39,8 +44,8 @@ interface Session {
 
 interface AppState extends Session {
   pressure: Pressure; // directed-evolution target (M4)
-  smoothSkin: boolean; // render a marching-cubes metaball surface instead of capsules (M15)
-  toggleSmooth: () => void;
+  skinMode: SkinMode; // capsules / smooth / hybrid (M15 + the hybrid)
+  setSkinMode: (mode: SkinMode) => void;
   morphoFilter: string | null; // bias "New random creature" to one morphotype, or null for the full sampler (M16)
   setMorphoFilter: (id: string | null) => void;
   newCreature: () => void;
@@ -143,7 +148,7 @@ export const useStore = create<AppState>((set, get) => {
   return {
     ...loadInitial(),
     pressure: ZERO_PRESSURE,
-    smoothSkin: loadSmooth(),
+    skinMode: loadSkinMode(),
     morphoFilter: null,
     physicsRunning: false,
     physicsDistance: null,
@@ -154,16 +159,14 @@ export const useStore = create<AppState>((set, get) => {
 
     setMorphoFilter: (id) => set({ morphoFilter: id }),
 
-    toggleSmooth: () =>
-      set((state) => {
-        const v = !state.smoothSkin;
-        try {
-          if (typeof localStorage !== 'undefined') localStorage.setItem(SMOOTH_KEY, v ? '1' : '0');
-        } catch {
-          /* ignore */
-        }
-        return { smoothSkin: v };
-      }),
+    setSkinMode: (mode) => {
+      try {
+        if (typeof localStorage !== 'undefined') localStorage.setItem(SKIN_KEY, mode);
+      } catch {
+        /* ignore */
+      }
+      set({ skinMode: mode });
+    },
 
     newCreature: () => {
       const { symmetryMode, menagerie, morphoFilter } = get();

@@ -26,16 +26,22 @@ const BODY_PART_KINDS = new Set(['leg', 'tail', 'arm', 'tentacle', 'neck']);
 function isBodyNode(n: BodyNode): boolean {
   return n.kind === 'spine' || (n.part != null && BODY_PART_KINDS.has(n.part.kind));
 }
+// The HYBRID mode meshes *everything* (full part definition) except the eyes/mouth, which always draw
+// as solids — best of both: an organic surface like smooth, but nothing drops out like capsules keep.
+function isHybridNode(n: BodyNode): boolean {
+  return n.terminal !== 'eye' && n.terminal !== 'mouth';
+}
 
-export function buildSmoothGeometry(p: Phenotype): THREE.BufferGeometry {
+export function buildSmoothGeometry(p: Phenotype, full = false): THREE.BufferGeometry {
   // primitives as flat typed arrays (capsule a→b, radius r) — a hot-loop win over objects.
   // Capsules already round-cap their endpoints, so the joints/leaves need no extra spheres.
-  const { ax, ay, az, bx, by, bz, pr, count: np } = primitives(p);
+  // `full` (hybrid) meshes every part for full definition; otherwise just the locomotor body.
+  const { ax, ay, az, bx, by, bz, pr, count: np } = primitives(p, full);
 
   let meanR = 0;
   for (let i = 0; i < np; i++) meanR += pr[i];
   meanR = meanR / Math.max(np, 1);
-  const k = 0.5 * meanR; // smooth-union blend radius (rounds the joints)
+  const k = (full ? 0.34 : 0.5) * meanR; // hybrid blends tighter → keeps more part definition
 
   // grid bounds: the body bounds padded so the inflated surface stays inside
   const pad = meanR * 1.5 + k + 0.05;
@@ -225,12 +231,13 @@ interface FlatPrims {
   pr: Float64Array; count: number;
 }
 
-function primitives(p: Phenotype): FlatPrims {
+function primitives(p: Phenotype, full: boolean): FlatPrims {
   // one capsule per edge (a capsule round-caps its ends, so joints/leaves need no spheres);
   // a lone node with no edges falls back to a degenerate a→a capsule (a sphere). Mesh only the body
   // skeleton (trunk + locomotor limbs); feature tips are drawn as solids (M24). Fall back to all
   // edges if a creature somehow has no body edges, so the surface is never empty.
-  let bodyEdges = p.edges.filter(([a, b]) => isBodyNode(p.nodes[a]) && isBodyNode(p.nodes[b]));
+  const include = full ? isHybridNode : isBodyNode;
+  let bodyEdges = p.edges.filter(([a, b]) => include(p.nodes[a]) && include(p.nodes[b]));
   if (bodyEdges.length === 0) bodyEdges = p.edges;
   const edges = bodyEdges.length > 0 ? bodyEdges : null;
   const count = edges ? edges.length : p.nodes.length;
