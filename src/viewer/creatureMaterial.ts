@@ -51,13 +51,17 @@ const PRESET: Record<CoveringType, { rough: number; metal: number; bump: number 
 };
 
 export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number): THREE.MeshStandardMaterial {
-  const main = new THREE.Color().setHSL(pal.hueA, pal.sat, pal.light);
-  const back = main.clone().multiplyScalar(0.6); // dorsal — darker
-  const belly = main.clone().lerp(new THREE.Color(0xffffff), 0.42); // ventral — lighter
-  const pattern = new THREE.Color().setHSL(pal.hueB, Math.min(1, pal.sat * 1.1), pal.light * 0.5);
+  // A moodier base than the raw palette: real integument is rarely a bright, saturated toy. We
+  // desaturate and darken a touch so creatures read as living tissue, not painted plastic.
+  const main = new THREE.Color().setHSL(pal.hueA, pal.sat * 0.8, pal.light * 0.88);
+  const back = main.clone().multiplyScalar(0.48); // dorsal — deep shadow, strong countershading
+  // ventral — lighter, but a muted greyed tone, never the cartoon white belly
+  const belly = main.clone().lerp(new THREE.Color(0xb4ad9e), 0.34);
+  const pattern = new THREE.Color().setHSL(pal.hueB, Math.min(1, pal.sat * 1.1), pal.light * 0.44);
   // a deeper, slightly hue-shifted accent — outlines rosettes/ocelli and adds depth inside markings
-  const accent = new THREE.Color().setHSL((pal.hueB + 0.08) % 1, Math.min(1, pal.sat * 1.2), pal.light * 0.34);
-  const rim = main.clone().lerp(new THREE.Color(0xffe2b8), 0.5); // warm backlight
+  const accent = new THREE.Color().setHSL((pal.hueB + 0.08) % 1, Math.min(1, pal.sat * 1.2), pal.light * 0.3);
+  // a cool, dim skylight edge — a thin backlit rim of living skin, NOT a warm glossy halo
+  const rim = new THREE.Color(0x74839c);
 
   const preset = PRESET[cov.type];
   const roughness = THREE.MathUtils.clamp(preset.rough * (1 - 0.45 * cov.sheen), 0.05, 1);
@@ -114,10 +118,18 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
           skin = mix(skin, uPattern2, smoothstep(0.55, 0.95, pat) * uContrast * 0.4);
           // subtle tonal break-up so the surface never reads as flat plastic
           skin *= 0.9 + 0.18 * fbm(bp * uPScale * 1.6);
-          // fake AO from the sub-surface musculature: creases darken → the form reads (less balloon)
-          skin *= mix(0.72, 1.0, smoothstep(-0.22, 0.22, muscle(bp)));
+          // deep fake AO from the sub-surface musculature: creases go dark → sinewy, taut, not a balloon
+          skin *= mix(0.5, 1.0, smoothstep(-0.24, 0.2, muscle(bp)));
+          // grime in the deepest recesses (scale seams, plate grooves) — soils the too-clean look
+          skin *= 1.0 - 0.28 * smoothstep(0.35, 0.85, surfaceHeight(bp, uCover));
           diffuseColor.rgb = skin;
         }`,
+      )
+      // roughness: patchy wet/dry, so the skin catches light unevenly like real hide (never uniform gloss)
+      .replace(
+        '#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>
+        roughnessFactor = clamp(roughnessFactor * (0.82 + 0.4 * fbm(vBodyPos * 3.6 + uOff)), 0.05, 1.0);`,
       )
       // relief: perturb the (view-space) normal by the body-space height field's gradient
       .replace(
@@ -143,13 +155,14 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
         {
-          // a tighter, dimmer rim than before — a subtle backlit edge, not a glossy balloon halo
-          float fres = pow(1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition))), 4.0);
-          totalEmissiveRadiance += uRim * fres * 0.3;
+          // a thin, dim, cool backlit edge — just enough to separate the silhouette from the dark
+          // ground, never the warm glossy halo that read as a toy
+          float fres = pow(1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition))), 5.0);
+          totalEmissiveRadiance += uRim * fres * 0.13;
           if (uSheen > 0.01) {
             float vd = abs(dot(normalize(normal), normalize(vViewPosition)));
             vec3 irid = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + vd));
-            totalEmissiveRadiance += irid * uSheen * (1.0 - vd) * 0.22;
+            totalEmissiveRadiance += irid * uSheen * (1.0 - vd) * 0.14;
           }
         }`,
       );

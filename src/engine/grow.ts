@@ -236,6 +236,12 @@ export function grow(genome: Genome): Phenotype {
       if (atCap()) break;
       const last = j === app.segments - 1;
       let r = app.thickness * Math.pow(app.taper, j);
+      // a real leg is a muscular haunch tapering to a slim shin/ankle (the broad foot comes from the
+      // paw/hoof terminator, which spreads wider than its node) — so legs read as powerful, not vestigial.
+      if (app.kind === 'leg') {
+        const t = app.segments > 1 ? j / (app.segments - 1) : 0;
+        r *= 1.32 - 0.62 * t; // ~1.32× at the hip → ~0.7× at the ankle
+      }
       // the eye is the emotional anchor — floor the grown bulb so even a tapered/stalked eye on a
       // small head always reads (M19/M24), regardless of how the gene tapered down its tip.
       if (last && app.terminal === 'eye') r = Math.max(r, EYE_R_MIN);
