@@ -8,6 +8,11 @@
 import type { Phenotype } from '../engine/grow';
 import type { Terminal, PartKind } from '../engine/genome';
 
+// Face organs that seat directly on a body surface: the capsule that would connect the body to one of
+// these is the fat flesh tube that buried the face (the "boob-eye"). We never draw it — the organ sits
+// proud on the surface (grow seats it) and renders its own geometry on top, so it can't be occluded.
+const SURFACE_ORGANS = new Set<Terminal>(['eye', 'mouth', 'ear']);
+
 export interface MeshNode {
   pos: [number, number, number];
   radius: number;
@@ -39,11 +44,14 @@ export interface MeshData {
 
 export function buildMeshData(p: Phenotype): MeshData {
   const nodes: MeshNode[] = p.nodes.map((n) => ({ pos: n.pos, radius: n.radius }));
-  const edges: MeshEdge[] = p.edges.map(([a, b]) => ({
-    a,
-    b,
-    radius: ((p.nodes[a].radius + p.nodes[b].radius) / 2) * 0.9,
-  }));
+  const edges: MeshEdge[] = [];
+  for (const [a, b] of p.edges) {
+    // never draw the connecting capsule into a seated face organ (see SURFACE_ORGANS) — that tube is
+    // what buried the eyes/mouth. The organ's parent surface holds it; its own mesh renders on top.
+    const tb = p.nodes[b].terminal;
+    if (tb && SURFACE_ORGANS.has(tb)) continue;
+    edges.push({ a, b, radius: ((p.nodes[a].radius + p.nodes[b].radius) / 2) * 0.9 });
+  }
 
   const bodySpheres: number[] = [];
   const features: MeshFeature[] = [];

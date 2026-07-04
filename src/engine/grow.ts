@@ -216,14 +216,21 @@ export function grow(genome: Genome): Phenotype {
       // underbelly midline, then descend. This widens the stance and puts the limb's top where it
       // belongs. The growth heads down with a slight outward splay; the knee/ankle folds do the rest.
       const sideX = dir0[0] >= 0 ? 1 : -1; // which flank (the X=0 mirror makes the other side)
-      startPos = [base.pos[0] + sideX * base.radius * 0.92, base.pos[1] + base.radius * 0.2, base.pos[2]];
-      dir = norm([sideX * 0.32, -1, 0]);
+      // Stance width is set by the leg's (bauplan-normalized) azimuth: 4.712 ≈ straight down (narrow,
+      // upright), lower ≈ splayed out (sprawling). This is what makes a spider's legs fan out wide
+      // instead of hanging in a tight bunch under the body like a quadruped's.
+      const splay = clamp((4.712 - app.attachAzimuth) * 0.62, [0.12, 1.05]);
+      startPos = [base.pos[0] + sideX * base.radius * (0.92 + splay * 0.35), base.pos[1] + base.radius * 0.2, base.pos[2]];
+      dir = norm([sideX * splay, -1, 0]);
       dir0 = dir;
     } else {
-      // push face features proud of the body so they aren't swallowed by the (bulged) head surface —
-      // an eye half-buried at the surface reads as nothing, especially in capsule mode.
-      const faceMargin = app.terminal === 'eye' ? 0.7 : app.terminal === 'mouth' ? 0.34 : 0;
-      const out = base.radius * (1 + faceMargin);
+      // Seat a face organ (eye/mouth/ear) proud of the body by a fraction of ITS OWN radius, so it
+      // always clears the surface without floating — for a tiny or a huge organ alike. The renderer
+      // draws no connecting capsule into these (see meshData SURFACE_ORGANS), so the organ must sit on
+      // the surface: never buried, never adrift. Other appendages attach at the surface as before.
+      const t = app.terminal;
+      const seat = t === 'eye' ? 0.6 : t === 'mouth' ? 0.45 : t === 'ear' ? 0.5 : 0;
+      const out = base.radius + seat * app.thickness;
       startPos = [base.pos[0] + dir[0] * out, base.pos[1] + dir[1] * out, base.pos[2] + dir[2] * out];
     }
     // orient +Z → aim direction, then roll about that axis (orients flat parts)

@@ -836,25 +836,69 @@ function Frill({ f, color }: { f: MeshFeature; color: number }) {
   );
 }
 
-// A wing: a thin membrane spanning out along the aim, braced by a few articulated struts
-// (finger-bones radiating into the web — bat/dragon/raptor read).
+// A wing: a big webbed membrane on an articulated arm — a humerus to the wrist, a leading spar, and a
+// fan of finger-digits with skin webbed between them and a trailing edge back to the body (bat/dragon
+// read). Built spanwise along the aim (+Z), fanning chordwise (±Y), thin along X. Much larger and more
+// structured than a single membrane blob.
 function Wing({ f, color }: { f: MeshFeature; color: number }) {
   const r = Math.max(f.radius, 0.06);
-  const strut = useMemo(() => new THREE.Color(color).multiplyScalar(0.6).getHex(), [color]);
+  const S = r * 10; // wing span — deliberately large so the wing reads at body scale
+  const bone = useMemo(() => new THREE.Color(color).multiplyScalar(0.5).getHex(), [color]);
+
+  // skeleton points in the wing plane (X ≈ 0, the membrane normal)
+  const P = useMemo(() => {
+    const v = (y: number, z: number) => new THREE.Vector3(0, y * S, z * S);
+    return {
+      root: v(0, 0), // shoulder
+      wrist: v(0.05, 0.5), // elbow/wrist knuckle mid-span
+      tips: [v(0.42, 1.0), v(0.08, 1.05), v(-0.3, 0.86), v(-0.62, 0.55)] as const, // 4 finger tips
+      trail: v(-0.5, 0.06), // trailing edge anchor back at the body
+    };
+  }, [S]);
+
+  // one welded membrane surface: a triangle fan from the shoulder across the digit tips + trailing edge
+  const membrane = useMemo(() => {
+    const chord = [P.tips[0], P.tips[1], P.tips[2], P.tips[3], P.trail];
+    const verts: number[] = [];
+    for (let i = 0; i < chord.length - 1; i++) {
+      verts.push(P.root.x, P.root.y, P.root.z, chord[i].x, chord[i].y, chord[i].z, chord[i + 1].x, chord[i + 1].y, chord[i + 1].z);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    g.computeVertexNormals();
+    return g;
+  }, [P]);
+  useEffect(() => () => membrane.dispose(), [membrane]);
+
+  // bones as tapered cylinders between two skeleton points (cylinder is +Y; orient Y → the bone axis)
+  const bones = useMemo(() => {
+    const mk = (a: THREE.Vector3, b: THREE.Vector3, w: number) => {
+      const mid = a.clone().add(b).multiplyScalar(0.5);
+      const d = b.clone().sub(a);
+      const len = Math.max(d.length(), 1e-3);
+      const q = new THREE.Quaternion().setFromUnitVectors(UP, d.clone().normalize());
+      return { pos: [mid.x, mid.y, mid.z] as [number, number, number], quat: [q.x, q.y, q.z, q.w] as [number, number, number, number], len, w };
+    };
+    return [
+      mk(P.root, P.wrist, r * 0.24), // humerus/forearm (thick arm bone)
+      mk(P.root, P.tips[0], r * 0.16), // leading-edge spar (thumb)
+      mk(P.wrist, P.tips[0], r * 0.11),
+      mk(P.wrist, P.tips[1], r * 0.1),
+      mk(P.wrist, P.tips[2], r * 0.1),
+      mk(P.wrist, P.tips[3], r * 0.09),
+    ];
+  }, [P, r]);
+
   return (
     <group quaternion={f.quat}>
-      <mesh scale={[r * 0.16, r * 2.6, r * 3.2]} castShadow>
-        <sphereGeometry args={[1, 10, 8]} />
-        <meshStandardMaterial color={color} roughness={0.6} metalness={0.0} side={THREE.DoubleSide} />
+      <mesh geometry={membrane} castShadow>
+        <meshStandardMaterial color={color} roughness={0.72} metalness={0.0} side={THREE.DoubleSide} transparent opacity={0.95} />
       </mesh>
-      {/* struts fan within the membrane (the local YZ plane) — rotate the +Z bone about local X */}
-      {[-0.55, -0.18, 0.2, 0.6].map((ang, i) => (
-        <group key={i} rotation={[ang, 0, 0]}>
-          <mesh position={[0, 0, r * 1.5]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-            <cylinderGeometry args={[r * 0.06, r * 0.11, r * 3.0, 6]} />
-            <meshStandardMaterial color={strut} roughness={0.5} />
-          </mesh>
-        </group>
+      {bones.map((b, i) => (
+        <mesh key={i} position={b.pos} quaternion={b.quat} castShadow>
+          <cylinderGeometry args={[b.w * 0.5, b.w, b.len, 6]} />
+          <meshStandardMaterial color={bone} roughness={0.5} />
+        </mesh>
       ))}
     </group>
   );
