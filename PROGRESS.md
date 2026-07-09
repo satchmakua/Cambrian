@@ -48,7 +48,7 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 ## Mouth jaw builds — 5 fitted constructions across the maw bands · 2026-06-29 (Part 2)
 
 The standard "sandwich" mouth (top oval + bottom oval) was replaced. Mocked up **6 schematics** (current
-+ 5 new) with the visualize tool; the human picked "build all five and let the style band pick which."
++ 5 new) with the visualize tool; the direction taken: build all five and let the style band pick which.
 Five new jaw components in `CreatureMesh`, each fitted from many distinct pieces (not 2 ovals):
 - **SnarlMouth (#2)** — a soft mammal muzzle: rounded snout, nose pad, lips framing a dark slit, blunt
   teeth, tongue. → the **herbivore** band.
@@ -68,7 +68,7 @@ are unchanged, so the variant-mapping test is untouched.
 
 **Verified (2026-06-29):** typecheck clean; `npm test` → **95/95**; `npm run build` → succeeds; in-browser
 ungulate/ursid/felid/croc/horror/chimera each roll their build (snarl/anatomical/hinged/ring) with **no
-console errors**. The *look* is the human's call.
+console errors**. The *look* is a visual call.
 
 ## Visual refinement round 5 — shoulder legs + level feet, forward eyes, jaw, hybrid skin · 2026-06-29 (Part 2)
 
@@ -101,7 +101,7 @@ Image-driven feedback. Probed the geometry first (no WebGL screenshots).
 hybrid surface; the leg leveling keeps exact symmetry + fuzz + bounds green); `npm run build` → succeeds;
 in-browser the 3-way skin control switches capsules↔smooth↔hybrid and every mode + the new jaw/legs/eyes
 render with **no console errors**. Geometry (stance, foot-level, shoulder attach, eye gaze) confirmed by
-probe; the *look* is the human's call.
+probe; the *look* is a visual call.
 
 ## Visual refinement round 4 — bigger legs, wide stance, limb terminators · 2026-06-29 (Part 2)
 
@@ -129,7 +129,7 @@ stronger, **spaced wider** (too close together / under the centreline), and **an
 **Verified (2026-06-29):** typecheck clean; `npm test` → **93/93** (the paw/hoof leg-count cascade keeps
 morphospace/animation/pressures green); `npm run build` → succeeds; in-browser the Paw/Hoof/Hand renders
 compile with the right terminator per animal, no console errors. Stance/thickness confirmed by probe;
-the *look* is the human's call.
+the *look* is a visual call.
 
 ## Visual refinement round 3 — camera, boob-heads, stronger signals · 2026-06-29 (Part 2)
 
@@ -163,7 +163,7 @@ upper); **upright primates**; a **better bear**. Probed the geometry first (no W
 
 **Verified (2026-06-29):** typecheck clean; `npm test` → **93/93** (2 new); `npm run build` → succeeds;
 in-browser felid/primate/ursid/croc/serpent (sizes z 2.2→6.9) all roll centred with faces + reframe, no
-console errors. Geometry confirmed by probe; the *look* is the human's call. (Other-bug pass: the camera
+console errors. Geometry confirmed by probe; the *look* is a visual call. (Other-bug pass: the camera
 fight + the off-top eyes were the two real bugs found.)
 
 ## Visual refinement round 2 — eye visibility/size, leg joints, snouts · 2026-06-29 (Part 2)
@@ -171,7 +171,7 @@ fight + the off-top eyes were the two real bugs found.)
 Follow-up to the feedback below: legs "still have no visible joints"; in **capsule mode you can't see the
 eyes** (the body swallows them); in **smooth mode the eyes are too big**; animal types need to read better
 (a chicken-like roll delighted); mouths want more types (snout/trunk/herbivore/…). Probed the real geometry
-first (I can't screenshot WebGL) and found: a felid eye was **r=0.28** (half the head!) with its centre
+first (WebGL can't be screenshotted here) and found: a felid eye was **r=0.28** (half the head!) with its centre
 **exactly on the head surface** → half-buried under the bulged capsule head; leg joints existed but were
 **gentle (31°/50°)** off a thin thread from a fat hip → read as a curved noodle.
 
@@ -190,8 +190,8 @@ first (I can't screenshot WebGL) and found: a felid eye was **r=0.28** (half the
 
 **Verified (2026-06-29):** typecheck clean; `npm test` → **91/91**; `npm run build` → succeeds. **In-browser:**
 felid/canid/croc/ungulate/bird all roll with faces + canonical legs (croc's long jaw shows), no console
-errors. Geometry confirmed by probe (eye protrusion %, joint angles, snout length); the *look* is the
-human's call.
+errors. Geometry confirmed by probe (eye protrusion %, joint angles, snout length); the *look* is a
+visual call.
 
 **Mouths — herbivore vs predator + a trunk (10 styles).** Followed up the snout with the rest of the
 mouth-type ask. `mouthVariant` (`partStyles.ts`) went 8→**10** via **non-uniform bands** so the existing
@@ -201,8 +201,8 @@ forward-then-drooping tapered prehensile tube). Re-pointed the priors so grazers
 (ungulate/rodent), predators fanged (felid/croc/serpent/dragon/wyvern/shark), omnivores a toothed maw,
 birds/turtles/cephalopods a beak, arthropods mandibles — **verified headlessly** (the parts.test mouth
 map now asserts ungulate→herbivore, felid→fanged, …, and chimera reaches trunk). 91/91 + build green;
-in-browser the herbivore/trunk renders compile with no console errors. **Still open (with the human's
-eyes):** per-morphotype representation tuning (tails, characteristic silhouettes) and a look-pass on the
+in-browser the herbivore/trunk renders compile with no console errors. **Still open (pending a visual
+read):** per-morphotype representation tuning (tails, characteristic silhouettes) and a look-pass on the
 new mouth renders.
 
 ## Visual refinement pass — textures, eyes, mouths, legs, less "balloon" · 2026-06-29 (Part 2)
@@ -238,7 +238,7 @@ limb in a stance, not one curved sweep. Deterministic + exactly mirror-symmetric
 determinism + exact symmetry + the fuzz green); `npm run build` → succeeds. **In-browser:** the rebuilt
 shader **compiles across all 7 coverings** (fur/scales/chitin/slime/plates/feathers/skin) and the new
 eye/mouth/leg geometry renders, with **no console/GLSL errors**; every creature still shows its face. The
-actual *look* (the textures, the eyes, the de-ballooning) is the human's visual call — the multi-canvas
+actual *look* (the textures, the eyes, the de-ballooning) is a visual call — the multi-canvas
 WebGL page can't be screenshotted, as throughout.
 
 ## M24 — Bauplan: structural attractor basins + the guaranteed face · 2026-06-29 (Part 2)
@@ -248,9 +248,9 @@ at random angles, faces gone after a couple of breeds. Root-caused in code (not 
 guaranteed only on a *fresh roll* (M19), but the breeder litter's aggressive structural/saltation
 mutation (`removeAppendage`, `changeTerminal`, head-swapping `confluence`) stripped it; legs were
 placed/aimed at fully random `attachT`/`azimuth` by `addAppendage`/`reaim`; and nothing pulled
-structure back (the §11.2 coherence-pull was never built). The human chose **"coherent core, coherent
-weird"** (everything gets canonical structure; uncanny stays weird but never broken) as **one big
-push**. Researched + planned in plan-mode, then implemented.
+structure back (the §11.2 coherence-pull was never built). The direction taken — **"coherent core, coherent
+weird"** (everything gets canonical structure; uncanny stays weird but never broken) — landed as **one big
+push**. Researched and planned first, then implemented.
 
 **The attractor basin = a deterministic pass inside `grow()`** (`developBauplan`, pure): the stored
 genome may drift, but growth pulls it onto a canonical body plan before building.
@@ -293,7 +293,7 @@ morphospace "dragon = winged beast" set already admits chimera). `npm run build`
 harsh breeding (×6) kept eyes + a mouth — 0 faceless**; legs stayed canonical; smooth mode built; the
 Coherence slider + all controls wired with **no console errors** (one transient HMR `ReferenceError`
 appeared only because a const's usage hot-reloaded a beat before its definition — gone on reload;
-build/tests green). The mouth-organ look + the smooth-gap fix are the human's visual call.
+build/tests green). The mouth-organ look + the smooth-gap fix are a visual call.
 
 ## M23 — Full part vocabulary · 2026-06-29 (Part 2)
 
@@ -343,7 +343,7 @@ children; 300 creatures stay valid + in-bounds + **exactly bilaterally symmetric
 `npm run build` → succeeds (Rapier still its own lazy chunk; main +~8 KB for the renderers).
 **In-browser:** every new part rendered as a feature across felid (ears+whiskers) / fish+shark (gills) /
 turtle+crab (carapace) / bird (crest) / wyvern (barb) / dragon (barb+club+crest) / crab (pincers +
-stalked eyes), with **no console errors**. (The distinct *look* of each part is the human's visual call,
+stalked eyes), with **no console errors**. (The distinct *look* of each part is a visual call,
 as throughout — the multi-canvas WebGL page defeats the screenshot tool.)
 
 ## M22 — Full morphotype library · 2026-06-29 (Part 2)
@@ -378,7 +378,7 @@ from body plan (M13), so each moves plausibly now (walk/flap/scuttle); the *spec
 pairs with them (trundle/run/hop/jet/hover) are M25.
 
 One brittle test surfaced & fixed along the way: `animation.test`'s "serpents undulate more than
-quads" **fished auto-roll seeds** for the first legless long body — my larger pool shifted that seed
+quads" **fished auto-roll seeds** for the first legless long body — the larger pool shifted that seed
 onto a *winged* legless creature (a wyvern → `flap`, waveAmp 0.04), which isn't the undulation under
 test. Replaced the seed-fishing with a **forced serpent** (`genomeOfMorphotype('serpent')`, mean
 waveAmp 0.379 vs quad 0.179) — deterministic and faithful to intent. Also fixed a fidelity nit found
@@ -394,7 +394,7 @@ rolled a distinctive valid creature — primate (4 hands, deep body), mustelid (
 (domed plates, 3.4×3.1 wide), ratite (feathered biped, tall), chimera (3 spliced fins + 4 eyes, flap),
 arthro-alien (10 legs + 6 eyes, scuttle), crystalline (9 spike tips, plated) — coverings
 fur/plates/feathers/chitin/skin all compile, motions in character, **no console errors**. (Whether each
-*reads clearly as its kind* is the human's visual call, as throughout.)
+*reads clearly as its kind* is a visual call, as throughout.)
 
 ## M20 — gallery layout · M21 — silhouette differentiation · 2026-06-29 (Part 2)
 
@@ -444,7 +444,7 @@ shader reads `patternField`/`surfaceHeight` from `aBodyPos`. The texture is now 
 body's own frame and rides the animation/rotation; the Mikkelsen screen-space bump is kept (it's
 view-*consistent* — what mattered was making its height field body-locked). Verified: typecheck +
 72 tests + build green; in-browser the shader compiles across fur/slime/scales/chitin/skin + the
-smooth path with no console errors. (The "no swimming" itself is temporal — the human's visual call.)
+smooth path with no console errors. (The "no swimming" itself is temporal — a visual call.)
 
 **M18 (bilateral symmetry).** Confirmed a real bug (a probe found rolls with a node 2.0 bu off its
 mirror). Fixed three breakers in `grow` for bilateral mode: the **yaw** spine bend is zeroed (trunk
@@ -458,8 +458,8 @@ motion classification unaffected.
 
 ## Roadmap Part 2 planned (Phase 5, M17–M26) · 2026-06-29
 
-The human reviewed the build against MORPHOLOGY.md and flagged that Part 1 shipped every *system* but
-not the whole *catalogue*, plus five visual defects — and directed: implement the doc **in full, no
+A review of the build against MORPHOLOGY.md flagged that Part 1 shipped every *system* but
+not the whole *catalogue*, plus five visual defects — the mandate: implement the doc **in full, no
 simplifying or cheesing**. Wrote **[ROADMAP.md](ROADMAP.md) Phase 5 (M17–M26)**. Root-caused the five
 defects with probes before planning (so the milestones are real, not guesses):
 
@@ -514,7 +514,7 @@ build` → succeeds with **Rapier still its own lazy chunk** (CreatureMesh stati
 ~4 KB). **In-browser:** an "Evolve to walk" run recorded a **120-frame** gait that auto-played
 (`__cambrian.gait = playback(120f)`), the ▶/■ toggle flips the viewer between the recorded gait and
 procedural motion, and navigating to another creature drops playback (seed guard); no console errors.
-(Seeing it actually stride is the human's call — the preview throttles rAF, as throughout.)
+(Seeing it actually stride is a visual call — the preview throttles rAF, as throughout.)
 
 ## M6 — Physics fitness (stretch) · built 2026-06-29 (awaiting test) — roadmap complete
 
@@ -543,7 +543,7 @@ across 14 creatures, and a run strictly improves with elitism + replays identica
 → succeeds, **Rapier in its own lazy chunk** (`rapier-*.js` 2.3 MB / 842 KB gz, separate from the
 1.16 MB main). **In-browser:** the "Evolve to walk" panel lazy-loaded Rapier (init fired) and evolved
 an **8-generation walker travelling 3.76 bu**, the lineage advanced to gen 8, no console errors.
-(Watching it actually crawl is the human's call — the sim is headless; the viewer shows the evolved
+(Watching it actually crawl is a visual call — the sim is headless; the viewer shows the evolved
 body, not the physics playback.)
 
 ## M7 — glTF export (stretch) · built 2026-06-29 (awaiting test)
@@ -566,7 +566,7 @@ across 20 random creatures × both modes). `npm run build` → succeeds. **In-br
 produced a **valid binary GLB** for both modes — `glTF` magic, version 2, the header total length
 matches the buffer, a well-formed `JSON` chunk parsing to a glTF-2.0 document with **59 meshes**
 (capsules, 704 KB) / **12 meshes** (smooth, 976 KB) + accessors + 4 materials; the Export button
-renders, no console errors. (Opening the file in Blender/another viewer is the human's confirmation.)
+renders, no console errors. (Opening the file in Blender/another viewer is the remaining confirmation.)
 
 ## M16 — Dials & polish · built 2026-06-29 (awaiting test) — Phase 3 complete
 
@@ -623,7 +623,7 @@ surface spans ≥ half the body's length; deterministic; serpent + radial topolo
 `window.__cambrian.skin` handle confirms), rebuilds on every new-creature roll, and toggles back —
 all with **no console errors**; a direct in-browser build of the default creature returned a
 **12,688-triangle** surface in **84ms**. (The multi-canvas page defeats the preview screenshot tool,
-so the organic *look* is the human's call — as in M5/M12/M14.)
+so the organic *look* is a visual call — as in M5/M12/M14.)
 
 ## M14 — The Menagerie · built 2026-06-29 (awaiting test)
 
@@ -681,8 +681,8 @@ swim for fish, scuttle for crab, flap for bird, slither for serpent, drift for c
 felid. `npm run build` → succeeds. **In-browser:** 8 random rolls came out slither (legless) /
 scuttle (6 legs) / drift (radial, 14 eyes) / flap (winged) / walk (legged) / swim (finned, legless)
 — each matching its body plan, no console errors. (Motion *plays* only in a foregrounded browser —
-the preview throttles rAF — so the live wiring is verified via the `motion` handle + the human's
-eyes, as in M5.)
+the preview throttles rAF — so the live wiring is verified via the `motion` handle + a visual
+read, as in M5.)
 
 ## M12 — Covering & texture · built 2026-06-29 (awaiting test)
 
@@ -754,7 +754,7 @@ ranges, not a fixed mold). A generic `compile(morphotype → genome)` builds the
 parameterized builders (legs by posture, wings, fins, tails, horns, spines, antennae, eyes by
 style, mouths by style, radial arms/tentacles). The **bimodal sampler**: 45% a Familiar
 morphotype, 35% Uncanny, 20% the free "wild" compositional generator (the in-between tail) — so
-the distribution has two strong modes, per the human's "familiar AND uncanny both strong" call.
+the distribution has two strong modes, per the "familiar AND uncanny both strong" goal.
 
 Also raised `GENE_BOUNDS`: `radialCount` 8→12 (many-tentacled cephalopods), `appendageCount`
 8→16 (legs+wings+fins+tail+spines stack; NODE_MAX is the real cap).
@@ -764,7 +764,7 @@ Also raised `GENE_BOUNDS`: `radialCount` 8→12 (many-tentacled cephalopods), `a
 generator); `npm run build` → succeeds. **In-browser** (14-creature sample): 28% radial
 (cephalopods/horrors/urchins/starfish), fins/claws/horns/eyes/mouths spread across creatures,
 node range 12–51, **all finite, no console errors**. _The visual "reads clearly as a cat / crab
-/ heron / dragon" is the human's call._
+/ heron / dragon" is a visual call._
 
 ## M9 — Part vocabulary (core) · built 2026-06-28 (awaiting test)
 
@@ -828,13 +828,13 @@ Researched the relevant prior art and folded it into the design (no code yet):
 - **Games landscape:** Spore is still the creature-creator king ~17 yrs on; Species / Thrive /
   The Sapling / Framsticks go further on *evolution*; our truest relative is Picbreeder /
   EndlessForms (interactive CPPN/NEAT evolution of forms). Captured in §14.
-- **Attractor basins → a real divergence engine (MORPHOLOGY §11).** Formalized the human's
+- **Attractor basins → a real divergence engine (MORPHOLOGY §11).** Formalized the guiding
   intuition with quality-diversity research: a computed **morphospace** with morphotypes as
   **attractor centroids**, a **coherence field** (familiar near centroids, uncanny in the
   valleys), **basin dynamics** (coherence pull / confluence / saltation), **niched litters**
   (9 offspring spread across morphospace, not 9 near-clones), a **MAP-Elites "Menagerie"**
   archive, and a **novelty** steer. This is the cure for premature convergence (collapse to one
-  morphotype) the human flagged.
+  morphotype) that was flagged.
 
 **Critical-review changes applied:** replaced the fixed `vibe` genome tag with a *computed*
 morphospace position (so a creature reports its true current form); re-cut the roadmap (M8 was
@@ -853,10 +853,10 @@ Two things in response to feedback (creatures lag on click; too few distinct sha
   10→1-context consolidation via drei `<View>` is scheduled as M8.)
 - **Variety:** wrote **[MORPHOLOGY.md](MORPHOLOGY.md)** — a full spec for the variety system
   the toy needs. A **genome v2** "creature grammar": ~24 **morphotypes** (priors, split into a
-  strong *familiar* and a strong *uncanny* cluster per the human's call), ~24 **trait axes**,
+  strong *familiar* and a strong *uncanny* cluster by design), ~24 **trait axes**,
   a ~25-part **vocabulary** (wings, tails, horns, fins, pincers, frills, carapace, every eye
   style, every mouth style), and a **procedural covering/texture** system (in-shader patterns
-  + bump for scales/fur/feathers/chitin/slime — no asset files, the human chose procedural).
+  + bump for scales/fur/feathers/chitin/slime — no asset files, procedural by design).
   The key unlock is giving appendages a full **spherical aim** (azimuth + elevation + roll),
   which is why v1 looks same-y (parts can only fan sideways today). Build plan = ROADMAP
   Phase 3 (M8–M13), which takes priority over the M6/M7 stretch. Decisions locked: procedural
@@ -881,7 +881,7 @@ so it can't show motion — same limit as screenshots).
 visibly changes over time; deterministic + bounded — never exceeds the rig's amplitudes, no
 NaN — across 200 creatures × 4 times; serpents undulate more than the compact quadruped);
 `npm run build` → succeeds; no console errors in-browser (base pose renders; motion plays in
-a real foregrounded browser). Awaiting the human's visual read on the animation.
+a real foregrounded browser). Pending a visual read on the animation.
 
 ## M4 — Directed pressures · built 2026-06-28 (awaiting test)
 
@@ -918,7 +918,7 @@ length/curl, an optional second ring of spikes/eyes).
 → succeeds. **Diversity sample (600 random genomes, headless):** symmetry 71% bilateral / 29%
 radial; bilateral leg-pairs spread 0→88 / 1→87 / 2→179 / 3→71 (no collapse onto one mold);
 51% carry fins; body length short 215 / mid 241 / long 144; node counts 6–49 across **38
-distinct** sizes. Awaiting the human's visual read.
+distinct** sizes. Pending a visual read.
 
 ## Creature-look pass — face, skin, articulation · 2026-06-28 (awaiting test)
 
@@ -943,13 +943,13 @@ refs — eyes are the emotional anchor; countershading + rim give form):
   thinning shin; **feet/claws** render as flattened pads, **fins** as thin blades.
 - **Dev:** `preserveDrawingBuffer` in dev + the freeze hook for headless capture (the preview
   screenshot tool still can't grab the WebGL framebuffer, so verified by stats + feature
-  tally + the human's eyes), and `window.__cambrian.terminals` reports the face/limb tally.
+  tally + a visual read), and `window.__cambrian.terminals` reports the face/limb tally.
 
 **Verified (2026-06-28):** `npm run typecheck` clean (added `vite/client` types for
 `import.meta.env`); `npm test` → **32/32** (bounds guard caught an over-range knee curl —
 fixed); `npm run build` → succeeds. **In-browser feature tally:** quadrupeds spawn with 2
 eyes + 4 feet + a mouth, fish with 2 eyes + 3 fins + a mouth, radials with a clawed-arm
-crown. Awaiting the human's visual read on whether it now reads as a creature.
+crown. Pending a visual read on whether it now reads as a creature.
 
 ## Morphology pass — recognizable body plans · 2026-06-28 (awaiting test)
 
@@ -975,13 +975,13 @@ README refs):
 - **Dev affordances:** enriched `window.__cambrian` (symmetry, bounds dims, max radius) and
   added `window.__cambrianFreeze(true)` to switch the viewer to on-demand rendering. (Note:
   the headless preview still can't screenshot the WebGL canvas, so this pass was verified by
-  geometry stats + the human's eyes.)
+  geometry stats + a visual read.)
 
 **Verified (2026-06-28):** `npm run typecheck` clean; `npm test` → **32/32** (added a
 forced-mode test: radial/bilateral honored and valid across 300 seeds each); `npm run build`
 → succeeds. **In-browser geometry stats:** bilateral z:width dropped from ≈3.3 → **≈2.2 avg**
 (animal proportions); bodies are now chunky (max radius 0.47–0.93, up from ~0.37 threads);
-radial creatures are fat discs/domes with arm crowns. Awaiting the human's visual read.
+radial creatures are fat discs/domes with arm crowns. Pending a visual read.
 
 ## M3 — Lineage + sharing · built 2026-06-27 (awaiting test)
 

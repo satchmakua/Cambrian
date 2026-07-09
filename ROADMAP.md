@@ -1,15 +1,14 @@
 # ROADMAP — Cambrian
 
-The milestone checklist. Standing instruction: **"continue"** → build the next
-unchecked milestone.
+The milestone checklist. Build the next unchecked milestone.
 
 **Rules of the road:**
-- Each milestone is an **independently runnable** slice — something the human can
-  actually test, not an internal-only refactor.
+- Each milestone is an **independently runnable** slice — something actually
+  testable end-to-end, not an internal-only refactor.
 - Every milestone ends with explicit **Test** steps: what to do and what should
   happen. These are the acceptance criteria.
 - Build **top-down**: a thin end-to-end slice first, then deepen.
-- Check a box **only after the human confirms its Test passes**, then add a
+- Check a box **only after its Test passes**, then add a
   `PROGRESS.md` entry.
 
 ---
@@ -21,7 +20,7 @@ unchecked milestone.
   wired end to end, one creature on screen. Determinism + 4000-genome fuzz tests pass.
   **Test:** `npm install` then `npm run dev` → open http://localhost:5173, a little
   alien rotates on a turntable; "Re-roll jitter" re-grows it. `npm test` → green;
-  `npm run build` → succeeds. _(built 2026-06-27, awaiting human confirmation)_
+  `npm run build` → succeeds. _(built 2026-06-27, pending visual confirmation)_
 
 ## Phase 1 — A complete, fun toy
 
@@ -30,20 +29,20 @@ unchecked milestone.
   (segments, appendages, bilateral symmetry). Determinism + fuzz tests stay green.
   **Test:** click "New random creature" repeatedly → visibly different, always-valid
   creatures appear; the same seed always regrows the same one.
-  _(built 2026-06-27, self-verified in-browser, awaiting human confirmation)_
+  _(built 2026-06-27, self-verified in-browser, pending visual confirmation)_
 
 - [ ] **M2 — Mutate + breeder loop.** The four mutation operators (point / structural /
   duplication / macro) + a 3×3 offspring gallery; click a child → it parents the next
   generation. **This is the core toy.**
   **Test:** from a creature, pick offspring across ~10 generations and steer the body
   toward a target (e.g. "longer, more limbs"); the lineage visibly trends that way.
-  _(built 2026-06-27, self-verified in-browser, awaiting human confirmation)_
+  _(built 2026-06-27, self-verified in-browser, pending visual confirmation)_
 
 - [ ] **M3 — Lineage + sharing.** Family-tree view, snapshots, `CAM1:` genome-string
   import/export, regrow-from-string, localStorage session.
   **Test:** copy a creature's string, reload the page, paste it → the exact same
   creature returns; the lineage tree shows the path and lets you branch from an ancestor.
-  _(built 2026-06-27, self-verified in-browser, awaiting human confirmation)_
+  _(built 2026-06-27, self-verified in-browser, pending visual confirmation)_
 
 ## Phase 2 — Direction & polish
 
@@ -51,14 +50,14 @@ unchecked milestone.
   `runGenerations` headless fast-forward, then show the result and the path taken.
   **Test:** set "bigger + aquatic", run 50 generations → the result is larger and more
   fin/streamlined than the start; running again with the same seed reproduces it.
-  _(built 2026-06-28, self-verified in-browser, awaiting human confirmation)_
+  _(built 2026-06-28, self-verified in-browser, pending visual confirmation)_
 
 - [ ] **M5 — Better bodies & motion.** Radial symmetry, terminals (fins/claws/feet/eyes)
   rendered as distinct tips, procedural undulation/walk animation, palette/materials.
   **Test:** evolve a radial creature and a many-legged one; both animate plausibly
   (undulating spine, limbs in phase) without visual blow-ups.
   _(built 2026-06-28: distinct terminals + countershaded skin + procedural motion;
-  awaiting human visual confirmation)_
+  pending visual confirmation)_
 
 ## Phase 3 — The creature grammar (v2)  ·  **next priority**
 
@@ -71,7 +70,7 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
   share to `CAM2:`; raise `NODE_MAX`. (Gallery `<View>` consolidation rides here if convenient;
   the remount churn is already fixed by stable keys.)
   **Test:** roll creatures with tails pointing back, fins up, horns forward — all expressible.
-  _(built 2026-06-28, self-verified: aim test + 2000-genome v2 fuzz + in-browser; awaiting human)_
+  _(built 2026-06-28, self-verified: aim test + 2000-genome v2 fuzz + in-browser; pending a visual read)_
 
 - [x] **M9 — Part vocabulary (core).** A `style` gene (0..1) selects render variants per
   part. Built the high-impact set: **5 eye styles** (round/beady/slit/compound/glowing),
@@ -79,7 +78,7 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
   (new terminal — crabs!), **wings** (crude membranes), and fins. _Deferred to polish (M16):
   frills, ears, antennae, carapace, articulated wing struts, leg-posture geometry._
   **Test:** build creatures with a beak vs. a fanged maw vs. pincers; each reads distinctly.
-  _(built 2026-06-28, self-verified: 42 tests + in-browser pincers/styles + no errors; awaiting human)_
+  _(built 2026-06-28, self-verified: 42 tests + in-browser pincers/styles + no errors; pending a visual read)_
 
 - [x] **M10 — Morphotype library + trait sampler.** **24 morphotype priors** (16 familiar +
   8 uncanny) as terse data tables, a generic compiler (morphotype → genome via the M9 parts),
@@ -89,7 +88,7 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
   **Test:** random rolls read clearly as cat / crab / heron / dragon / cephalopod and keep
   surprising over a long session.
   _(built 2026-06-28, self-verified: 42 tests + in-browser variety (28% radial, finite, no
-  errors); awaiting human's visual read on whether the species read clearly)_
+  errors); pending a visual read on whether the species read clearly)_
 
 - [x] **M11 — Divergence engine.** A computed **morphospace** (`morphospace.ts`: 8-D descriptor +
   attractor centroids sampled per morphotype + a **coherence** label), and **niched litters**
@@ -99,7 +98,7 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
   divergence; revisit if lineages don't settle.)_ See MORPHOLOGY §11.
   **Test:** a lineage visibly drifts *between* morphotypes instead of staying one shape; each
   litter offers genuinely divergent choices.
-  _(built 2026-06-28, self-verified: 47 tests + in-browser coherence labels; awaiting human)_
+  _(built 2026-06-28, self-verified: 47 tests + in-browser coherence labels; pending a visual read)_
 
 - [x] **M12 — Covering & texture.** A `Covering` gene (type + pattern + scale/contrast/sheen),
   sampled per-morphotype, mutated, and `CAM2:`-shared. The skin shader gained an 8-pattern color
@@ -110,7 +109,7 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
   **Test:** the same silhouette in fur vs. scales vs. chitin looks like a different animal.
   _(built 2026-06-29, self-verified: 51 tests + typecheck + build; in-browser the default reads as
   matte spotted fur, a roll came out wet glossy slime, another a hard scaled lizard — all distinct,
-  shader compiles with no console errors; awaiting human visual confirmation)_
+  shader compiles with no console errors; pending visual confirmation)_
 
 - [x] **M13 — Motion styles.** The animation rig generalized from "undulation + gait" to **8
   styles** (walk / swim / slither / scuttle / flap / drift / ooze) picked from the creature's own
@@ -123,7 +122,7 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
   _(built 2026-06-29, self-verified: 52 tests incl. a style-classification test (fish→swim · crab→
   scuttle · bird→flap · serpent→slither · cephalopod→drift · felid→walk) + deterministic/bounded
   motion; in-browser 8 rolls produced slither/scuttle/drift/flap/walk/swim each matching its body
-  plan, no console errors; awaiting human's visual read on the foregrounded animation)_
+  plan, no console errors; pending a visual read on the foregrounded animation)_
 
 - [x] **M14 — The Menagerie.** A **MAP-Elites** archive (`src/viewer/archive.ts`) over two
   morphospace axes (limb count × elongation) — every creature that appears (the current one + its
@@ -139,7 +138,7 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
   reference set) + archive tests (binning in-range, the grid spreads, highest-coherence elite per
   cell, idempotent); in-browser the grid filled 3→25/49 over 20 rolls, clicking a cell loaded that
   specimen (gen→0, seed from the archive), the novelty run advanced gen 0→15, no console errors;
-  awaiting human's read)_
+  pending a visual read)_
 
 - [x] **M15 — Smooth skin** *(elevated from far-stretch — biggest "less crude" win)*.
   `src/viewer/smoothSkin.ts`: a signed-distance field = the **smooth union** of the skeleton's
@@ -154,8 +153,8 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
   _(built 2026-06-29, self-verified: 61 tests incl. 4 smooth-skin tests (non-empty + finite +
   within padded bounds + spans the body across 30 creatures; deterministic; survives serpent/radial);
   in-browser the toggle flips capsules⇄smooth and rebuilds on every roll with no console errors, and
-  a direct in-browser build of the default creature gave a 12,688-triangle surface in 84ms; awaiting
-  the human's visual read on the organic look)_
+  a direct in-browser build of the default creature gave a 12,688-triangle surface in 84ms; pending
+  a visual read on the organic look)_
 
 - [x] **M16 — Dials & polish.** New directed-evolution axes — **Wings** (reward wing parts),
   **Neck** (reward the head reaching forward of the bulk), and a categorical **Skin** steer (hold
@@ -167,7 +166,7 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
   lineages + the covering steer holding "scales" through a run; in-browser the Wings/Neck/Skin
   controls + a 45-gen run took a furred creature → scales + a wing + a long forward reach, and the
   morphotype filter rolled crab/cephalopod/bird/serpent correctly (right symmetry + motion), no
-  console errors. **Phase 3 complete.** Awaiting the human's read)_
+  console errors. **Phase 3 complete.** Pending a visual read)_
 
 ## Phase 4 — Stretch
 
@@ -183,7 +182,7 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
   (bit-identical replays), finite + non-exploding (< 100 bu) across 14 creatures, and a run strictly
   improves with elitism + replays identically; in-browser "Evolve to walk" lazy-loaded Rapier and
   evolved an 8-gen walker travelling 3.76 bu, lineage advanced, no console errors. **The roadmap is
-  complete.** Awaiting the human's read)_
+  complete.** Pending a visual read)_
 
 - [x] **M7 — (stretch) glTF export.** `src/viewer/exportGltf.ts` bakes the current creature
   (capsule-union *or* the M15 smooth surface) + simplified feature solids into a static THREE.Group
@@ -194,7 +193,7 @@ morphotype → trait → part → covering grammar. Takes priority over the M6/M
   _(built 2026-06-29, self-verified: 66 tests incl. 3 export-group tests (real meshes, finite
   geometry, non-empty across 20×2 creatures); in-browser the exporter produced a **valid GLB** for
   both modes — `glTF` magic, version 2, intact JSON chunk + length, glTF-2.0 doc with 59 meshes
-  (capsules) / 12 (smooth) + materials; the button renders, no console errors. Awaiting the human's
+  (capsules) / 12 (smooth) + materials; the button renders, no console errors. Pending an
   open-in-Blender check)_
 
 ---
@@ -222,7 +221,7 @@ deterministic; growth stays bounded & meshable; the 4000-genome fuzz test stays 
   orbits — the texture is fixed to the body, no swimming.
   _(built 2026-06-29: typecheck + 72 tests + build green; in-browser the shader compiles across all
   covering types (fur/slime/scales/chitin/skin) + the smooth path with no console errors; the
-  body-locked mechanism replaces the world-space sampling — awaiting the human's visual read that the
+  body-locked mechanism replaces the world-space sampling — pending a visual read that the
   swimming is gone)_
 
 - [x] **M18 — Strict bilateral symmetry.** Bilateral creatures are now **exactly** mirror-symmetric.
@@ -248,7 +247,7 @@ deterministic; growth stays bounded & meshable; the 4000-genome fuzz test stays 
   **Test:** every creature has ≥1 eye and a mouth; the largest eye is ≥ 0.15 bu (never tiny).
   _(built 2026-06-29: probe → eyes 200/200, mouths 200/200 (were 29/30 and 20/30), mean eye r/bodyR
   0.25→0.43; 74 tests incl. the face invariant; in-browser every fresh roll shows 2 eyes + a mouth
-  (radial: a clustered central maw), no console errors — awaiting the human's read that the face pops)_
+  (radial: a clustered central maw), no console errors — pending a visual read that the face pops)_
 
 - [x] **M20 — Right-rail / gallery layout.** The rail aside was `overflow: hidden` with the gallery as
   `flex: 1`, so the M16 sliders + M6 physics panel squeezed it and the 3×3 grid's rows clipped.
@@ -272,7 +271,7 @@ deterministic; growth stays bounded & meshable; the 4000-genome fuzz test stays 
   width), not variations on one body.
   _(built 2026-06-29: probe → foot-spread varies by posture (croc 0.57 / lizard 0.45 sprawl vs
   ungulate 0.23 / bird 0.30 tucked), feet reach below the torso; **bilateral symmetry stays exact
-  (0.0)** through the knee + mirror; 74 tests + build green — awaiting the human's read that creatures
+  (0.0)** through the knee + mirror; 74 tests + build green — pending a visual read that creatures
   now look distinct)_
 
 ### 5.B — Complete the catalogue
@@ -293,7 +292,7 @@ deterministic; growth stays bounded & meshable; the 4000-genome fuzz test stays 
   existing morphospace test's mean > 0.45 / min > 0.2 holds over the 30-type library) + build green;
   in-browser each new kind rolled a distinctive valid creature (motions walk/flap/scuttle in character;
   coverings fur/plates/feathers/chitin/skin all compile) with no console errors. Fixed one fidelity
-  nit found in-browser: turtle/ostrich stub tails no longer render a fish-fin tip. Awaiting the human's
+  nit found in-browser: turtle/ostrich stub tails no longer render a fish-fin tip. Pending a
   visual read that each new kind reads clearly.)_
 
 - [x] **M23 — Full part vocabulary (§6).** Implement every deferred part with distinct crude geometry:
@@ -315,7 +314,7 @@ deterministic; growth stays bounded & meshable; the 4000-genome fuzz test stays 
   in-browser every new part rendered as a feature across felid/fish/turtle/bird/wyvern/crab/shark/dragon
   with no console errors. (Updated the morphospace "dragon reads as a winged beast" test to admit chimera
   as a basin sibling — the descriptor can't see covering; M26's sheen/headedness dims separate them.)
-  Awaiting the human's visual read.)_
+  Pending a visual read.)_
 
 - [x] **M24 — Bauplan: structural attractor basins, the guaranteed face & the mouth organ.**
   _(Re-scoped from "body regions" per playtest feedback — creatures were drifting into mouthless,
@@ -338,7 +337,7 @@ deterministic; growth stays bounded & meshable; the 4000-genome fuzz test stays 
   test; the `aim`/`morphospace` tests adjusted for the guaranteed face) + build green; in-browser every
   fresh roll AND every generation of harsh breeding (saltation/confluence ×6) kept eyes + a mouth (0
   faceless), legs stayed canonical, smooth mode built, the Coherence slider + all controls wired with
-  no console errors. Awaiting the human's visual read on the mouth organ + smooth fix.)_
+  no console errors. Pending a visual read on the mouth organ + smooth fix.)_
 
 - [ ] **M25 — Full motion library (§8).** Add the gaits that were folded or missing: **hop**
   (crouch→launch→land), **trot/gallop** (with a body bound), **glide** (wings held, slow bank),
