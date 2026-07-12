@@ -121,9 +121,20 @@ export function CreatureMesh({
   // position) so the covering shader can weld the texture to the skin even as the mesh animates.
   const sphereGeos = useMemo(() => {
     const m = new THREE.Matrix4();
+    const rs = new THREE.Matrix4();
+    const zero = new THREE.Vector3();
+    const qq = new THREE.Quaternion();
+    const sc = new THREE.Vector3();
     return data.bodySpheres.map((i) => {
-      const g = new THREE.SphereGeometry(data.nodes[i].radius, 18, 14);
-      const p = data.nodes[i].pos;
+      const n = data.nodes[i];
+      const g = new THREE.SphereGeometry(n.radius, 18, 14);
+      // an anisotropic node (a shaped head, a flat body) bakes its local-frame ellipsoid scale +
+      // orientation into the sphere, so the silhouette reads as a wedge/dome/slab — not a round ball.
+      // Baked before aBodyPos so the covering shader still welds to the deformed rest surface.
+      if (n.scale && n.quat) {
+        g.applyMatrix4(rs.compose(zero, qq.fromArray(n.quat), sc.fromArray(n.scale)));
+      }
+      const p = n.pos;
       bakeBodyPos(g, m.makeTranslation(p[0], p[1], p[2]));
       return g;
     });

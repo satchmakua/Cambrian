@@ -16,6 +16,8 @@ const SURFACE_ORGANS = new Set<Terminal>(['eye', 'mouth', 'ear']);
 export interface MeshNode {
   pos: [number, number, number];
   radius: number;
+  scale?: [number, number, number]; // local-frame ellipsoid multipliers on radius (heads/flat bodies)
+  quat?: [number, number, number, number]; // node orientation — only carried when `scale` is set
 }
 
 export interface MeshEdge {
@@ -43,7 +45,7 @@ export interface MeshData {
 }
 
 export function buildMeshData(p: Phenotype): MeshData {
-  const nodes: MeshNode[] = p.nodes.map((n) => ({ pos: n.pos, radius: n.radius }));
+  const nodes: MeshNode[] = p.nodes.map((n) => ({ pos: n.pos, radius: n.radius, scale: n.scale, quat: n.scale ? n.quat : undefined }));
   const edges: MeshEdge[] = [];
   for (const [a, b] of p.edges) {
     // never draw the connecting capsule into a seated face organ (see SURFACE_ORGANS) — that tube is

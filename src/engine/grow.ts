@@ -26,6 +26,7 @@ export interface BodyNode {
   pos: Vec3;
   quat: Quat; // orientation; the node's local forward is +Z
   radius: number; // always ≥ R_MIN
+  scale?: Vec3; // local-frame ellipsoid multipliers on `radius` (width/height/length); round if absent
   kind: 'spine' | 'limb' | 'terminal';
   terminal?: Terminal;
   part?: { kind: PartKind; style: number }; // which genome part grew this node (for render variants)
@@ -77,6 +78,15 @@ export function grow(genome: Genome): Phenotype {
     // so it reads as a body, not beads on a stick.
     const girth = (seg.size[0] + seg.size[1]) / 2;
     const elong = Math.min(1.4, Math.max(0.75, seg.size[2] / Math.max(girth, 0.001)));
+    // The girth above averages width (x) and height (y) into one radius, so a broad or a domed skull
+    // would render as the same round ball. Keep that anisotropy as a per-node ellipsoid SCALE (about
+    // the mean, so volume/union are preserved and the scalar radius is untouched): a wide flat slab, a
+    // tall narrow dome, a long wedge now read as different heads in capsule mode. z stays 1 — segment
+    // length is already carried by `elong` (the chain stride), so scaling z too would double-count.
+    const csx = Math.min(1.7, Math.max(0.6, seg.size[0] / Math.max(girth, 1e-3)));
+    const csy = Math.min(1.7, Math.max(0.6, seg.size[1] / Math.max(girth, 1e-3)));
+    const segScale: Vec3 | undefined =
+      Math.abs(csx - 1) > 0.02 || Math.abs(csy - 1) > 0.02 ? [csx, csy, 1] : undefined;
     const spine: number[] = [];
     let pos = startPos;
     let quat = startQuat;
@@ -88,6 +98,7 @@ export function grow(genome: Genome): Phenotype {
       const profile = 1 + BODY_BULGE * Math.sin(Math.PI * u);
       const radius = girth * Math.pow(seg.taper, i) * profile;
       const idx = addNode(pos, quat, radius, 'spine');
+      if (segScale) nodes[idx].scale = segScale;
       if (prev >= 0) edges.push([prev, idx]);
       spine.push(idx);
       prev = idx;
