@@ -299,3 +299,14 @@ export function computeAnim(rig: Rig, t: number): Float32Array {
   }
   return anim;
 }
+
+/**
+ * Jaw gape oscillation (mouth overhaul) — the angle (rad) a mandible hangs open at time `t`.
+ * A slow, mostly-closed breathing rhythm that periodically yawns wider: the 1.6 power keeps the
+ * jaw near rest most of the cycle so motion reads as a living idle, not a metronome. Pure and
+ * bounded: 0 ≤ gape ≤ amp for any input, deterministic in (t, phase, omega).
+ */
+export function jawGape(t: number, phase: number, omega: number, amp: number): number {
+  const s = 0.5 + 0.5 * Math.sin(t * omega + phase);
+  return amp * Math.pow(s, 1.6);
+}

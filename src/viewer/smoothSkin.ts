@@ -2,49 +2,43 @@
  * Smooth skin (MORPHOLOGY §12, ROADMAP M15) — one organic surface over the node field.
  *
  * The capsule-union "kit" is robust but reads as separate parts welded with hard seams.
- * This replaces it (when toggled) with a single watertight surface: a signed-distance
- * field that is the **smooth union** of the skeleton's capsules + joint spheres, polygonized
- * by **marching tetrahedra** (6 tets per grid cell — small, watertight, no 256-entry table,
- * no opaque metaball tuning; the iso-surface is exactly the smoothed capsule union, so it
- * hugs the body predictably). Pure geometry in body space (= world space — the creature isn't
- * transformed), so the existing covering shader's world-space patterns/bump carry straight over.
+ * This replaces it (when toggled) with a single watertight surface: the shared body field
+ * (`bodyField.ts` — smooth union of the skeleton's capsules + the anisotropic node ellipsoids,
+ * so shaped skulls/flat torsos keep their silhouette), polygonized by **marching tetrahedra**
+ * (6 tets per grid cell — small, watertight, no 256-entry table; the iso-surface is exactly
+ * the smoothed capsule union, so it hugs the body predictably). Pure geometry in body space
+ * (= world space — the creature isn't transformed), so the existing covering shader's
+ * world-space patterns/bump carry straight over.
+ *
+ * `carves` subtract mouth cavities from the field (the mouth-overhaul): the maw becomes a real
+ * recess in the head with a soft lip rim, and every vertex gets an `aFlesh` weight (1 inside the
+ * cavity → 0 at `band` outside it) that the covering shader turns into dark wet mouth-flesh.
  *
  * It's a *viewer* concern and gated behind the capsule path: `grow()` stays static, thumbnails
  * keep capsules, and the build is one-time per creature (off the render loop). Deterministic
  * from the phenotype; bounded & finite on any topology (asserted by the test).
  */
 import * as THREE from 'three';
-import type { Phenotype, BodyNode } from '../engine/grow';
+import type { Phenotype } from '../engine/grow';
+import { buildFieldPrims, fieldAtCarved, carveDist, type Carve } from './bodyField';
 
 // keep grid_samples × primitives under this, so the (one-time, off-render-loop) build is quick
 const BUDGET = 1e6;
 
-// The smooth body meshes only the locomotor silhouette — trunk + these limb kinds. Eyes, mouth,
-// horns, wings, fins, ears, whiskers, etc. are drawn as solid features on top, so meshing them into
-// the field only made thin floating lumps + gaps (M24 fix).
-const BODY_PART_KINDS = new Set(['leg', 'tail', 'arm', 'tentacle', 'neck']);
-function isBodyNode(n: BodyNode): boolean {
-  return n.kind === 'spine' || (n.part != null && BODY_PART_KINDS.has(n.part.kind));
-}
-// The HYBRID mode meshes *everything* (full part definition) except the eyes/mouth, which always draw
-// as solids — best of both: an organic surface like smooth, but nothing drops out like capsules keep.
-function isHybridNode(n: BodyNode): boolean {
-  return n.terminal !== 'eye' && n.terminal !== 'mouth';
-}
-
-export function buildSmoothGeometry(p: Phenotype, full = false): THREE.BufferGeometry {
-  // primitives as flat typed arrays (capsule a→b, radius r) — a hot-loop win over objects.
-  // Capsules already round-cap their endpoints, so the joints/leaves need no extra spheres.
-  // `full` (hybrid) meshes every part for full definition; otherwise just the locomotor body.
-  const { ax, ay, az, bx, by, bz, pr, count: np } = primitives(p, full);
+export function buildSmoothGeometry(p: Phenotype, full = false, carves: readonly Carve[] = []): THREE.BufferGeometry {
+  // the shared body field as flat typed arrays — `full` (hybrid) meshes every part for full
+  // definition; otherwise just the locomotor body (see bodyField for the filters + fallbacks).
+  const prims = buildFieldPrims(p, full ? 'hybrid' : 'body');
+  const np = prims.nc + prims.ne;
 
   let meanR = 0;
-  for (let i = 0; i < np; i++) meanR += pr[i];
-  meanR = meanR / Math.max(np, 1);
-  const k = (full ? 0.34 : 0.5) * meanR; // hybrid blends tighter → keeps more part definition
+  for (let i = 0; i < prims.nc; i++) meanR += prims.pr[i];
+  meanR = meanR / Math.max(prims.nc, 1);
+  prims.k = (full ? 0.34 : 0.5) * meanR; // hybrid blends tighter → keeps more part definition
 
-  // grid bounds: the body bounds padded so the inflated surface stays inside
-  const pad = meanR * 1.5 + k + 0.05;
+  // grid bounds: the body bounds padded so the inflated surface stays inside — including any
+  // ellipsoid node's overshoot past its scalar radius (a stretched snout, a broad slab body)
+  const pad = meanR * 1.5 + prims.k + prims.excess + 0.05;
   const min = [p.bounds.min[0] - pad, p.bounds.min[1] - pad, p.bounds.min[2] - pad];
   const max = [p.bounds.max[0] + pad, p.bounds.max[1] + pad, p.bounds.max[2] + pad];
   const ext = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
@@ -59,13 +53,18 @@ export function buildSmoothGeometry(p: Phenotype, full = false): THREE.BufferGeo
   const dy = ext[1] / ny;
   const dz = ext[2] / nz;
 
-  // M24: floor every primitive radius at ~0.6 of a grid cell, so a thin limb (a leg, a tail tip) is
+  // M24: floor every capsule radius at ~0.6 of a grid cell, so a thin limb (a leg, a tail tip) is
   // always at least one cell thick and can't be missed/fragmented by the marching tets (the gaps).
+  // (Ellipsoid nodes ride fat body nodes and never bind — their thin axis is backed by a capsule.)
   const rFloor = 0.6 * Math.max(dx, dy, dz);
-  for (let m = 0; m < np; m++) if (pr[m] < rFloor) pr[m] = rFloor;
+  for (let m = 0; m < prims.nc; m++) if (prims.pr[m] < rFloor) prims.pr[m] = rFloor;
+
+  // a carve rim thinner than a grid cell aliases into stair-steps — soften it to the cell size
+  const cell = Math.max(dx, dy, dz);
+  const carved: Carve[] =
+    carves.length === 0 ? [] : carves.map((c) => (c.blend >= cell * 0.8 ? c : { ...c, blend: cell * 0.8 }));
 
   // sample the field once at every grid corner: (nx+1)(ny+1)(nz+1) values.
-  // sdf = smooth-union of every capsule, inlined over the flat prim arrays.
   const sx = nx + 1;
   const sy = ny + 1;
   const sz = nz + 1;
@@ -76,26 +75,7 @@ export function buildSmoothGeometry(p: Phenotype, full = false): THREE.BufferGeo
     for (let j = 0; j < sy; j++) {
       const y = min[1] + j * dy;
       for (let i = 0; i < sx; i++) {
-        const x = min[0] + i * dx;
-        let d = Infinity;
-        for (let m = 0; m < np; m++) {
-          const pax = x - ax[m], pay = y - ay[m], paz = z - az[m];
-          const bxx = bx[m] - ax[m], byy = by[m] - ay[m], bzz = bz[m] - az[m];
-          const dot = bxx * bxx + byy * byy + bzz * bzz;
-          let h = dot > 1e-9 ? (pax * bxx + pay * byy + paz * bzz) / dot : 0;
-          h = h < 0 ? 0 : h > 1 ? 1 : h;
-          const ex = pax - bxx * h, ey = pay - byy * h, ez = paz - bzz * h;
-          const val = Math.sqrt(ex * ex + ey * ey + ez * ez) - pr[m];
-          if (d === Infinity) {
-            d = val;
-          } else {
-            // polynomial smooth-min (soft union)
-            const t = 0.5 + (0.5 * (val - d)) / k;
-            const hh = t < 0 ? 0 : t > 1 ? 1 : t;
-            d = val * (1 - hh) + d * hh - k * hh * (1 - hh);
-          }
-        }
-        field[idx(i, j, l)] = d;
+        field[idx(i, j, l)] = fieldAtCarved(prims, carved, min[0] + i * dx, y, z);
       }
     }
   }
@@ -141,6 +121,25 @@ export function buildSmoothGeometry(p: Phenotype, full = false): THREE.BufferGeo
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+
+  // aFlesh — 1 deep inside a carved cavity, fading to 0 `band` outside its wall. The covering
+  // shader shades it as dark wet mouth-flesh. Always present (zeros without carves), so the
+  // extended material never references a missing attribute.
+  const nVerts = positions.length / 3;
+  const flesh = new Float32Array(nVerts);
+  if (carved.length > 0) {
+    for (let v = 0; v < nVerts; v++) {
+      const x = positions[v * 3], y = positions[v * 3 + 1], z = positions[v * 3 + 2];
+      let w = 0;
+      for (const c of carved) {
+        const cd = carveDist(c, x, y, z);
+        const cw = 1 - cd / Math.max(c.band, 1e-4);
+        if (cw > w) w = cw;
+      }
+      flesh[v] = w < 0 ? 0 : w > 1 ? 1 : w;
+    }
+  }
+  geo.setAttribute('aFlesh', new THREE.BufferAttribute(flesh, 1));
   geo.computeVertexNormals();
   return geo;
 }
@@ -221,45 +220,6 @@ function emit(
   } else {
     out.push(a[0], a[1], a[2], c[0], c[1], c[2], b[0], b[1], b[2]); // flip
   }
-}
-
-// --- the implicit field --------------------------------------------------------------------
-
-interface FlatPrims {
-  ax: Float64Array; ay: Float64Array; az: Float64Array;
-  bx: Float64Array; by: Float64Array; bz: Float64Array;
-  pr: Float64Array; count: number;
-}
-
-function primitives(p: Phenotype, full: boolean): FlatPrims {
-  // one capsule per edge (a capsule round-caps its ends, so joints/leaves need no spheres);
-  // a lone node with no edges falls back to a degenerate a→a capsule (a sphere). Mesh only the body
-  // skeleton (trunk + locomotor limbs); feature tips are drawn as solids (M24). Fall back to all
-  // edges if a creature somehow has no body edges, so the surface is never empty.
-  const include = full ? isHybridNode : isBodyNode;
-  let bodyEdges = p.edges.filter(([a, b]) => include(p.nodes[a]) && include(p.nodes[b]));
-  if (bodyEdges.length === 0) bodyEdges = p.edges;
-  const edges = bodyEdges.length > 0 ? bodyEdges : null;
-  const count = edges ? edges.length : p.nodes.length;
-  const ax = new Float64Array(count), ay = new Float64Array(count), az = new Float64Array(count);
-  const bx = new Float64Array(count), by = new Float64Array(count), bz = new Float64Array(count);
-  const pr = new Float64Array(count);
-  if (edges) {
-    for (let i = 0; i < edges.length; i++) {
-      const a = p.nodes[edges[i][0]];
-      const b = p.nodes[edges[i][1]];
-      ax[i] = a.pos[0]; ay[i] = a.pos[1]; az[i] = a.pos[2];
-      bx[i] = b.pos[0]; by[i] = b.pos[1]; bz[i] = b.pos[2];
-      pr[i] = (a.radius + b.radius) * 0.5;
-    }
-  } else {
-    for (let i = 0; i < p.nodes.length; i++) {
-      const n = p.nodes[i];
-      ax[i] = bx[i] = n.pos[0]; ay[i] = by[i] = n.pos[1]; az[i] = bz[i] = n.pos[2];
-      pr[i] = n.radius;
-    }
-  }
-  return { ax, ay, az, bx, by, bz, pr, count };
 }
 
 function clampi(v: number, lo: number, hi: number): number {

@@ -12,9 +12,12 @@ lineage from a scurrying blob to a finned giant to a striped quadruped.
 textures · M18 strict bilateral symmetry · M19 always-readable face · M20 gallery layout · M21
 distinct leg postures) done, the **morphotype library is now 30** (M22 added primate, mustelid,
 turtle, ratite, chimera, arthro-alien, crystalline), the **full part vocabulary** ships (M23: ears,
-whiskers, gills, carapace/shell, crest, club/barb tails, 8 mouth styles, stalked eyes, strut-braced
+whiskers, gills, carapace/shell, crest, club/barb tails, 10 mouth styles, stalked eyes, strut-braced
 wings), and a **bauplan** layer (M24) gives every creature a canonical limb arrangement + a guaranteed
-prominent face (a real mouth organ) that survives evolution, with a tunable "weirdness" dial. Genome **v2 + spherical aim (M8)**, a **part
+prominent face (a real mouth organ) that survives evolution, with a tunable "weirdness" dial. The
+**mouth overhaul** (2026-07-16) then rebuilt every mouth around the true skin: lip curves ray-traced
+onto the body's implicit surface, teeth rooted in the same curves (nothing floats), maws **carved**
+into the smooth skin as real wet-flesh recesses, and a mandible that idles open/shut. Genome **v2 + spherical aim (M8)**, a **part
 vocabulary** with eye/mouth styles, horns, pincers, wings (M9), **morphotype priors + a bimodal sampler** (M10)
 so rolls read as cat / crab / heron / dragon / cephalopod, a **divergence engine** (M11:
 morphospace + coherence labels + niched litters), **procedural covering & texture** (M12: in-shader

@@ -70,3 +70,28 @@ describe('procedural animation', () => {
     expect(dominant('felid')).toBe('walk');
   });
 });
+
+describe('jaw gape (mouth overhaul)', () => {
+  it('is bounded by amp, non-negative, and deterministic', async () => {
+    const { jawGape } = await import('../../src/viewer/animation');
+    for (let i = 0; i < 400; i++) {
+      const t = i * 0.173;
+      const g = jawGape(t, 1.3, 0.9, 0.12);
+      expect(g).toBeGreaterThanOrEqual(0);
+      expect(g).toBeLessThanOrEqual(0.12);
+      expect(g).toBe(jawGape(t, 1.3, 0.9, 0.12));
+    }
+  });
+
+  it('actually moves — the jaw is alive, not frozen', async () => {
+    const { jawGape } = await import('../../src/viewer/animation');
+    let min = Infinity;
+    let max = -Infinity;
+    for (let i = 0; i < 200; i++) {
+      const g = jawGape(i * 0.1, 0, 0.8, 0.1);
+      if (g < min) min = g;
+      if (g > max) max = g;
+    }
+    expect(max - min).toBeGreaterThan(0.05); // sweeps most of its amplitude over a cycle
+  });
+});

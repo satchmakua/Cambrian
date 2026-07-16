@@ -159,6 +159,9 @@ export interface MouthGene {
   style: MouthStyle;            // see §6.3 — beak, maw, mandibles, sucker, baleen, lamprey, none
   size: number; teeth: number;  // 0 none … 1 fanged
 }
+// NOTE (as built): mouths use the generic AppendageGene with a single `style` scalar — the
+// separate `teeth` gene above was never wired. Tooth pattern/gape derive deterministically
+// from `style` + the genome seed inside the viewer's mouth modules (see §6.3).
 
 export interface TailGene { length: number; style: TailStyle; thickness: number; curl: number; }
 
@@ -287,15 +290,34 @@ spherical aim (§3.1). Build these out fully — this is the "tedious robustness
 - Placement from `eyePlacement` (side ↔ front).
 
 ### 6.3 Mouths (we need mouths — `MouthStyle`)
-A real face needs a real mouth. Each is a distinct crude assembly:
-- **maw** — open jaw: upper + lower flattened wedges, dark interior, optional tooth row.
-- **beak** — two hard cones meeting (bird/turtle/cephalopod); hooked variant (raptor).
-- **mandibles** — paired side pincers that meet (insect/arachnid).
-- **sucker** — a radial disc of small teeth (lamprey/leech) or a round suction ring.
-- **baleen / filter** — a fringed slot (whale/basking).
-- **tusked / fanged** — maw + protruding tusks/fangs (`teeth` gene).
-- **proboscis** — a tube (butterfly/mosquito).
-- **none** — featureless (slime/alien).
+A real mouth is a slit IN the face, not an assembly glued in front of it. Every mouth is
+**anchored to the true skin surface** (the mouth-overhaul architecture — do NOT hand-place
+primitive assemblies; that is the floating-geometry defect this system replaced):
+- `src/viewer/bodyField.ts` — the body's implicit skin field (one source of truth for
+  "where exactly is the surface?"), plus subtractive `Carve` ops.
+- `src/viewer/mouthLine.ts` — the mouth line/ring: curves ray-traced ONTO that field, with
+  tangent frames; also derives the cavity carves the smooth skin subtracts (a maw is
+  negative space, shaded as wet flesh via the `aFlesh` vertex attribute).
+- `src/viewer/mouths/` — one surface-anchored module per variant, dispatched by style band
+  (`partStyles.mouthVariant`): lips are swept tubes along the lip curves, teeth are
+  instanced fangs whose roots interpolate the SAME curves (floating is impossible by
+  construction), interiors recess into the carve on smooth skin.
+
+The styles (0..1 `style` gene, bands in `partStyles.ts`):
+- **herbivore / maw / fanged / underbite** — the jawed family (`mouths/jawed.tsx`): lips +
+  gum ridges + interlocking tooth rows + a mandible group that idles open/shut
+  (`animation.jawGape`); fanged carries corner canines that clear the closed lip line.
+- **beak** — a cere collar seated on the skin + two lofted, hooked keratin halves
+  (`mouths/beak.tsx`); hook deepens on a seeded draw (raptor).
+- **mandibles** — paired chitin shear-blades hinged at the true mouth corners, serrated on
+  the inner edge, with a small fleshy mouth behind them (`mouths/mandibles.tsx`).
+- **sucker / lamprey** — a radial orifice (`mouths/ring.tsx`): a closed lip ring + a lofted
+  funnel; lamprey studs the funnel with concentric rasp-tooth rings, sucker gets a rasp
+  ring + puckered suction disc.
+- **baleen** — a fringed keratin curtain hanging from the upper lip line inside a heavy
+  lower jaw line (`mouths/baleen.tsx`).
+- **proboscis / trunk** — collared feeding tubes swept off a socket ring
+  (`mouths/probe.tsx`); the trunk droops, ridges, and tucks prehensile at the tip.
 
 ### 6.4 Head adornment & defense
 - **horn** (cone; straight/curved/branched=antler by `style`), **frill** (a fanned collar

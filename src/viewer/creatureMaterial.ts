@@ -94,9 +94,14 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
     // the texture stays welded to the skin as the body animates and the camera orbits (no swimming).
     // World normal (for countershading) we still compute ourselves — three's `worldPosition` is only
     // declared under certain defines (envmap/shadow), which don't hold for every body/thumbnail.
+    // `aFlesh` (mouth overhaul) marks carved mouth-cavity vertices: 1 deep inside the maw → 0 on
+    // untouched skin. Every body geometry sets it (zeros when there is no carve).
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec3 aBodyPos;\nvarying vec3 vBodyPos;\nvarying vec3 vWNrm;')
-      .replace('#include <project_vertex>', '  vBodyPos = aBodyPos;\n#include <project_vertex>')
+      .replace(
+        '#include <common>',
+        '#include <common>\nattribute vec3 aBodyPos;\nattribute float aFlesh;\nvarying vec3 vBodyPos;\nvarying vec3 vWNrm;\nvarying float vFlesh;',
+      )
+      .replace('#include <project_vertex>', '  vBodyPos = aBodyPos;\n  vFlesh = aFlesh;\n#include <project_vertex>')
       .replace(
         '#include <beginnormal_vertex>',
         '#include <beginnormal_vertex>\n  vWNrm = normalize(mat3(modelMatrix) * objectNormal);',
@@ -122,6 +127,11 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
           skin *= mix(0.5, 1.0, smoothstep(-0.24, 0.2, muscle(bp)));
           // grime in the deepest recesses (scale seams, plate grooves) — soils the too-clean look
           skin *= 1.0 - 0.28 * smoothstep(0.35, 0.85, surfaceHeight(bp, uCover));
+          // carved mouth interior (mouth overhaul): covering/pattern give way to dark wet gum-flesh,
+          // deepening toward near-black down the throat — depth + darkness is what reads "orifice"
+          float fw = smoothstep(0.1, 0.75, vFlesh);
+          vec3 gum = mix(vec3(0.16, 0.035, 0.045), vec3(0.045, 0.008, 0.012), smoothstep(0.4, 1.0, vFlesh));
+          skin = mix(skin, gum, fw);
           diffuseColor.rgb = skin;
         }`,
       )
@@ -129,7 +139,9 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
       .replace(
         '#include <roughnessmap_fragment>',
         `#include <roughnessmap_fragment>
-        roughnessFactor = clamp(roughnessFactor * (0.82 + 0.4 * fbm(vBodyPos * 3.6 + uOff)), 0.05, 1.0);`,
+        roughnessFactor = clamp(roughnessFactor * (0.82 + 0.4 * fbm(vBodyPos * 3.6 + uOff)), 0.05, 1.0);
+        // mouth flesh is wet — glassy specular, whatever the covering
+        roughnessFactor = mix(roughnessFactor, 0.14, smoothstep(0.1, 0.75, vFlesh));`,
       )
       // relief: perturb the (view-space) normal by the body-space height field's gradient
       .replace(
@@ -158,7 +170,8 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
           // a thin, dim, cool backlit edge — just enough to separate the silhouette from the dark
           // ground, never the warm glossy halo that read as a toy
           float fres = pow(1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition))), 5.0);
-          totalEmissiveRadiance += uRim * fres * 0.13;
+          // no backlit rim inside the mouth — a glowing throat would break the recess illusion
+          totalEmissiveRadiance += uRim * fres * 0.13 * (1.0 - 0.9 * smoothstep(0.1, 0.6, vFlesh));
           if (uSheen > 0.01) {
             float vd = abs(dot(normalize(normal), normalize(vViewPosition)));
             vec3 irid = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + vd));
@@ -178,6 +191,7 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
 const FRAG_HELPERS = /* glsl */ `
 varying vec3 vBodyPos;
 varying vec3 vWNrm;
+varying float vFlesh;
 uniform vec3 uBack; uniform vec3 uBelly; uniform vec3 uPattern; uniform vec3 uPattern2; uniform vec3 uRim;
 uniform int uPType; uniform int uCover;
 uniform float uPScale; uniform float uContrast; uniform float uSheen; uniform float uBump;

@@ -45,6 +45,71 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ---
 
+## Mouth overhaul — surface-anchored mouths, carved maws, the end of the sandwich · 2026-07-16
+
+The primitive-assembly mouths (including the 5 fitted jaw builds below) never stopped reading
+as glued-on toys: a mouth is **negative space in a face**, and everything we drew was a convex
+blob in front of one, with teeth at hand-authored offsets that nothing tied to the actual skin.
+Researched how Spore (authored rigblocks) and SDF systems (boolean carves) solve this, then
+rebuilt the whole subsystem around one idea: **every piece of mouth geometry anchors to a curve
+ray-traced onto the true body surface.**
+
+**Architecture (new modules):**
+- `src/viewer/bodyField.ts` — the skin as a pure implicit field (capsules + the per-node
+  ellipsoids, smooth-union, shared with smoothSkin) + `Carve` subtraction ops + ray/Newton
+  surface projection + the viewer's small shared vec/quat math.
+- `src/viewer/mouthLine.ts` — `MouthSpec` (variant/gape/arc per creature, seeded), the mouth
+  LINE (two lip curves welded at the corners, traced by a ray fan from inside the head) and
+  the mouth RING (closed loop for orifice/socket mouths), plus `mouthCarves()`.
+- `src/viewer/sweep.ts` — variable-radius, flattenable, closable swept tubes (lips, gums,
+  collars, trunks). `src/viewer/teeth.ts` — pure tooth placement along the same curves
+  (mirrored jitter → M18 symmetry; interlocking rows; ring variant) + one shared curved-fang
+  geometry with a root→tip vertex-color gradient, drawn as InstancedMesh rows.
+- `src/viewer/mouths/` — one module per variant band: `jawed.tsx` (herbivore/maw/fanged/
+  underbite as ONE parametric build: lips + gum ridges + interlocking teeth + a mandible group
+  hinged at the true mouth corners), `ring.tsx` (sucker/lamprey funnels with interior tooth
+  rings), `beak.tsx` (cere collar + hooked lofted halves), `mandibles.tsx` (serrated shear
+  blades at the corners), `baleen.tsx` (keratin curtain), `probe.tsx` (proboscis/trunk),
+  `palette.ts` + `shared.ts` (house flesh tones, interior sheet, rel mapper).
+- **Carved maws:** `smoothSkin.ts` subtracts the mouth cavities from the field (smooth-max,
+  soft lip rim) and emits an `aFlesh` vertex weight; `creatureMaterial.ts` shades it as dark
+  wet gum-flesh (pattern/covering give way, roughness drops, rim glow dies in the throat). On
+  smooth/hybrid skin a maw is now a genuine recess in the head. Eyes/mouths stay solids.
+- **Jaw idle:** `animation.ts` gained pure `jawGape()`; the jawed family's mandible group
+  (lower lip/gum/teeth/tongue) breathes open/shut about the corner hinge in capsule mode.
+- Engine: the mouth's seat dropped 0.45→0.12 (the anchor hugs the skin it draws on); the
+  smooth field now honors per-node ellipsoid scale, so shaped skulls survive smooth mode.
+
+Five variant modules were built by a parallel agent fan-out against the shared API, then TWO
+adversarial review rounds. Consistency lens: 10 findings (dead exports, duplicated helpers,
+palette drift, a threshold parity slip, missing jawed tests, MORPHOLOGY §6.3 drift) — fixed.
+Deep lenses (geometry / determinism / react-perf / measured-jank probes) confirmed 9 real
+bugs, all fixed: **(sev5)** capsule mode passed the cavity carves into the mouth builds, so
+lower lips traced onto an un-rendered cavity — buried inside the head on the DEFAULT render
+path (now `carves` flow only when the carved skin is shown); **(sev4)** every `sweepTube` was
+wound inside-out (walls backface-culled — flipped + signed-volume regression test); lips were
+traced on the hard-union field while smooth/hybrid render the k-blended one (a `SkinSurface`
+mode now threads through so lips sit on the skin that's actually drawn); mouth carves could
+hollow the flesh behind eyes on ~37% of carve-bearing creatures (`spareTheEyes` shrink-clamp +
+test); `toothRing` fed closed rings through an open interpolator (teeth bunched at the wrap —
+ring-aware sampling + spacing test); the variant components' single dispose effect killed
+still-in-use shared geometry/materials on every phenotype swap (split by lifetime, all 6
+modules); lamprey teeth raked down a throat that doesn't exist on the un-carved kit (cavity-
+aware rake); baleen plates could hang through the fat lower lip (clamped to the measured
+opening); grow-only ref arrays retained detached meshes (truncated per creature).
+
+**Verified (2026-07-16):** `npm run typecheck` clean; `npm test` → **169/169** across 28 files
+(62 new: mouth line on-surface/symmetry/determinism on BOTH skins, tooth-root ≤ sink-depth
+invariant, carve add/remove-matter + eye-sparing, aFlesh marking, shader-injection integrity,
+sweep winding, ring spacing, jawGape bounds, per-variant suites); `npm run build` clean
+(Rapier still its own lazy chunk). Live dev-server mounts across capsules/smooth/hybrid, 10+
+morphotypes incl. a radial 9-mouth urchin and 7-mouth horror: zero console errors. (rAF never
+ticks in the headless preview pane — nothing paints, which is also why screenshots hang — so
+shader compile is verified by a Node test that runs the real `onBeforeCompile` against three's
+standard shader source, and geometry claims by measurement probes in the test suite.)
+
+_The genome is untouched (same `CAM2:` codes) — same creatures, new faces._
+
 ## Mouth jaw builds — 5 fitted constructions across the maw bands · 2026-06-29 (Part 2)
 
 The standard "sandwich" mouth (top oval + bottom oval) was replaced. Mocked up **6 schematics** (current

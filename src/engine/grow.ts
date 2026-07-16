@@ -252,7 +252,9 @@ export function grow(genome: Genome): Phenotype {
       // draws no connecting capsule into these (see meshData SURFACE_ORGANS), so the organ must sit on
       // the surface: never buried, never adrift. Other appendages attach at the surface as before.
       const t = app.terminal;
-      const seat = t === 'eye' ? 0.6 : t === 'mouth' ? 0.45 : t === 'ear' ? 0.5 : 0;
+      // the mouth hugs the skin (0.12): its geometry is traced onto the true surface by the viewer's
+      // mouth-line system, so a proud seat would only push the anchor off the face it draws on
+      const seat = t === 'eye' ? 0.6 : t === 'mouth' ? 0.12 : t === 'ear' ? 0.5 : 0;
       // measured against the node's TRUE surface (see surfaceExtent), so a long snout or a domed skull
       // still wears its face proud rather than swallowing it.
       const out = surfaceExtent(base, dir) + seat * app.thickness;

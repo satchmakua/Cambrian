@@ -14,6 +14,7 @@ import type { Phenotype } from '../engine/grow';
 import type { Palette, Covering } from '../engine/genome';
 import { buildMeshData } from './meshData';
 import { buildSmoothGeometry } from './smoothSkin';
+import { mouthCarves } from './mouthLine';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -47,7 +48,8 @@ export function buildExportGroup(phenotype: Phenotype, smooth: boolean): THREE.G
 
   // --- body ---
   if (smooth) {
-    group.add(new THREE.Mesh(buildSmoothGeometry(phenotype), bodyMat));
+    // the baked smooth body carries the carved mouth cavity too (mouth overhaul)
+    group.add(new THREE.Mesh(buildSmoothGeometry(phenotype, false, mouthCarves(phenotype)), bodyMat));
   } else {
     for (const i of data.bodySpheres) {
       const n = data.nodes[i];
