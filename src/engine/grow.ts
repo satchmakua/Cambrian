@@ -77,7 +77,8 @@ export function grow(genome: Genome): Phenotype {
     // a continuous mass, and a fusiform profile makes the torso bulge in the middle —
     // so it reads as a body, not beads on a stick.
     const girth = (seg.size[0] + seg.size[1]) / 2;
-    const elong = Math.min(1.4, Math.max(0.75, seg.size[2] / Math.max(girth, 0.001)));
+    const rawElong = seg.size[2] / Math.max(girth, 0.001);
+    const elong = Math.min(1.4, Math.max(0.75, rawElong));
     // The girth above averages width (x) and height (y) into one radius, so a broad or a domed skull
     // would render as the same round ball. Keep that anisotropy as a per-node ellipsoid SCALE (about
     // the mean, so volume/union are preserved and the scalar radius is untouched): a wide flat slab, a
@@ -85,8 +86,16 @@ export function grow(genome: Genome): Phenotype {
     // length is already carried by `elong` (the chain stride), so scaling z too would double-count.
     const csx = Math.min(1.7, Math.max(0.6, seg.size[0] / Math.max(girth, 1e-3)));
     const csy = Math.min(1.7, Math.max(0.6, seg.size[1] / Math.max(girth, 1e-3)));
+    // The stride clamp above caps how much length the chain can express (it protects body continuity —
+    // spheres must keep overlapping). A long snout (croc, ungulate, tapered) asks for far more than
+    // 1.4, and that excess was simply discarded, so every muzzle came out stubby. Recover it as a
+    // z-stretch on the node ellipsoid: the stride — and so continuity — is untouched, but the segment
+    // finally reads as long as the genome asked. Unclamped segments get 1 (no change).
+    const csz = Math.min(1.9, Math.max(0.7, rawElong / elong));
     const segScale: Vec3 | undefined =
-      Math.abs(csx - 1) > 0.02 || Math.abs(csy - 1) > 0.02 ? [csx, csy, 1] : undefined;
+      Math.abs(csx - 1) > 0.02 || Math.abs(csy - 1) > 0.02 || Math.abs(csz - 1) > 0.02
+        ? [csx, csy, csz]
+        : undefined;
     const spine: number[] = [];
     let pos = startPos;
     let quat = startQuat;
@@ -231,7 +240,10 @@ export function grow(genome: Genome): Phenotype {
       // upright), lower ≈ splayed out (sprawling). This is what makes a spider's legs fan out wide
       // instead of hanging in a tight bunch under the body like a quadruped's.
       const splay = clamp((4.712 - app.attachAzimuth) * 0.62, [0.12, 1.05]);
-      startPos = [base.pos[0] + sideX * base.radius * (0.92 + splay * 0.35), base.pos[1] + base.radius * 0.2, base.pos[2]];
+      // measure the flank on the true surface — a wide flat body (croc/lizard) is broader than its
+      // scalar radius, and attaching at the radius would bury the leg's top inside the torso.
+      const flank = surfaceExtent(base, [sideX, 0, 0]);
+      startPos = [base.pos[0] + sideX * flank * (0.92 + splay * 0.35), base.pos[1] + base.radius * 0.2, base.pos[2]];
       dir = norm([sideX * splay, -1, 0]);
       dir0 = dir;
     } else {
@@ -241,7 +253,9 @@ export function grow(genome: Genome): Phenotype {
       // the surface: never buried, never adrift. Other appendages attach at the surface as before.
       const t = app.terminal;
       const seat = t === 'eye' ? 0.6 : t === 'mouth' ? 0.45 : t === 'ear' ? 0.5 : 0;
-      const out = base.radius + seat * app.thickness;
+      // measured against the node's TRUE surface (see surfaceExtent), so a long snout or a domed skull
+      // still wears its face proud rather than swallowing it.
+      const out = surfaceExtent(base, dir) + seat * app.thickness;
       startPos = [base.pos[0] + dir[0] * out, base.pos[1] + dir[1] * out, base.pos[2] + dir[2] * out];
     }
     // orient +Z → aim direction, then roll about that axis (orients flat parts)
@@ -442,6 +456,24 @@ function qFromAxisAngle(axis: Vec3, angle: number): Quat {
 /** Compose a local rotation: pitch about local X, then yaw about local Y. */
 function qFromEuler(pitch: number, yaw: number): Quat {
   return qMul(qFromAxisAngle([1, 0, 0], pitch), qFromAxisAngle([0, 1, 0], yaw));
+}
+/** Conjugate — the inverse rotation, for our unit quats (world → the node's local frame). */
+function qConj(q: Quat): Quat {
+  return [-q[0], -q[1], -q[2], q[3]];
+}
+/**
+ * Distance from a node's centre to its SURFACE along a world-space direction. A shaped node (a long
+ * snout, a broad skull, a flat croc body) is an ellipsoid, so its surface is nearer on the squashed
+ * axis and further on the stretched one. Parts must seat against that true surface — otherwise a
+ * stretched snout swallows the mouth it carries, and a broad flank leaves the legs hanging inside.
+ * Round nodes (no scale) fall back to the scalar radius, exactly as before.
+ */
+function surfaceExtent(node: BodyNode, dirWorld: Vec3): number {
+  const s = node.scale;
+  if (!s) return node.radius;
+  const d = qRotate(dirWorld, qConj(node.quat)); // into the node's local frame
+  const k = Math.hypot(d[0] / (node.radius * s[0]), d[1] / (node.radius * s[1]), d[2] / (node.radius * s[2]));
+  return k > 1e-6 ? 1 / k : node.radius;
 }
 function qRotate(v: Vec3, q: Quat): Vec3 {
   const [x, y, z, w] = q;
