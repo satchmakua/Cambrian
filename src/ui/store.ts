@@ -61,6 +61,9 @@ interface AppState extends Session {
   runDirected: (generations: number) => void;
   /** Pull a Menagerie cell back as a fresh parent (M14). */
   loadCell: (key: string) => void;
+  /** Dev/headless only: root the lineage at a deterministic seed (+ optional morphotype) so a
+   *  screenshot harness can request an exact creature via URL params. */
+  devLoad: (seed: number, morph: string | null, sym: SymmetryMode) => void;
   physicsRunning: boolean; // a physics-fitness run is in flight (M6)
   physicsDistance: number | null; // distance the latest evolved walker travelled (bu)
   /** Evolve for locomotion in a lazy-loaded physics sim; appends the path to the tree (M6). */
@@ -255,6 +258,11 @@ export const useStore = create<AppState>((set, get) => {
     loadCell: (key) => {
       const entry = get().menagerie[key];
       if (entry) commit(rootedAt(entry.genome, get().symmetryMode, get().menagerie));
+    },
+
+    devLoad: (seed, morph, sym) => {
+      const g = morph ? genomeOfMorphotype(seed >>> 0, morph) : randomGenome(seed >>> 0, sym);
+      commit(rootedAt(g, sym, get().menagerie));
     },
 
     runPhysics: async (generations) => {

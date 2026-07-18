@@ -45,6 +45,16 @@ export function App() {
   const genome = current.genome;
   const generation = current.generation;
   const phenotype = useMemo(() => grow(genome), [genome]);
+
+  // Dev/headless: ?bare=1 renders just the creature full-bleed (no UI chrome) for clean face shots.
+  const bare = import.meta.env.DEV && new URLSearchParams(location.search).get('bare') === '1';
+  if (bare) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: '#0f1116' }}>
+        <CreatureViewer phenotype={phenotype} skinMode={skinMode} />
+      </div>
+    );
+  }
   const vibe = useMemo(() => coherence(phenotype), [phenotype]);
   const currentCell = useMemo(() => binKey(describe(phenotype)), [phenotype]);
   const menagerieCount = Object.keys(menagerie).length;

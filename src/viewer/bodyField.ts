@@ -280,10 +280,12 @@ export function rayToSurface(f: FieldPrims, carves: readonly Carve[], origin: Ve
     t += step;
     const d = fieldAtCarved(f, carves, origin[0] + dir[0] * t, origin[1] + dir[1] * t, origin[2] + dir[2] * t);
     if (dPrev < 0 && d >= 0) {
-      // bisect the bracket [tPrev, t]
+      // bisect the bracket [tPrev, t] — 16 halvings take a ~0.5 bu bracket well under the 1e-4
+      // tolerance the callers assert, and each extra step is a full field evaluation
       let lo = tPrev, hi = t;
-      for (let j = 0; j < 24; j++) {
+      for (let j = 0; j < 16; j++) {
         const mid = (lo + hi) / 2;
+        if (hi - lo < 1e-5) break;
         const dm = fieldAtCarved(f, carves, origin[0] + dir[0] * mid, origin[1] + dir[1] * mid, origin[2] + dir[2] * mid);
         if (dm < 0) lo = mid;
         else hi = mid;

@@ -1,7 +1,34 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './ui/App';
+import { useStore, type SkinMode } from './ui/store';
+import type { SymmetryMode } from './engine/random';
 import './index.css';
+
+// Dev/headless only: let a screenshot harness request an exact creature + view via URL params,
+// e.g. /?seed=42&morph=felid&skin=hybrid&spin=0 — see scripts/shoot.mjs. No effect in prod.
+if (import.meta.env.DEV) {
+  const q = new URLSearchParams(location.search);
+  if (q.has('seed') || q.has('morph')) {
+    const seed = Number(q.get('seed') ?? '1') >>> 0;
+    const morph = q.get('morph');
+    const sym = (q.get('sym') as SymmetryMode) || 'auto';
+    useStore.getState().devLoad(seed, morph, sym);
+  }
+  const skin = q.get('skin');
+  if (skin === 'smooth' || skin === 'hybrid' || skin === 'capsules') {
+    useStore.getState().setSkinMode(skin as SkinMode);
+  }
+  if (q.get('spin') === '0') {
+    // freeze the auto-rotate at the canonical initial angle so A/B shots are reproducible
+    const freeze = () => {
+      const f = (window as unknown as { __cambrianFreeze?: (v?: boolean) => void }).__cambrianFreeze;
+      if (f) f(true);
+      else setTimeout(freeze, 100);
+    };
+    setTimeout(freeze, 200);
+  }
+}
 
 const root = document.getElementById('app');
 if (!root) throw new Error('#app mount point not found');

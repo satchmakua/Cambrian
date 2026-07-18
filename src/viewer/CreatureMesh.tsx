@@ -357,17 +357,22 @@ function Eye({ f, socket, iris, lid }: { f: MeshFeature; socket: number; iris: n
   return (
     <group quaternion={f.quat}>
       {/* the bony orbit the eye is sunk into — a dark receptacle ring, so the eye reads as set INTO
-          the skull (hooded, sunken), never a ball stuck on the surface. */}
-      <mesh position={[0, 0, -r * 0.02]}>
-        <torusGeometry args={[r * 0.98, r * 0.32, 12, 24]} />
+          the skull (hooded, sunken), never a ball stuck on the surface.
+          The ring must CLEAR the eyeball: its inner edge is (major − tube), which has to stay wider
+          than the 0.9r ball or the torus drives straight through the sclera as a hard ridge. It also
+          sits back along −Z so it rings the eye's equator like an orbit rather than a hoop in front. */}
+      <mesh position={[0, 0, -r * 0.18]}>
+        <torusGeometry args={[r * 1.2, r * 0.26, 12, 28]} />
         <meshStandardMaterial color={socketDark} roughness={0.85} metalness={0.0} />
       </mesh>
       {v === 'round' || v === 'beady' ? (
         // a wet animal eye set deep under a heavy brow — dark, glassy, watching. No cream sclera,
         // no fat white sticker; the low-roughness ball catches the environment like real moisture.
         <>
-          {/* a heavy brow ridge overhanging from above — throws the socket into shadow */}
-          <mesh position={[0, r * 0.5, r * 0.12]} rotation={[-0.75, 0, 0]} scale={[r * 1.2, r * 0.55, r * 0.7]}>
+          {/* a heavy brow ridge overhanging from ABOVE — it must hood the eye, not cross it, so it
+              rides high and slightly behind the ball's front pole (a forward-tipped brow at eye
+              height cut a hard crescent through the sclera) */}
+          <mesh position={[0, r * 0.82, -r * 0.06]} rotation={[-0.45, 0, 0]} scale={[r * 1.16, r * 0.5, r * 0.66]}>
             <sphereGeometry args={[1, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.5]} />
             <meshStandardMaterial color={socketDark} roughness={0.82} side={THREE.DoubleSide} />
           </mesh>
@@ -376,23 +381,25 @@ function Eye({ f, socket, iris, lid }: { f: MeshFeature; socket: number; iris: n
             <sphereGeometry args={[r * 0.9, 22, 18]} />
             <meshStandardMaterial color={v === 'round' ? 0x3c1f16 : 0x070709} roughness={0.12} metalness={0.0} />
           </mesh>
-          {/* a large dark iris filling most of the eye */}
-          <mesh position={[0, 0, r * 0.5]}>
-            <sphereGeometry args={[r * 0.6, 18, 14]} />
+          {/* Iris + pupil are shallow CAPS lying flush on the eyeball, not balls stacked in front of
+              it — full spheres at +z bulged past the ball's pole and read as googly cartoon eyes.
+              Each is squashed in z and parked so its face just clears the 0.86r front pole. */}
+          <mesh position={[0, 0, r * 0.70]} scale={[1, 1, 0.3]}>
+            <sphereGeometry args={[r * 0.62, 20, 14]} />
             <meshStandardMaterial color={iris} roughness={0.16} metalness={0.1} />
           </mesh>
-          {/* a wide, deep pupil */}
-          <mesh position={[0, 0, r * 0.72]}>
+          <mesh position={[0, 0, r * 0.8]} scale={[1, 1, 0.3]}>
             <sphereGeometry args={[r * (v === 'round' ? 0.32 : 0.42), 16, 12]} />
             <meshStandardMaterial color={0x030304} roughness={0.05} />
           </mesh>
           {/* a small, sharp catchlight — a wet glint, not a cartoon sticker */}
-          <mesh position={[r * 0.17, r * 0.2, r * 0.82]}>
+          <mesh position={[r * 0.17, r * 0.2, r * 0.88]}>
             <sphereGeometry args={[r * 0.05, 8, 8]} />
             <meshBasicMaterial color={0xdce4f0} />
           </mesh>
-          {/* a wet lower lid of flesh cupping the eye */}
-          <mesh position={[0, -r * 0.4, r * 0.14]} rotation={[0.6, 0, 0]} scale={[r * 1.05, r * 0.5, r * 0.6]}>
+          {/* a wet lower lid of flesh cupping the eye — cups from below and behind, same rule as the
+              brow: it may kiss the ball's lower edge but must never slice across the sclera */}
+          <mesh position={[0, -r * 0.74, -r * 0.02]} rotation={[0.45, 0, 0]} scale={[r * 1.04, r * 0.44, r * 0.58]}>
             <sphereGeometry args={[1, 18, 8, 0, Math.PI * 2, 0, Math.PI * 0.4]} />
             <meshStandardMaterial color={lidFlesh} roughness={0.62} side={THREE.DoubleSide} />
           </mesh>
@@ -400,7 +407,7 @@ function Eye({ f, socket, iris, lid }: { f: MeshFeature; socket: number; iris: n
       ) : v === 'slit' ? (
         // slit — a reptile vertical-pupil eye sunk under a brow, a duller metallic iris (less toy-gold)
         <>
-          <mesh position={[0, r * 0.46, r * 0.12]} rotation={[-0.7, 0, 0]} scale={[r * 1.15, r * 0.5, r * 0.65]}>
+          <mesh position={[0, r * 0.78, -r * 0.05]} rotation={[-0.42, 0, 0]} scale={[r * 1.12, r * 0.46, r * 0.62]}>
             <sphereGeometry args={[1, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.5]} />
             <meshStandardMaterial color={socketDark} roughness={0.82} side={THREE.DoubleSide} />
           </mesh>

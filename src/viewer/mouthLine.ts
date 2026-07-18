@@ -73,8 +73,22 @@ const FUNNEL: ReadonlySet<MouthVariant> = new Set(['sucker', 'lamprey']);
  */
 export type SkinSurface = 'kit' | 'smooth' | 'hybrid';
 
+// One field per (phenotype, surface), shared by every mouth on that creature. The mouth path only
+// ever READS the prims (ray/Newton tracing), so sharing is safe — and it collapses the per-mouth
+// rebuild that made many-mouthed radial bodies (an 8-maw urchin) pay for the field 8 times over.
+// Keyed weakly on the phenotype, so caches die with the creature.
+const PRIM_CACHE = new WeakMap<Phenotype, Map<SkinSurface, FieldPrims>>();
+
 /** Field prims tuned to the rendered surface (the same blend k smoothSkin uses, per mode). */
 function surfacePrims(p: Phenotype, surface: SkinSurface): FieldPrims {
+  let per = PRIM_CACHE.get(p);
+  if (!per) {
+    per = new Map();
+    PRIM_CACHE.set(p, per);
+  }
+  const hit = per.get(surface);
+  if (hit) return hit;
+
   const prims = buildFieldPrims(p, surface === 'hybrid' ? 'hybrid' : 'body');
   if (surface !== 'kit') {
     let meanR = 0;
@@ -82,6 +96,7 @@ function surfacePrims(p: Phenotype, surface: SkinSurface): FieldPrims {
     meanR = meanR / Math.max(prims.nc, 1);
     prims.k = (surface === 'hybrid' ? 0.34 : 0.5) * meanR; // mirror smoothSkin's blend exactly
   }
+  per.set(surface, prims);
   return prims;
 }
 
