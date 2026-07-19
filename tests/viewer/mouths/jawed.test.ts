@@ -61,27 +61,45 @@ describe('jawed mouth build (mouth overhaul)', () => {
     }
   });
 
-  it('tooth roots stay within sink-depth of the true skin (node-relative build)', () => {
+  it('tooth roots are rooted IN the mouth line — floating teeth stay impossible', () => {
+    // The muzzle projects off the skull by design, so the anchor is the projected lip curve, not
+    // the raw body field: every root must sit within its own sink depth of that curve.
+    const p = grow(defaultGenome());
+    const idx = mouthIdx(p);
+    for (const v of VARIANTS) {
+      const b = buildJawed(p, idx, [], false, v)!;
+      const profs = JAWED_PARAMS[v];
+      for (const [teeth, prof, row] of [
+        [b.upperTeeth, profs.upper, b.upper],
+        [b.lowerTeeth, profs.lower, b.lower],
+      ] as const) {
+        if (!prof) continue;
+        for (const t of teeth) {
+          let best = Infinity;
+          for (const s of row) {
+            best = Math.min(best, Math.hypot(t.pos[0] - s.p[0], t.pos[1] - s.p[1], t.pos[2] - s.p[2]));
+          }
+          // within a sink depth of the curve, plus the polyline's own chord sag between samples
+          expect(best).toBeLessThanOrEqual(t.len * prof.sink + b.r * 0.25);
+        }
+      }
+    }
+  });
+
+  it('the projected muzzle actually stands off the skull (there IS a snout)', () => {
     const p = grow(defaultGenome());
     const idx = mouthIdx(p);
     const node = p.nodes[idx];
     const f = buildFieldPrims(p, 'body');
-    for (const v of VARIANTS) {
-      const b = buildJawed(p, idx, [], false, v)!;
-      const profs = JAWED_PARAMS[v];
-      for (const [teeth, prof] of [
-        [b.upperTeeth, profs.upper],
-        [b.lowerTeeth, profs.lower],
-      ] as const) {
-        if (!prof) continue;
-        for (const t of teeth) {
-          const d = Math.abs(
-            fieldAt(f, t.pos[0] + node.pos[0], t.pos[1] + node.pos[1], t.pos[2] + node.pos[2]),
-          );
-          expect(d).toBeLessThanOrEqual(t.len * prof.sink + 6e-3);
-        }
-      }
-    }
+    const b = buildJawed(p, idx, [], false, 'fanged')!;
+    const mid = b.upper[(b.upper.length / 2) | 0];
+    // the front centre of the lip line sits OUTSIDE the raw body surface (positive field)
+    const d = fieldAt(f, mid.p[0] + node.pos[0], mid.p[1] + node.pos[1], mid.p[2] + node.pos[2]);
+    expect(d).toBeGreaterThan(0.02);
+    // …while the corners stay welded to it
+    const corner = b.upper[0];
+    const dc = Math.abs(fieldAt(f, corner.p[0] + node.pos[0], corner.p[1] + node.pos[1], corner.p[2] + node.pos[2]));
+    expect(dc).toBeLessThan(b.r * 0.2);
   });
 
   it('is bilaterally symmetric on the midline mouth — teeth mirror, hinge lies on ±X', () => {

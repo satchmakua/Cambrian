@@ -273,14 +273,14 @@ interface HeadArch {
   weight: number; // relative frequency when not pinned (common skulls > exotic ones)
 }
 const HEAD_ARCHETYPES: Record<HeadShape, HeadArch> = {
-  round: { wide: [0.92, 1.08], domed: [0.9, 1.12], long: [0.85, 1.05], taper: [0.86, 0.98], curve: [0.0, 0.12], repeat: [1, 1], weight: 1.4 },
-  domed: { wide: [0.8, 0.98], domed: [1.22, 1.5], long: [0.8, 1.0], taper: [0.8, 0.94], curve: [0.0, 0.1], repeat: [1, 2], weight: 1.0 },
-  flat: { wide: [1.02, 1.28], domed: [0.52, 0.72], long: [1.0, 1.32], taper: [0.8, 0.92], curve: [0.0, 0.16], repeat: [1, 2], weight: 1.0 },
-  broad: { wide: [1.28, 1.62], domed: [0.85, 1.05], long: [0.75, 0.95], taper: [0.86, 0.99], curve: [0.0, 0.1], repeat: [1, 1], weight: 0.9 },
-  wedge: { wide: [0.58, 0.8], domed: [0.95, 1.25], long: [1.1, 1.45], taper: [0.6, 0.74], curve: [0.0, 0.14], repeat: [2, 2], weight: 1.0 },
-  bulbous: { wide: [1.05, 1.35], domed: [1.25, 1.62], long: [0.68, 0.92], taper: [0.62, 0.82], curve: [0.0, 0.1], repeat: [1, 2], weight: 0.7 },
-  tapered: { wide: [0.6, 0.82], domed: [0.68, 0.95], long: [1.4, 1.9], taper: [0.6, 0.72], curve: [0.08, 0.26], repeat: [2, 2], weight: 0.8 },
-  blocky: { wide: [1.08, 1.34], domed: [0.95, 1.2], long: [0.95, 1.2], taper: [0.9, 1.0], curve: [0.0, 0.1], repeat: [1, 2], weight: 0.8 },
+  round: { wide: [0.92, 1.08], domed: [0.9, 1.12], long: [0.85, 1.05], taper: [0.86, 0.98], curve: [0.0, 0.12], repeat: [1, 2], weight: 0.45 },
+  domed: { wide: [0.74, 0.96], domed: [1.3, 1.68], long: [0.78, 1.0], taper: [0.78, 0.94], curve: [0.0, 0.1], repeat: [2, 2], weight: 1.1 },
+  flat: { wide: [1.06, 1.42], domed: [0.44, 0.66], long: [1.05, 1.45], taper: [0.78, 0.92], curve: [0.0, 0.18], repeat: [2, 2], weight: 1.1 },
+  broad: { wide: [1.35, 1.8], domed: [0.8, 1.05], long: [0.72, 0.95], taper: [0.84, 0.99], curve: [0.0, 0.1], repeat: [1, 2], weight: 1.0 },
+  wedge: { wide: [0.52, 0.76], domed: [0.95, 1.32], long: [1.15, 1.6], taper: [0.56, 0.72], curve: [0.0, 0.16], repeat: [2, 2], weight: 1.2 },
+  bulbous: { wide: [1.1, 1.45], domed: [1.35, 1.8], long: [0.64, 0.9], taper: [0.58, 0.8], curve: [0.0, 0.1], repeat: [2, 2], weight: 0.9 },
+  tapered: { wide: [0.54, 0.78], domed: [0.62, 0.92], long: [1.5, 2.05], taper: [0.56, 0.7], curve: [0.08, 0.28], repeat: [2, 2], weight: 1.1 },
+  blocky: { wide: [1.12, 1.45], domed: [0.92, 1.24], long: [0.95, 1.25], taper: [0.88, 1.0], curve: [0.0, 0.1], repeat: [2, 2], weight: 1.0 },
 };
 const HEAD_SHAPE_IDS = Object.keys(HEAD_ARCHETYPES) as HeadShape[];
 function weightedHeadShape(rng: Rng): HeadShape {
@@ -380,11 +380,11 @@ type Posture = 'sprawling' | 'digitigrade' | 'plantigrade' | 'hooved' | 'upright
 const POSTURE: Record<Posture, { az: Rg; curl: Rg; segs: [number, number]; len: Rg; thick: Rg; term: Terminal }> = {
   // Big, strong, properly-angled limbs. `az` sets the stance width (lower = splayed out wider; 4.71 ≈
   // straight down/narrow), `thick`×girth the limb girth, `len`×girth the segment length, `term` the foot.
-  sprawling: { az: [3.45, 3.85], curl: [0.48, 0.58], segs: [3, 4], len: [0.5, 0.7], thick: [0.36, 0.5], term: 'claw' },
-  digitigrade: { az: [3.95, 4.35], curl: [0.46, 0.58], segs: [4, 4], len: [0.6, 0.85], thick: [0.44, 0.6], term: 'paw' },
-  plantigrade: { az: [3.92, 4.32], curl: [0.32, 0.5], segs: [3, 4], len: [0.5, 0.72], thick: [0.52, 0.68], term: 'paw' },
-  hooved: { az: [4.18, 4.5], curl: [0.12, 0.28], segs: [3, 4], len: [0.7, 1.0], thick: [0.34, 0.48], term: 'hoof' },
-  upright: { az: [4.2, 4.5], curl: [0.22, 0.4], segs: [3, 4], len: [0.65, 0.95], thick: [0.4, 0.56], term: 'foot' },
+  sprawling: { az: [3.45, 3.85], curl: [0.48, 0.58], segs: [3, 4], len: [0.86, 1.18], thick: [0.36, 0.5], term: 'claw' },
+  digitigrade: { az: [3.95, 4.35], curl: [0.46, 0.58], segs: [4, 4], len: [1.06, 1.46], thick: [0.44, 0.6], term: 'paw' },
+  plantigrade: { az: [3.92, 4.32], curl: [0.32, 0.5], segs: [3, 4], len: [0.9, 1.26], thick: [0.52, 0.68], term: 'paw' },
+  hooved: { az: [4.18, 4.5], curl: [0.12, 0.28], segs: [3, 4], len: [1.0, 1.42], thick: [0.34, 0.48], term: 'hoof' },
+  upright: { az: [4.2, 4.5], curl: [0.22, 0.4], segs: [3, 4], len: [0.94, 1.36], thick: [0.4, 0.56], term: 'foot' },
 };
 
 interface LegOpts {
@@ -428,10 +428,14 @@ function wing(rng: Rng, attachT: number, girth: number): AppendageGene {
     attachAzimuth: range(rng, 1.6, 2.4), // up-and-side
     attachElevation: range(rng, -0.4, -0.1), // swept back
     roll: range(rng, -0.6, 0.6),
-    segments: randint(rng, 2, 3),
-    length: clamp(girth * range(rng, 1.0, 1.8), A.length),
-    thickness: clamp(girth * range(rng, 0.26, 0.38), A.thickness),
-    taper: range(rng, 0.74, 0.86), // less tip taper so the wing node stays big → a big rendered wing
+    // A wing is a MEMBRANE, not a limb. The membrane is drawn on the terminal node and scales with
+    // its radius, so a long, tapering multi-segment arm spent the whole appendage on a bare stalk
+    // and left a petal at the end. Keep the stalk to a short shoulder and let the wing be the part
+    // you actually see: fewer/shorter segments, thicker, barely tapered → a big terminal node.
+    segments: randint(rng, 1, 2),
+    length: clamp(girth * range(rng, 0.32, 0.62), A.length),
+    thickness: clamp(girth * range(rng, 0.36, 0.54), A.thickness),
+    taper: range(rng, 0.88, 0.97),
     curl: [range(rng, -0.1, 0.2), 0],
   });
 }
@@ -546,7 +550,7 @@ function eyes(rng: Rng, attachT: number, antennae: boolean, refGirth: number, o:
     length: clamp(refGirth * (stalk ? range(rng, 0.55, 0.9) : range(rng, 0.45, 0.7)), A.length),
     // eyes sized smaller relative to the head than before (they read as big cartoon eyes otherwise);
     // grow then pushes them proud of the body so they stay clearly visible even in capsule mode.
-    thickness: clamp(Math.max(0.12, refGirth * (stalk ? range(rng, 0.26, 0.38) : range(rng, 0.34, 0.5))), A.thickness),
+    thickness: clamp(Math.max(0.07, refGirth * (stalk ? range(rng, 0.14, 0.2) : range(rng, 0.18, 0.26))), A.thickness),
     taper: stalk ? range(rng, 0.92, 0.99) : range(rng, 0.85, 0.95),
     curl: [range(rng, -0.2, 0.1), 0],
   });
@@ -628,7 +632,10 @@ function mouth(rng: Rng, refGirth: number, style?: Rg): AppendageGene {
   return part('maw', 'mouth', false, rg(rng, style, [0, 1]), {
     attachT: range(rng, 0.85, 1.0),
     attachAzimuth: range(rng, 4.5, 4.95), // down…
-    attachElevation: range(rng, 0.5, 0.85), // …and well forward — on the face front, not the underside (M24)
+    // …and well forward — on the face FRONT, not the underside (M24). This must stay above the
+    // bauplan's mouth-elevation floor or every creature's mouth pins to that one constant and the
+    // gene stops varying at all; sampling across it keeps the snout angle evolvable.
+    attachElevation: range(rng, 0.95, 1.35),
     segments: 1,
     length: clamp(refGirth * range(rng, 0.5, 0.72), A.length),
     thickness: clamp(refGirth * range(rng, 0.52, 0.74), A.thickness), // big enough to read clearly as an organ

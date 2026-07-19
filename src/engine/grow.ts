@@ -20,7 +20,7 @@ export type Quat = [number, number, number, number]; // [x, y, z, w]
 const BODY_BULGE = 0.35;
 
 /** Minimum grown radius for an eye bulb (bu) — the face must always read (M19/M24). */
-const EYE_R_MIN = 0.11;
+const EYE_R_MIN = 0.06;
 
 export interface BodyNode {
   pos: Vec3;
@@ -290,7 +290,10 @@ export function grow(genome: Genome): Phenotype {
       // a real jointed leg: thigh → (knee folds the shin sharply back under the body) → (ankle swings
       // the foot forward) — a clear Z stance, not one gentle curved sweep. Other limbs keep their curl.
       if (app.kind === 'leg') {
-        if (j === 0) pitch = -Math.abs(app.curl[0]) * 3.0 - 0.3; // knee — a hard ~90° backward fold (clear joint)
+        // knee — a clear backward fold, but softened: at ×3.0 the leg folded so far back under the
+        // body that added segment length turned into more fold instead of more standing height,
+        // which is why creatures read as stubby however long their legs got.
+        if (j === 0) pitch = -Math.abs(app.curl[0]) * 2.15 - 0.2;
         else if (j === 1) pitch = Math.abs(app.curl[0]) * 2.0 + 0.2; // ankle — swing the foot forward
       }
     }
@@ -392,14 +395,33 @@ function ensureBilateralFace(g: Genome): void {
 function ensureFace(apps: AppendageGene[], girth: number): void {
   const eyes = apps.filter((p) => p.terminal === 'eye');
   if (eyes.length === 0) apps.push(faceEye(girth));
-  else for (const e of eyes) e.thickness = clamp(Math.max(e.thickness, 0.16, girth * 0.45), AP.thickness);
+  else
+    for (const e of eyes) {
+      // Prominent but PROPORTIONATE. The floor is measured against the head segment's girth, while
+      // the head *node* tapers smaller than that — so a bare `girth * 0.45` floor grew eyes nearly
+      // as wide as the skull, two balls that owned the whole face and occluded the mouth behind
+      // them. Keep a floor (M19: eyes are the emotional anchor) but cap it against the same girth.
+      // Cap for proportion FIRST, then floor for prominence — in the other order the cap wins on
+      // small-headed creatures (girth < 0.28) and silently defeats the floor it was paired with,
+      // leaving eyes smaller than M19 promises. Prominence outranks proportion when they collide.
+      e.thickness = clamp(Math.max(0.075, Math.min(Math.max(e.thickness, girth * 0.17), girth * 0.26)), AP.thickness);
+      // and keep them off the snout tip, so the muzzle front belongs to the mouth
+      e.attachElevation = clamp(Math.min(e.attachElevation, 0.75), AP.attachElevation);
+    }
 
   const mouths = apps.filter((p) => p.terminal === 'mouth');
   if (mouths.length === 0) apps.push(faceMouth(girth));
   else
     for (const m of mouths) {
       m.thickness = clamp(Math.max(m.thickness, 0.26, girth * 0.46), AP.thickness); // a big, clearly-read mouth
-      m.attachElevation = clamp(Math.max(m.attachElevation, 0.4), AP.attachElevation);
+      // Keep the maw on the FACE, not under the chin. `aim` is [cos(e)cos(a), cos(e)sin(a), sin(e)]
+      // with the maw's azimuth ≈ 3π/2, so elevation IS the fore/aft tilt, and it sets where the
+      // organ SEATS as well as where it points. At 0.4 the mouth aims ~66° at the ground; even at
+      // 0.85 it seated behind the (large, forward-set) eyes, which occluded it entirely. 0.95 puts
+      // the maw out front on the snout — the frontmost face feature, the way a muzzle reads. The
+      // sampler in random.ts deliberately draws ABOVE this floor: a floor covering the whole
+      // sampled range would pin every creature's mouth to one constant and kill the gene.
+      m.attachElevation = clamp(Math.max(m.attachElevation, 0.95), AP.attachElevation);
     }
 }
 
@@ -411,14 +433,16 @@ function ensureRadialFace(g: Genome): void {
 }
 
 function faceEye(girth: number): AppendageGene {
-  return facePart('eyestalk', 'eye', true, 0, 0.85, 0.95, 0.3, clamp(girth * 0.55, AP.length), clamp(Math.max(0.16, girth * 0.5), AP.thickness));
+  return facePart('eyestalk', 'eye', true, 0, 0.85, 0.95, 0.3, clamp(girth * 0.55, AP.length), clamp(Math.max(0.085, girth * 0.26), AP.thickness));
 }
 function faceMouth(girth: number): AppendageGene {
-  return facePart('maw', 'mouth', false, 0.05, 0.92, 4.71, 0.65, clamp(girth * 0.5, AP.length), clamp(Math.max(0.2, girth * 0.42), AP.thickness));
+  // elevation 1.15 ≈ 24° below the forward axis — the mouth rides the front of the muzzle, the way
+  // a face reads, instead of hanging beneath the jaw where nothing but the floor can see it
+  return facePart('maw', 'mouth', false, 0.05, 0.92, 4.71, 1.15, clamp(girth * 0.5, AP.length), clamp(Math.max(0.2, girth * 0.42), AP.thickness));
 }
 function radialEyeCrown(girth: number): AppendageGene {
   // pair:false but grow arrays it radialCount× → a ring of eyes around the crown
-  return facePart('eyestalk', 'eye', false, 0.85, 0.8, 0, 0.2, clamp(girth * 0.5, AP.length), clamp(Math.max(0.16, girth * 0.4), AP.thickness));
+  return facePart('eyestalk', 'eye', false, 0.85, 0.8, 0, 0.2, clamp(girth * 0.5, AP.length), clamp(Math.max(0.085, girth * 0.21), AP.thickness));
 }
 function radialMaw(girth: number): AppendageGene {
   // elevation ≈ +Z so grow's radial array collapses the copies onto the front centre (a central maw)

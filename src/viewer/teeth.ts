@@ -92,7 +92,10 @@ export function toothRow(
     const key = Math.round(Math.abs(t) * 512);
     const jl = (hash01(seed, profile.salt * 131 + key) * 2 - 1) * profile.jitterLen;
     const rockMag = (hash01(seed, profile.salt * 131 + key + 7) * 2 - 1) * profile.jitterRock;
-    const rock = t === 0 ? 0 : Math.sign(t) * rockMag; // antisymmetric — twins rock apart, mirror-true
+    // antisymmetric — twins rock apart, mirror-true. The centre tooth of an ODD row must not rock
+    // at all: its `t` is a sum of steps that only lands on exactly 0 for some counts, so an
+    // `=== 0` test let a t of ~1e-16 take a full-magnitude rock and broke bilateral symmetry (M18).
+    const rock = Math.abs(t) < 1e-9 ? 0 : Math.sign(t) * rockMag;
 
     const len = Math.max(0.02, profile.len(Math.abs(t)) * r * (1 + jl));
     const w = Math.max(0.008, len * profile.width);

@@ -350,13 +350,16 @@ function Feature({
 function Eye({ f, socket, iris, lid }: { f: MeshFeature; socket: number; iris: number; lid: number }) {
   const r = Math.max(f.radius, 0.06);
   const v = eyeVariant(f.style);
-  // derived flesh tones: a dark bony orbit, and a wet reddish lower lid
+  // a dark bony orbit tone
   const socketDark = useMemo(() => new THREE.Color(socket).multiplyScalar(0.5).getHex(), [socket]);
-  const lidFlesh = useMemo(() => new THREE.Color(socket).lerp(new THREE.Color(0x5c2d2e), 0.45).getHex(), [socket]);
   void lid;
   return (
     <group quaternion={f.quat}>
-      {/* the bony orbit the eye is sunk into — a dark receptacle ring, so the eye reads as set INTO
+      {/* The brow ridge and lower lid used to live here as open hemispherical shells. Whatever
+          their orientation, the shell's RIM cut a hard crescent across the sclera — an eyelid has
+          to lie flat on a curved eye and a capped sphere never does. Removed; the orbit ring below
+          gives the set-in read on its own.
+          the bony orbit the eye is sunk into — a dark receptacle ring, so the eye reads as set INTO
           the skull (hooded, sunken), never a ball stuck on the surface.
           The ring must CLEAR the eyeball: its inner edge is (major − tube), which has to stay wider
           than the 0.9r ball or the torus drives straight through the sclera as a hard ridge. It also
@@ -369,13 +372,6 @@ function Eye({ f, socket, iris, lid }: { f: MeshFeature; socket: number; iris: n
         // a wet animal eye set deep under a heavy brow — dark, glassy, watching. No cream sclera,
         // no fat white sticker; the low-roughness ball catches the environment like real moisture.
         <>
-          {/* a heavy brow ridge overhanging from ABOVE — it must hood the eye, not cross it, so it
-              rides high and slightly behind the ball's front pole (a forward-tipped brow at eye
-              height cut a hard crescent through the sclera) */}
-          <mesh position={[0, r * 0.82, -r * 0.06]} rotation={[-0.45, 0, 0]} scale={[r * 1.16, r * 0.5, r * 0.66]}>
-            <sphereGeometry args={[1, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.5]} />
-            <meshStandardMaterial color={socketDark} roughness={0.82} side={THREE.DoubleSide} />
-          </mesh>
           {/* the eyeball — bloodshot dark amber (round) or a glossy black bead (beady), set deep */}
           <mesh position={[0, 0, -r * 0.04]}>
             <sphereGeometry args={[r * 0.9, 22, 18]} />
@@ -397,20 +393,10 @@ function Eye({ f, socket, iris, lid }: { f: MeshFeature; socket: number; iris: n
             <sphereGeometry args={[r * 0.05, 8, 8]} />
             <meshBasicMaterial color={0xdce4f0} />
           </mesh>
-          {/* a wet lower lid of flesh cupping the eye — cups from below and behind, same rule as the
-              brow: it may kiss the ball's lower edge but must never slice across the sclera */}
-          <mesh position={[0, -r * 0.74, -r * 0.02]} rotation={[0.45, 0, 0]} scale={[r * 1.04, r * 0.44, r * 0.58]}>
-            <sphereGeometry args={[1, 18, 8, 0, Math.PI * 2, 0, Math.PI * 0.4]} />
-            <meshStandardMaterial color={lidFlesh} roughness={0.62} side={THREE.DoubleSide} />
-          </mesh>
         </>
       ) : v === 'slit' ? (
         // slit — a reptile vertical-pupil eye sunk under a brow, a duller metallic iris (less toy-gold)
         <>
-          <mesh position={[0, r * 0.78, -r * 0.05]} rotation={[-0.42, 0, 0]} scale={[r * 1.12, r * 0.46, r * 0.62]}>
-            <sphereGeometry args={[1, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.5]} />
-            <meshStandardMaterial color={socketDark} roughness={0.82} side={THREE.DoubleSide} />
-          </mesh>
           <mesh position={[0, 0, -r * 0.02]}>
             <sphereGeometry args={[r * 0.9, 18, 14]} />
             <meshStandardMaterial color={0x9a7a2c} roughness={0.28} metalness={0.22} />
@@ -594,7 +580,7 @@ function Frill({ f, color }: { f: MeshFeature; color: number }) {
 // structured than a single membrane blob.
 function Wing({ f, color }: { f: MeshFeature; color: number }) {
   const r = Math.max(f.radius, 0.06);
-  const S = r * 10; // wing span — deliberately large so the wing reads at body scale
+  const S = r * 15; // wing span — deliberately large so the wing reads at body scale, not a petal
   const bone = useMemo(() => new THREE.Color(color).multiplyScalar(0.5).getHex(), [color]);
 
   // skeleton points in the wing plane (X ≈ 0, the membrane normal)

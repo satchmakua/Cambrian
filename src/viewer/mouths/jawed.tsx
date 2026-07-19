@@ -20,14 +20,14 @@ import * as THREE from 'three';
 import type { Phenotype } from '../../engine/grow';
 import type { Vec3 } from '../../engine/genome';
 import type { Carve } from '../bodyField';
-import { basisToQuat, norm3 } from '../bodyField';
+import { norm3 } from '../bodyField';
 import type { MeshFeature } from '../meshData';
 import { jawGape } from '../animation';
 import { buildMouthLine, hash01, mouthSpec, type MouthSample, type SkinSurface } from '../mouthLine';
 import { sweepTube, type SweepPoint } from '../sweep';
 import { fangGeometry, setToothInstances, toothRow, type ToothProfile, type ToothXform } from '../teeth';
-import { GUM, INTERIOR, LIP, TONGUE } from './palette';
-import { interiorSheet, relRow } from './shared';
+import { INTERIOR, LIP } from './palette';
+import { interiorBowl, muzzleSkirt, relRow } from './shared';
 
 export type JawedVariant = 'herbivore' | 'maw' | 'fanged' | 'underbite';
 
@@ -41,54 +41,50 @@ interface JawedParams {
    *  reading as scratched-on lines. The masses give the jaw a silhouette to sit in. */
   muzzleR: number;
   jawR: number;
-  tongue: boolean;
-  nosePad: boolean;
+  /** how far the mouth's front centre projects off the skull, × r — this is what makes a SNOUT */
+  project: number;
 }
 
 // house tooth-profile shapes: u = |t| (0 front → 1 corner). Exported so the tests measure the
 // REAL table instead of a copy that silently desyncs on retune.
 export const JAWED_PARAMS = {
   herbivore: {
-    upper: { count: 6, len: (u: number) => 0.13 - 0.03 * u, width: 0.62, curl: 0.05, jitterLen: 0.1, jitterRock: 0.06, sink: 0.4, margin: 0.3, salt: 2 },
+    upper: { count: 10, len: (u: number) => 0.52 - 0.10 * u, width: 0.62, curl: 0.05, jitterLen: 0.1, jitterRock: 0.06, sink: 0.4, margin: 0.3, salt: 2 },
     lower: null,
-    lipR: (u: number) => 0.30 - 0.10 * u * u,
-    lowerLipR: (u: number) => 0.32 - 0.10 * u * u,
+    lipR: (u: number) => 0.17 - 0.06 * u * u,
+    lowerLipR: (u: number) => 0.18 - 0.06 * u * u,
     muzzleR: 0.42,
     jawR: 0.40,
-    tongue: true,
-    nosePad: true,
+    project: 0.55,
   },
   maw: {
-    upper: { count: 9, len: (u: number) => 0.17 + 0.09 * u, width: 0.3, curl: 0.22, jitterLen: 0.22, jitterRock: 0.12, sink: 0.32, margin: 0.16, salt: 2 },
-    lower: { count: 9, len: (u: number) => 0.14 + 0.07 * u, width: 0.3, curl: 0.2, jitterLen: 0.22, jitterRock: 0.12, sink: 0.32, margin: 0.16, salt: 5 },
-    lipR: (u: number) => 0.24 - 0.08 * u * u,
-    lowerLipR: (u: number) => 0.26 - 0.09 * u * u,
+    upper: { count: 13, len: (u: number) => 0.30 + 0.14 * u, width: 0.3, curl: 0.22, jitterLen: 0.22, jitterRock: 0.12, sink: 0.32, margin: 0.16, salt: 2 },
+    lower: { count: 13, len: (u: number) => 0.26 + 0.12 * u, width: 0.3, curl: 0.2, jitterLen: 0.22, jitterRock: 0.12, sink: 0.32, margin: 0.16, salt: 5 },
+    lipR: (u: number) => 0.13 - 0.04 * u * u,
+    lowerLipR: (u: number) => 0.14 - 0.05 * u * u,
     muzzleR: 0.36,
     jawR: 0.40,
-    tongue: true,
-    nosePad: false,
+    project: 0.50,
   },
   fanged: {
     // canine spikes at the corner third — the crocodile read; tips clear the closed lip line
-    upper: { count: 9, len: (u: number) => 0.16 + 0.1 * u + 0.34 * spike(u, 0.62), width: 0.26, curl: 0.3, jitterLen: 0.2, jitterRock: 0.12, sink: 0.3, margin: 0.14, salt: 2 },
-    lower: { count: 9, len: (u: number) => 0.13 + 0.08 * u + 0.2 * spike(u, 0.38), width: 0.26, curl: 0.26, jitterLen: 0.2, jitterRock: 0.12, sink: 0.3, margin: 0.14, salt: 5 },
-    lipR: (u: number) => 0.21 - 0.07 * u * u,
-    lowerLipR: (u: number) => 0.22 - 0.07 * u * u,
+    upper: { count: 12, len: (u: number) => 0.28 + 0.15 * u + 0.5 * spike(u, 0.62), width: 0.26, curl: 0.3, jitterLen: 0.2, jitterRock: 0.12, sink: 0.3, margin: 0.14, salt: 2 },
+    lower: { count: 12, len: (u: number) => 0.24 + 0.13 * u + 0.32 * spike(u, 0.38), width: 0.26, curl: 0.26, jitterLen: 0.2, jitterRock: 0.12, sink: 0.3, margin: 0.14, salt: 5 },
+    lipR: (u: number) => 0.115 - 0.035 * u * u,
+    lowerLipR: (u: number) => 0.12 - 0.04 * u * u,
     muzzleR: 0.34,
     jawR: 0.38,
-    tongue: true,
-    nosePad: false,
+    project: 0.72,
   },
   underbite: {
     // a jutting lower row of long up-raked tusks past a modest upper lip (deep-sea / ogre)
-    upper: { count: 7, len: (u: number) => 0.09 + 0.04 * u, width: 0.34, curl: 0.18, jitterLen: 0.16, jitterRock: 0.1, sink: 0.34, margin: 0.22, salt: 2 },
-    lower: { count: 7, len: (u: number) => 0.3 + 0.28 * u * u, width: 0.2, curl: -0.34, jitterLen: 0.24, jitterRock: 0.14, sink: 0.26, margin: 0.2, salt: 5 },
-    lipR: (u: number) => 0.19 - 0.06 * u * u,
-    lowerLipR: (u: number) => 0.34 - 0.11 * u * u,
+    upper: { count: 10, len: (u: number) => 0.09 + 0.04 * u, width: 0.34, curl: 0.18, jitterLen: 0.16, jitterRock: 0.1, sink: 0.34, margin: 0.22, salt: 2 },
+    lower: { count: 10, len: (u: number) => 0.46 + 0.34 * u * u, width: 0.2, curl: -0.34, jitterLen: 0.24, jitterRock: 0.14, sink: 0.26, margin: 0.2, salt: 5 },
+    lipR: (u: number) => 0.11 - 0.035 * u * u,
+    lowerLipR: (u: number) => 0.19 - 0.06 * u * u,
     muzzleR: 0.28,
     jawR: 0.50,
-    tongue: false,
-    nosePad: false,
+    project: 0.52,
   },
 } satisfies Record<JawedVariant, JawedParams>;
 
@@ -100,18 +96,19 @@ function spike(u: number, c: number): number {
 
 export interface JawedBuild {
   r: number;
+  /** the node-relative, PROJECTED lip curves every piece is anchored to (tests verify against
+   *  these: after projection the muzzle stands off the raw skull by design, so the anti-floating
+   *  guarantee is "rooted in the mouth line", not "within sink-depth of the skull") */
+  upper: MouthSample[];
+  lower: MouthSample[];
   muzzle: THREE.BufferGeometry; // upper-jaw mass above the lip line
   jawMass: THREE.BufferGeometry; // mandible mass below the lip line (rides the gape)
   upperLip: THREE.BufferGeometry;
   lowerLip: THREE.BufferGeometry;
-  upperGum: THREE.BufferGeometry | null;
-  lowerGum: THREE.BufferGeometry | null;
   upperTeeth: ToothXform[];
   lowerTeeth: ToothXform[];
   jaw: { pivot: Vec3; axis: Vec3; amp: number; omega: number; phase: number };
   interior: THREE.BufferGeometry;
-  tongue: { pos: Vec3; quat: [number, number, number, number] } | null;
-  nose: { pos: Vec3 } | null;
 }
 
 /** Pure, node-relative jawed-mouth build — everything derived from the surface mouth line. */
@@ -131,58 +128,45 @@ export function buildJawed(
   const line = buildMouthLine(phenotype, spec, carves, 17, surface);
   const o = spec.node.pos; // node-relative frame origin
 
-  const upper = relRow(line.upper, o);
-  const lower = relRow(line.lower, o);
+  // PROJECT the muzzle. The lip curves are traced onto the existing skull surface, so on their own
+  // they can only ever be a decal on a smooth head — no snout. Pushing each sample out along the
+  // aim, weighted to peak at the front centre and vanish at the corners, pulls the mouth forward
+  // into an actual protruding muzzle while the corners stay welded where they were traced.
+  const project = (row: MouthSample[]): MouthSample[] =>
+    row.map((s) => {
+      const w = Math.pow(Math.cos((s.t * Math.PI) / 2), 1.3); // 1 at the front centre → 0 at corners
+      const d = params.project * r * w;
+      const dir = norm3([
+        spec.aim[0] * 0.8 + s.n[0] * 0.2,
+        spec.aim[1] * 0.8 + s.n[1] * 0.2,
+        spec.aim[2] * 0.8 + s.n[2] * 0.2,
+      ]);
+      return { ...s, p: [s.p[0] + dir[0] * d, s.p[1] + dir[1] * d, s.p[2] + dir[2] * d] as Vec3 };
+    });
+  const upperBase = relRow(line.upper, o); // where the curve was traced, ON the skull
+  const lowerBase = relRow(line.lower, o);
+  const upper = project(upperBase);
+  const lower = project(lowerBase);
 
   // lips — swept along the true-lip curves, flattened onto the skin, thinning into the corners
   const lipPts = (row: MouthSample[]): SweepPoint[] => row.map((s) => ({ p: s.p, n: s.n }));
   const upperLip = sweepTube(lipPts(upper), {
     radius: (u) => r * params.lipR(Math.abs(u * 2 - 1)),
-    flatten: 0.6,
+    flatten: 0.45,
     radialSegments: 10,
   });
   const lowerLip = sweepTube(lipPts(lower), {
     radius: (u) => r * params.lowerLipR(Math.abs(u * 2 - 1)),
-    flatten: 0.6,
+    flatten: 0.45,
     radialSegments: 10,
   });
 
-  // jaw MASSES — the volume the lips ride on. Each is a fat tube swept along its lip curve but
-  // pushed AWAY from the opening (+away = up the muzzle / down the chin) and slightly into the
-  // skin (−n), so it merges with the head as a muzzle roll and a mandible instead of hovering.
-  // This is what turns "two lines on a sphere" into a jaw with a silhouette.
-  const massPts = (row: MouthSample[], massR: number): SweepPoint[] =>
-    row.map((s) => ({
-      p: [
-        s.p[0] + s.away[0] * r * massR * 0.72 - s.n[0] * r * 0.10,
-        s.p[1] + s.away[1] * r * massR * 0.72 - s.n[1] * r * 0.10,
-        s.p[2] + s.away[2] * r * massR * 0.72 - s.n[2] * r * 0.10,
-      ] as Vec3,
-      n: s.n,
-    }));
-  const muzzle = sweepTube(massPts(upper, params.muzzleR), {
-    radius: (u) => r * params.muzzleR * (1 - 0.4 * Math.abs(u * 2 - 1) ** 2),
-    flatten: 0.72,
-    radialSegments: 12,
-  });
-  const jawMass = sweepTube(massPts(lower, params.jawR), {
-    radius: (u) => r * params.jawR * (1 - 0.4 * Math.abs(u * 2 - 1) ** 2),
-    flatten: 0.72,
-    radialSegments: 12,
-  });
-
-  // gum ridges — thinner, wetter tubes just inside each lip (where the tooth roots live)
-  const gumPts = (row: MouthSample[]): SweepPoint[] =>
-    row.map((s) => ({
-      p: [
-        s.p[0] - s.away[0] * r * 0.07 - s.n[0] * r * 0.01,
-        s.p[1] - s.away[1] * r * 0.07 - s.n[1] * r * 0.01,
-        s.p[2] - s.away[2] * r * 0.07 - s.n[2] * r * 0.01,
-      ] as Vec3,
-      n: s.n,
-    }));
-  const upperGum = params.upper ? sweepTube(gumPts(upper), { radius: (u) => r * params.lipR(Math.abs(u * 2 - 1)) * 0.6, flatten: 0.75, radialSegments: 8 }) : null;
-  const lowerGum = params.lower ? sweepTube(gumPts(lower), { radius: (u) => r * params.lowerLipR(Math.abs(u * 2 - 1)) * 0.6, flatten: 0.75, radialSegments: 8 }) : null;
+  // jaw MASSES — lofted from the projected rim back to the traced curve on the skull, so the snout
+  // is a welded volume rather than a shell standing off the head. (Fat tubes near the rim left a
+  // hollow behind deep projections: an adversarial probe saw through ~19% of the view sphere on
+  // fanged mouths. Lofting removes the failure mode instead of tuning around it.)
+  const muzzle = muzzleSkirt(upper, upperBase, r * params.muzzleR * 0.55);
+  const jawMass = muzzleSkirt(lower, lowerBase, r * params.jawR * 0.55);
 
   // teeth — roots interpolate the same curves; the lower row interlocks into the upper's gaps.
   // Rows stay separate: the lower row belongs to the mandible group and swings with the gape.
@@ -216,32 +200,13 @@ export function buildJawed(
 
   // the interior — a sheet spanning the opening: recessed into the real carve on smooth skin,
   // a hair proud of the capsule kit as a dark throat backdrop (depth by shading, not geometry)
-  const inset = recessed ? -0.34 * r : 0.012 * r;
-  const interior = interiorSheet(upper, lower, inset, recessed ? -0.5 * r : 0);
+  // a real concave throat: now that the muzzle projects, the bowl has room to recede INTO it
+  // without vanishing inside the skull, on the capsule kit as well as the carved smooth skin
+  const interior = interiorBowl(upper, lower, [-spec.aim[0], -spec.aim[1], -spec.aim[2]],
+    r * (recessed ? 0.95 : 0.62));
 
-  // tongue — lolling on the lower interior, anchored to the line's center
-  let tongue: JawedBuild['tongue'] = null;
-  if (params.tongue) {
-    const tm = lower[(lower.length / 2) | 0];
-    tongue = {
-      pos: [
-        tm.p[0] - tm.away[0] * r * 0.18 - tm.n[0] * r * (recessed ? 0.16 : 0.02),
-        tm.p[1] - tm.away[1] * r * 0.18 - tm.n[1] * r * (recessed ? 0.16 : 0.02),
-        tm.p[2] - tm.away[2] * r * 0.18 - tm.n[2] * r * (recessed ? 0.16 : 0.02),
-      ],
-      quat: basisToQuat(tm.tan, tm.n, tm.away),
-    };
-  }
-  // nose pad — a grazer's leathery rhinarium riding the upper lip's center
-  let nose: JawedBuild['nose'] = null;
-  if (params.nosePad) {
-    const nm = upper[(upper.length / 2) | 0];
-    nose = {
-      pos: [nm.p[0] + nm.away[0] * r * 0.22, nm.p[1] + nm.away[1] * r * 0.22, nm.p[2] + nm.away[2] * r * 0.22],
-    };
-  }
 
-  return { r, muzzle, jawMass, upperLip, lowerLip, upperGum, lowerGum, upperTeeth, lowerTeeth, jaw, interior, tongue, nose };
+  return { r, upper, lower, muzzle, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, jaw, interior };
 }
 
 export function JawedMouth({
@@ -275,11 +240,8 @@ export function JawedMouth({
       lip: new THREE.MeshStandardMaterial({ color: lip, roughness: 0.52 }),
       // the jaw masses wear the body's own dark skin tone so they read as part of the head
       jaw: new THREE.MeshStandardMaterial({ color: dark, roughness: 0.62 }),
-      gum: new THREE.MeshStandardMaterial({ color: GUM, roughness: 0.32 }),
       interior: new THREE.MeshStandardMaterial({ color: INTERIOR, roughness: 0.3, side: THREE.DoubleSide }),
       teeth: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42 }),
-      tongue: new THREE.MeshStandardMaterial({ color: TONGUE, roughness: 0.3 }),
-      nose: new THREE.MeshStandardMaterial({ color: 0x18120e, roughness: 0.45 }),
     };
   }, [dark]);
 
@@ -292,8 +254,6 @@ export function JawedMouth({
         built.jawMass.dispose();
         built.upperLip.dispose();
         built.lowerLip.dispose();
-        built.upperGum?.dispose();
-        built.lowerGum?.dispose();
         built.interior.dispose();
       }
     },
@@ -315,14 +275,12 @@ export function JawedMouth({
   });
 
   if (!built) return null;
-  const r = built.r;
   const pv = built.jaw.pivot;
   return (
     <group>
       <mesh geometry={built.interior} material={mats.interior} />
       <mesh geometry={built.muzzle} material={mats.jaw} castShadow />
       <mesh geometry={built.upperLip} material={mats.lip} castShadow />
-      {built.upperGum && <mesh geometry={built.upperGum} material={mats.gum} />}
       {built.upperTeeth.length > 0 && (
         <instancedMesh
           args={[fang, mats.teeth, built.upperTeeth.length]}
@@ -338,7 +296,6 @@ export function JawedMouth({
           <group position={[-pv[0], -pv[1], -pv[2]]}>
             <mesh geometry={built.jawMass} material={mats.jaw} castShadow />
             <mesh geometry={built.lowerLip} material={mats.lip} castShadow />
-            {built.lowerGum && <mesh geometry={built.lowerGum} material={mats.gum} />}
             {built.lowerTeeth.length > 0 && (
               <instancedMesh
                 args={[fang, mats.teeth, built.lowerTeeth.length]}
@@ -348,19 +305,9 @@ export function JawedMouth({
                 }}
               />
             )}
-            {built.tongue && (
-              <mesh position={built.tongue.pos} quaternion={built.tongue.quat} scale={[r * 0.26, r * 0.07, r * 0.4]} material={mats.tongue}>
-                <sphereGeometry args={[1, 12, 8]} />
-              </mesh>
-            )}
           </group>
         </group>
       </group>
-      {built.nose && (
-        <mesh position={built.nose.pos} scale={[r * 0.3, r * 0.2, r * 0.22]} material={mats.nose}>
-          <sphereGeometry args={[1, 12, 8]} />
-        </mesh>
-      )}
     </group>
   );
 }

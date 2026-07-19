@@ -69,7 +69,7 @@ describe('bauplan: structural attractor basins (M24)', () => {
       const f = faceCount(grow(legged(pairs)));
       expect(f.eyes).toBeGreaterThanOrEqual(2);
       expect(f.mouths).toBeGreaterThanOrEqual(1);
-      expect(f.maxEye).toBeGreaterThanOrEqual(0.11);
+      expect(f.maxEye).toBeGreaterThanOrEqual(0.06); // == EYE_R_MIN (halved with the eyes)
     }
   });
 
@@ -82,7 +82,7 @@ describe('bauplan: structural attractor basins (M24)', () => {
         const f = faceCount(grow(genome));
         expect(f.eyes).toBeGreaterThanOrEqual(1);
         expect(f.mouths).toBeGreaterThanOrEqual(1);
-        expect(f.maxEye).toBeGreaterThanOrEqual(0.11);
+        expect(f.maxEye).toBeGreaterThanOrEqual(0.06); // == EYE_R_MIN (halved with the eyes)
       }
     }
   });

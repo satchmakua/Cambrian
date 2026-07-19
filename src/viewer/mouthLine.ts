@@ -307,7 +307,11 @@ export function buildMouthLine(
 
   // the slit's resting pitch: mouths sit below the muzzle's midline, corners droop (heavy, grim)
   const setDown = 0.1;
-  const gapeHalf = 0.28 * s.gape + 0.06; // half-separation (radians of pitch) between the lip lines
+  // Half-separation (radians of pitch) between the lip lines. This is the single number that
+  // decides whether a mouth reads as a MOUTH or as a scratch: at 0.28·gape the lips sat ~0.1 bu
+  // apart on a typical head — a hairline that swallowed its own interior and teeth. Opened up so
+  // the dark throat and the tooth rows actually have room to show.
+  const gapeHalf = 0.5 * s.gape + 0.14;
   const upperPitch = (t: number) => setDown + s.droop * Math.abs(t) - gapeHalf * Math.cos((t * Math.PI) / 2);
   const lowerPitch = (t: number) => setDown + s.droop * Math.abs(t) + gapeHalf * Math.cos((t * Math.PI) / 2);
 
