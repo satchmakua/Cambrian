@@ -38,7 +38,6 @@ describe('jawed mouth build (mouth overhaul)', () => {
     );
     expect(a.upperTeeth).toEqual(b.upperTeeth);
     expect(a.lowerTeeth).toEqual(b.lowerTeeth);
-    expect(a.jaw).toEqual(b.jaw);
   });
 
   it('every variant builds finite geometry across random genomes, both recessed flags', () => {
@@ -102,7 +101,7 @@ describe('jawed mouth build (mouth overhaul)', () => {
     expect(dc).toBeLessThan(b.r * 0.2);
   });
 
-  it('is bilaterally symmetric on the midline mouth — teeth mirror, hinge lies on ±X', () => {
+  it('is bilaterally symmetric on the midline mouth — teeth mirror', () => {
     const p = grow(defaultGenome());
     const b = buildJawed(p, mouthIdx(p), [], false, 'maw')!;
     const n = b.upperTeeth.length;
@@ -114,9 +113,6 @@ describe('jawed mouth build (mouth overhaul)', () => {
       expect(a.pos[2]).toBeCloseTo(m.pos[2], 4);
       expect(a.len).toBeCloseTo(m.len, 6);
     }
-    // the mandible hinge: pivot on the midline plane, axis along ±X
-    expect(Math.abs(b.jaw.pivot[0])).toBeLessThan(1e-3);
-    expect(Math.abs(b.jaw.axis[0])).toBeGreaterThan(0.99);
   });
 
   it('variants differ where their anatomy differs (underbite tusks outsize maw teeth)', () => {
@@ -129,18 +125,4 @@ describe('jawed mouth build (mouth overhaul)', () => {
     expect(buildJawed(p, idx, [], false, 'herbivore')!.lowerTeeth.length).toBe(0);
   });
 
-  it('the jaw oscillation parameters stay in their sane idle band', () => {
-    for (let s = 0; s < 8; s++) {
-      const p = grow(randomGenome(s));
-      const idx = mouthIdx(p);
-      if (idx < 0) continue;
-      for (const v of VARIANTS) {
-        const jaw = buildJawed(p, idx, [], false, v)!.jaw;
-        expect(jaw.amp).toBeGreaterThan(0);
-        expect(jaw.amp).toBeLessThanOrEqual(0.12); // subtle idle, never a flapping cartoon jaw
-        expect(jaw.omega).toBeGreaterThan(0);
-        expect(Math.hypot(jaw.axis[0], jaw.axis[1], jaw.axis[2])).toBeCloseTo(1, 6);
-      }
-    }
-  });
 });

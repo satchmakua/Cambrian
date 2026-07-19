@@ -29,7 +29,6 @@ export function Mouth({
   carves,
   recessed,
   surface = 'kit',
-  animate = false,
 }: {
   f: MeshFeature;
   dark: number;
@@ -37,14 +36,13 @@ export function Mouth({
   carves: readonly Carve[];
   recessed: boolean;
   surface?: SkinSurface;
-  animate?: boolean;
 }) {
   const v = mouthVariant(f.style);
   const shared = { f, phenotype, carves, recessed, surface, dark } as const;
   if (v === 'herbivore' || v === 'maw' || v === 'fanged') {
     // the old fanged band split hinged (style < 0.22) vs underbite — kept as a parameter flip
     const variant: JawedVariant = v === 'fanged' && f.style >= 0.22 ? 'underbite' : v;
-    return <JawedMouth {...shared} variant={variant} animate={animate} />;
+    return <JawedMouth {...shared} variant={variant} />;
   }
   if (v === 'beak') return <BeakMouth {...shared} />;
   if (v === 'mandibles') return <MandiblesMouth {...shared} />;

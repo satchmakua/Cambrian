@@ -12,18 +12,17 @@
  * Geometry is authored NODE-RELATIVE (world minus the mouth node's rest position, no rotation), so
  * the feature group's per-frame translation carries the whole mouth with the animated head. The
  * pure `buildJawed` does all of it headlessly (tested like every sibling variant); the component
- * is a thin wrapper that adds materials and the per-frame mandible gape.
+ * is a thin wrapper that adds materials. (The mandible used to idle open/shut; the idle
+ * animation pass was removed — creatures hold the rest pose grow() produced.)
  */
-import { useEffect, useMemo, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import type { Phenotype } from '../../engine/grow';
 import type { Vec3 } from '../../engine/genome';
 import type { Carve } from '../bodyField';
 import { norm3 } from '../bodyField';
 import type { MeshFeature } from '../meshData';
-import { jawGape } from '../animation';
-import { buildMouthLine, hash01, mouthSpec, type MouthSample, type SkinSurface } from '../mouthLine';
+import { buildMouthLine, mouthSpec, type MouthSample, type SkinSurface } from '../mouthLine';
 import { sweepTube, type SweepPoint } from '../sweep';
 import { fangGeometry, setToothInstances, toothRow, type ToothProfile, type ToothXform } from '../teeth';
 import { INTERIOR, LIP } from './palette';
@@ -102,12 +101,11 @@ export interface JawedBuild {
   upper: MouthSample[];
   lower: MouthSample[];
   muzzle: THREE.BufferGeometry; // upper-jaw mass above the lip line
-  jawMass: THREE.BufferGeometry; // mandible mass below the lip line (rides the gape)
+  jawMass: THREE.BufferGeometry; // mandible mass below the lip line
   upperLip: THREE.BufferGeometry;
   lowerLip: THREE.BufferGeometry;
   upperTeeth: ToothXform[];
   lowerTeeth: ToothXform[];
-  jaw: { pivot: Vec3; axis: Vec3; amp: number; omega: number; phase: number };
   interior: THREE.BufferGeometry;
 }
 
@@ -173,30 +171,6 @@ export function buildJawed(
   const upperTeeth: ToothXform[] = params.upper ? toothRow(upper, params.upper, r, seed) : [];
   const lowerTeeth: ToothXform[] = params.lower ? toothRow(lower, params.lower, r, seed, true) : [];
 
-  // the mandible hinge — an axis through the mouth corners, pulled back toward the jaw joint.
-  // Everything below the mouth line (lower lip/gum/teeth, tongue) rotates about it per frame.
-  const cornerL = upper[0].p;
-  const cornerR = upper[upper.length - 1].p;
-  const pivot: Vec3 = [
-    (cornerL[0] + cornerR[0]) / 2 - spec.aim[0] * r * 0.3,
-    (cornerL[1] + cornerR[1]) / 2 - spec.aim[1] * r * 0.3,
-    (cornerL[2] + cornerR[2]) / 2 - spec.aim[2] * r * 0.3,
-  ];
-  // degenerate fallback [1,0,0]: the hinge is corner-to-corner, which IS ±X on a midline mouth
-  let axis: Vec3 = norm3([cornerR[0] - cornerL[0], cornerR[1] - cornerL[1], cornerR[2] - cornerL[2]], [1, 0, 0]);
-  // sign-fix: a positive gape must swing the chin AWAY from the upper lip (down the face)
-  const mid = lower[(lower.length / 2) | 0].p;
-  const v: Vec3 = [mid[0] - pivot[0], mid[1] - pivot[1], mid[2] - pivot[2]];
-  const move: Vec3 = [axis[1] * v[2] - axis[2] * v[1], axis[2] * v[0] - axis[0] * v[2], axis[0] * v[1] - axis[1] * v[0]];
-  if (move[0] * spec.up[0] + move[1] * spec.up[1] + move[2] * spec.up[2] > 0) axis = [-axis[0], -axis[1], -axis[2]];
-  // herbivores chew fast and shallow; predators hang slow and wide
-  const jaw = {
-    pivot,
-    axis,
-    amp: variant === 'herbivore' ? 0.07 : variant === 'maw' ? 0.09 : variant === 'fanged' ? 0.12 : 0.05,
-    omega: (variant === 'herbivore' ? 2.6 : 0.8) * (0.85 + hash01(seed, idx + 97) * 0.3),
-    phase: hash01(seed, idx + 83) * Math.PI * 2,
-  };
 
   // the interior — a sheet spanning the opening: recessed into the real carve on smooth skin,
   // a hair proud of the capsule kit as a dark throat backdrop (depth by shading, not geometry)
@@ -206,7 +180,7 @@ export function buildJawed(
     r * (recessed ? 0.95 : 0.62));
 
 
-  return { r, upper, lower, muzzle, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, jaw, interior };
+  return { r, upper, lower, muzzle, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior };
 }
 
 export function JawedMouth({
@@ -217,7 +191,6 @@ export function JawedMouth({
   variant,
   dark,
   surface = 'kit',
-  animate = false,
 }: {
   f: MeshFeature;
   phenotype: Phenotype;
@@ -226,7 +199,6 @@ export function JawedMouth({
   variant: JawedVariant;
   dark: number;
   surface?: SkinSurface; // which rendered skin to trace lips onto (kit vs blended smooth/hybrid)
-  animate?: boolean; // gape idles only when the body itself animates (never thumbnails/smooth)
 }) {
   const built = useMemo(
     () => buildJawed(phenotype, f.idx, carves, recessed, variant, surface),
@@ -262,20 +234,8 @@ export function JawedMouth({
   useEffect(() => () => fang.dispose(), [fang]);
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
 
-  // the mandible idles open/shut about the corner hinge — only while the body itself animates
-  const jawRef = useRef<THREE.Group>(null);
-  const jawAxis = useMemo(
-    () => (built ? new THREE.Vector3(built.jaw.axis[0], built.jaw.axis[1], built.jaw.axis[2]) : null),
-    [built],
-  );
-  useFrame((st) => {
-    if (!animate || !built || !jawRef.current || !jawAxis) return;
-    const a = jawGape(st.clock.elapsedTime, built.jaw.phase, built.jaw.omega, built.jaw.amp);
-    jawRef.current.quaternion.setFromAxisAngle(jawAxis, a);
-  });
 
   if (!built) return null;
-  const pv = built.jaw.pivot;
   return (
     <group>
       <mesh geometry={built.interior} material={mats.interior} />
@@ -290,10 +250,8 @@ export function JawedMouth({
           }}
         />
       )}
-      {/* the mandible — everything below the mouth line swings together about the corner hinge */}
-      <group position={pv}>
-        <group ref={jawRef}>
-          <group position={[-pv[0], -pv[1], -pv[2]]}>
+      {/* the lower jaw: lip, mass and tooth row */}
+      <group>
             <mesh geometry={built.jawMass} material={mats.jaw} castShadow />
             <mesh geometry={built.lowerLip} material={mats.lip} castShadow />
             {built.lowerTeeth.length > 0 && (
@@ -305,8 +263,6 @@ export function JawedMouth({
                 }}
               />
             )}
-          </group>
-        </group>
       </group>
     </group>
   );

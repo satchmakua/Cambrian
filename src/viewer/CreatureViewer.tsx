@@ -58,8 +58,6 @@ import type { Phenotype } from '../engine/grow';
 import type { Trajectory } from '../physics/fitness';
 import type { SkinMode } from '../ui/store';
 import { CreatureMesh } from './CreatureMesh';
-import { buildRig } from './animation';
-import { buildMeshData } from './meshData';
 
 export function CreatureViewer({
   phenotype,
@@ -95,9 +93,8 @@ export function CreatureViewer({
       maxRadius: +Math.max(...phenotype.nodes.map((n) => n.radius)).toFixed(2),
       terminals,
       covering: phenotype.genomeRef.covering.type,
-      motion: buildRig(buildMeshData(phenotype), phenotype).style,
       skin: skinMode,
-      gait: trajectory ? `playback(${trajectory.frameCount}f)` : 'procedural',
+      gait: trajectory ? `playback(${trajectory.frameCount}f)` : 'static',
     };
   }, [phenotype, skinMode, trajectory]);
 

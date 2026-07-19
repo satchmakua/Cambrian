@@ -11,12 +11,38 @@
 import { grow, type Phenotype } from './grow';
 import { genomeOfMorphotype, MORPHOTYPE_IDS } from './random';
 
-const DIMS = 8;
+const DIMS = 10;
 
 /** Terminals that cap a locomotor leg (so legged creatures count their limbs). */
 const LEG_TIPS = new Set(['foot', 'claw', 'pincer', 'paw', 'hoof']);
 
-/** [elongation, limbCount, finniness, bulk, eyeCount, winged, tailed, radial] — each ~[0,1]. */
+/**
+ * **Headedness** (§11.1) — how set apart the front of the body is from its bulk, i.e. does this
+ * creature have a NECK and a distinct head, or is it one undifferentiated mass?
+ *
+ * Measured as the constriction between the body's widest point and the narrowest point of its
+ * forward half: a heron or ratite pinches hard (→ 1), a slime or urchin never pinches at all
+ * (→ 0), a tapered fish sits in between. Computed from the grown spine, so a lineage reports its
+ * true current shape. Radial/chainless bodies have no forward axis and score 0 by construction.
+ */
+function headedness(p: Phenotype): number {
+  const spine = p.nodes.filter((n) => n.kind === 'spine');
+  if (spine.length < 3) return 0;
+  let rMax = 0;
+  for (const n of spine) if (n.radius > rMax) rMax = n.radius;
+  if (rMax <= 1e-6) return 0;
+  // +Z is forward (DESIGN §4.1), so the forward half of the chain is where a neck would be
+  const sorted = [...spine].sort((a, b) => a.pos[2] - b.pos[2]);
+  const front = sorted.slice(Math.floor(sorted.length / 2));
+  let neckMin = Infinity;
+  for (const n of front) if (n.radius < neckMin) neckMin = n.radius;
+  const v = 1 - neckMin / rMax;
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+/** [elongation, limbCount, finniness, bulk, eyeCount, winged, tailed, radial, headedness, sheen]
+ *  — each ~[0,1]. The last two complete the §11.1 dimension set: without them look-alike basins
+ *  that differ only by surface or by whether they own a head collapse onto each other. */
 export function describe(p: Phenotype): number[] {
   const { min, max } = p.bounds;
   const dx = max[0] - min[0];
@@ -51,6 +77,11 @@ export function describe(p: Phenotype): number[] {
     wings > 0 ? 1 : 0, // winged
     tails > 0 ? 1 : 0, // tailed
     p.genomeRef.symmetry === 'radial' || tentacles > 0 ? 1 : 0, // radial
+    headedness(p), // neck / distinct head vs. one undifferentiated mass
+    // sheen is the one descriptor read off the genome rather than the skeleton: it is the surface
+    // axis the doc calls for, and it is what separates basins that are structurally identical —
+    // a chitinous insectoid from a furred ursid, a wet cephalopod from a dry horror.
+    Math.min(1, Math.max(0, p.genomeRef.covering.sheen)),
   ];
 }
 

@@ -2,11 +2,12 @@
  * Renders a Phenotype and gives it life (DESIGN §6.3/§6.4, M5 motion).
  *
  * The body is a capsule-union skinned with the shared countershaded material, plus
- * features (eyes, mouth, feet, claws, fins). Each frame a topology-free deformation
- * animates the node positions — a traveling sine wave along the body (undulation, strong
- * for serpents, gentle for legged bodies) plus a phased leg gait (low nodes lift/swing) —
- * and the capsules/spheres/features are re-posed to match. Pure viewer concern: the
- * engine's grow() stays static and deterministic.
+ * features (eyes, mouth, feet, claws, fins), rendered in the static rest pose grow() produced.
+ *
+ * There is no idle animation: the procedural undulation/gait pass was removed deliberately — it
+ * read as wobble rather than life and obscured the silhouette. The ONLY thing that moves a
+ * creature now is playback of a physics-recorded gait (M6), which re-poses the nodes from the
+ * recorded trajectory. Pure viewer concern either way: grow() stays static and deterministic.
  */
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
@@ -17,7 +18,6 @@ import { eyeVariant, earVariant } from './partStyles';
 import { Mouth } from './mouths';
 import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
-import { buildRig, computeAnim } from './animation';
 import { makeCreatureMaterial } from './creatureMaterial';
 import { buildSmoothGeometry } from './smoothSkin';
 import { mouthCarves } from './mouthLine';
@@ -49,12 +49,10 @@ function bakeBodyPos(geo: THREE.BufferGeometry, matrix: THREE.Matrix4): void {
 
 export function CreatureMesh({
   phenotype,
-  animate = true,
   skinMode = 'capsules',
   trajectory = null,
 }: {
   phenotype: Phenotype;
-  animate?: boolean;
   skinMode?: SkinMode;
   trajectory?: Trajectory | null;
 }) {
@@ -85,7 +83,7 @@ export function CreatureMesh({
     return g;
   }, [showSmooth, full, phenotype, carves]);
   useEffect(() => () => smoothGeo?.dispose(), [smoothGeo]);
-  const animateBody = !!trajectory || (animate && !showSmooth);
+  const playing = !!trajectory; // the recorded physics gait is the only motion left
 
   const footColor = useMemo(
     () => new THREE.Color().setHSL(pal.hueA, pal.sat, Math.max(0.12, pal.light * 0.45)).getHex(),
@@ -98,7 +96,8 @@ export function CreatureMesh({
     [pal],
   );
 
-  const rig = useMemo(() => buildRig(data, phenotype), [data, phenotype]);
+  // scratch buffer the trajectory sampler writes each played-back frame into
+  const animScratch = useMemo(() => new Float32Array(data.nodes.length * 3), [data]);
 
   // base capsule transforms for the initial (pre-animation) frame
   const baseCaps = useMemo(() => {
@@ -179,16 +178,13 @@ export function CreatureMesh({
   const q = useMemo(() => new THREE.Quaternion(), []);
 
   useFrame((st) => {
-    if (!animateBody) return; // thumbnails + smooth skin render the static base pose
-    // a recorded physics gait plays back from the trajectory; otherwise procedural motion
-    const anim = trajectory
-      ? sampleTrajectory(trajectory, st.clock.elapsedTime, rig.anim)
-      : computeAnim(rig, st.clock.elapsedTime);
+    if (!playing || !trajectory) return; // no gait recorded → the creature simply stands still
+    const anim = sampleTrajectory(trajectory, st.clock.elapsedTime, animScratch);
     const { bodySpheres, edges, features } = data;
 
     if (import.meta.env.DEV) {
-      // dev-only motion probe: the live animated position of the last node
-      const li = (rig.n - 1) * 3;
+      // dev-only motion probe: the live played-back position of the last node
+      const li = (data.nodes.length - 1) * 3;
       (window as unknown as { __cambrianAnim?: number[] }).__cambrianAnim = [
         +anim[li].toFixed(3),
         +anim[li + 1].toFixed(3),
@@ -271,7 +267,6 @@ export function CreatureMesh({
             carves={showSmooth ? carves : NO_CARVES}
             recessed={showSmooth && carves.length > 0}
             surface={showSmooth ? (full ? 'hybrid' : 'smooth') : 'kit'}
-            animate={animateBody}
           />
         </group>
       ))}
@@ -289,7 +284,6 @@ function Feature({
   carves,
   recessed,
   surface,
-  animate,
 }: {
   f: MeshFeature;
   footColor: number;
@@ -299,14 +293,13 @@ function Feature({
   carves: readonly Carve[];
   recessed: boolean;
   surface: SkinSurface;
-  animate: boolean;
 }) {
   switch (f.type) {
     case 'eye':
       return <Eye f={f} socket={footColor} iris={irisColor} lid={finColor} />;
     case 'mouth':
       return (
-        <Mouth f={f} dark={footColor} phenotype={phenotype} carves={carves} recessed={recessed} surface={surface} animate={animate} />
+        <Mouth f={f} dark={footColor} phenotype={phenotype} carves={carves} recessed={recessed} surface={surface} />
       );
     case 'pincer':
       return <Pincer f={f} color={footColor} />;

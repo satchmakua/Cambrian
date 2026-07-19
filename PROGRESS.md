@@ -45,6 +45,37 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ---
 
+## M26 — Morphospace descriptor dims (headedness + sheen) · 2026-07-18
+
+The last unchecked milestone. The morphospace descriptor was 8-D and **structural only**, so basins
+that differ by surface or by whether the animal owns a head collapsed together — the roadmap called
+out chimera reading as a dragon, but measurement showed the problem was far wider: **7 morphotypes
+never self-labelled at all** (ungulate, insectoid, chelonian, ratite, horror, starfish, crystalline).
+
+Added the two dims §11.1 specifies, appended so `archive.binKey` (which reads dims 0–1) is untouched:
+
+- **headedness** — computed from the grown spine: `1 − (min radius of the forward half) / (max spine
+  radius)`. It asks "is there a neck?", so a heron/ungulate/serpent pinches toward a distinct head
+  while a slime or urchin, having no forward axis to constrict, scores a flat 0. Chainless/radial
+  bodies score 0 by construction.
+- **sheen** — read off `covering.sheen`. The only descriptor sourced from the genome rather than the
+  skeleton, and deliberately so: it is the surface axis, and surface is exactly what separates
+  structurally identical creatures (chitinous insectoid vs. furred ursid, wet cephalopod vs. horror).
+
+**Measured (not asserted):** catalogue-wide self-labelling **47.1% → 57.3%** (1200 samples, 30
+morphotypes × 40 seeds). Chimera self-labels **22/40 → 27/40**, misread as dragon **4 → 1**. Both new
+dims carry real variance (σ 0.26 / 0.29 against elongation's 0.20), so neither is a dead axis padding
+the distance. Mean coherence fell 0.841 → 0.702, which is the expected consequence of measuring in a
+higher-dimensional space — the clustering test's floors still pass untouched.
+
+**Verified:** `npm run typecheck` clean; `npm test` → **168/168** across 27 files (5 new: 10-D shape +
+bounds, headedness blob-vs-neck separation, sheen tracks the gene and varies across the catalogue,
+the chimera/dragon regression, and a catalogue-wide self-labelling floor); `npm run build` clean.
+
+_Remaining confusions are genuinely structural — ungulate vs. canid, ratite vs. primate, horror vs.
+urchin — pairs that share a body plan and differ mostly in proportion. Separating those wants
+proportion dims, not these two._
+
 ## Mouth overhaul — surface-anchored mouths, carved maws, the end of the sandwich · 2026-07-16
 
 The primitive-assembly mouths (including the 5 fitted jaw builds below) never stopped reading

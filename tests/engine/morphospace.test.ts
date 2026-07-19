@@ -36,14 +36,90 @@ group('morphospace', () => {
     for (let s = 0; s < 10; s++) if (coherence(grow(genomeOfMorphotype(s * 31 + 5, 'serpent'))).nearest === 'serpent') serpent++;
     expect(serpent).toBeGreaterThan(5);
     // a dragon reads as a winged beast — its own basin holds the structural siblings dragon /
-    // wyvern / chimera (all winged, tailed quadrupeds; the descriptor can't see the covering that
-    // sets a chimera apart — that's what M26's sheen/headedness dims are for). The point: not a fish.
+    // wyvern / chimera (all winged, tailed quadrupeds). The point: not a fish.
     let winged = 0;
     for (let s = 0; s < 10; s++) {
       const n = coherence(grow(genomeOfMorphotype(s * 13 + 2, 'dragon'))).nearest;
       if (n === 'dragon' || n === 'wyvern' || n === 'chimera') winged++;
     }
     expect(winged).toBeGreaterThan(5);
+  });
+});
+
+group('descriptor dims (M26 — §11.1)', () => {
+  const DIMS = 10;
+  const HEADED = 8;
+  const SHEEN = 9;
+
+  it('is the full 10-D vector, every dim finite and in [0,1]', () => {
+    for (let s = 0; s < 40; s++) {
+      const d = describe(grow(randomGenome(s)));
+      expect(d).toHaveLength(DIMS);
+      for (const v of d) {
+        expect(Number.isFinite(v)).toBe(true);
+        expect(v).toBeGreaterThanOrEqual(0);
+        expect(v).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('headedness separates necked bodies from undifferentiated blobs', () => {
+    // a blob has no forward constriction at all…
+    for (const id of ['slime', 'urchin']) {
+      for (let s = 0; s < 6; s++) {
+        expect(describe(grow(genomeOfMorphotype(s * 41 + 3, id)))[HEADED]).toBeLessThan(0.12);
+      }
+    }
+    // …while a chain-bodied creature pinches toward its head
+    const mean = (id: string) => {
+      let t = 0;
+      for (let s = 0; s < 8; s++) t += describe(grow(genomeOfMorphotype(s * 41 + 3, id)))[HEADED];
+      return t / 8;
+    };
+    expect(mean('serpent')).toBeGreaterThan(0.25);
+    expect(mean('ungulate')).toBeGreaterThan(0.25);
+    expect(mean('slime')).toBeLessThan(0.1);
+  });
+
+  it('sheen reports the creature’s actual surface gene', () => {
+    for (let s = 0; s < 20; s++) {
+      const p = grow(randomGenome(s));
+      expect(describe(p)[SHEEN]).toBeCloseTo(p.genomeRef.covering.sheen, 6);
+    }
+    // and it genuinely varies across the catalogue (a constant dim would separate nothing)
+    const vals = MORPHOTYPE_IDS.map((id) => describe(grow(genomeOfMorphotype(11, id)))[SHEEN]);
+    expect(Math.max(...vals) - Math.min(...vals)).toBeGreaterThan(0.4);
+  });
+
+  it('the new dims sharpen the labels — chimera stops being read as a dragon', () => {
+    const tally = (id: string) => {
+      let self = 0;
+      let asDragon = 0;
+      for (let s = 0; s < 40; s++) {
+        const n = coherence(grow(genomeOfMorphotype(s * 97 + 5, id))).nearest;
+        if (n === id) self++;
+        if (n === 'dragon') asDragon++;
+      }
+      return { self, asDragon };
+    };
+    const chimera = tally('chimera');
+    // it was 22/40 self with 4 read as dragon before the sheen+headedness dims landed
+    expect(chimera.self).toBeGreaterThanOrEqual(25);
+    expect(chimera.asDragon).toBeLessThanOrEqual(2);
+    expect(chimera.self).toBeGreaterThan(chimera.asDragon);
+  });
+
+  it('self-labelling across the whole catalogue improved and stays there', () => {
+    let hits = 0;
+    let total = 0;
+    for (const id of MORPHOTYPE_IDS) {
+      for (let s = 0; s < 12; s++) {
+        if (coherence(grow(genomeOfMorphotype(s * 97 + 5, id))).nearest === id) hits++;
+        total++;
+      }
+    }
+    // 47.1% on the 8-D descriptor → 57.3% on the full 10-D one; guard the gain, not the exact number
+    expect(hits / total).toBeGreaterThan(0.52);
   });
 });
 

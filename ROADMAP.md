@@ -339,20 +339,35 @@ deterministic; growth stays bounded & meshable; the 4000-genome fuzz test stays 
   faceless), legs stayed canonical, smooth mode built, the Coherence slider + all controls wired with
   no console errors. Pending a visual read on the mouth organ + smooth fix.)_
 
-- [ ] **M25 — Full motion library (§8).** Add the gaits that were folded or missing: **hop**
-  (crouch→launch→land), **trot/gallop** (with a body bound), **glide** (wings held, slow bank),
-  **jet** (mantle pulse), **writhe/hover** (uncanny idles); and the Spore-style **motion primitives
-  keyed by limb role** (author abstract gaits, retarget per limb) for motion beyond pure sine math.
-  **Test:** a frog hops, a horse gallops, a jelly jets, a raptor glides — each distinct and in
-  character; the determinism + bounded-amplitude invariants hold.
+- [ ] **M25 — Full motion library (§8). — DEFERRED INDEFINITELY (2026-07-18).** Idle animation was
+  removed from the project entirely: the procedural undulation/gait pass (`viewer/animation.ts`, the
+  M13 motion styles, the jaw-gape idle) read as wobble rather than life and was judged not to earn
+  its keep, so creatures now hold the static rest pose `grow()` produces. Building *more* gaits on
+  top of a deleted system is moot. **Do not pick this up as "the next milestone."** Reviving it means
+  first re-litigating whether idle motion belongs at all.
+  _(Physics fitness (M6) and its recorded-gait playback are untouched and still live — evolving
+  walkers by distance is a selection pressure, and playback is the one thing that still moves a
+  creature.)_
+  <sub>Original scope, for the record: **hop** (crouch→launch→land), **trot/gallop** (with a body
+  bound), **glide** (wings held, slow bank), **jet** (mantle pulse), **writhe/hover** (uncanny idles);
+  plus Spore-style **motion primitives keyed by limb role** (author abstract gaits, retarget per
+  limb) for motion beyond pure sine math.</sub>
 
-- [ ] **M26 — Morphospace descriptor dims (§11.1).** Bring the descriptor to the doc's 8 dims
-  (**add sheen + headedness**) so the coherence labels separate look-alike basins (e.g. chimera vs.
-  dragon, which the current 8-D descriptor can't tell apart — they only differ by covering).
+- [x] **M26 — Morphospace descriptor dims (§11.1).** Brought the descriptor to the doc's full
+  dimension set by **adding headedness + sheen** (now 10-D: the eight structural dims plus these two).
+  **headedness** is computed from the grown spine — the constriction between the body's widest point
+  and the narrowest point of its forward half — so a heron or ungulate pinches toward a head while a
+  slime or urchin scores a flat 0. **sheen** is read off `covering.sheen`, the one surface axis, which
+  is what tells structurally identical basins apart (chitinous insectoid vs. furred ursid, wet
+  cephalopod vs. dry horror).
   _(The structural **coherence pull** the original M26 specced was implemented in M24 as the bauplan
-  pass + the tunable `coherence` gene, so this milestone is now just the descriptor dims.)_
-  **Test:** chimera and dragon get distinct nearest-centroid labels more often; determinism holds; the
-  morphospace coherence test stays green.
+  pass + the tunable `coherence` gene, so this milestone was just the descriptor dims.)_
+  **Test:** _(built + self-verified 2026-07-18)_ catalogue-wide self-labelling **47.1% → 57.3%**;
+  chimera self-labels **22/40 → 27/40** and is misread as a dragon **4 → 1**; both new dims carry real
+  variance (σ ≈ 0.26 / 0.29, on par with elongation's 0.20) so neither is a dead axis; `describe()`
+  stays deterministic and every dim finite in [0,1]; the coherence + niching tests stay green.
+  **168 tests** (5 new, in `tests/engine/morphospace.test.ts`). `binKey` reads dims 0–1 only, so the
+  Menagerie grid is unaffected by the append.
 
 ---
 
