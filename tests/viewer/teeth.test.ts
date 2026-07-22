@@ -93,6 +93,31 @@ describe('teeth (mouth overhaul)', () => {
     }
   });
 
+  it('EVEN-count ring teeth are bilaterally symmetric — length included (the M18 wrinkle)', () => {
+    // Even counts land mirror-partner teeth on X=0-symmetric positions, so their SIZES must match
+    // too — keying jitter on the raw index broke that. (Odd counts are placed rotationally and are
+    // deliberately ragged — a lamprey rasp, not a machined gear — so they are not asserted here.)
+    const n = 20;
+    const ring = Array.from({ length: n }, (_, i) => {
+      const a = (i / n) * Math.PI * 2;
+      return {
+        t: -1 + (2 * i) / n,
+        p: [Math.cos(a), Math.sin(a) * 0.6, 0] as [number, number, number],
+        n: [0, 0, 1] as [number, number, number],
+        tan: [-Math.sin(a), Math.cos(a), 0] as [number, number, number],
+        away: [Math.cos(a), Math.sin(a), 0] as [number, number, number],
+      };
+    });
+    for (const count of [6, 8, 12]) {
+      const teeth = toothRing(ring, count, 0.2, 1, 77, 3, [0, 0, -1]);
+      for (const t of teeth) {
+        // every tooth has a partner at mirrored x with the same length (itself, if on the X=0 plane)
+        const best = Math.min(...teeth.map((u) => Math.hypot(t.pos[0] + u.pos[0], t.pos[1] - u.pos[1]) + Math.abs(t.len - u.len)));
+        expect(best).toBeLessThan(1e-6);
+      }
+    }
+  });
+
   it('ring teeth spread evenly around a CLOSED ring — no bunching at the wrap segment', () => {
     // a perfect synthetic ring (closed convention: last sample does not repeat the first)
     const n = 20;

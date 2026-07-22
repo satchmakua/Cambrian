@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
+import { mix32 } from '../engine/rng';
 import { buildMeshData, type MeshFeature } from './meshData';
 import { eyeVariant, earVariant } from './partStyles';
 import { Mouth } from './mouths';
@@ -25,6 +26,35 @@ import { sampleTrajectory, type Trajectory } from '../physics/fitness';
 import type { SkinMode } from '../ui/store';
 
 const UP = new THREE.Vector3(0, 1, 0);
+
+// Curated iris palette: [hue, sat, light], weighted so warm animal eyes (amber/gold/green/copper)
+// are common and striking colours (blue/red/violet/pale) are a rarer accent. Deterministic per
+// creature so a seed always regrows the same eyes.
+const IRIS_PALETTE: [number, number, number, number][] = [
+  // weight, hue, sat, light
+  [5, 0.09, 0.9, 0.34], // amber
+  [5, 0.13, 0.85, 0.4], // gold
+  [4, 0.28, 0.6, 0.3], // green
+  [3, 0.07, 0.95, 0.3], // copper/orange
+  [3, 0.15, 0.55, 0.5], // pale yellow
+  [2, 0.55, 0.75, 0.4], // ice blue
+  [1.4, 0.62, 0.85, 0.32], // deep blue
+  [1.2, 0.98, 0.8, 0.32], // blood red
+  [1, 0.78, 0.55, 0.34], // violet
+  [1, 0.0, 0.0, 0.12], // near-black
+];
+function irisFor(seed: number): number {
+  const total = IRIS_PALETTE.reduce((t, e) => t + e[0], 0);
+  // two independent hashes: one picks the swatch, one jitters hue/sat a touch for within-type variety
+  let r = (mix32(seed, 0x1e5) / 0xffffffff) * total;
+  let e = IRIS_PALETTE[0];
+  for (const c of IRIS_PALETTE) {
+    r -= c[0];
+    if (r <= 0) { e = c; break; }
+  }
+  const j = (mix32(seed, 0x2e5) / 0xffffffff - 0.5) * 0.05;
+  return new THREE.Color().setHSL((e[1] + j + 1) % 1, e[2], e[3]).getHex();
+}
 
 // stable empty carve list for the capsule kit — the mouth builds must trace the PRISTINE surface
 // when the carved one isn't rendered (a lip traced onto an invisible cavity is a buried lip)
@@ -90,11 +120,11 @@ export function CreatureMesh({
     [pal],
   );
   const finColor = useMemo(() => new THREE.Color().setHSL(pal.hueA, pal.sat, pal.light).getHex(), [pal]);
-  // a deep, saturated iris derived from the creature's own hue — a rich animal eye, not a bright disc
-  const irisColor = useMemo(
-    () => new THREE.Color().setHSL((pal.hueA + 0.08) % 1, Math.min(1, pal.sat * 0.85 + 0.2), 0.34).getHex(),
-    [pal],
-  );
+  // Iris color — deterministic per creature (from its seed), drawn from a curated eye palette rather
+  // than tied to the body hue (which gave every animal an eye a shade off its own coat). Warm animal
+  // colors dominate; striking blues/reds/violets appear as a minority, so eye colour is a real point
+  // of variety without every creature reading as a clown.
+  const irisColor = useMemo(() => irisFor(seed), [seed]);
 
   // scratch buffer the trajectory sampler writes each played-back frame into
   const animScratch = useMemo(() => new Float32Array(data.nodes.length * 3), [data]);
@@ -392,7 +422,7 @@ function Eye({ f, socket, iris, lid }: { f: MeshFeature; socket: number; iris: n
         <>
           <mesh position={[0, 0, -r * 0.02]}>
             <sphereGeometry args={[r * 0.9, 18, 14]} />
-            <meshStandardMaterial color={0x9a7a2c} roughness={0.28} metalness={0.22} />
+            <meshStandardMaterial color={iris} roughness={0.28} metalness={0.22} />
           </mesh>
           <mesh position={[0, 0, r * 0.66]} scale={[0.14, 1.0, 0.4]}>
             <sphereGeometry args={[r * 0.82, 10, 14]} />

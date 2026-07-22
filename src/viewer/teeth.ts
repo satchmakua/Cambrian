@@ -142,7 +142,12 @@ export function toothRing(
   for (let i = 0; i < count; i++) {
     const t = -1 + (2 * i) / count;
     const sm = sampleAtRing(ring, t); // ring-aware — even spacing across the wrap segment
-    const jl = (hash01(seed, salt * 131 + i) * 2 - 1) * 0.3;
+    // Jitter keyed on a MIRROR-INVARIANT of the placement, not the index. The X=0 mirror flips only
+    // x, so quantizing (|x|, y) hands mirror-partner teeth the same size while keeping top/bottom
+    // distinct — the same trick toothRow uses with |t|. Keying on `i` broke bilateral symmetry on
+    // even-count rings (M18): partners i and count/2−i drew different jitter (~0.019r apart).
+    const key = Math.round(Math.abs(sm.p[0]) * 512) * 8192 + Math.round((sm.p[1] + 32) * 512);
+    const jl = (hash01(seed, salt * 131 + key) * 2 - 1) * 0.3;
     const len = Math.max(0.02, lenR * r * (1 + jl));
     // emerge: across the ring toward its center, tipped down the throat
     const Y = norm3([
