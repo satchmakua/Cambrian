@@ -24,7 +24,7 @@ import { norm3 } from '../bodyField';
 import type { MeshFeature } from '../meshData';
 import { buildMouthLine, mouthSpec, type MouthSample, type SkinSurface } from '../mouthLine';
 import { sweepTube, type SweepPoint } from '../sweep';
-import { fangGeometry, setToothInstances, toothRow, type ToothProfile, type ToothXform } from '../teeth';
+import { bluntGeometry, fangGeometry, setToothInstances, toothRow, type ToothProfile, type ToothXform } from '../teeth';
 import { INTERIOR, LIP } from './palette';
 import { interiorBowl, muzzleSkirt, relRow } from './shared';
 
@@ -42,6 +42,8 @@ interface JawedParams {
   jawR: number;
   /** how far the mouth's front centre projects off the skull, × r — this is what makes a SNOUT */
   project: number;
+  /** blunt (grazer molars/incisors) vs the default pointed fang — the visible tooth-type variety */
+  blunt?: boolean;
 }
 
 // house tooth-profile shapes: u = |t| (0 front → 1 corner). Exported so the tests measure the
@@ -55,6 +57,7 @@ export const JAWED_PARAMS = {
     muzzleR: 0.42,
     jawR: 0.40,
     project: 0.55,
+    blunt: true,
   },
   maw: {
     upper: { count: 13, len: (u: number) => 0.30 + 0.14 * u, width: 0.3, curl: 0.22, jitterLen: 0.22, jitterRock: 0.12, sink: 0.32, margin: 0.16, salt: 2 },
@@ -101,6 +104,7 @@ export interface JawedBuild {
   upper: MouthSample[];
   lower: MouthSample[];
   muzzle: THREE.BufferGeometry; // upper-jaw mass above the lip line
+  upperFold: THREE.BufferGeometry; // overhanging upper lip that hides the tooth roots
   jawMass: THREE.BufferGeometry; // mandible mass below the lip line
   upperLip: THREE.BufferGeometry;
   lowerLip: THREE.BufferGeometry;
@@ -166,9 +170,33 @@ export function buildJawed(
   const muzzle = muzzleSkirt(upper, upperBase, r * params.muzzleR * 0.55);
   const jawMass = muzzleSkirt(lower, lowerBase, r * params.jawR * 0.55);
 
+  // An OVERHANGING upper lip. Without it the upper tooth row sits exposed on the rim and you see
+  // straight over the roots into the top of the mouth. This is a fatter fold, pushed forward off
+  // the tooth line (+aim) and draping down (−away), so it covers the roots and closes that view —
+  // a convex labial covering. The upper teeth then root a touch back (−aim), tucked behind it, so
+  // only their downward tips show below the fold's edge.
+  const foldPts: SweepPoint[] = upper.map((s) => ({
+    p: [
+      s.p[0] + spec.aim[0] * r * 0.16 - s.away[0] * r * 0.05,
+      s.p[1] + spec.aim[1] * r * 0.16 - s.away[1] * r * 0.05,
+      s.p[2] + spec.aim[2] * r * 0.16 - s.away[2] * r * 0.05,
+    ] as Vec3,
+    n: s.n,
+  }));
+  const upperFold = sweepTube(foldPts, {
+    radius: (u) => r * params.lipR(Math.abs(u * 2 - 1)) * 1.9,
+    flatten: 0.62,
+    radialSegments: 10,
+  });
+
   // teeth — roots interpolate the same curves; the lower row interlocks into the upper's gaps.
   // Rows stay separate: the lower row belongs to the mandible group and swings with the gape.
-  const upperTeeth: ToothXform[] = params.upper ? toothRow(upper, params.upper, r, seed) : [];
+  // The upper row is pulled back under the fold so its roots hide behind the overhang.
+  const upperTucked: MouthSample[] = upper.map((s) => ({
+    ...s,
+    p: [s.p[0] - spec.aim[0] * r * 0.06, s.p[1] - spec.aim[1] * r * 0.06, s.p[2] - spec.aim[2] * r * 0.06] as Vec3,
+  }));
+  const upperTeeth: ToothXform[] = params.upper ? toothRow(upperTucked, params.upper, r, seed) : [];
   const lowerTeeth: ToothXform[] = params.lower ? toothRow(lower, params.lower, r, seed, true) : [];
 
 
@@ -180,7 +208,7 @@ export function buildJawed(
     r * (recessed ? 0.95 : 0.62));
 
 
-  return { r, upper, lower, muzzle, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior };
+  return { r, upper, lower, muzzle, upperFold, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior };
 }
 
 export function JawedMouth({
@@ -205,7 +233,7 @@ export function JawedMouth({
     [phenotype, f.idx, carves, recessed, variant, surface],
   );
 
-  const fang = useMemo(() => fangGeometry(), []);
+  const fang = useMemo(() => ((JAWED_PARAMS[variant] as JawedParams).blunt ? bluntGeometry() : fangGeometry()), [variant]);
   const mats = useMemo(() => {
     const lip = new THREE.Color(dark).lerp(new THREE.Color(LIP), 0.4);
     return {
@@ -223,6 +251,7 @@ export function JawedMouth({
     () => () => {
       if (built) {
         built.muzzle.dispose();
+        built.upperFold.dispose();
         built.jawMass.dispose();
         built.upperLip.dispose();
         built.lowerLip.dispose();
@@ -241,6 +270,7 @@ export function JawedMouth({
       <mesh geometry={built.interior} material={mats.interior} />
       <mesh geometry={built.muzzle} material={mats.jaw} castShadow />
       <mesh geometry={built.upperLip} material={mats.lip} castShadow />
+      <mesh geometry={built.upperFold} material={mats.lip} castShadow />
       {built.upperTeeth.length > 0 && (
         <instancedMesh
           args={[fang, mats.teeth, built.upperTeeth.length]}

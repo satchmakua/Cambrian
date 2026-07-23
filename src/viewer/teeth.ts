@@ -171,6 +171,56 @@ export function toothRing(
 // --- geometry + instancing (three.js side) ---------------------------------------------------
 
 /**
+ * A BLUNT tooth — a rounded incisor/molar stub for grazers, so herbivore mouths don't render the
+ * same pointed fang as predators. It barely tapers and DOMES over at the top instead of coming to
+ * a point, reading as a flat chewing tooth. Same root→crown vertex-colour gradient, no throat rake.
+ */
+export function bluntGeometry(rings = 6, radial = 8): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+  const root = new THREE.Color(0x8a7a58);
+  const crown = new THREE.Color(0xd9cdae); // a duller ivory than a fang's bright tip
+  const c = new THREE.Color();
+  for (let i = 0; i <= rings; i++) {
+    const v = i / rings;
+    // stays fat, then rounds off over the last third → a domed chewing surface, not a spike
+    const rad = 0.5 * (1 - 0.18 * v) * (v > 0.7 ? Math.sqrt(Math.max(0, 1 - ((v - 0.7) / 0.3) ** 2)) : 1) + 0.02;
+    for (let j = 0; j < radial; j++) {
+      const a = (j / radial) * Math.PI * 2;
+      positions.push(Math.cos(a) * rad, v, Math.sin(a) * rad);
+      c.lerpColors(root, crown, Math.min(1, v / 0.4));
+      colors.push(c.r, c.g, c.b);
+    }
+  }
+  for (let i = 0; i < rings; i++) {
+    for (let j = 0; j < radial; j++) {
+      const j2 = (j + 1) % radial;
+      const a = i * radial + j, b = i * radial + j2, d = (i + 1) * radial + j, e = (i + 1) * radial + j2;
+      indices.push(a, d, b, b, d, e);
+    }
+  }
+  const topIdx = positions.length / 3;
+  positions.push(0, 1.0, 0);
+  colors.push(crown.r, crown.g, crown.b);
+  const rootIdx = topIdx + 1;
+  positions.push(0, 0, 0);
+  colors.push(root.r, root.g, root.b);
+  for (let j = 0; j < radial; j++) {
+    const j2 = (j + 1) % radial;
+    indices.push(topIdx, rings * radial + j, rings * radial + j2);
+    indices.push(rootIdx, j2, j);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+
+/**
  * One shared curved-fang mesh: root at the origin, crown up local +Y, tip curled toward −Z (the
  * throat, once the placement frame orients +Z out of the face). Vertex colors bake a root→tip
  * gradient — shadowed at the gum, grimy ivory mid-crown, faintly translucent-bright at the tip —
