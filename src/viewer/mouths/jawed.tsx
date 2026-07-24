@@ -67,6 +67,7 @@ export const JAWED_PARAMS = {
     muzzleR: 0.36,
     jawR: 0.40,
     project: 0.50,
+    blunt: true,
   },
   fanged: {
     // canine spikes at the corner third — the crocodile read; tips clear the closed lip line

@@ -99,9 +99,16 @@ describe('morphotype library (M22 — full catalogue §4)', () => {
       for (const id of ['mustelid', 'chelonian'] as const) {
         expect(legCount(grow(genomeOfMorphotype(s * 11 + 3, id)))).toBe(4);
       }
-      // ratite + primate — bipeds (one leg pair; the primate also carries grasping arms)
+      // ratite + primate + biped — bipeds (one leg pair; the last two carry grasping arms)
       expect(legCount(grow(genomeOfMorphotype(s * 11 + 3, 'ratite')))).toBe(2);
       expect(legCount(grow(genomeOfMorphotype(s * 11 + 3, 'primate')))).toBe(2);
+      const bip = grow(genomeOfMorphotype(s * 11 + 3, 'biped'));
+      expect(legCount(bip)).toBe(2);
+      expect(hasPart(bip, 'arm')).toBe(true); // an upright two-legged walker with grasping arms
+      // fish + shark — always finned (their defining morphology): dorsal + pectoral + caudal
+      for (const id of ['fish', 'shark'] as const) {
+        expect(grow(genomeOfMorphotype(s * 11 + 3, id)).nodes.filter((n) => n.part?.kind === 'fin').length).toBeGreaterThanOrEqual(2);
+      }
       // arthro-alien — ten-plus legs, a true many-legged body
       expect(legCount(grow(genomeOfMorphotype(s * 11 + 3, 'arthro-alien')))).toBeGreaterThanOrEqual(8);
       // chimera — a winged, tailed mishmash

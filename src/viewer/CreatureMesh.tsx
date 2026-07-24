@@ -576,13 +576,67 @@ function Pincer({ f, color }: { f: MeshFeature; color: number }) {
 }
 
 // A fin: a thin blade, oriented outward by the node frame.
+// A fin — a broad fanned blade, not the old flattened bead on a stalk (which read as a limb stump).
+// The membrane fans from the root out along the node's aim (+Z), spread in ±Y, thin along X, with
+// radial fin-rays for the ribbed fish-fin look. A caudal (a tail-terminal fin, kind 'tail') is
+// bigger and FORKED — a proper tail fin — so a fish's tail reads as a caudal fan.
 function Fin({ f, color }: { f: MeshFeature; color: number }) {
   const r = Math.max(f.radius, 0.06);
+  const caudal = f.kind === 'tail';
+  const S = r * (caudal ? 7.5 : 5.5);
+  const ray = useMemo(() => new THREE.Color(color).multiplyScalar(0.6).getHex(), [color]);
+
+  const { root, tips } = useMemo(() => {
+    const RAYS = 8;
+    const rt = new THREE.Vector3(0, 0, 0);
+    const ts: THREE.Vector3[] = [];
+    for (let i = 0; i < RAYS; i++) {
+      const t = i / (RAYS - 1);
+      const ang = -0.85 + t * 1.7; // fan from a leading edge to a trailing edge, around +Z
+      // reach: a rounded blade (fullest mid-fan). A caudal notches in the middle → a forked fork.
+      const round = 0.62 + 0.55 * Math.sin(t * Math.PI);
+      const reach = caudal ? round * (1 - 0.42 * Math.exp(-((t - 0.5) ** 2) / 0.02)) : round;
+      ts.push(new THREE.Vector3(0, Math.sin(ang) * reach * S, Math.cos(ang) * reach * S));
+    }
+    return { root: rt, tips: ts };
+  }, [S, caudal]);
+
+  const membrane = useMemo(() => {
+    const verts: number[] = [];
+    for (let i = 0; i < tips.length - 1; i++) {
+      verts.push(root.x, root.y, root.z, tips[i].x, tips[i].y, tips[i].z, tips[i + 1].x, tips[i + 1].y, tips[i + 1].z);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    g.computeVertexNormals();
+    return g;
+  }, [root, tips]);
+  useEffect(() => () => membrane.dispose(), [membrane]);
+
+  // fin rays — thin spars from the root to every other tip, the stiffening rods of a real fin
+  const rays = useMemo(
+    () =>
+      tips.filter((_, i) => i % 2 === 0).map((tip) => {
+        const mid = tip.clone().multiplyScalar(0.5);
+        const len = Math.max(tip.length(), 1e-3);
+        const q = new THREE.Quaternion().setFromUnitVectors(UP, tip.clone().normalize());
+        return { pos: [mid.x, mid.y, mid.z] as [number, number, number], quat: [q.x, q.y, q.z, q.w] as [number, number, number, number], len };
+      }),
+    [tips],
+  );
+
   return (
-    <mesh quaternion={f.quat} scale={[r * 0.32, r * 1.2, r * 1.6]}>
-      <sphereGeometry args={[1, 12, 10]} />
-      <meshStandardMaterial color={color} roughness={0.55} metalness={0.0} />
-    </mesh>
+    <group quaternion={f.quat}>
+      <mesh geometry={membrane} castShadow>
+        <meshStandardMaterial color={color} roughness={0.5} metalness={0.0} side={THREE.DoubleSide} transparent opacity={0.94} />
+      </mesh>
+      {rays.map((b, i) => (
+        <mesh key={i} position={b.pos} quaternion={b.quat}>
+          <cylinderGeometry args={[r * 0.04, r * 0.06, b.len, 4]} />
+          <meshStandardMaterial color={ray} roughness={0.5} />
+        </mesh>
+      ))}
+    </group>
   );
 }
 
