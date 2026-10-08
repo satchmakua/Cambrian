@@ -313,8 +313,20 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
           <PopulationChart history={snap.history} species={snap.species} />
           <ul>
             {snap.species.slice(0, 14).map((s) => (
-              <li key={s.id} className={s.extinct ? 'extinct' : ''}>
-                <i style={{ background: hueCss(s.hue) }} />
+              <li
+                key={s.id}
+                className={s.extinct ? 'extinct' : ''}
+                onClick={() => {
+                  // follow a living member
+                  const c = getWorld().creatures.find((x) => x.species === s.id && x.alive);
+                  if (c) {
+                    select(c.id);
+                    setFollow(true);
+                  }
+                }}
+                title={s.extinct ? 'extinct' : 'follow one'}
+              >
+                <CensusIcon speciesId={s.id} hue={s.hue} />
                 <span className="sp-name">{s.name}</span>
                 <span className="sp-diet">{s.diet}</span>
                 <span className="sp-n">{s.extinct ? '†' : s.alive}</span>
@@ -483,6 +495,17 @@ function SpeciesPortrait({ speciesId }: { speciesId: number }) {
       {url ? <img src={url} alt="" /> : <div className="ph" />}
       <figcaption>{sp.name}</figcaption>
     </figure>
+  );
+}
+
+/** A census row's face: the species' founder, tiny, edged in its chart colour. */
+function CensusIcon({ speciesId, hue }: { speciesId: number; hue: number }) {
+  const sp = speciesById(getWorld(), speciesId);
+  const url = usePortrait(sp?.founder);
+  return (
+    <span className="sp-icon" style={{ borderColor: hueCss(hue) }}>
+      {url && <img src={url} alt="" />}
+    </span>
   );
 }
 
