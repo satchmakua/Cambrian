@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  createWorld, release, stepWorld, worldHash, bodyOf, liveCount, preysOn, STEP, DAY_LENGTH, MAX_POP, AIRBORNE, climate, seasonOf, YEAR_DAYS,
+  createWorld, release, stepWorld, worldHash, bodyOf, liveCount, preysOn, STEP, DAY_LENGTH, MAX_POP, AIRBORNE, climate, seasonOf, YEAR_DAYS, COURT_TIME,
 } from '../../src/sim/world';
 import { traitsOf } from '../../src/sim/traits';
 import { heightAt, makeTerrain, biomeAt, WORLD_SIZE, WATER_LEVEL } from '../../src/sim/terrain';
@@ -169,3 +169,57 @@ describe('seasons', () => {
     for (let t = 0; t < DAY_LENGTH * YEAR_DAYS; t += 30) expect(Math.abs(climate(t + 30).grass - climate(t).grass)).toBeLessThan(0.08);
   });
 });
+
+describe('courtship & young', () => {
+  it('a pair dance about each other for the whole display before the young arrive', () => {
+    const w = createWorld(3);
+    const pair = release(w, g('ungulate'), 2);
+    pair[1].x = pair[0].x + 2.5;
+    pair[1].z = pair[0].z;
+    for (const c of pair) {
+      c.age = c.traits.maturity + 10;
+      c.energy = c.traits.maxEnergy;
+      c.fatigue = 0;
+      c.breedCooldown = 0;
+    }
+    let danced = 0;
+    let maxGap = 0;
+    for (let i = 0; i < 60 / STEP && w.tally.births === 0; i++) {
+      stepWorld(w);
+      const courting = pair.some((c) => c.action === 'mate' && c.courtT > 0);
+      if (courting) {
+        danced += STEP;
+        maxGap = Math.max(maxGap, Math.hypot(pair[0].x - pair[1].x, pair[0].z - pair[1].z));
+      }
+    }
+    expect(w.tally.births).toBeGreaterThan(0);
+    expect(danced).toBeGreaterThanOrEqual(COURT_TIME - STEP); // no birth before the display is through
+    const contact = pair[0].traits.radius + pair[1].traits.radius;
+    expect(maxGap).toBeLessThan(contact + 4.5); // they circle close, not wander apart
+  });
+
+  it('the young bolt with a fleeing parent', () => {
+    const w = createWorld(3);
+    const [mum] = release(w, g('ungulate'), 1);
+    const [cat] = release(w, g('felid'), 1, { x: mum.x, z: mum.z });
+    cat.x = mum.x + 12;
+    cat.z = mum.z;
+    // a newborn asleep beside its mother (a sleeper sees only a third as far: not the hunter)
+    const [calf] = release(w, mum.genome, 1, { x: mum.x, z: mum.z });
+    calf.age = 0;
+    calf.parent = mum.id;
+    calf.x = mum.x - 2;
+    calf.z = mum.z;
+    calf.action = 'sleep';
+    calf.fatigue = 0.5;
+    calf.decideIn = 0;
+    mum.action = 'flee';
+    mum.target = cat.id;
+    mum.decideIn = 5; // she is mid-flight this step
+    cat.decideIn = 5;
+    stepWorld(w);
+    expect(calf.action).toBe('flee');
+    expect(calf.target).toBe(cat.id);
+  });
+});
+

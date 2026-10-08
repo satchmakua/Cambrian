@@ -178,10 +178,13 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
       DEV_WARMED = true;
       for (let i = 0; i < warm * 20; i++) stepWorld(w);
       const f = q.get('follow');
+      // follow=courting: run on (up to ten minutes) until a pair is mid-display
+      if (f === 'courting') for (let i = 0; i < 12000 && !w.creatures.some((x) => x.action === 'mate' && x.courtT > 1.2); i++) stepWorld(w);
       if (f) {
         // follow=aloft: the first creature on the wing
-        const sp = f === 'aloft' ? undefined : w.species.find((x) => f === '1' || x.name.includes(f) || x.kind.includes(f));
-        const c = w.creatures.find((x) => (f === 'aloft' ? x.alt > 1 : sp ? x.species === sp.id : true));
+        const special = f === 'aloft' || f === 'courting';
+        const sp = special ? undefined : w.species.find((x) => f === '1' || x.name.includes(f) || x.kind.includes(f));
+        const c = w.creatures.find((x) => (f === 'aloft' ? x.alt > 1 : f === 'courting' ? x.action === 'mate' && x.courtT > 1.2 : sp ? x.species === sp.id : true));
         if (c) {
           select(c.id);
           setFollow(true);

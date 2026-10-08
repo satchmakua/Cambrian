@@ -53,6 +53,8 @@ const WORLD_MUTATION: MutationRates = { point: 0.22, pointSigma: 0.05, structura
 const MUTATION_CHANCE = 0.3; // per offspring
 const SPATIAL = 10; // spatial-hash cell (bu)
 const SCENT = 2.6; // hungry hunters smell prey this many vision-radii away
+/** seconds a pair circle each other in display before they mate */
+export const COURT_TIME = 4;
 /** above this altitude (bu) a flier is airborne: out of a walker's reach, free of the ground's rules */
 export const AIRBORNE = 0.45;
 const CLIMB = 2.6; // bu/s up
@@ -123,6 +125,8 @@ export interface Creature {
   alt: number;
   /** a flier's wish to be airborne this step (set by the current action; landing is gradual) */
   fly: boolean;
+  /** seconds of courtship display danced with the current partner (0 when not courting) */
+  courtT: number;
 }
 
 export interface Plant {
@@ -385,6 +389,7 @@ function spawn(w: World, genome: Genome, species: Species, x: number, z: number,
     wanderSeed: w.rng() * 1000,
     alt: 0,
     fly: false,
+    courtT: 0,
   };
   w.creatures.push(c);
   species.alive++;
@@ -647,6 +652,18 @@ function decide(w: World, c: Creature): void {
       break;
     }
   }
+  // the young bolt when their parent does (they follow it through the escape, not just a stroll)
+  if (!threat && c.age < t.maturity && c.parent !== null) {
+    const mum = w.creatures.find((o) => o.id === c.parent && o.alive);
+    if (mum && mum.action === 'flee' && Math.hypot(mum.x - c.x, mum.z - c.z) < 20) {
+      const th = w.creatures.find((x) => x.id === mum.target && x.alive);
+      if (th) {
+        threat = th;
+        threatD = Math.hypot(th.x - c.x, th.z - c.z);
+        alarmed = true;
+      }
+    }
+  }
   if (threat && (!asleep || threatD < sight || alarmed)) {
     c.action = 'flee';
     c.target = threat.id;
@@ -694,6 +711,7 @@ function decide(w: World, c: Creature): void {
     if (mate) {
       c.action = 'mate';
       c.target = mate.id;
+      c.courtT = 0;
       return;
     }
     // radial / oozing kinds bud alone when there is no partner
@@ -1040,11 +1058,33 @@ function act(w: World, c: Creature, dt: number): void {
         break;
       }
       const d = Math.hypot(m.x - c.x, m.z - c.z);
-      if (d > (t.radius + m.traits.radius) + 0.8 || !landed || m.alt > AIRBORNE) {
+      const contact = t.radius + m.traits.radius;
+      if (d > contact + 3 || !landed || m.alt > AIRBORNE) {
+        // court from close by and on the ground: approach first
         goal = m;
         pace = 0.75;
+        c.courtT = 0;
+      } else if (c.courtT < COURT_TIME) {
+        // the display: the pair circle each other about their midpoint (the partner, if it's idle,
+        // is drawn into the dance — two suitors orbiting the same way go round each other; one busy
+        // feeding or hunting carries on and is simply courted)
+        c.courtT += dt;
+        if (m.action === 'wander' && m.age >= m.traits.maturity && m.breedCooldown <= 0) {
+          m.action = 'mate';
+          m.target = c.id;
+          m.courtT = c.courtT;
+        }
+        const mx = (c.x + m.x) / 2, mz = (c.z + m.z) / 2;
+        const ang = Math.atan2(c.x - mx, c.z - mz) + 0.9;
+        const R = contact * 0.6 + 0.9;
+        goal = { x: mx + Math.sin(ang) * R, z: mz + Math.cos(ang) * R };
+        pace = 0.3;
+      } else if (d > contact + 0.8) {
+        goal = m;
+        pace = 0.5;
       } else if (c.breedCooldown <= 0) {
         breed(w, c, m);
+        c.courtT = 0;
         done(c);
       }
       break;
@@ -1108,6 +1148,7 @@ function done(c: Creature): void {
   c.action = 'wander';
   c.target = -1;
   c.decideIn = 0;
+  c.courtT = 0;
 }
 
 function bite(w: World, a: Creature, b: Creature, dt: number): void {

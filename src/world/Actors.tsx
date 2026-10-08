@@ -20,7 +20,7 @@ import { createRig, poseRig } from '../viewer/rig';
 import { JawContext, type JawControl } from '../viewer/mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from '../viewer/flight';
 import { LidContext, type LidControl } from '../viewer/eyelids';
-import { AIRBORNE, bodyOf, growthOf, type Corpse, type Creature, type World } from '../sim/world';
+import { AIRBORNE, COURT_TIME, bodyOf, growthOf, type Corpse, type Creature, type World } from '../sim/world';
 import { heightAt, WATER_LEVEL } from '../sim/terrain';
 import { emoteFor, emoteMaterial, type Emote } from './emotes';
 import { SOUND, voiceOf, type Call } from './audio';
@@ -154,7 +154,7 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
   const voice = useMemo(() => voiceOf(traits), [traits]);
   const heard = useRef({ action: c.action, bitten: c.attackedAt, last: -1e9, born: c.age < 2 });
   const shown = useRef<{ e: Emote | null; pop: number }>({ e: null, pop: 0 });
-  const pose = useRef({ x: c.x, z: c.z, h: c.heading, sleep: 0, eat: 0, bob: Math.random() * 10, turn: 0, alt: c.alt, fly: 0, beat: Math.random() * 6, climb: 0 });
+  const pose = useRef({ x: c.x, z: c.z, h: c.heading, sleep: 0, eat: 0, bob: Math.random() * 10, turn: 0, alt: c.alt, fly: 0, beat: Math.random() * 6, climb: 0, display: 0 });
   const swimmer = traits.habitat === 'water' || traits.locomotion === 'swim' || traits.locomotion === 'drift';
   // each actor animates its own skeleton (bones can't be shared between skinned meshes)
   const rig = useMemo(() => createRig(phenotype), [phenotype]);
@@ -183,13 +183,17 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
     P.alt += (c.alt - P.alt) * k;
     P.fly += ((c.alt > AIRBORNE || (c.fly && c.alt > 0.05) ? 1 : 0) - P.fly) * Math.min(1, dt * 4);
     if (dt > 0) P.climb += ((P.alt - prevAlt) / dt - P.climb) * Math.min(1, dt * 3);
+    // courting: the pair circling each other put on a display
+    const courting = c.action === 'mate' && c.courtT > 0 && c.courtT < COURT_TIME;
+    P.display += ((courting ? 1 : 0) - P.display) * Math.min(1, dt * 3);
     if (flight) {
-      flight.spread = P.fly;
+      // (a displaying bird half-opens its wings and shivers them; the flight beat takes over aloft)
+      flight.spread = Math.max(P.fly, 0.55 * P.display * (1 - P.fly));
       // beat hard climbing out, steadily cruising, and glide (wings held, a slow rock) coming down;
       // small fliers beat faster than big ones
       const power = P.climb > 0.4 ? 1 : P.climb < -0.6 ? 0.08 : 0.55;
       P.beat += dt * (9 / Math.pow(Math.max(0.3, s * traits.length * 0.35), 0.35)) * (0.4 + 0.6 * power);
-      flight.flap = wingbeat(P.beat, power);
+      flight.flap = P.fly > 0.05 ? wingbeat(P.beat, power) : 0.3 * P.display * Math.sin(world.time * 14);
     }
     // drive the gait from the speed the body actually shows on screen (in its own body units)
     if (dt > 0) {
@@ -206,7 +210,8 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
         turn: P.turn,
         fly: P.fly,
         // standing about: breathe and glance around
-        idle: Math.max(0, 1 - vis / Math.max(0.3, traits.speed * 0.3)) * (1 - P.eat) * (1 - P.sleep) * (1 - P.fly),
+        idle: Math.max(0, 1 - vis / Math.max(0.3, traits.speed * 0.3)) * (1 - P.eat) * (1 - P.sleep) * (1 - P.fly) * (1 - P.display),
+        display: P.display,
       });
     }
     const ground = heightAt(world.terrain, P.x, P.z);
