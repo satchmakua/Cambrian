@@ -34,6 +34,9 @@ export type JawedVariant = 'herbivore' | 'maw' | 'fanged' | 'underbite';
 
 /** how far a mammal's jaw hangs open at rest (0 = lips meeting) — a hair, so it reads alive */
 const REST_SHUT = 0.04;
+/** everything else rests with its jaws barely parted: the teeth show along a closed line (a croc's,
+ *  a shark's grin) instead of the gaping mask the built pose holds */
+const REST_PARTED = 0.05;
 
 interface JawedParams {
   upper: ToothProfile | null;
@@ -162,7 +165,12 @@ export function buildJawed(
         muzzleR: base.muzzleR * 0.5,
         jawR: base.jawR * 0.7,
       }
-    : base;
+    : {
+        // a reptile's, a fish's, a frog's mouth: no fleshy lips — a thin hard rim along the jaw line
+        ...base,
+        lipR: (u) => base.lipR(u) * 0.55,
+        lowerLipR: (u) => base.lowerLipR(u) * 0.55,
+      };
   const r = spec.r;
   const seed = phenotype.genomeRef.seed;
   const line = buildMouthLine(phenotype, spec, carves, 17, surface);
@@ -246,9 +254,9 @@ export function buildJawed(
     r * (recessed ? 0.95 : 0.62));
 
 
-  // a mammal's jaw and lip fold are coat: give them body-space coordinates so they can wear the
-  // skin material itself (pattern, countershading and relief continue across the seam)
-  if (muzzled) for (const g of [muzzle, jawMass, upperFold]) bakeBodySpace(g, o);
+  // the jaw masses (and a mammal's lip fold) are skin: give them body-space coordinates so they can
+  // wear the body's own covering material (pattern, countershading and relief continue across)
+  for (const g of muzzled ? [muzzle, jawMass, upperFold] : [muzzle, jawMass]) bakeBodySpace(g, o);
 
   // the nose pad: a soft, flattened wedge seated on the muzzle tip, its broad face along the skin
   let nose: THREE.BufferGeometry | null = null;
@@ -327,7 +335,8 @@ export function JawedMouth({
   const fang = useMemo(() => ((JAWED_PARAMS[variant] as JawedParams).blunt ? bluntGeometry() : fangGeometry()), [variant]);
   const muzzled = built?.muzzled ?? false;
   const mats = useMemo(() => {
-    const lip = muzzled ? new THREE.Color(dark).multiplyScalar(0.55) : new THREE.Color(dark).lerp(new THREE.Color(LIP), 0.4);
+    // a mammal's lip line is a dark crease; a reptile's rim a darker tone of its own hide
+    const lip = muzzled ? new THREE.Color(dark).multiplyScalar(0.55) : new THREE.Color(dark).lerp(new THREE.Color(LIP), 0.2).multiplyScalar(0.85);
     return {
       lip: new THREE.MeshStandardMaterial({ color: lip, roughness: 0.52 }),
       // the jaw masses wear the body's own dark skin tone so they read as part of the head — a
@@ -368,13 +377,13 @@ export function JawedMouth({
   useFrame(() => {
     if (!hinge || !lowerJaw.current) return;
     // no control (Breed / Studio still): a mammal holds its mouth shut, everything else the built gape
-    const open = jaw ? jaw.open : muzzled ? REST_SHUT : 1;
+    const open = jaw ? jaw.open : muzzled ? REST_SHUT : REST_PARTED;
     poseJaw(lowerJaw.current, hinge, open);
     if (throat.current) throat.current.visible = open > 0.35;
   });
 
   if (!built) return null;
-  const coatMat = muzzled && skin ? skin : mats.jaw;
+  const coatMat = skin ?? mats.jaw;
   return (
     <group>
       {/* the throat stays with the skull; when the jaw nearly shuts there is no opening to show it

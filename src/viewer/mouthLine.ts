@@ -180,8 +180,9 @@ export function mouthCarves(p: Phenotype): Carve[] {
   const out: Carve[] = [];
   for (const s of mouthSpecs(p)) {
     let carve: Carve | null = null;
-    // a muzzled mouth rests closed: a cavity behind shut lips is never seen, only felt as a dent
-    if (s.muzzled) continue;
+    // a jawed mouth rests closed: a cavity behind shut lips is never seen, only felt as a dent (and
+    // seen through the parted rim as a dark gaping maw). Funnels and baleen slots still carve.
+    if (JAWED.has(s.variant)) continue;
     if (WEDGE.has(s.variant)) {
       const depth = s.r * (0.85 + s.gape * 0.3);
       carve = {

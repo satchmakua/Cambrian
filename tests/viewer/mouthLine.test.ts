@@ -13,10 +13,14 @@ function firstMouth(p: Phenotype): MouthSpec | undefined {
   return mouthSpecs(p)[0];
 }
 
-/** the default creature with bare skin: a carving (non-mammal) mouth — fur mouths rest closed, uncarved */
-function bareGenome() {
+/** the default creature wearing a lamprey funnel: a carving mouth (jawed mouths rest shut, uncarved) */
+function funnelGenome() {
   const g = defaultGenome();
-  g.covering = { ...g.covering, type: 'skin' };
+  let seg: typeof g.body | undefined = g.body;
+  while (seg) {
+    for (const a of seg.appendages) if (a.terminal === 'mouth') a.style = 0.68;
+    seg = seg.child;
+  }
   return g;
 }
 
@@ -85,7 +89,7 @@ describe('mouth line (mouth overhaul)', () => {
   });
 
   it('mouth carves remove matter exactly where the maw is', () => {
-    const p = grow(bareGenome());
+    const p = grow(funnelGenome());
     const carves = mouthCarves(p);
     expect(carves.length).toBeGreaterThan(0);
     const f = buildFieldPrims(p, 'body');
@@ -104,7 +108,7 @@ describe('mouth line (mouth overhaul)', () => {
 
   it('the carved smooth skin marks wet mouth-flesh vertices (aFlesh) at the maw', async () => {
     const { buildSmoothGeometry } = await import('../../src/viewer/smoothSkin');
-    const p = grow(bareGenome());
+    const p = grow(funnelGenome());
     const carves = mouthCarves(p);
     expect(carves.length).toBeGreaterThan(0);
     const geo = buildSmoothGeometry(p, true, carves);
@@ -139,7 +143,7 @@ describe('mouth line (mouth overhaul)', () => {
 
   it('carves spare the eyes — every eye keeps solid flesh behind its bulb', () => {
     let carvedBodies = 0;
-    for (let s = 0; s < 40; s++) {
+    for (let s = 0; s < 160; s++) {
       const p = grow(randomGenome(s));
       const carves = mouthCarves(p);
       if (carves.length === 0) continue;
@@ -195,9 +199,7 @@ describe('mouth line (mouth overhaul)', () => {
   it('every wedge/funnel mouth across random genomes yields exactly one finite carve', () => {
     for (let s = 0; s < 40; s++) {
       const p = grow(randomGenome(s));
-      const carvers = mouthSpecs(p).filter(
-        (m) => !m.muzzled && ['herbivore', 'maw', 'fanged', 'baleen', 'sucker', 'lamprey'].includes(m.variant),
-      );
+      const carvers = mouthSpecs(p).filter((m) => ['baleen', 'sucker', 'lamprey'].includes(m.variant));
       const carves = mouthCarves(p);
       expect(carves.length).toBe(carvers.length);
       for (const c of carves) {
