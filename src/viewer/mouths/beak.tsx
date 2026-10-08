@@ -21,6 +21,7 @@ import type { Phenotype } from '../../engine/grow';
 import type { Vec3 } from '../../engine/genome';
 import { buildFieldPrims, norm3, projectToSurface, qRotateV, type Carve } from '../bodyField';
 import type { MeshFeature } from '../meshData';
+import { billColor } from '../keratin';
 import { buildMouthRing, hash01, mouthSpec, type MouthSample, type MouthSpec, type SkinSurface } from '../mouthLine';
 import { sweepTube } from '../sweep';
 import { INTERIOR } from './palette';
@@ -209,8 +210,7 @@ export function BeakMouth({
 
   const bill = useMemo(() => {
     // a bill's colour: yellow-orange, slate-black or pale horn, per creature
-    const h = hash01(phenotype.genomeRef.seed, 0xb111);
-    return h < 0.4 ? 0xd99a2b : h < 0.75 ? 0x34373c : 0xcbb98d;
+    return billColor(phenotype.genomeRef.seed);
   }, [phenotype]);
   const mats = useMemo(() => {
     // glossy keratin (nudged a touch toward the body tone); the lower mandible a shade darker

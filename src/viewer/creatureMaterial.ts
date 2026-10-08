@@ -70,7 +70,15 @@ function debugChannel(): number {
   return Number(new URLSearchParams(location.search).get('dbg') ?? 0) | 0;
 }
 
-export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number): THREE.MeshPhysicalMaterial {
+/** Bare, scaly lower legs (a bird's scutellate tarsi and toes): below body height `y` (rest pose,
+ *  body space; softened over ±`band`) the covering gives way to `color` keratin scales. */
+export interface BareLegs {
+  y: number;
+  band: number;
+  color: number;
+}
+
+export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, bare: BareLegs | null = null): THREE.MeshPhysicalMaterial {
   // A moodier base than the raw palette: real integument is rarely a bright, saturated toy. We
   // desaturate and darken a touch so creatures read as living tissue, not painted plastic.
   const main = new THREE.Color().setHSL(pal.hueA, pal.sat * 0.8, pal.light * 0.88);
@@ -124,6 +132,9 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
     shader.uniforms.uBump = { value: preset.bump };
     shader.uniforms.uOff = { value: off };
     shader.uniforms.uDebug = { value: debugChannel() };
+    shader.uniforms.uBareY = { value: bare ? bare.y : -1e6 };
+    shader.uniforms.uBareBand = { value: bare ? Math.max(bare.band, 1e-3) : 1 };
+    shader.uniforms.uBareCol = { value: new THREE.Color(bare ? bare.color : 0) };
 
     // Pattern + relief sample `aBodyPos` — a per-vertex *body-space* coordinate (the vertex's
     // rest-pose position, baked into the geometry by CreatureMesh). Because it's fixed to the mesh,
@@ -165,6 +176,15 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number):
           skin = mix(skin, uPattern2, smoothstep(0.55, 0.95, pat) * uContrast * 0.4);
           // low-frequency tonal break-up so the surface never reads as flat plastic
           skin *= 0.92 + 0.16 * fbmA(bp * 2.2, 2.2);
+          // bare legs: the plumage ends in a soft cuff and the shank below is keratin scutes
+          float bare = 1.0 - smoothstep(uBareY - uBareBand, uBareY + uBareBand, vBodyPos.y);
+          if (bare > 0.0) {
+            float hb = gHb;
+            float hs = surfaceHeight(bp * 2.6, 1);
+            gH = mix(gH, hs, bare);
+            gHb = mix(hb, gHb * 0.6, bare);
+            skin = mix(skin, uBareCol * (0.72 + 0.36 * hs), bare);
+          }
           // gentle sub-surface musculature shading (creases a touch darker → taut, not a balloon)
           skin *= mix(0.78, 1.0, smoothstep(-0.24, 0.2, gM));
           // grime in the recesses (scale seams, plate grooves, fur partings)
@@ -251,6 +271,7 @@ uniform int uPType; uniform int uCover;
 uniform float uPScale; uniform float uContrast; uniform float uSheen; uniform float uBump;
 uniform vec3 uOff;
 uniform int uDebug;
+uniform float uBareY; uniform float uBareBand; uniform vec3 uBareCol;
 
 // Per-fragment globals, primed at the top of the colour stage and reused by the roughness + normal
 // stages (so the expensive relief is evaluated once per pixel, not three times).

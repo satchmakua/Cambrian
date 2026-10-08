@@ -130,3 +130,21 @@ describe('morphotype library (M22 — full catalogue §4)', () => {
     }
   });
 });
+
+describe('marking colours harmonise with the body', () => {
+  it('a familiar pelt wears kin or umber markings, never an arbitrary hue', () => {
+    const dist = (a: number, b: number) => Math.min(Math.abs(a - b), 1 - Math.abs(a - b));
+    for (const kind of ['felid', 'canid', 'ungulate', 'ursid', 'rodent']) {
+      let off = 0;
+      for (let seed = 1; seed <= 60; seed++) {
+        const g = genomeOfMorphotype(seed, kind);
+        if (g.covering.type !== 'fur') continue;
+        const { hueA, hueB } = g.palette;
+        const kin = dist(hueA, hueB) <= 0.061;
+        const umber = hueB >= 0.06 && hueB <= 0.106;
+        if (!kin && !umber) off++;
+      }
+      expect(off).toBeLessThanOrEqual(6); // only the rare vivid (exotic) coats break the rule
+    }
+  });
+});

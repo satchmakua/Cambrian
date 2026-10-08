@@ -115,8 +115,8 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'anuran', cluster: 'familiar', weight: 0.6, girth: [0.5, 0.7], repeat: [1, 2], height: [0.85, 1.05], legPairs: [2], posture: 'sprawling', legLen: [0.55, 0.8], tail: 0.0, eyeStyle: [0, 0.2], eyeAz: [1.3, 1.7], mouthStyle: [0.07, 0.12], covering: ['skin'], pattern: ['spots', 'mottle'], sheen: [0.55, 0.85], hue: [0.25, 0.45], sat: [0.5, 0.85] },
   { id: 'fish', cluster: 'familiar', weight: 0.7, girth: [0.4, 0.58], repeat: [4, 6], height: [1.05, 1.45], elong: [1.3, 1.6], taper: [0.78, 0.9], legPairs: [0], dorsal: 1, pectoral: 1, tail: 1, tailTerm: ['fin'], tailLen: [0.5, 0.75], tailThick: [0.5, 0.66], tailSegs: [3, 3], gills: 0.9, head: 0.3, eyeStyle: [0, 0.2], eyeAz: [0.3, 0.6], mouthStyle: [0.07, 0.12], covering: ['scales'], pattern: ['plain', 'spots', 'stripes'], sheen: [0.35, 0.6], hue: [0.45, 0.65], sat: [0.4, 0.8] },
   { id: 'shark', cluster: 'familiar', weight: 0.6, girth: [0.45, 0.62], repeat: [5, 7], height: [0.95, 1.2], elong: [1.4, 1.7], taper: [0.78, 0.9], legPairs: [0], dorsal: 1, pectoral: 1, tail: 1, tailTerm: ['fin'], tailLen: [0.6, 0.85], tailThick: [0.45, 0.6], tailSegs: [3, 4], gills: 0.95, head: 0.3, eyeStyle: [0.1, 0.3], eyeAz: [0.3, 0.6], mouthStyle: [0.13, 0.24], covering: ['skin'], pattern: ['plain', 'gradient'], hue: [0.55, 0.62], sat: [0.2, 0.45] },
-  { id: 'bird', cluster: 'familiar', weight: 1.3, girth: [0.34, 0.5], repeat: [2, 3], height: [1.0, 1.3], neck: [0.42, 0.52], neckLinks: [2, 2], neckLift: [-0.42, -0.3], headSize: [0.62, 0.78], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 1.0], legTerm: ['claw'], wings: 0.95, tail: 0.85, tailTerm: ['fin'], tailLen: [0.22, 0.36], tailSegs: [2, 2], rear: [-0.22, -0.1], crest: 0.45, eyeStyle: [0, 0.2], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'plain', 'spots'], hue: [0.05, 0.65], sat: [0.5, 0.9] },
-  { id: 'raptor', cluster: 'familiar', weight: 1.2, girth: [0.4, 0.54], repeat: [2, 3], height: [1.0, 1.25], neck: [0.45, 0.55], neckLinks: [2, 2], neckLift: [-0.4, -0.28], headSize: [0.62, 0.76], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 0.95], legTerm: ['claw'], wings: 1, tail: 0.85, tailTerm: ['fin'], tailLen: [0.22, 0.36], tailSegs: [2, 2], rear: [-0.2, -0.08], crest: 0.3, headShape: ['wedge'], eyeStyle: [0, 0.15], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'mottle'], hue: [0.06, 0.12] },
+  { id: 'bird', cluster: 'familiar', weight: 1.3, girth: [0.34, 0.5], repeat: [2, 3], height: [1.0, 1.3], neck: [0.42, 0.52], neckLinks: [2, 2], neckLift: [-0.42, -0.3], headSize: [0.62, 0.78], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 1.0], legThick: [0.15, 0.21], legTerm: ['claw'], wings: 0.95, tail: 0.85, tailTerm: ['fin'], tailLen: [0.22, 0.36], tailSegs: [2, 2], rear: [-0.22, -0.1], crest: 0.45, eyeStyle: [0, 0.2], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'plain', 'spots'], hue: [0.05, 0.65], sat: [0.5, 0.9] },
+  { id: 'raptor', cluster: 'familiar', weight: 1.2, girth: [0.4, 0.54], repeat: [2, 3], height: [1.0, 1.25], neck: [0.45, 0.55], neckLinks: [2, 2], neckLift: [-0.4, -0.28], headSize: [0.62, 0.76], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 0.95], legThick: [0.18, 0.24], legTerm: ['claw'], wings: 1, tail: 0.85, tailTerm: ['fin'], tailLen: [0.22, 0.36], tailSegs: [2, 2], rear: [-0.2, -0.08], crest: 0.3, headShape: ['wedge'], eyeStyle: [0, 0.15], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'mottle'], hue: [0.06, 0.12] },
   { id: 'crab', cluster: 'familiar', weight: 1.2, girth: [0.45, 0.62], repeat: [1, 2], height: [0.5, 0.7], elong: [0.7, 0.95], legPairs: [3], posture: 'sprawling', legLen: [0.6, 0.85], legAz: [3.6, 4.0], legTerm: ['pincer', 'claw'], tail: 0.0, antennae: 0.6, carapace: 0.85, stalkEyes: 0.9, eyeStyle: [0, 0.3], eyeAz: [1.2, 1.6], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['mottle', 'reticulate'], sheen: [0.3, 0.55], hue: [0.02, 0.1], sat: [0.5, 0.85] },
   { id: 'insectoid', cluster: 'familiar', weight: 1.2, girth: [0.3, 0.44], repeat: [4, 6], height: [0.75, 0.95], legPairs: [3], posture: 'sprawling', legLen: [0.55, 0.8], legAz: [3.7, 4.1], legTerm: ['claw'], antennae: 0.9, eyeStyle: [0.6, 0.8], eyeCount: [2], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['bands', 'reticulate'], sheen: [0.6, 0.95], hue: [0.1, 0.6], sat: [0.5, 0.9] },
   { id: 'arachnid', cluster: 'familiar', weight: 0.9, girth: [0.36, 0.52], repeat: [1, 2], height: [0.8, 1.05], legPairs: [4], posture: 'sprawling', legLen: [0.72, 1.35], legAz: [3.6, 4.0], legTerm: ['claw'], eyeStyle: [0.2, 0.4], eyeCount: [4, 6], mouthStyle: [0.38, 0.49], covering: ['fur', 'chitin'], pattern: ['mottle', 'bands'], hue: [0.02, 0.09], sat: [0.3, 0.6] },
@@ -415,23 +415,34 @@ function faceOnBody(rng: Rng, apps: AppendageGene[], girth: number, m: Morpho, e
 }
 
 function scaffold(rng: Rng, seed: number, symmetry: Symmetry, radialCount: number, body: SegmentGene, m: Morpho): Genome {
-  return {
-    version: GENOME_VERSION,
-    seed,
-    symmetry,
-    radialCount,
-    // familiar ≈ fully canonical; uncanny a touch looser (still coherent — "coherent weird", M24)
-    coherence: clamp(rg(rng, m.coherence, m.cluster === 'uncanny' ? [0.8, 0.95] : [0.95, 1.0]), [0, 1]),
-    covering: covering(rng, m),
-    palette: (() => {
-      const exotic = rng() < 0.14; // a rare vivid morph
-      const hueA = exotic ? rng() : rg(rng, m.hue, [0, 1]);
-      const sat = exotic ? range(rng, 0.7, 0.95) : rg(rng, m.sat, [0.32, 0.9]);
-      const light = rg(rng, m.light, [0.3, 0.7]);
-      return { hueA, hueB: rng(), sat, light };
-    })(),
-    body,
-  };
+  // familiar ≈ fully canonical; uncanny a touch looser (still coherent — "coherent weird", M24)
+  const coherence = clamp(rg(rng, m.coherence, m.cluster === 'uncanny' ? [0.8, 0.95] : [0.95, 1.0]), [0, 1]);
+  const cov = covering(rng, m);
+  const exotic = rng() < (cov.type === 'fur' && m.cluster === 'familiar' ? 0.05 : 0.14); // a rare vivid morph (rarer still for a pelt)
+  const hueA = exotic ? rng() : rg(rng, m.hue, [0, 1]);
+  const sat = exotic ? range(rng, 0.7, 0.95) : rg(rng, m.sat, [0.32, 0.9]);
+  const light = rg(rng, m.light, [0.3, 0.7]);
+  const hueB = markingHue(hueA, rng(), cov.type, exotic || m.cluster === 'uncanny');
+  return { version: GENOME_VERSION, seed, symmetry, radialCount, coherence, covering: cov, palette: { hueA, hueB, sat, light }, body };
+}
+
+/**
+ * The hue of a creature's markings, harmonised with its body colour. Real coats are a tabby's
+ * darker-same-hue stripes or a leopard's near-black rosettes, almost never a beige cat with green
+ * spots — so a pelt's markings stay KIN to the body hue (or a neutral umber), and only scales,
+ * feathers and the alien coverings are let loose (a bird's flash of colour, a frog's warning
+ * spots). `u` is the one draw a free hue would have cost, so the genome stream is unchanged.
+ */
+function markingHue(hueA: number, u: number, cover: CoveringType, wild: boolean): number {
+  const wrap = (h: number) => ((h % 1) + 1) % 1;
+  const free = wild ? 1 : cover === 'fur' ? 0 : cover === 'skin' || cover === 'plates' ? 0.3 : cover === 'feathers' || cover === 'scales' ? 0.5 : 1;
+  if (u < free) return wrap(u / free + hueA); // any hue
+  const k = (u - free) / (1 - free); // 0..1
+  const kin = cover === 'fur' ? 0.55 : 0.6;
+  const flash = cover === 'fur' ? 0.55 : 0.8; // pelts never wear a complementary flash
+  if (k < kin) return wrap(hueA + (k / kin - 0.5) * 0.12); // kin: within ±0.06 of the body hue
+  if (k < flash) return wrap(hueA + 0.5 + ((k - kin) / (flash - kin) - 0.5) * 0.08); // a complementary flash
+  return 0.06 + ((k - flash) / (1 - flash)) * 0.045; // umber / near-black markings
 }
 
 // Base sheen for a covering type — wet/glassy skins glisten, pelts are matte.

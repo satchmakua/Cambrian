@@ -23,6 +23,8 @@ import { Mouth } from './mouths';
 import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
+import { bareLegsOf, footPlanOf, lastLinkOf, toedFootGeometry, type FootPlan } from './feet';
+import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
 import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finKindOf } from './wings';
 import { ensureSkinWeights, type RigInstance } from './rig';
@@ -139,7 +141,7 @@ export function CreatureMesh({
   const cov = phenotype.genomeRef.covering;
   const seed = phenotype.genomeRef.seed;
 
-  const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed), [pal, cov, seed]);
+  const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed, bareLegsOf(phenotype)), [pal, cov, seed, phenotype]);
   useEffect(() => () => bodyMat.dispose(), [bodyMat]);
 
   // physics playback (post-roadmap): when a recorded gait is present, capsules re-pose from it
@@ -545,8 +547,11 @@ function Feature({
       ) : (
         <Fin f={f} color={finColor} lite={lite} phenotype={phenotype} />
       );
-    case 'claw':
-      return f.kind === 'horn' ? <Horn f={f} color={footColor} /> : <Claw f={f} color={footColor} />;
+    case 'claw': {
+      if (f.kind === 'horn') return <Horn f={f} color={footColor} />;
+      const plan = f.kind === 'leg' ? footPlanOf(phenotype) : null;
+      return plan ? <ToedFoot f={f} plan={plan} skin={skin} phenotype={phenotype} /> : <Claw f={f} color={footColor} />;
+    }
     case 'club':
       return <Club f={f} color={footColor} />;
     case 'barb':
@@ -797,6 +802,31 @@ function Hand({ f, color }: { f: MeshFeature; color: number }) {
       <mesh position={[-r * 0.6, 0, r * 0.3]} rotation={[Math.PI / 2, 0, 0.7]} scale={[r * 0.13, r * 0.13, r * 0.6]} castShadow>
         <cylinderGeometry args={[1, 0.8, 1, 6]} />
         <meshStandardMaterial color={color} roughness={0.72} />
+      </mesh>
+    </group>
+  );
+}
+
+// A toed foot (feet.ts): a bird's four thin toes or a lizard's splayed five, in the body's own
+// covering (the bare-shank keratin, for a bird), with dark claws.
+function ToedFoot({ f, plan, skin, phenotype }: { f: MeshFeature; plan: FootPlan; skin: THREE.Material; phenotype: Phenotype }) {
+  const r = Math.max(f.radius, 0.04);
+  const origin = phenotype.nodes[f.idx].pos;
+  const link = useMemo(() => lastLinkOf(phenotype, f.idx), [phenotype, f.idx]);
+  const geo = useMemo(() => {
+    const g = toedFootGeometry(plan, r, link);
+    return { toes: bakeSkin(g.toes, origin), claws: g.claws };
+  }, [plan, r, link, origin]);
+  useEffect(() => () => {
+    geo.toes.dispose();
+    geo.claws.dispose();
+  }, [geo]);
+  const claw = useMemo(() => new THREE.Color(shankColor(phenotype.genomeRef.seed)).multiplyScalar(0.35).getHex(), [phenotype]);
+  return (
+    <group>
+      <mesh geometry={geo.toes} material={skin} castShadow />
+      <mesh geometry={geo.claws} castShadow>
+        <meshStandardMaterial color={claw} roughness={0.4} />
       </mesh>
     </group>
   );

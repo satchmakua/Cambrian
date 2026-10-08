@@ -342,14 +342,21 @@ function MainView({
 }) {
   const track = useRef<HTMLDivElement>(null);
   const d = framing.size * 1.9;
-  // dev/headless: ?studiocam=side|front|top for a canonical main-view angle
+  // dev/headless: ?studiocam=side|front|top|face|headside|feet for a canonical main-view angle
   const cam = import.meta.env.DEV && typeof location !== 'undefined' ? new URLSearchParams(location.search).get('studiocam') : null;
   const f = framing.face ?? { pt: [0, 0, framing.ext[2] / 2] as [number, number, number], r: framing.size * 0.25 };
   const fd = Math.max(f.r * 3.2, framing.size * 0.4);
-  // face / headside: a full-size portrait of the head (three-quarter, or straight profile)
-  const target: [number, number, number] = cam === 'face' || cam === 'headside' ? f.pt : [0, 0, 0];
+  // face / headside: a full-size portrait of the head (three-quarter, or straight profile);
+  // feet: a low close-up of the first foot
+  const foot = phenotype.nodes.find((n) => n.kind === 'terminal' && n.part?.kind === 'leg');
+  const fp: [number, number, number] = foot
+    ? [foot.pos[0] - framing.center[0], foot.pos[1] - framing.center[1], foot.pos[2] - framing.center[2]]
+    : [0, framing.groundY, 0];
+  const footD = framing.size * 0.38;
+  const target: [number, number, number] = cam === 'face' || cam === 'headside' ? f.pt : cam === 'feet' ? fp : [0, 0, 0];
   const camPos: [number, number, number] =
     cam === 'side' ? [d * 0.95, d * 0.12, 0.01] : cam === 'front' ? [0.01, d * 0.15, d * 0.95] : cam === 'top' ? [0.01, d, 0.02]
+      : cam === 'feet' ? [fp[0] + footD * 0.75 * Math.sign(fp[0] || 1), fp[1] + footD * 0.35, fp[2] + footD * 0.65]
       : cam === 'face' ? [f.pt[0] + fd * 0.42, f.pt[1] + fd * 0.22, f.pt[2] + fd * 0.88]
       : cam === 'headside' ? [f.pt[0] + fd, f.pt[1] + fd * 0.05, f.pt[2]]
       : [d * 0.62, d * 0.38, d * 0.7];
