@@ -12,11 +12,11 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../engine/rng';
 import { heightAt, biomeAt, moistureAt, normalAt, WATER_LEVEL, type Terrain } from '../sim/terrain';
 import type { World } from '../sim/world';
 import { yearLook } from './seasonLook';
+import { FOLIAGE_TIME, coniferGeometry, crownGeometry, foliageMaterial } from './foliage';
 
 const RES = 200; // terrain grid quads per side
 
@@ -308,7 +308,9 @@ export function Bushes({ world }: { world: World }) {
   const bushRef = useRef<THREE.InstancedMesh>(null);
   const fruitRef = useRef<THREE.InstancedMesh>(null);
   const plants = world.plants;
-  const leaf = useMemo(() => new THREE.IcosahedronGeometry(1, 1), []);
+  const leaf = useMemo(() => crownGeometry([[0, 0, 0, 1], [0.55, -0.15, 0.25, 0.7], [-0.5, -0.2, -0.2, 0.65], [0.1, 0.35, -0.35, 0.6]], 0.2, 2), []);
+  const leafMat = useMemo(() => foliageMaterial(9, 0.5), []);
+  useEffect(() => () => leafMat.dispose(), [leafMat]);
   const berry = useMemo(() => new THREE.SphereGeometry(0.16, 8, 6), []);
   useEffect(() => () => {
     leaf.dispose();
@@ -361,9 +363,7 @@ export function Bushes({ world }: { world: World }) {
 
   return (
     <>
-      <instancedMesh ref={bushRef} args={[leaf, undefined, plants.length]} castShadow receiveShadow>
-        <meshStandardMaterial roughness={0.85} flatShading />
-      </instancedMesh>
+      <instancedMesh ref={bushRef} args={[leaf, leafMat, plants.length]} castShadow receiveShadow />
       <instancedMesh ref={fruitRef} args={[berry, undefined, plants.length * MAX_FRUIT_PER_BUSH]}>
         <meshStandardMaterial color={0xc8322e} roughness={0.35} emissive={0x3a0808} />
       </instancedMesh>
@@ -373,39 +373,16 @@ export function Bushes({ world }: { world: World }) {
 
 // --- decor: trees + rocks -------------------------------------------------------------------------
 
-/** A broadleaf crown: three overlapping lobes (one round blob read as a lollipop). */
+/** A broadleaf crown: a clump of overlapping lumpy lobes (one round blob read as a lollipop). */
 function broadleafCrown(): THREE.BufferGeometry {
-  const lobes: [number, number, number, number][] = [
+  return crownGeometry([
     [0, 0.1, 0, 1],
     [0.62, -0.22, 0.2, 0.74],
     [-0.5, -0.18, -0.36, 0.7],
     [0.05, -0.3, 0.6, 0.62],
-  ];
-  const parts = lobes.map(([x, y, z, r]) => {
-    const g = new THREE.IcosahedronGeometry(r, 1);
-    g.translate(x, y, z);
-    return g.index ? g.toNonIndexed() : g;
-  });
-  const g = mergeGeometries(parts, false) ?? parts[0];
-  g.computeVertexNormals();
-  return g;
-}
-
-/** A conifer: three stacked cones tapering to a spire. */
-function coniferCrown(): THREE.BufferGeometry {
-  const tiers: [number, number, number][] = [
-    [1.0, 1.5, 0.0],
-    [0.78, 1.3, 0.85],
-    [0.52, 1.1, 1.6],
-  ];
-  const parts = tiers.map(([r, h, y]) => {
-    const g = new THREE.ConeGeometry(r, h, 8, 1);
-    g.translate(0, y + h / 2, 0);
-    return g.index ? g.toNonIndexed() : g;
-  });
-  const g = mergeGeometries(parts, false) ?? parts[0];
-  g.computeVertexNormals();
-  return g;
+    [-0.15, 0.55, -0.1, 0.62],
+    [0.4, 0.32, -0.42, 0.55],
+  ]);
 }
 
 const AUTUMN = [0xd9822b, 0xc4422b, 0xe0b23a, 0xb8562a, 0xd59a2f].map((c) => new THREE.Color(c));
@@ -441,10 +418,12 @@ export function Decor({ terrain, world }: { terrain: Terrain; world?: World }) {
   const geos = useMemo(() => ({
     trunk: new THREE.CylinderGeometry(0.22, 0.34, 1, 6),
     crown: broadleafCrown(),
-    pine: coniferCrown(),
+    pine: coniferGeometry(),
     rock: new THREE.DodecahedronGeometry(1, 0),
   }), []);
   useEffect(() => () => Object.values(geos).forEach((g) => g.dispose()), [geos]);
+  const mats = useMemo(() => ({ crown: foliageMaterial(7, 1), pine: foliageMaterial(11, 0.6) }), []);
+  useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
   useEffect(() => {
     const o = new THREE.Object3D();
     const c = new THREE.Color();
@@ -493,7 +472,8 @@ export function Decor({ terrain, world }: { terrain: Terrain; world?: World }) {
   const seasonKey = useRef(-1);
   const greens = useMemo(() => trees.map((_, i) => ((i * 7) % 23 === 0 ? new THREE.Color().setHSL(0.13, 0.55, 0.3) : new THREE.Color().setHSL(0.24 + (i % 7) * 0.014, 0.45, 0.17 + (i % 5) * 0.018))), [trees]);
   const pineGreens = useMemo(() => pines.map((_, i) => new THREE.Color().setHSL(0.36 + (i % 5) * 0.01, 0.38, 0.13 + (i % 4) * 0.015)), [pines]);
-  useFrame(() => {
+  useFrame((st) => {
+    FOLIAGE_TIME.value = st.clock.elapsedTime; // the wind in the leaves
     if (!world) return;
     const key = Math.round(world.time / 6); // re-tint every few seconds of sim time
     if (key === seasonKey.current) return;
@@ -529,15 +509,11 @@ export function Decor({ terrain, world }: { terrain: Terrain; world?: World }) {
       <instancedMesh ref={trunkRef} args={[geos.trunk, undefined, trees.length]} castShadow>
         <meshStandardMaterial color={0x4a3626} roughness={0.9} />
       </instancedMesh>
-      <instancedMesh ref={crownRef} args={[geos.crown, undefined, trees.length]} castShadow receiveShadow>
-        <meshStandardMaterial roughness={0.85} flatShading />
-      </instancedMesh>
+      <instancedMesh ref={crownRef} args={[geos.crown, mats.crown, trees.length]} castShadow receiveShadow />
       <instancedMesh ref={pineTrunkRef} args={[geos.trunk, undefined, pines.length]} castShadow>
         <meshStandardMaterial color={0x3e2c20} roughness={0.9} />
       </instancedMesh>
-      <instancedMesh ref={pineRef} args={[geos.pine, undefined, pines.length]} castShadow receiveShadow>
-        <meshStandardMaterial roughness={0.88} flatShading />
-      </instancedMesh>
+      <instancedMesh ref={pineRef} args={[geos.pine, mats.pine, pines.length]} castShadow receiveShadow />
       <instancedMesh ref={rockRef} args={[geos.rock, undefined, rocks.length]} castShadow receiveShadow>
         <meshStandardMaterial color={0x6f6a62} roughness={0.92} flatShading />
       </instancedMesh>
