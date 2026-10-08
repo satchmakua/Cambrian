@@ -105,6 +105,10 @@ export interface CreatureCard {
   flying: boolean; // on the wing right now
   /** the other party in what it is doing — the prey it hunts, what it flees, the carcass it eats */
   about: string | null;
+  /** it has a clutch of eggs it is keeping near */
+  nesting: boolean;
+  /** it is going for another kind's eggs */
+  raiding: boolean;
 }
 
 /** One species as a branch of the tree of life (every species ever, extinct ones included). */
@@ -194,6 +198,10 @@ function aboutOf(w: World, c: World['creatures'][number]): string | null {
     const o = w.creatures.find((x) => x.id === c.target && x.alive);
     return o ? speciesById(w, o.species)?.name ?? null : null;
   }
+  if (c.action === 'scavenge') {
+    const egg = w.eggs.find((x) => x.id === c.target);
+    if (egg) return speciesById(w, egg.species)?.name ?? null;
+  }
   if (c.action === 'eat' || c.action === 'scavenge') {
     const k = w.corpses.find((x) => x.id === c.target);
     return k ? speciesById(w, k.species)?.name ?? null : null;
@@ -236,6 +244,8 @@ export function snapshotOf(w: World, selected: number | null): Snapshot {
         adult: c.age > c.traits.maturity,
         flying: c.alt > AIRBORNE,
         about: aboutOf(w, c),
+        nesting: w.eggs.some((e) => e.mother === c.id),
+        raiding: c.action === 'scavenge' && w.eggs.some((e) => e.id === c.target),
         generation: c.generation,
         children: c.children,
         kills: c.kills,

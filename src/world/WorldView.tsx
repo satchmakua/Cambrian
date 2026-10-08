@@ -56,6 +56,8 @@ function an(name: string): string {
 /** The lower-third line for documentary mode: what the subject is doing, and to whom. */
 function narrate(c: NonNullable<Snapshot['selected']>): string {
   const a = c.about;
+  if (c.raiding) return a ? `raids ${an(a)} nest` : 'raids a nest';
+  if (c.nesting && (c.action === 'wander' || c.action === 'sleep')) return c.action === 'sleep' ? 'sleeps beside its eggs' : 'keeps watch over its nest';
   switch (c.action) {
     case 'hunt':
       return a ? `stalks ${an(a)}${c.flying ? ' from the air' : ''}` : 'is on the hunt';
@@ -356,7 +358,7 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
             <button onClick={() => select(null)} title="deselect">✕</button>
           </div>
           <p className="doing">
-            {sel.adult ? 'adult' : 'juvenile'} · gen {sel.generation} · <b>{ACTION_LABEL[sel.action] ?? sel.action}{sel.flying ? ' · on the wing' : ''}</b>
+            {sel.adult ? 'adult' : 'juvenile'} · gen {sel.generation} · <b>{sel.raiding ? 'raiding a nest' : sel.nesting && sel.action === 'wander' ? 'minding its nest' : ACTION_LABEL[sel.action] ?? sel.action}{sel.flying ? ' · on the wing' : ''}</b>
           </p>
           <Bar label="energy" v={sel.energy} color="#e0b84f" />
           <Bar label="health" v={sel.health} color="#e06a5f" />

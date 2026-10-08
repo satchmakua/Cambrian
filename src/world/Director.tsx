@@ -29,11 +29,15 @@ function interest(w: World, c: Creature): number {
     case 'eat':
       return 7;
     case 'scavenge':
-      return 5;
+      // a raid on a nest is a scene; picking over a carcass less so
+      return w.eggs.some((e) => e.id === c.target) ? 11 : 5;
     default:
       break;
   }
   if (c.alt > AIRBORNE) return 8;
+  // a mother over her clutch, the more so the nearer it is to hatching
+  const egg = w.eggs.find((e) => e.mother === c.id);
+  if (egg) return w.time > egg.hatchAt - 15 ? 10 : 4;
   if (c.age < c.traits.maturity * 0.5 && c.parent !== null) return 5;
   if (c.action === 'forage' || c.action === 'graze' || c.action === 'filter') return 2.5;
   if (c.action === 'sleep') return 1.5;
