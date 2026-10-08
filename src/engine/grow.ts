@@ -405,7 +405,9 @@ export function grow(genome: Genome): Phenotype {
 export const LEG_SLOTS: readonly (readonly number[])[] = [
   [],
   [0.55],
-  [0.2, 0.8],
+  // a quadruped stands with its legs under the hips and shoulders — the trunk's ends — not pulled
+  // in toward the middle (at 0.2/0.8 the body overhung its short wheelbase like a sausage on stilts)
+  [0.1, 0.92],
   [0.18, 0.5, 0.82],
   [0.12, 0.37, 0.63, 0.88],
   [0.1, 0.3, 0.5, 0.7, 0.9],

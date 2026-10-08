@@ -550,7 +550,7 @@ function Feature({
     case 'barb':
       return <Barb f={f} color={footColor} />;
     case 'ear':
-      return <Ear f={f} color={footColor} />;
+      return <Ear f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} />;
     case 'gill':
       return <Gill f={f} color={footColor} />;
     case 'crest':
@@ -560,7 +560,7 @@ function Feature({
     case 'whisker':
       return <Whisker f={f} color={footColor} />;
     case 'paw':
-      return <Paw f={f} color={footColor} />;
+      return <Paw f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} />;
     case 'hoof':
       return <Hoof f={f} color={footColor} />;
     case 'hand':
@@ -669,28 +669,62 @@ function Foot({ f, color }: { f: MeshFeature; color: number }) {
   );
 }
 
-// A paw: a soft padded foot — a sole pad, toe pads, and small claws (cat / dog / bear).
-function Paw({ f, color }: { f: MeshFeature; color: number }) {
+// A paw: a soft padded mitten — a broad sole, a fan of four toe lobes, small dark claws (cat / dog /
+// bear). The fur parts wear the body's own covering (baked body-space coordinates, so the coat's
+// pattern and countershading run down the leg onto the foot); a dark detached disc read as a shoe.
+const PAW_TOES: readonly [number, number][] = [
+  [-0.66, 0.82],
+  [-0.23, 1.0],
+  [0.23, 1.0],
+  [0.66, 0.82],
+];
+function pawGeometry(r: number, origin: readonly number[]): { fur: THREE.BufferGeometry; claws: THREE.BufferGeometry } {
+  const parts: THREE.BufferGeometry[] = [];
+  const sole = new THREE.SphereGeometry(1, 18, 12);
+  // the sole's underside sits on the ground plane (the foot node's own bottom, −r)
+  sole.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(0, -r * 0.2, r * 0.42), new THREE.Quaternion(), new THREE.Vector3(r * 1.5, r * 0.8, r * 1.7)));
+  parts.push(sole);
+  const claws: THREE.BufferGeometry[] = [];
+  for (const [x, z] of PAW_TOES) {
+    const toe = new THREE.SphereGeometry(1, 12, 8);
+    toe.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x * r * 1.1, -r * 0.55, r * 0.42 + z * r * 1.5), new THREE.Quaternion(), new THREE.Vector3(r * 0.44, r * 0.45, r * 0.52)));
+    parts.push(toe);
+    const claw = new THREE.ConeGeometry(1, 1, 6);
+    claw.applyMatrix4(
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(x * r * 1.12, -r * 0.62, r * 0.42 + z * r * 1.5 + r * 0.5),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2 + 0.55, 0, 0)),
+        new THREE.Vector3(r * 0.09, r * 0.3, r * 0.09),
+      ),
+    );
+    claws.push(claw);
+  }
+  const fur = bakeSkin(mergeGeometries(parts.map((g) => g.toNonIndexed()), false) ?? parts[0], origin);
+  const clawGeo = mergeGeometries(claws.map((g) => g.toNonIndexed()), false) ?? claws[0];
+  for (const g of [...parts, ...claws]) g.dispose();
+  return { fur, claws: clawGeo };
+}
+
+function Paw({ f, color, skin, origin }: { f: MeshFeature; color: number; skin?: THREE.Material; origin: readonly number[] }) {
   const r = Math.max(f.radius, 0.06);
-  const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.6).getHex(), [color]);
+  const geo = useMemo(() => pawGeometry(r, origin), [r, origin]);
+  useEffect(() => () => {
+    geo.fur.dispose();
+    geo.claws.dispose();
+  }, [geo]);
+  const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.45).getHex(), [color]);
   return (
     <group>
-      <mesh scale={[r * 1.3, r * 0.62, r * 1.45]} castShadow>
-        <sphereGeometry args={[1, 16, 12]} />
-        <meshStandardMaterial color={color} roughness={0.78} />
-      </mesh>
-      {[-0.55, 0, 0.55].map((x, i) => (
-        <mesh key={`t${i}`} position={[x * r * 0.7, -r * 0.08, r * 1.0]} scale={[r * 0.34, r * 0.42, r * 0.5]} castShadow>
-          <sphereGeometry args={[1, 10, 8]} />
+      {skin ? (
+        <mesh geometry={geo.fur} material={skin} castShadow />
+      ) : (
+        <mesh geometry={geo.fur} castShadow>
           <meshStandardMaterial color={color} roughness={0.78} />
         </mesh>
-      ))}
-      {[-0.55, 0, 0.55].map((x, i) => (
-        <mesh key={`c${i}`} position={[x * r * 0.7, -r * 0.02, r * 1.35]} rotation={[Math.PI / 2 + 0.4, 0, 0]} scale={[r * 0.1, r * 0.32, r * 0.1]} castShadow>
-          <coneGeometry args={[1, 1, 6]} />
-          <meshStandardMaterial color={dark} roughness={0.5} />
-        </mesh>
-      ))}
+      )}
+      <mesh geometry={geo.claws} castShadow>
+        <meshStandardMaterial color={dark} roughness={0.45} />
+      </mesh>
     </group>
   );
 }
@@ -999,27 +1033,82 @@ function Barb({ f, color }: { f: MeshFeature; color: number }) {
 }
 
 // An ear (pointed / leaf / round by style). Aimed up; the part frame's +Z points up.
-function Ear({ f, color }: { f: MeshFeature; color: number }) {
+/** Bake the covering shader's per-vertex inputs onto a feature mesh authored in the body frame
+ *  relative to its node (rest body space = local + origin). */
+function bakeSkin(g: THREE.BufferGeometry, origin: readonly number[]): THREE.BufferGeometry {
+  const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  const body = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    body[i * 3] = pos.getX(i) + origin[0];
+    body[i * 3 + 1] = pos.getY(i) + origin[1];
+    body[i * 3 + 2] = pos.getZ(i) + origin[2];
+  }
+  g.setAttribute('aBodyPos', new THREE.BufferAttribute(body, 3));
+  g.setAttribute('aFlesh', new THREE.BufferAttribute(new Float32Array(pos.count), 1));
+  g.setAttribute('aAO', new THREE.BufferAttribute(new Float32Array(pos.count).fill(1), 1));
+  return g;
+}
+
+/**
+ * An ear, built in the BODY frame: it rises along the part's outward aim, its face turned to the
+ * front (an ear's opening looks forward, whatever roll the growth frame happened to carry), the
+ * outside wearing the coat and a darker inner ear inset on the front face.
+ *   pointed — a cat/fox triangle · round — a bear/mouse cup · leaf — a long rabbit/deer blade
+ */
+function earGeometry(v: ReturnType<typeof earVariant>, r: number, quat: readonly number[]): { outer: THREE.BufferGeometry; inner: THREE.BufferGeometry } {
+  const out = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3])).normalize();
+  // the ear's face normal: body-forward, made perpendicular to the ear's rise
+  const n = new THREE.Vector3(0, 0, 1).addScaledVector(out, -out.z);
+  if (n.lengthSq() < 1e-6) n.set(0, 1, 0);
+  n.normalize();
+  const side = new THREE.Vector3().crossVectors(out, n).normalize();
+  // local frame: X = across the ear, Y = up the ear (out), Z = its face normal (forward)
+  const basis = new THREE.Matrix4().makeBasis(side, out, n);
+  const shape = (inner: boolean): THREE.BufferGeometry => {
+    const k = inner ? 0.68 : 1;
+    let g: THREE.BufferGeometry;
+    if (v === 'pointed') {
+      g = new THREE.ConeGeometry(1, 1, 12, 1);
+      g.scale(r * 0.95 * k, r * 1.9 * k, r * (inner ? 0.12 : 0.34));
+      g.translate(0, r * (0.95 - (inner ? 0.2 : 0)), inner ? r * 0.16 : 0);
+    } else {
+      g = new THREE.SphereGeometry(1, 16, 12);
+      const [w, h] = v === 'round' ? [1.15, 1.1] : [0.85, 2.0];
+      g.scale(r * w * k, r * h * k, r * (inner ? 0.1 : 0.3));
+      g.translate(0, r * h * 0.72, inner ? r * 0.2 : 0);
+    }
+    g.applyMatrix4(basis);
+    return g;
+  };
+  return { outer: shape(false), inner: shape(true) };
+}
+
+function Ear({ f, color, skin, origin }: { f: MeshFeature; color: number; skin?: THREE.Material; origin: readonly number[] }) {
   const r = Math.max(f.radius, 0.06);
   const v = earVariant(f.style);
-  if (v === 'pointed') {
-    // a triangular cat/fox ear standing up
-    return (
-      <group quaternion={f.quat}>
-        <mesh position={[0, 0, r * 0.9]} rotation={[Math.PI / 2, 0, 0]} scale={[r * 0.95, r * 1.9, r * 0.3]} castShadow>
-          <coneGeometry args={[1, 1, 5]} />
-          <meshStandardMaterial color={color} roughness={0.7} side={THREE.DoubleSide} />
-        </mesh>
-      </group>
-    );
-  }
-  // round (mouse/bear) vs leaf (rabbit/fox) — a flat upright plate, thin side-to-side (local X)
-  const scale: [number, number, number] = v === 'round' ? [r * 0.3, r * 1.3, r * 1.3] : [r * 0.28, r * 1.0, r * 2.1];
+  const geo = useMemo(() => {
+    const g = earGeometry(v, r, f.quat);
+    bakeSkin(g.outer, origin);
+    return g;
+  }, [v, r, f.quat, origin]);
+  useEffect(() => () => {
+    geo.outer.dispose();
+    geo.inner.dispose();
+  }, [geo]);
+  const innerColor = useMemo(() => new THREE.Color(color).lerp(new THREE.Color(0x8a5552), 0.55).multiplyScalar(0.8).getHex(), [color]);
   return (
-    <mesh quaternion={f.quat} position={[0, 0, r * 0.8]} scale={scale} castShadow>
-      <sphereGeometry args={[1, 12, 12]} />
-      <meshStandardMaterial color={color} roughness={0.7} side={THREE.DoubleSide} />
-    </mesh>
+    <group>
+      {skin ? (
+        <mesh geometry={geo.outer} material={skin} castShadow />
+      ) : (
+        <mesh geometry={geo.outer} castShadow>
+          <meshStandardMaterial color={color} roughness={0.7} />
+        </mesh>
+      )}
+      <mesh geometry={geo.inner}>
+        <meshStandardMaterial color={innerColor} roughness={0.75} />
+      </mesh>
+    </group>
   );
 }
 
