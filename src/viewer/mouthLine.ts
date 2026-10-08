@@ -138,9 +138,11 @@ export function mouthSpec(p: Phenotype, mouthIdx: number): MouthSpec | null {
   // and hungry), opening wider by a deterministic per-creature draw. Fanged maws hang wider.
   const base = variant === 'fanged' ? 0.34 : variant === 'maw' ? 0.26 : 0.16;
   const gape = base + hash01(seed, mouthIdx + 11) * 0.38;
-  const arc = 0.85 + hash01(seed, mouthIdx + 23) * 0.5; // how far the slit wraps around the muzzle
-  const droop = 0.12 + hash01(seed, mouthIdx + 37) * 0.22;
   const muzzled = p.genomeRef.covering.type === 'fur' && JAWED.has(variant);
+  // how far the slit wraps around the muzzle — a mammal's lip line ends under the eye, not back by
+  // the ear (a long wrap read as a cartoon grin)
+  const arc = (muzzled ? 0.62 : 0.85) + hash01(seed, mouthIdx + 23) * (muzzled ? 0.22 : 0.5);
+  const droop = 0.12 + hash01(seed, mouthIdx + 37) * 0.22;
   return {
     idx: mouthIdx,
     variant,

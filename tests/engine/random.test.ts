@@ -148,3 +148,17 @@ describe('marking colours harmonise with the body', () => {
     }
   });
 });
+
+describe('mouth bands', () => {
+  it('a familiar morphotype keeps the mouth its kind is meant to have (no cat with a beak)', async () => {
+    const { mouthVariant } = await import('../../src/viewer/partStyles');
+    const want: Record<string, string> = { felid: 'fanged', canid: 'fanged', ursid: 'maw', rodent: 'herbivore', ungulate: 'herbivore', bird: 'beak', raptor: 'beak', crocodilian: 'fanged', shark: 'fanged' };
+    for (const [kind, v] of Object.entries(want)) {
+      for (let seed = 1; seed <= 25; seed++) {
+        const p = grow(genomeOfMorphotype(seed, kind));
+        const m = p.nodes.find((n) => n.terminal === 'mouth')!;
+        expect(mouthVariant(m.part!.style), `${kind} seed ${seed}`).toBe(v);
+      }
+    }
+  });
+});

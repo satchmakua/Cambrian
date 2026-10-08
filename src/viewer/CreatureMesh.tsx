@@ -632,7 +632,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   // eye stare
   const lidded = v === 'round' || v === 'beady' || v === 'slit';
   const slitIris = useMemo(() => REPTILE_IRIS[Math.floor(unitHash(seed, 0x511) * REPTILE_IRIS.length)], [seed]);
-  const sink = lidded && onFace ? r * 0.5 : 0;
+  const sink = lidded && onFace ? r * 0.36 : 0;
   const lidColor = useMemo(() => new THREE.Color(lid).multiplyScalar(0.82).getHex(), [lid]);
   const origin = phenotype?.nodes[f.idx].pos;
   const lidGeo = useMemo(() => {
