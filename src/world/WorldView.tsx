@@ -17,6 +17,7 @@ import { useWorldUi, getWorld, populate, strangerGenome, bumpVersion, autosave, 
 import { DAY_LENGTH, YEAR_DAYS, dayNumber, speciesById, stepWorld, type HistorySample } from '../sim/world';
 import { howItDiffers } from '../sim/lineage';
 import { usePortrait } from '../viewer/portrait';
+import { NARRATOR, sentence } from './narrator';
 import { spell, weatherAt } from '../sim/weather';
 
 const SPEEDS = [1, 4, 16, 48];
@@ -133,7 +134,8 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
   const sound = useWorldUi((s) => s.sound);
   // (dev: ?tree=1 opens it, for inspection screenshots)
   const [showTree, setShowTree] = useState(() => import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('tree') === '1');
-  const { setRunning, setSpeed, setFollow, setEmotes, setDocumentary, setSound, select, reset, open, releaseGenome, refresh, fastForward, stopFastForward, dismissChronicle } = useWorldUi.getState();
+  const narration = useWorldUi((s) => s.narration);
+  const { setRunning, setSpeed, setFollow, setEmotes, setDocumentary, setNarration, setSound, select, reset, open, releaseGenome, refresh, fastForward, stopFastForward, dismissChronicle } = useWorldUi.getState();
   const ff = useWorldUi((s) => s.ff);
   const chron = useWorldUi((s) => s.chronicle);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -253,6 +255,9 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
         <div className="releases">
           <button className={sound ? 'active' : ''} onClick={() => setSound(!sound)} title="synthesized wind, birdsong and crickets, and the creatures' own calls">{sound ? '♪ sound' : '♪ sound off'}</button>
           <button className={documentary ? 'active' : ''} onClick={() => setDocumentary(!documentary)} title="documentary mode: the camera finds the most interesting things happening and follows them">▶ documentary</button>
+          {documentary && NARRATOR.available && (
+            <button className={narration ? 'active' : ''} onClick={() => setNarration(!narration)} title="read the documentary's captions aloud">🎙 voice</button>
+          )}
           <button className={emotes ? 'active' : ''} onClick={() => setEmotes(!emotes)} title="mood icons over the creatures: asleep, courting, alarmed, hunting">moods</button>
           <Menu label="+ release" title="release new animals into the valley">
             <button onClick={() => releaseGenome(founder, 6)} title="release six of the creature you're breeding">six of your creature</button>
@@ -378,6 +383,7 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
         <div className="doc-caption">
           <b>{sel.adult ? capital(sel.species) : `A young ${sel.species}`}</b>
           <span>{narrate(sel)}</span>
+          <Narration subject={sel.adult ? `the ${sel.species}` : `a young ${sel.species}`} doing={narrate(sel)} id={sel.id} />
         </div>
       )}
 
@@ -507,5 +513,13 @@ function CensusIcon({ speciesId, hue }: { speciesId: number; hue: number }) {
       {url && <img src={url} alt="" />}
     </span>
   );
+}
+
+/** Speaks the caption when the story changes (the narrator drops repeats and never talks over itself). */
+function Narration({ subject, doing, id }: { subject: string; doing: string; id: number }) {
+  useEffect(() => {
+    NARRATOR.say(sentence(subject, doing, id + doing.length));
+  }, [subject, doing, id]);
+  return null;
 }
 

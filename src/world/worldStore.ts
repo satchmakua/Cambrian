@@ -9,6 +9,7 @@
  */
 import { create } from 'zustand';
 import { SOUND } from './audio';
+import { NARRATOR } from './narrator';
 import { loadWorld, saveWorld } from '../sim/persist';
 import { weatherAt, weatherWord } from '../sim/weather';
 import { adoptWorld, chronicle, snapshotForChronicle, type Chronicle } from '../sim/fastForward';
@@ -147,6 +148,9 @@ interface WorldUi {
   /** the auto-director: the camera cuts between the most interesting things happening */
   documentary: boolean;
   setDocumentary: (v: boolean) => void;
+  /** the documentary's captions read aloud (browser speech synthesis) */
+  narration: boolean;
+  setNarration: (v: boolean) => void;
   snapshot: Snapshot | null;
   setEmotes: (v: boolean) => void;
   setRunning: (v: boolean) => void;
@@ -271,7 +275,16 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
     set({ sound });
   },
   documentary: false,
-  setDocumentary: (documentary) => set({ documentary, follow: documentary ? true : get().follow }),
+  setDocumentary: (documentary) => {
+    if (!documentary) NARRATOR.setOn(false);
+    else NARRATOR.setOn(get().narration);
+    set({ documentary, follow: documentary ? true : get().follow });
+  },
+  narration: false,
+  setNarration: (narration) => {
+    NARRATOR.setOn(narration && get().documentary);
+    set({ narration });
+  },
   snapshot: null,
   setEmotes: (emotes) => set({ emotes }),
   setRunning: (running) => set({ running }),
