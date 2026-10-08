@@ -17,6 +17,7 @@ import { useWorldUi, getWorld, populate, strangerGenome, bumpVersion, type Snaps
 import { stepWorld, type HistorySample } from '../sim/world';
 
 const SPEEDS = [1, 4, 16, 48];
+let DEV_WARMED = false;
 
 const ACTION_LABEL: Record<string, string> = {
   wander: 'wandering',
@@ -104,7 +105,9 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
     // follow=aloft) — for inspection screenshots.
     if (import.meta.env.DEV) {
       const q = new URLSearchParams(location.search);
-      const warm = Number(q.get('warm') ?? 0);
+      // (once per page: StrictMode runs this effect twice in dev, which doubled the warm-up)
+      const warm = DEV_WARMED ? 0 : Number(q.get('warm') ?? 0);
+      DEV_WARMED = true;
       for (let i = 0; i < warm * 20; i++) stepWorld(w);
       const f = q.get('follow');
       if (f) {
