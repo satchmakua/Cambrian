@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -44,6 +44,42 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic; **+ gait playback** |
 
 ---
+
+## Part 3 — See them, then set them loose (M27–M35) · 2026-10-08
+
+A long autonomous session with two aims: give creatures an honest way to be **looked at**, and a
+**world** to live in. Everything is judged from real renders now — a headless Chromium harness
+(`scripts/shoot.mjs`) plus the Studio's plates and Bestiary made each defect visible before fixing it.
+
+**Seeing them.** The canvas blanked whenever the CDN HDR fetch failed (a throw that Suspense doesn't
+catch) — replaced by a procedural studio environment PMREM'd once per renderer. The covering read as
+TV static; the root cause was the bump (a 0..1 relief fed in as a height in body units → slopes ~30,
+saturated normals), not the colour. Physical relief heights + band-limited procedural noise +
+`MeshPhysicalMaterial` lobes fixed it. Bodies were bead chains with flat facets: the field is now
+round cones (exact SDF), the mesh welded with gradient normals and SDF AO, sampled as a narrow band.
+The **Studio** (plates, x-ray skeleton, inspector, Bestiary, motion preview) shares one WebGL context.
+
+**Anatomy found by looking.** Carapace = a scaled sphere that swelled into an egg → a shell polygonized
+from the trunk field. Arachnids were balls → every leg pair re-thickened the same node ×1.22. Legs
+collapsed onto 1–2 nodes → interpolated attach + arched arthropod legs. Wings were kites drawn from
+the tip node → shoulder-built folded feathered wings (shrink-wrapped to the flank) and membrane wings.
+
+**The World.** `src/sim/` (seeded, headless, Math.random-banned): terrain, traits read off anatomy, and
+creatures choosing flee/sleep/eat/breed/wander; breeding mutates; drift past a morphospace threshold
+speciates. Balancing was done with 20-day headless runs, and the findings were not where expected:
+grazers chasing "the best cell" starved while standing in algae (→ graze in place); meals were
+interrupted by the re-deliberation that started them (→ hysteresis); and minority species died not of
+hunger but because the grazers filled the population cap within a day so nobody else could ever breed
+(→ a soft cap with a rescue band for rare species, condition-gated breeding, ectotherms at half the
+burn). Runs now show predator-prey cycles, persistent hunters and, in some worlds, stable fish.
+
+**Motion.** A bone per node, the smooth skin skinned by round-cone distance, features portaled into
+bones; one gait phase rule gives trot / tripod / alternation. Idle wobble stays removed — motion comes
+only from what a creature is doing. World perf: ~5–7k → ~520 draw calls (LOD, merged kit, budgeted builds).
+
+**Verified:** typecheck clean; the full suite green (190+ tests: new anatomy, wings, rig, shell,
+smooth-skin, material, and ecosystem tests); every visual change checked in headless renders.
+_Known limits:_ the World is heavy for software GL (fine on a GPU); mouths still rest open; no flight.
 
 ## M26 — Morphospace descriptor dims (headedness + sheen) · 2026-07-18
 

@@ -8,27 +8,24 @@ A 3D artificial-evolution toy: creatures are *grown* from a generative genome, m
 selected — by you (Biomorphs-style breeder) or by directed pressures — so you can walk a
 lineage from a scurrying blob to a finned giant to a striped quadruped.
 
-**Status:** 🟢 **Part 1 complete (M0–M16)** + **Part 2 in progress** — fidelity fixes (M17 body-locked
-textures · M18 strict bilateral symmetry · M19 always-readable face · M20 gallery layout · M21
-distinct leg postures) done, the **morphotype library is now 30** (M22 added primate, mustelid,
-turtle, ratite, chimera, arthro-alien, crystalline), the **full part vocabulary** ships (M23: ears,
-whiskers, gills, carapace/shell, crest, club/barb tails, 10 mouth styles, stalked eyes, strut-braced
-wings), and a **bauplan** layer (M24) gives every creature a canonical limb arrangement + a guaranteed
-prominent face (a real mouth organ) that survives evolution, with a tunable "weirdness" dial. The
-**mouth overhaul** (2026-07-16) then rebuilt every mouth around the true skin: lip curves ray-traced
-onto the body's implicit surface, teeth rooted in the same curves (nothing floats), maws **carved**
-into the smooth skin as real wet-flesh recesses. Genome **v2 + spherical aim (M8)**, a **part
-vocabulary** with eye/mouth styles, horns, pincers, wings (M9), **morphotype priors + a bimodal sampler** (M10)
-so rolls read as cat / crab / heron / dragon / cephalopod, a **divergence engine** (M11:
-morphospace + coherence labels + niched litters), **procedural covering & texture** (M12: in-shader
-patterns + per-covering surface bump for fur / scales / chitin / slime / feathers / plates), and
-**the Menagerie** (M14: a MAP-Elites archive that fills with divergent specimens as you
-play, browsable + pull-as-parent, plus a novelty steer), and **smooth skin** (M15: a toggleable
-marching-tetrahedra surface that welds the capsule kit into one organic body), and **dials & polish**
-(M16: wings/neck/covering steers, a morphotype filter, the frill part), plus the two stretches —
-**glTF export** (M7: bake any creature to a `.glb`) and **physics fitness** (M6: evolve creatures
-that walk, via a lazy-loaded Rapier ragdoll sim). M0–M5 done: faces, countershaded skin, breeder +
-directed evolution, lineage, `CAM2:` sharing. Full variety spec in [MORPHOLOGY.md](MORPHOLOGY.md); see [ROADMAP.md](ROADMAP.md).
+**Status:** 🟢 Parts 1–2 complete (the breeder, the creature grammar, fidelity) — and **Part 3 is
+live: the creatures have a world.** Three screens:
+
+- **Breed** — the Biomorphs loop: nine divergent mutant offspring, click one to make it the parent;
+  directed pressures, the Menagerie (MAP-Elites), lineage tree, `CAM2:` sharing, glTF export,
+  physics-evolved walkers.
+- **Studio** — a naturalist's bench: the creature from lateral / anterior / dorsal plates (true
+  orthographic proportions, scale bars) and a face close-up, an x-ray skeleton, an inspector, a
+  motion preview (walk / run / eat / sleep), and a **Bestiary** of every morphotype side by side.
+- **World** — release creatures into a living ecosystem: a lake, meadows that yellow where herds
+  graze, fruit-bearing woods, day and night. Every creature's diet, speed, senses, weapons and armour
+  are read off its anatomy; it eats, sleeps, flees, hunts, breeds (offspring mutate — new species
+  branch off on screen) and dies. Bodies walk with a procedural skinned gait. A census, a creature
+  card with follow-cam, and a field journal narrate it; take any wild creature home to breed.
+
+Creatures are smooth organic bodies (an implicit round-cone field, welded and skinned) with
+anti-aliased procedural coverings — fur, scales, feathers, chitin, slime, plates. Full variety spec in
+[MORPHOLOGY.md](MORPHOLOGY.md); milestones in [ROADMAP.md](ROADMAP.md).
 
 ## Stack
 
@@ -48,15 +45,22 @@ npm run build    # tsc + vite production build
 
 Open **http://localhost:5180**: an alien rotates on the left; click an offspring on the right to make it
 the next parent; the family tree along the bottom lets you revisit/branch from any ancestor.
-Copy the `CAM1:` string to share a creature, or paste one and hit Load to regrow it.
+Copy the `CAM2:` string to share a creature, or paste one and hit Load to regrow it. The **Studio** and
+**World** tabs next to the title open the inspection bench and the ecosystem.
+
+Headless captures (dev server running): `node scripts/shoot.mjs out/ "seed=3&morph=felid&bare=1&spin=0"`
+— see `src/main.tsx` and the Studio/World sources for the dev URL params (`?studio=1`, `?bestiary=1`,
+`?world=1&warm=120&follow=felid`, …).
 
 ## Layout
 
 ```
 src/engine/   # pure, dependency-free: rng, genome, random, grow, mutate, selection, lineage, share
-src/viewer/   # R3F + UI: capsule mesh, turntable, breeder gallery, lineage tree, share bar
-src/ui/       # React + Zustand store (lineage tree + current + litter, localStorage)
-tests/engine/ # determinism + bounds + 2000-genome fuzz + CAM1 round-trip
+src/sim/      # pure, deterministic ecosystem: terrain, traits-from-anatomy, the world step
+src/viewer/   # R3F: creature mesh + smooth skin + rig, materials, wings, Studio, breeder UI
+src/world/    # the World screen: landscape, actors, sky/day-night, HUD
+src/ui/       # React + Zustand store (lineage tree + current + litter + view, localStorage)
+tests/        # engine / sim / viewer: determinism, fuzz, anatomy, rig, ecosystem behaviour
 ```
 
 ## Docs

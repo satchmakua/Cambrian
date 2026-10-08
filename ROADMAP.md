@@ -371,5 +371,81 @@ deterministic; growth stays bounded & meshable; the 4000-genome fuzz test stays 
 
 ---
 
+## Phase 6 — See them, then set them loose (Part 3)
+
+Two directions at once: an honest way to **look** at creatures (they were judged from a turntable
+in software screenshots), and a **world** to drop them into — so the bodies you breed have to eat,
+sleep, hunt, breed and die, and keep evolving there. Same rules of the road; `src/sim/` is held to
+the engine's determinism discipline (seeded RNG only, headless-tested, `Math.random` banned).
+
+- [x] **M27 — Offline rendering + headless capture.** The CDN HDR environment threw on any failed
+  fetch and blanked the canvas; replaced by a procedural studio environment (PMREM'd once per
+  renderer, shared by every viewport). `scripts/shoot.mjs` renders URL-param views headlessly.
+  **Test:** with no network, the app renders; `node scripts/shoot.mjs out "seed=3&bare=1&spin=0"` writes a PNG.
+
+- [x] **M28 — Skin that reads.** The covering looked like TV static: the bump fed a 0..1 relief in as
+  a height in body units (slopes ~30 → saturated normals). Physical relief heights, every procedural
+  term band-limited against the pixel footprint, `MeshPhysicalMaterial` (fur/feather sheen, slime/
+  chitin clearcoat, iridescence by the sheen gene), baked crease AO; `?dbg=N` shows one shading term.
+  **Test:** fur, scales, plates and slime read as distinct clean materials at any zoom.
+
+- [x] **M29 — Smooth skin v2.** Round-cone field (tapering chains are one smooth limb, not beads),
+  welded indexed mesh with gradient normals (no facets), SDF ambient occlusion, a narrow-band grid +
+  exact primitive culling (3× the triangles at similar cost), per-primitive blend; hybrid is default.
+  **Test:** bodies are single organic forms with soft creases; smoothSkin tests assert welded, outward,
+  unit-normal surfaces.
+
+- [x] **M30 — The Specimen Studio.** A main stage + lateral/anterior/dorsal orthographic plates with
+  scale bars + a face close-up, all in one WebGL context (drei `View`); an x-ray skeleton overlay; an
+  inspector (nearest kinds, measurements, 10-D descriptor, parts, covering); a **Bestiary** of every
+  morphotype; a **motion preview** (walk / run / eat / sleep). Dev: `?studio=1 ?bestiary=1 ?bones=1
+  ?motion= ?gaitphase= ?studiocam=`.
+  **Test:** Breed → Studio shows the creature from every angle; the Bestiary adopts a specimen.
+
+- [x] **M31 — Anatomy pass.** Carapaces are shells polygonized from the trunk's own field (not an egg);
+  haunches no longer compound into a ball on short trunks; legs attach interpolated along the chain;
+  hexapods+ grow slender **arched** arthropod legs; feet always reach the ground; wings are built from
+  the shoulder — **folded feathered wings** shrink-wrapped to the flank and **membrane wings** with
+  fingers and scalloped billowing skin — and birds get tail fans.
+  **Test:** spiders read as spiders, turtles wear shells, birds fold their wings (anatomy/wings tests).
+
+- [x] **M32 — The ecosystem engine.** `src/sim/`: a seeded terrain (lake, meadows, woods, rock),
+  traits read off the anatomy (diet from the mouth, speed from leg reach, senses from eyes, weapons and
+  armour, habitat, endo/ectotherm from the covering, allometric metabolism/lifespan), and a world of
+  creatures with energy/fatigue/health/age choosing to flee, sleep, eat (graze/fruit/algae/scavenge/
+  hunt), breed or wander. Breeding mutates with the breeder's operators; drift past a morphospace
+  threshold founds a new species. Balanced over 20-day headless runs (predator-prey cycles, a rescue
+  band so rare species can always breed).
+  **Test:** `tests/sim/world.test.ts` — determinism, grazing, hunting, births/mutations/deaths,
+  starvation, habitat constraints.
+
+- [x] **M33 — The World view.** The ecosystem in 3D: biome terrain whose meadows yellow where grazed,
+  a lake, fruit bushes showing their fruit, woods; a day/night sky; time-warp 1–48×; a census with a
+  population chart, a creature card (needs, traits, follow-cam, take-home-to-breeder), a field
+  journal of births/kills/speciation/extinction; release your creature or a stranger.
+  **Test:** Breed → World: creatures graze, hunt, sleep at night, breed and die; the census moves.
+
+- [x] **M34 — Living motion.** A bone per skeleton node, the smooth skin skinned to it (round-cone
+  distance weights), features riding their bones; a procedural gait (trot / tripod / alternation from
+  one phase rule, arched sweeps, slither and swim waves, tails, head bob, eat, sleep).
+  **Test:** in the World and the Studio motion preview, legs step in phase and the skin deforms
+  without tearing (rig tests).
+
+- [x] **M35 — World performance.** Per-actor LOD (full / lite / silhouette), merged capsule kit,
+  budgeted skin builds, hitbox picking: ~5–7k → ~520 draw calls at 150 creatures.
+
+### Next up (unchecked — pick from here)
+
+- [ ] **Mouths that close.** Jaws rest closed and open to eat / bite / call (the open maw everywhere
+  reads as a gape).
+- [ ] **Behaviour you can see.** Attack lunges and flinches, courtship circling, a mother leading
+  young, herds that flee together, carcasses picked over by scavengers.
+- [ ] **Flight.** Winged creatures take off, glide and land (flap from the shoulder, the rig is there).
+- [ ] **Richer world.** Seasons, drought years, a second lake / river, grass you can see sway.
+- [ ] **Save & share a world.** Serialize the world (seed + releases + state) like `CAM2:` creatures.
+- [ ] **Run the World headless at ×1000** to show long-term evolution (lineage trees of wild species).
+
+---
+
 **North star:** in ten clicks you can visibly steer a blob toward a shark — and share the
 result as a short string that regrows it exactly on someone else's machine.

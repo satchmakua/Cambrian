@@ -78,6 +78,9 @@ whole design:
 - **An ecosystem / world.** No predators, prey, food, climate, or co-evolution. Creatures
   evolve against *you* or a scalar fitness, alone. (That's a different, huge project — see
   sibling *Omnia*.) This is the highest-risk scope creep; it stays out.
+  *(Update, Part 3: v1 shipped without it, as planned; Part 3 then took it on deliberately — a
+  small, deterministic, headless ecosystem in `src/sim/` held to the engine's own discipline, where
+  traits are read off the evolved anatomy rather than added as stats. See ROADMAP Phase 6.)*
 - **Internal anatomy / organs.** We evolve the external body plan only.
 - **Evolved neural controllers / brains.** v1 animation is procedural. (Sims-style brains
   are a research rabbit hole.)
