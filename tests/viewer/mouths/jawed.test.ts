@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { grow, type Phenotype } from '../../../src/engine/grow';
 import { defaultGenome } from '../../../src/engine/genome';
-import { randomGenome } from '../../../src/engine/random';
+import { randomGenome, genomeOfMorphotype } from '../../../src/engine/random';
 import { buildFieldPrims, fieldAt } from '../../../src/viewer/bodyField';
 import { buildJawed, JAWED_PARAMS, type JawedVariant } from '../../../src/viewer/mouths/jawed';
 import { mouthCarves } from '../../../src/viewer/mouthLine';
@@ -125,4 +125,24 @@ describe('jawed mouth build (mouth overhaul)', () => {
     expect(buildJawed(p, idx, [], false, 'herbivore')!.lowerTeeth.length).toBe(0);
   });
 
+
+  it('a reptile or a frog shuts its mouth as a seam: no projecting grin, a croc shows only small teeth', () => {
+    for (const [kind, variant] of [['lizard', 'maw'], ['crocodilian', 'fanged'], ['anuran', 'maw']] as const) {
+      const p = grow(genomeOfMorphotype(5, kind));
+      const idx = mouthIdx(p);
+      const sealed = buildJawed(p, idx, [], false, variant)!;
+      expect(sealed.sealed).toBe(true);
+      expect(sealed.muzzled).toBe(false);
+      if (variant === 'maw') {
+        expect(sealed.upperTeeth.length + sealed.lowerTeeth.length).toBe(0);
+      } else {
+        expect(sealed.upperTeeth.length).toBeLessThanOrEqual(9);
+        const grin = JAWED_PARAMS.fanged.upper.len(0.55);
+        for (const t of sealed.upperTeeth) expect(t.len).toBeLessThan(grin * sealed.r);
+      }
+    }
+    // a shark keeps its grin
+    const shark = grow(genomeOfMorphotype(5, 'shark'));
+    expect(buildJawed(shark, mouthIdx(shark), [], false, 'fanged')!.sealed).toBe(false);
+  });
 });

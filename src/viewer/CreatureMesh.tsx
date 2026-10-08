@@ -585,6 +585,7 @@ const UPPER_LID = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI
 const LOWER_LID = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
 
 const LID_OPEN = { upper: -0.62, lower: 0.72 } as const;
+const REPTILE_IRIS = [0xb08a2e, 0xa8661f, 0x7d8a33, 0x9a4f24, 0x8f8a6e, 0xc2a046];
 
 /** One eye's lids in the body's own covering: the shared hemispheres scaled to the eye, with the
  *  covering shader's body-space coordinates baked at the open pose (so the coat runs onto the lids
@@ -630,6 +631,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   // vertebrate eyes have lids that blink — and shut in sleep; an insect's facets and a glowing alien
   // eye stare
   const lidded = v === 'round' || v === 'beady' || v === 'slit';
+  const slitIris = useMemo(() => REPTILE_IRIS[Math.floor(unitHash(seed, 0x511) * REPTILE_IRIS.length)], [seed]);
   const sink = lidded && onFace ? r * 0.5 : 0;
   const lidColor = useMemo(() => new THREE.Color(lid).multiplyScalar(0.82).getHex(), [lid]);
   const origin = phenotype?.nodes[f.idx].pos;
@@ -718,11 +720,12 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
           </mesh>
         </>
       ) : v === 'slit' ? (
-        // slit — a reptile vertical-pupil eye sunk under a brow, a duller metallic iris (less toy-gold)
+        // slit — a reptile vertical-pupil eye sunk under a brow; the whole visible ball is iris, so it
+        // takes a reptile's colours (gold, amber, olive, copper, stone) — a blue marble read as a toy
         <>
           <mesh position={[0, 0, -r * 0.02]}>
             <sphereGeometry args={[r * 0.9, 18, 14]} />
-            <meshStandardMaterial color={iris} roughness={0.28} metalness={0.22} />
+            <meshStandardMaterial color={slitIris} roughness={0.28} metalness={0.22} />
           </mesh>
           <mesh position={[0, 0, r * 0.66]} scale={[0.14, 1.0, 0.4]}>
             <sphereGeometry args={[r * 0.82, 10, 14]} />

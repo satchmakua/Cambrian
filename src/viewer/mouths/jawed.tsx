@@ -114,6 +114,27 @@ export const MUZZLED_TEETH: Record<JawedVariant, { upper: ToothProfile | null; l
   underbite: { upper: null, lower: { ...CANINE, count: 2, len: () => 0.5, width: 0.3, curl: -0.2, margin: 0.55, salt: 5 } },
 };
 
+// A REPTILE's or an amphibian's mouth (a sealed spec — scaled, plated or bare skin, on a body with
+// no fins) is shut too: the snout IS the head, so the jaw barely projects, the lip is a thin dark
+// seam, and the teeth are a crocodile's small interlocking rows along that seam — or none at all,
+// for the lizard and the frog. (The full projecting grin is kept for the fish and the sharks.)
+const SEALED_ROW = { jitterLen: 0.14, jitterRock: 0.08, sink: 0.42 };
+export const SEALED_TEETH: Record<JawedVariant, { upper: ToothProfile | null; lower: ToothProfile | null }> = {
+  fanged: {
+    upper: { ...SEALED_ROW, count: 9, len: (u: number) => 0.2 + 0.08 * u + 0.18 * spike(u, 0.55), width: 0.2, curl: 0.12, margin: 0.2, salt: 2 },
+    lower: { ...SEALED_ROW, count: 8, len: (u: number) => 0.17 + 0.07 * u + 0.12 * spike(u, 0.32), width: 0.2, curl: 0.12, margin: 0.24, salt: 5 },
+  },
+  maw: { upper: null, lower: null },
+  herbivore: { upper: null, lower: null },
+  underbite: { upper: null, lower: { ...SEALED_ROW, count: 2, len: () => 0.42, width: 0.26, curl: -0.2, margin: 0.5, salt: 5 } },
+};
+
+/** A jawed mouth that shuts as a seam: no fur, and no fins on the body (a lizard, a croc, a frog, a
+ *  snake — not a fish or a shark). */
+export function sealedMouth(phenotype: Phenotype, muzzled: boolean): boolean {
+  return !muzzled && !phenotype.nodes.some((n) => n.part?.kind === 'fin');
+}
+
 /** a smooth bump of width ~0.16 centered at u = c — one emphasized canine position */
 function spike(u: number, c: number): number {
   const d = (u - c) / 0.16;
@@ -139,6 +160,8 @@ export interface JawedBuild {
   /** a muzzled mouth's nose pad (node-relative), else null */
   nose: THREE.BufferGeometry | null;
   muzzled: boolean;
+  /** a reptile's / amphibian's seam mouth (see sealedMouth) */
+  sealed: boolean;
 }
 
 /** Pure, node-relative jawed-mouth build — everything derived from the surface mouth line. */
@@ -154,6 +177,7 @@ export function buildJawed(
   if (!spec) return null;
   const base: JawedParams = JAWED_PARAMS[variant];
   const muzzled = spec.muzzled;
+  const sealed = sealedMouth(phenotype, muzzled);
   // a muzzled mouth sits ON a real snout (grow built one), so it barely projects; its lips are thin
   const params: JawedParams = muzzled
     ? {
@@ -165,12 +189,23 @@ export function buildJawed(
         muzzleR: base.muzzleR * 0.5,
         jawR: base.jawR * 0.7,
       }
-    : {
-        // a reptile's, a fish's, a frog's mouth: no fleshy lips — a thin hard rim along the jaw line
-        ...base,
-        lipR: (u) => base.lipR(u) * 0.55,
-        lowerLipR: (u) => base.lowerLipR(u) * 0.55,
-      };
+    : sealed
+      ? {
+          // a reptile's or a frog's: the jaw IS the snout — a dark seam along it, its small teeth
+          ...base,
+          ...SEALED_TEETH[variant],
+          project: base.project * 0.18,
+          lipR: (u) => base.lipR(u) * 0.32,
+          lowerLipR: (u) => base.lowerLipR(u) * 0.3,
+          muzzleR: base.muzzleR * 0.55,
+          jawR: base.jawR * 0.7,
+        }
+      : {
+          // a fish's or a shark's mouth: no fleshy lips — a thin hard rim along the jaw line
+          ...base,
+          lipR: (u) => base.lipR(u) * 0.55,
+          lowerLipR: (u) => base.lowerLipR(u) * 0.55,
+        };
   const r = spec.r;
   const seed = phenotype.genomeRef.seed;
   const line = buildMouthLine(phenotype, spec, carves, 17, surface);
@@ -256,7 +291,7 @@ export function buildJawed(
 
   // the jaw masses (and a mammal's lip fold) are skin: give them body-space coordinates so they can
   // wear the body's own covering material (pattern, countershading and relief continue across)
-  for (const g of muzzled ? [muzzle, jawMass, upperFold] : [muzzle, jawMass]) bakeBodySpace(g, o);
+  for (const g of muzzled || sealed ? [muzzle, jawMass, upperFold] : [muzzle, jawMass]) bakeBodySpace(g, o);
 
   // the nose pad: a soft, flattened wedge seated on the muzzle tip, its broad face along the skin
   let nose: THREE.BufferGeometry | null = null;
@@ -280,7 +315,7 @@ export function buildJawed(
     nose = g;
   }
 
-  return { r, aim: spec.aim, upper, lower, muzzle, upperFold, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior, nose, muzzled };
+  return { r, aim: spec.aim, upper, lower, muzzle, upperFold, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior, nose, muzzled, sealed };
 }
 
 /** The covering shader's per-vertex inputs for a node-relative feature mesh (rest body space = local + o). */
@@ -334,9 +369,11 @@ export function JawedMouth({
 
   const fang = useMemo(() => ((JAWED_PARAMS[variant] as JawedParams).blunt ? bluntGeometry() : fangGeometry()), [variant]);
   const muzzled = built?.muzzled ?? false;
+  const sealed = built?.sealed ?? false;
+  const shut = muzzled || sealed;
   const mats = useMemo(() => {
-    // a mammal's lip line is a dark crease; a reptile's rim a darker tone of its own hide
-    const lip = muzzled ? new THREE.Color(dark).multiplyScalar(0.55) : new THREE.Color(dark).lerp(new THREE.Color(LIP), 0.2).multiplyScalar(0.85);
+    // a mammal's lip line and a reptile's seam are a dark crease; a fish's rim a darker tone of its hide
+    const lip = shut ? new THREE.Color(dark).multiplyScalar(0.55) : new THREE.Color(dark).lerp(new THREE.Color(LIP), 0.2).multiplyScalar(0.85);
     return {
       lip: new THREE.MeshStandardMaterial({ color: lip, roughness: 0.52 }),
       // the jaw masses wear the body's own dark skin tone so they read as part of the head — a
@@ -346,7 +383,7 @@ export function JawedMouth({
       interior: new THREE.MeshStandardMaterial({ color: INTERIOR, roughness: 0.3, side: THREE.DoubleSide }),
       teeth: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42 }),
     };
-  }, [dark, muzzled, coat, noseColor]);
+  }, [dark, muzzled, shut, coat, noseColor]);
 
   // dispose per lifetime: the per-creature geometries turn over with `built`, but the shared fang
   // and the materials must NOT be disposed on every phenotype swap while still in use
@@ -377,7 +414,7 @@ export function JawedMouth({
   useFrame(() => {
     if (!hinge || !lowerJaw.current) return;
     // no control (Breed / Studio still): a mammal holds its mouth shut, everything else the built gape
-    const open = jaw ? jaw.open : muzzled ? REST_SHUT : REST_PARTED;
+    const open = jaw ? jaw.open : shut ? REST_SHUT : REST_PARTED;
     poseJaw(lowerJaw.current, hinge, open);
     if (throat.current) throat.current.visible = open > 0.35;
   });
@@ -391,7 +428,7 @@ export function JawedMouth({
       <mesh ref={throat} geometry={built.interior} material={mats.interior} />
       <mesh geometry={built.muzzle} material={coatMat} castShadow />
       <mesh geometry={built.upperLip} material={mats.lip} castShadow />
-      <mesh geometry={built.upperFold} material={muzzled ? coatMat : mats.lip} castShadow />
+      <mesh geometry={built.upperFold} material={shut ? coatMat : mats.lip} castShadow />
       {built.nose && <mesh geometry={built.nose} material={mats.nose} castShadow />}
       {built.upperTeeth.length > 0 && (
         <instancedMesh
