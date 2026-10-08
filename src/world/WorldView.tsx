@@ -87,7 +87,8 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
   const speed = useWorldUi((s) => s.speed);
   const follow = useWorldUi((s) => s.follow);
   const snap = useWorldUi((s) => s.snapshot);
-  const { setRunning, setSpeed, setFollow, select, reset, releaseGenome, refresh } = useWorldUi.getState();
+  const emotes = useWorldUi((s) => s.emotes);
+  const { setRunning, setSpeed, setFollow, setEmotes, select, reset, releaseGenome, refresh } = useWorldUi.getState();
 
   // first visit: populate the starter ecosystem (+ the breeder's creature)
   useEffect(() => {
@@ -146,6 +147,7 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
           ))}
         </div>
         <div className="releases">
+          <button className={emotes ? 'active' : ''} onClick={() => setEmotes(!emotes)} title="mood icons over the creatures: asleep, courting, alarmed, hunting">moods</button>
           <button onClick={() => releaseGenome(founder, 6)} title="release six of the creature you're breeding">+ your creature</button>
           <button onClick={() => releaseGenome(strangerGenome((Date.now() * 2654435761) >>> 0), 6)} title="release six of a random new species">+ a stranger</button>
           <button onClick={() => reset((Date.now() >>> 0) % 100000, founder)} title="a fresh world">new world</button>

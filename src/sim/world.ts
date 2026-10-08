@@ -116,6 +116,8 @@ export interface Creature {
   alive: boolean;
   attacker: number; // last creature to bite it (-1 none)
   attackedAt: number;
+  /** sim time of its last bite (the viewer's lunge) */
+  bitAt: number;
   wanderSeed: number;
   /** height above the ground (or the water) it is flying at — 0 on its feet */
   alt: number;
@@ -348,6 +350,7 @@ function spawn(w: World, genome: Genome, species: Species, x: number, z: number,
     alive: true,
     attacker: -1,
     attackedAt: -1e9,
+    bitAt: -1e9,
     wanderSeed: w.rng() * 1000,
     alt: 0,
     fly: false,
@@ -592,7 +595,25 @@ function decide(w: World, c: Creature): void {
       threat = o;
     }
   }
-  if (threat && (!asleep || threatD < sight)) {
+  // an alarm runs through a herd: kin bolting from a hunter set the rest running from it too, before
+  // they've seen it themselves (and wake the sleepers)
+  let alarmed = false;
+  if (!threat && t.herding > 0.3) {
+    for (const o of near) {
+      // only close kin carry the alarm, and only about a hunter that is close enough to matter
+      if (o === c || o.species !== c.species || o.action !== 'flee') continue;
+      if (Math.hypot(o.x - c.x, o.z - c.z) > 9) continue;
+      const th = w.creatures.find((x) => x.id === o.target && x.alive);
+      if (!th || (c.alt > AIRBORNE * 3 && !th.traits.flies)) continue;
+      const d = Math.hypot(th.x - c.x, th.z - c.z);
+      if (d > t.vision * 0.8) continue;
+      threat = th;
+      threatD = d;
+      alarmed = true;
+      break;
+    }
+  }
+  if (threat && (!asleep || threatD < sight || alarmed)) {
     c.action = 'flee';
     c.target = threat.id;
     return;
@@ -673,9 +694,19 @@ function decide(w: World, c: Creature): void {
   // keep a flier circling aloft forever, never arriving anywhere to land)
   if (c.action === 'wander' && c.alt > AIRBORNE && Math.hypot(c.tx - c.x, c.tz - c.z) > 6) return;
 
-  // 5. wander — herd animals drift toward their own kind; a hungry hunter follows its nose
+  // 5. wander — herd animals drift toward their own kind; a hungry hunter follows its nose; the young
+  // keep close to a parent
   c.action = 'wander';
   c.target = -1;
+  if (c.age < t.maturity && c.parent !== null) {
+    const mum = w.creatures.find((o) => o.id === c.parent && o.alive);
+    if (mum && Math.hypot(mum.x - c.x, mum.z - c.z) < 60) {
+      const a = c.wanderSeed + w.time * 0.3;
+      c.tx = mum.x + Math.sin(a) * (1.5 + mum.traits.radius * 2);
+      c.tz = mum.z + Math.cos(a) * (1.5 + mum.traits.radius * 2);
+      return;
+    }
+  }
   if ((t.diet === 'carnivore' || t.diet === 'omnivore') && hunger > 0.45) {
     const far = nearby(w, c.x, c.z, t.vision * SCENT, SCENT_BUF);
     let best: Creature | null = null;
@@ -1051,6 +1082,7 @@ function bite(w: World, a: Creature, b: Creature, dt: number): void {
   b.health -= dmg;
   b.attacker = a.id;
   b.attackedAt = w.time;
+  a.bitAt = w.time;
   if (b.action === 'sleep') b.decideIn = 0; // woken
   // armed prey bite back
   const gb = growthOf(b);

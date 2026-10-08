@@ -79,7 +79,10 @@ interface WorldUi {
   speed: number;
   selected: number | null;
   follow: boolean;
+  /** mood icons over the creatures (asleep, courting, alarmed, hunting) */
+  emotes: boolean;
   snapshot: Snapshot | null;
+  setEmotes: (v: boolean) => void;
   setRunning: (v: boolean) => void;
   setSpeed: (v: number) => void;
   select: (id: number | null) => void;
@@ -168,7 +171,9 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
   speed: 1,
   selected: null,
   follow: false,
+  emotes: true,
   snapshot: null,
+  setEmotes: (emotes) => set({ emotes }),
   setRunning: (running) => set({ running }),
   setSpeed: (speed) => set({ speed }),
   select: (selected) => set({ selected, follow: selected !== null ? get().follow : false, snapshot: snapshotOf(getWorld(), selected) }),

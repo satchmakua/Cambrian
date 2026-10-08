@@ -21,6 +21,8 @@ import { JawContext, type JawControl } from '../viewer/mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from '../viewer/flight';
 import { AIRBORNE, bodyOf, growthOf, type Corpse, type Creature, type World } from '../sim/world';
 import { heightAt, WATER_LEVEL } from '../sim/terrain';
+import { emoteFor, emoteMaterial, type Emote } from './emotes';
+import { useWorldUi } from './worldStore';
 
 // --- smooth-skin upgrade scheduler -----------------------------------------------------------------
 
@@ -146,6 +148,8 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
   const ref = useRef<THREE.Group>(null);
   const body = useRef<THREE.Group>(null);
   const ring = useRef<THREE.Mesh>(null);
+  const bubble = useRef<THREE.Sprite>(null);
+  const shown = useRef<{ e: Emote | null; pop: number }>({ e: null, pop: 0 });
   const pose = useRef({ x: c.x, z: c.z, h: c.heading, sleep: 0, eat: 0, bob: Math.random() * 10, turn: 0, alt: c.alt, fly: 0, beat: Math.random() * 6, climb: 0 });
   const swimmer = traits.habitat === 'water' || traits.locomotion === 'swim' || traits.locomotion === 'drift';
   // each actor animates its own skeleton (bones can't be shared between skinned meshes)
@@ -216,7 +220,33 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
     const bank = -THREE.MathUtils.clamp(P.turn * 0.45, -0.6, 0.6) * P.fly;
     g.rotation.set(pitch, P.h, bank, 'YXZ');
     g.scale.setScalar(s);
-    if (body.current) body.current.rotation.x = P.sleep * 0.08; // head drops a touch
+    if (body.current) {
+      body.current.rotation.x = P.sleep * 0.08; // head drops a touch
+      // a bite is a lunge — the body thrusts forward and back while its jaws are on the prey — and a
+      // bitten animal flinches (a quick shudder about its long axis)
+      const lunge = world.time - c.bitAt < 0.25 ? Math.max(0, Math.sin(world.time * 13)) : 0;
+      const hit = Math.max(0, 1 - (world.time - c.attackedAt) / 0.5);
+      body.current.position.z = lunge * place.height * 0.22;
+      body.current.rotation.z = hit * 0.12 * Math.sin(world.time * 47);
+    }
+    // the mood bubble: pops in when the mood changes, bobs above the head; near creatures only
+    if (bubble.current) {
+      const want = useWorldUi.getState().emotes && detail !== 'none' && c.alive ? emoteFor(c.action) : null;
+      const sh = shown.current;
+      if (want !== sh.e) {
+        sh.e = want;
+        sh.pop = 0;
+        if (want) bubble.current.material = emoteMaterial(want);
+      }
+      bubble.current.visible = sh.e !== null;
+      if (sh.e) {
+        sh.pop = Math.min(1, sh.pop + dt * 5);
+        const size = (0.7 + 0.18 * place.height * s) / s;
+        const pop = sh.pop < 1 ? 1 + 0.25 * Math.sin(sh.pop * Math.PI) : 1;
+        bubble.current.scale.setScalar(size * pop * THREE.MathUtils.smoothstep(sh.pop, 0, 0.4));
+        bubble.current.position.set(0, place.height - place.lift + size * 0.75 + Math.sin(world.time * 2.2 + c.id) * 0.05 / s, 0);
+      }
+    }
     // the jaw: shut while walking or asleep, chewing while it feeds, agape on the hunt or in flight
     const want =
       c.action === 'hunt' ? 1.35 :
@@ -254,6 +284,7 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
         <boxGeometry args={[traits.radius * 2.2, place.height, traits.length * 0.9]} />
         <meshBasicMaterial visible={false} />
       </mesh>
+      <sprite ref={bubble} visible={false} renderOrder={5} />
       <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} visible={false}>
         <ringGeometry args={[traits.radius * 1.4, traits.radius * 1.4 + 0.18, 40]} />
         <meshBasicMaterial color="#7fd1b9" transparent opacity={0.85} depthWrite={false} />
