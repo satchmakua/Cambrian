@@ -261,6 +261,8 @@ export interface PoseInput {
   swim: boolean; // in water as a swimmer
   turn: number; // signed turn rate (rad/s) — the spine leans into turns
   fly?: number; // 0 on its feet … 1 airborne: legs tucked, stride suspended, neck stretched, tail streamed
+  /** 0 … 1 standing idle (the breeder's hero view): it breathes, shifts its weight and glances about */
+  idle?: number;
 }
 
 const X = new THREE.Vector3(1, 0, 0);
@@ -302,14 +304,29 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
     yaw -= inp.turn * 0.06 * awake; // lean into turns
     setRot(r.bones[T.trunk[k]], 0, yaw * awake, 0);
   }
+  // idle: a slow look around (two incommensurate waves, so the glances never settle into a loop),
+  // a breath that lifts the chest, and a lazy weight shift
+  const idle = (inp.idle ?? 0) * awake;
+  const glance = idle * (0.32 * Math.sin(r.t * 0.42) + 0.16 * Math.sin(r.t * 1.07 + 1.3));
+  const nod = idle * 0.07 * Math.sin(r.t * 0.61 + 0.4);
+  if (idle > 0 && nT > 0) {
+    const chest = r.bones[T.trunk[nT - 1]];
+    const breath = 1 + idle * 0.014 * Math.sin(r.t * 1.6);
+    chest.scale.set(breath, breath, 1);
+    if (nT > 1) {
+      const sway = idle * 0.025 * Math.sin(r.t * 0.33);
+      r.bones[T.trunk[1]].quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(Z, sway));
+    }
+  } else if (nT > 0) r.bones[T.trunk[nT - 1]].scale.set(1, 1, 1);
   // neck & head: bob with the stride, drop to eat, droop to sleep
   for (let k = 0; k < T.neck.length; k++) {
     const first = k === 0;
     const bob = (T.legless ? 0 : 0.05) * moving * Math.sin(P * 2);
     // in flight the neck stretches out level ahead of the body
     const pitch = (first ? 0.55 * inp.eat + 0.35 * inp.sleep - 0.12 * fly : 0.12 * inp.eat) + bob;
-    const look = first ? -inp.turn * 0.12 : 0;
-    setRot(r.bones[T.neck[k]], pitch, look * awake, 0);
+    // the glance is shared down the neck so the head turns smoothly rather than at one joint
+    const look = (first ? -inp.turn * 0.12 : 0) + glance / Math.max(1, T.neck.length);
+    setRot(r.bones[T.neck[k]], pitch + (first ? nod : 0), look * awake, 0);
   }
   // legs
   for (const L of T.legs) {
