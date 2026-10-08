@@ -33,7 +33,7 @@ import { JawContext, hingeOf, poseJaw } from './jaw';
 export type JawedVariant = 'herbivore' | 'maw' | 'fanged' | 'underbite';
 
 /** how far a mammal's jaw hangs open at rest (0 = lips meeting) — a hair, so it reads alive */
-const REST_SHUT = 0.04;
+const REST_SHUT = 0;
 /** everything else rests with its jaws barely parted: the teeth show along a closed line (a croc's,
  *  a shark's grin) instead of the gaping mask the built pose holds */
 const REST_PARTED = 0.05;
@@ -411,12 +411,16 @@ export function JawedMouth({
   const lowerJaw = useRef<THREE.Group>(null);
   const hinge = useMemo(() => (built ? hingeOf(built.upper, built.lower, built.aim) : null), [built]);
   const throat = useRef<THREE.Mesh>(null);
+  const jawMassRef = useRef<THREE.Mesh>(null);
   useFrame(() => {
     if (!hinge || !lowerJaw.current) return;
     // no control (Breed / Studio still): a mammal holds its mouth shut, everything else the built gape
     const open = jaw ? jaw.open : shut ? REST_SHUT : REST_PARTED;
     poseJaw(lowerJaw.current, hinge, open);
     if (throat.current) throat.current.visible = open > 0.35;
+    // a shut mammal's chin is the skull's own: the lofted mandible only shows once the jaw drops
+    // (held shut it hung under the chin as a pale band)
+    if (jawMassRef.current) jawMassRef.current.visible = !muzzled || open > 0.12;
   });
 
   if (!built) return null;
@@ -428,7 +432,9 @@ export function JawedMouth({
       <mesh ref={throat} geometry={built.interior} material={mats.interior} />
       <mesh geometry={built.muzzle} material={coatMat} castShadow />
       <mesh geometry={built.upperLip} material={mats.lip} castShadow />
-      <mesh geometry={built.upperFold} material={shut ? coatMat : mats.lip} castShadow />
+      {/* (a mammal's mouth wears no fold: with only its canines/incisors there are no tooth roots to
+          hide, and draped under the lip line in the coat it hung below the chin as a pale band) */}
+      {!muzzled && <mesh geometry={built.upperFold} material={shut ? coatMat : mats.lip} castShadow />}
       {built.nose && <mesh geometry={built.nose} material={mats.nose} castShadow />}
       {built.upperTeeth.length > 0 && (
         <instancedMesh
@@ -441,7 +447,7 @@ export function JawedMouth({
       )}
       {/* the lower jaw: lip, mass and tooth row — one group, so it can swing on its hinge */}
       <group ref={lowerJaw}>
-            <mesh geometry={built.jawMass} material={coatMat} castShadow />
+            <mesh ref={jawMassRef} geometry={built.jawMass} material={coatMat} castShadow />
             <mesh geometry={built.lowerLip} material={mats.lip} castShadow />
             {built.lowerTeeth.length > 0 && (
               <instancedMesh
