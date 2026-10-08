@@ -383,9 +383,12 @@ float patternField(vec3 p0, int type, float scale) {
   float c = gFw * scale * 0.55;                                 // voronoi cells per pixel
   if (type == 3) {                                              // spots / rosettes (leopard)
     vec2 F = voronoi(p * scale * 0.55);
-    float fill = 1.0 - smoothstep(0.14 - c, 0.3 + c, F.x);
-    float ring = smoothstep(0.06 + c, 0.0, abs(F.x - 0.27));    // a darker rosette outline
-    return mix(0.3, clamp(max(fill * 0.7, ring), 0.0, 1.0), 1.0 - smoothstep(0.25, 0.6, c));
+    // a band-limited wobble roughens the spot edge and BREAKS the rosette ring into arcs — a
+    // leopard's rosette is a broken ring of dark blotches, a whole crisp circle read as a stamp
+    float n = fbmA(p * scale * 1.6, scale * 1.6);
+    float fill = 1.0 - smoothstep(0.14 - c, 0.3 + c, F.x + (n - 0.5) * 0.14);
+    float ring = smoothstep(0.085 + c, 0.0, abs(F.x - 0.29 + (n - 0.5) * 0.1)) * smoothstep(0.28, 0.46, n);
+    return mix(0.3, clamp(max(fill * 0.72, ring * 1.1), 0.0, 1.0), 1.0 - smoothstep(0.25, 0.6, c));
   }
   if (type == 4) {                                              // ocelli — concentric eye-spots (peacock)
     c = gFw * scale * 0.5;
