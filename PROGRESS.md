@@ -45,6 +45,29 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ---
 
+## Part 3d — Saved worlds and anatomy pass III (M44–M45) · 2026-10-08
+
+- **Saved worlds.** The world RNG is now `mulberry32State` (its 32-bit state readable), so a save
+  can resume the stream exactly. The test compares the *whole serialisation* of the original and
+  the reloaded world after both run on 150 s — and fails if the RNG state isn't restored (checked).
+  Autosave goes to `localStorage` every minute and on page hide; dev pages with query parameters
+  never resume (the screenshot harness stays reproducible). A world is ~0.3–0.6 MB.
+- **A bad hash.** `mix32` (bare FNV over words) was read directly as a fraction for iris and bill
+  colours; for consecutive seeds its high bits barely move, so irises came only from the
+  pale-yellow…violet end of the palette. `unitHash` adds the murmur3 finaliser. (Engine seeds still
+  use `mix32` — mulberry32 scrambles them.)
+- **Seasons look.** Keyed at the season middles, the first day of spring was still half winter: the
+  world opened under snow with half-bare trees while the clock said Spring. Snow/leaf-fall/autumn
+  colour now run inside their seasons.
+- **Anatomy.** 10% of felids (any `head < 1` necked plan) grew no head — the face sat on the trunk;
+  necked/muzzled and reptile plans now always grow one. A quarter of frogs and lizards drew a splay
+  wide enough to take the *arthropod* leg arch (knees above the back); the arch is now chitin-only.
+  Bare shanks are a shader zone (`uBareY`) below a feathered body's shank line, so toes and shanks
+  share the keratin without new geometry. Eye lids are per-eye geometries in the body material with
+  body-space coordinates baked at the open pose.
+- New Morpho dials reuse the draw they replace (`tailAz`, `armAz`/`armEl`/`armT`, `earAz`) or cost
+  none (`hindLeg`/`foreLeg` constants), so other morphotypes' genomes don't shift.
+
 ## Part 3c — Behaviour, landscape, tree of life (M39–M41) · 2026-10-08
 
 - **Behaviour.** Alarm propagation is limited to close kin (≤ 9 bu) and threats within 0.8 vision —

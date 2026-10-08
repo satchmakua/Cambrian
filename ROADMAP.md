@@ -468,13 +468,39 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   about the vertical (sea stars lie flat, octopuses squat), slug-like slimes with eyestalks that
   reach their eyes, low-domed turtles.
 
+- [x] **M42 — Seasons.** A twelve-day year: a spring flush of grass, summer fruit, an autumn of
+  turning leaves, a lean, cold winter with snow on open ground and bare broadleaves. The ecology
+  follows smooth climate curves; the look (`yearLook`) keeps snow and leaf-fall inside their own
+  seasons, so the first morning of spring is green.
+  **Test:** `tests/sim/world.test.ts › seasons`, `tests/sim/seasonLook.test.ts`.
+
+- [x] **M43 — The documentary.** An auto-director that cuts between the most interesting things
+  happening (hunts, births, flights), with narrated captions; synthesized ambience and spatial
+  creature calls (Web Audio, no assets).
+
+- [x] **M44 — Save & resume a world.** `saveWorld`/`loadWorld` (src/sim/persist.ts): the static
+  world rebuilds from its seed, every dynamic piece — fields, creatures, carcasses, species, log,
+  history and the RNG's own state — is restored, genomes stored once each as share strings with
+  identity kept. A loaded world continues **bit-for-bit** as the original would. The World bar
+  saves to a file and opens one; the world is also kept in the browser and resumed next visit.
+  **Test:** `tests/sim/persist.test.ts` (save → load → both run on → identical serialisations).
+
+- [x] **M45 — Anatomy pass III.** Toed feet (a bird's three-forward-one-back on bare scaly shanks
+  coloured like its bill; a lizard's clawed fan; a frog's pad-tipped toes); eyes sunk into the
+  skull with coat-covered lids; reptile and frog mouths that shut as a seam (only a croc's small
+  teeth show); frogs that crouch on springing haunches (no more spider-arched vertebrates);
+  primates whose arms hang from the shoulders with ears on the sides of the head and tails from
+  the back; songbird-sized heads; every necked body plan grows a head; coat markings kin to the
+  coat; and a proper hash for per-creature variety (every iris used to come out blue or red).
+  Dev: `?studiocam=feet`, `?bseed=N`.
+  **Test:** `tests/viewer/feet.test.ts`, `jawed.test.ts › seam`, `random.test.ts › marking
+  colours`, `rng.test.ts › unitHash`.
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Courtship & young.** Circling displays before mating; newborns that follow a parent through
   a flight or a flee, not just a stroll.
-- [ ] **Seasons.** A year of days: a green spring flush, a dry summer, a lean winter with snow.
-- [ ] **Richer world.** Seasons, drought years, a second lake / river, grass you can see sway.
-- [ ] **Save & share a world.** Serialize the world (seed + releases + state) like `CAM2:` creatures.
+- [ ] **Richer world.** Drought years, a second lake / river, weather (rain, falling snow).
 - [ ] **Run the World headless at ×1000** to show long-term evolution (lineage trees of wild species).
 
 ---
