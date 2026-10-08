@@ -66,7 +66,8 @@ export function isBodyNode(n: BodyNode): boolean {
 // The HYBRID mode meshes *everything* (full part definition) except the eyes/mouth, which always draw
 // as solids — best of both: an organic surface like smooth, but nothing drops out like capsules keep.
 export function isHybridNode(n: BodyNode): boolean {
-  return n.terminal !== 'eye' && n.terminal !== 'mouth';
+  // the carapace stub is drawn as a conforming shell of its own (smoothSkin.buildShellGeometry)
+  return n.terminal !== 'eye' && n.terminal !== 'mouth' && n.terminal !== 'carapace';
 }
 
 /**
@@ -266,14 +267,17 @@ export function fieldAt(f: FieldPrims, x: number, y: number, z: number): number 
   for (let m = 0; m < f.nc; m++) {
     // Exact culling: smin(val, d, k) returns d unchanged whenever val ≥ d + k, and val is at least
     // the distance to the cone's bounding sphere — so a cone whose sphere is that far away is skipped.
+    // per-primitive blend: a thin limb blends over at most ~its own radius, so slender legs keep their
+    // definition instead of webbing into each other, while fat trunk sections still fuse softly
+    const rMaxM = f.ra[m] > f.rb[m] ? f.ra[m] : f.rb[m];
+    const km = k < rMaxM * 1.1 ? k : rMaxM * 1.1;
     if (d !== Infinity) {
       const ox = x - f.cx[m], oy = y - f.cy[m], oz = z - f.cz[m];
-      const R = f.hl[m] + (f.ra[m] > f.rb[m] ? f.ra[m] : f.rb[m]);
-      const lim = d + k + R;
+      const lim = d + km + f.hl[m] + rMaxM;
       if (lim > 0 && ox * ox + oy * oy + oz * oz > lim * lim) continue;
     }
     const val = roundConeDist(x, y, z, f.ax[m], f.ay[m], f.az[m], f.bx[m], f.by[m], f.bz[m], f.ra[m], f.rb[m]);
-    d = d === Infinity ? val : smin(val, d, f.k);
+    d = d === Infinity ? val : smin(val, d, km);
   }
   for (let m = 0; m < f.ne; m++) {
     if (d !== Infinity) {

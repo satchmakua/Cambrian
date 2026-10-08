@@ -155,4 +155,34 @@ describe('smooth skin (M15)', () => {
     // a swallowed end-sphere degenerates to the bigger sphere, never NaN
     expect(roundConeDist(0, 0, 0, 0, 0, 0, 0, 0, 0.1, 1, 0.2)).toBeCloseTo(-1, 6);
   });
+
+  it('a carapace is a shell CONFORMING to the trunk — not a giant egg', async () => {
+    const { buildShellGeometry } = await import('../../src/viewer/smoothSkin');
+    for (const id of ['chelonian', 'crab']) {
+      for (let s = 0; s < 6; s++) {
+        const p = grow(genomeOfMorphotype(s * 11 + 2, id));
+        const shell = buildShellGeometry(p, 'low');
+        if (!p.nodes.some((n) => n.terminal === 'carapace')) {
+          expect(shell).toBeNull();
+          continue;
+        }
+        expect(shell).not.toBeNull();
+        const pos = shell!.getAttribute('position');
+        expect(pos.count).toBeGreaterThan(50);
+        const { finite, min, max } = scan(pos.array as ArrayLike<number>);
+        expect(finite).toBe(true);
+        // hugging the trunk: never wider than the trunk plus a modest margin
+        const trunk = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 0);
+        const rMax = Math.max(...trunk.map((n) => n.radius));
+        const tx0 = Math.min(...trunk.map((n) => n.pos[0] - n.radius * (n.scale?.[0] ?? 1)));
+        const tx1 = Math.max(...trunk.map((n) => n.pos[0] + n.radius * (n.scale?.[0] ?? 1)));
+        expect(min[0]).toBeGreaterThan(tx0 - rMax * 0.9);
+        expect(max[0]).toBeLessThan(tx1 + rMax * 0.9);
+        // and it is a BACK shell: nothing hangs below the trunk's mid-height skirt
+        const yMid = trunk.reduce((t, n) => t + n.pos[1], 0) / trunk.length;
+        expect(min[1]).toBeGreaterThan(yMid - rMax * 0.45);
+      }
+    }
+  });
 });
+

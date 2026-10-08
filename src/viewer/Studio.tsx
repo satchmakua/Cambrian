@@ -507,8 +507,11 @@ export function Studio({
       ) : (
         <Bestiary seed={bestiarySeed} skinMode={skinMode} overlays={overlays} onAdopt={(g) => { onAdopt(g); setTab('bench'); }} />
       )}
+      {/* on-demand: the bench is static unless orbited (OrbitControls invalidates on change), so it
+          renders a frame per interaction instead of five viewports every frame */}
       <Canvas
         className="studio-canvas"
+        frameloop="demand"
         eventSource={container as MutableRefObject<HTMLElement>}
         gl={{ preserveDrawingBuffer: import.meta.env.DEV, antialias: true }}
         dpr={[1, 2]}

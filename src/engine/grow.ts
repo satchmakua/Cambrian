@@ -30,6 +30,7 @@ export interface BodyNode {
   kind: 'spine' | 'limb' | 'terminal';
   terminal?: Terminal;
   part?: { kind: PartKind; style: number }; // which genome part grew this node (for render variants)
+  segment?: number; // spine nodes: which body section (0 = the trunk, 1 = the next child, …)
 }
 
 export interface Phenotype {
@@ -59,6 +60,7 @@ export function grow(genome: Genome): Phenotype {
     return nodes.length - 1;
   }
   const atCap = () => nodes.length >= NODE_MAX;
+  let legPairsHere = 0; // leg pairs on the segment currently growing (hexapods+ get arthropod legs)
 
   growSegment(dev.body, [0, 0, 0], [0, 0, 0, 1], 0, -1);
 
@@ -107,6 +109,7 @@ export function grow(genome: Genome): Phenotype {
       const profile = 1 + BODY_BULGE * Math.sin(Math.PI * u);
       const radius = girth * Math.pow(seg.taper, i) * profile;
       const idx = addNode(pos, quat, radius, 'spine');
+      nodes[idx].segment = depth;
       if (segScale) nodes[idx].scale = segScale;
       if (prev >= 0) edges.push([prev, idx]);
       spine.push(idx);
@@ -122,15 +125,23 @@ export function grow(genome: Genome): Phenotype {
       pos = [pos[0] + fwd[0] * step, pos[1] + fwd[1] * step, pos[2] + fwd[2] * step];
     }
 
+    const haunched = new Set<number>();
+    legPairsHere = seg.appendages.filter((a) => a.kind === 'leg').length;
     for (const app of seg.appendages) {
       if (atCap()) break;
       const ai = clampInt(Math.round(app.attachT * (spine.length - 1)), 0, spine.length - 1);
-      // shoulder / haunch: legs thicken the spine node they attach to, giving the
-      // body muscular structure instead of a uniform tube.
-      if (app.kind === 'leg') {
+      // shoulder / haunch: legs thicken the spine node they attach to, giving the body muscular
+      // structure instead of a uniform tube. Once per node: on a short trunk several leg pairs share
+      // a node, and compounding ×1.22 per pair swelled a spider's 1–2 node body into a giant ball.
+      if (app.kind === 'leg' && !haunched.has(spine[ai])) {
+        haunched.add(spine[ai]);
         nodes[spine[ai]].radius = Math.min(nodes[spine[ai]].radius * 1.22, nodes[spine[ai]].radius + 0.35);
       }
-      growAppendage(app, spine[ai]);
+      // Legs ride the CHAIN, not the nearest node: the slot is interpolated between neighbouring spine
+      // nodes (and extrapolated past a 1-node trunk's ends), so a hexapod's or a spider's legs spread
+      // fore-aft along the body instead of collapsing onto the same one or two nodes.
+      if (app.kind === 'leg' && dev.symmetry !== 'radial') growAppendage(app, spine[ai], chainBase(spine, app.attachT));
+      else growAppendage(app, spine[ai]);
     }
 
     if (seg.child && depth + 1 < DEPTH_MAX && !atCap()) {
@@ -138,8 +149,29 @@ export function grow(genome: Genome): Phenotype {
     }
   }
 
-  function growAppendage(app: AppendageGene, attachIdx: number): void {
-    const base = nodes[attachIdx];
+  /** A virtual attach node at fraction `t` along a spine chain (position/radius interpolated). */
+  function chainBase(spine: number[], t: number): BodyNode {
+    if (spine.length === 1) {
+      // a one-node trunk: spread along its own length (fore-aft by the slot), on the node's surface
+      const n = nodes[spine[0]];
+      const fwd = qRotate([0, 0, 1], n.quat);
+      const reach = surfaceExtent(n, fwd) * 0.85 * (t - 0.5) * 2;
+      return { ...n, pos: [n.pos[0] + fwd[0] * reach, n.pos[1] + fwd[1] * reach, n.pos[2] + fwd[2] * reach] };
+    }
+    const f = clamp(t, [0, 1]) * (spine.length - 1);
+    const i0 = Math.min(Math.floor(f), spine.length - 2);
+    const u = f - i0;
+    const a = nodes[spine[i0]];
+    const b = nodes[spine[i0 + 1]];
+    return {
+      ...(u < 0.5 ? a : b),
+      pos: [a.pos[0] + (b.pos[0] - a.pos[0]) * u, a.pos[1] + (b.pos[1] - a.pos[1]) * u, a.pos[2] + (b.pos[2] - a.pos[2]) * u],
+      radius: a.radius + (b.radius - a.radius) * u,
+    };
+  }
+
+  function growAppendage(app: AppendageGene, attachIdx: number, virtualBase?: BodyNode): void {
+    const base = virtualBase ?? nodes[attachIdx];
     const az = app.attachAzimuth + (rng() - 0.5) * 0.12; // seed perturbs the aim a touch
     const ce = Math.cos(app.attachElevation);
     const se = Math.sin(app.attachElevation);
@@ -148,7 +180,7 @@ export function grow(genome: Genome): Phenotype {
     const aim = (a: number): Vec3 => norm([ce * Math.cos(a), ce * Math.sin(a), se]);
 
     if (dev.symmetry === 'radial') {
-      for (let k = 0; k < dev.radialCount; k++) growLimb(app, base, aim(az + (k * Math.PI * 2) / dev.radialCount));
+      for (let k = 0; k < dev.radialCount; k++) growLimb(app, base, aim(az + (k * Math.PI * 2) / dev.radialCount), attachIdx);
       return;
     }
     // bilateral / none: grow one limb…
@@ -161,7 +193,7 @@ export function grow(genome: Genome): Phenotype {
     }
     const nStart = nodes.length;
     const eStart = edges.length;
-    growLimb(app, base, d);
+    growLimb(app, base, d, attachIdx);
     // …then a paired part is the *exact* reflection of that limb across X=0 (quaternions can't
     // mirror, so growing the other side from a flipped aim drifts — reflect the grown nodes instead).
     if (app.pair && dev.symmetry === 'bilateral') mirrorAcrossX(nStart, eStart, attachIdx);
@@ -197,7 +229,15 @@ export function grow(genome: Genome): Phenotype {
     const feet: number[] = [];
     for (let i = 0; i < nodes.length; i++) if (nodes[i].kind === 'terminal' && nodes[i].part?.kind === 'leg') feet.push(i);
     if (feet.length < 2) return;
-    const groundY = Math.min(...feet.map((i) => nodes[i].pos[1]));
+    // the ground is the lowest foot — or just under the belly, if every foot ends above it: a creature
+    // stands ON its feet. (Arched arthropod legs and stubby limbs used to end beside the belly, so the
+    // body lay on the floor with its legs dangling in the air.)
+    let belly = Infinity;
+    for (const n of nodes) {
+      if (n.kind !== 'spine') continue;
+      belly = Math.min(belly, n.pos[1] - n.radius * (n.scale?.[1] ?? 1));
+    }
+    const groundY = Math.min(...feet.map((i) => nodes[i].pos[1]), belly - 0.04);
     const parentOf = new Int32Array(nodes.length).fill(-1);
     for (const [a, b] of edges) parentOf[b] = a;
     for (const footIdx of feet) {
@@ -213,7 +253,14 @@ export function grow(genome: Genome): Phenotype {
       if (k < 1) continue;
       const dy = groundY - nodes[footIdx].pos[1];
       if (dy > -1e-3) continue;
-      for (let i = 1; i <= k; i++) nodes[chain[i]].pos[1] += dy * (i / k); // hip fixed, foot → ground
+      // hip fixed, foot → ground. An ARCHED leg (knee above the hip — an arthropod's) keeps its knee
+      // and stretches only the shin, so planting the foot never flattens the arch; a column leg
+      // spreads the stretch evenly down its length.
+      const arched = k >= 2 && nodes[chain[1]].pos[1] > nodes[chain[0]].pos[1];
+      for (let i = 1; i <= k; i++) {
+        const w = arched ? (i - 1) / (k - 1) : i / k;
+        nodes[chain[i]].pos[1] += dy * w;
+      }
     }
   }
 
@@ -228,9 +275,10 @@ export function grow(genome: Genome): Phenotype {
     }
   }
 
-  function growLimb(app: AppendageGene, base: BodyNode, dir0: Vec3): void {
+  function growLimb(app: AppendageGene, base: BodyNode, dir0: Vec3, parentIdx: number): void {
     let dir = dir0;
     let startPos: Vec3;
+    let arch: Vec3[] | null = null; // an explicit arthropod leg polyline (segment directions)
     if (app.kind === 'leg' && dev.symmetry !== 'radial') {
       // Legs attach at the shoulder/hip — the body's *side*, a touch above the belly — not the
       // underbelly midline, then descend. This widens the stance and puts the limb's top where it
@@ -245,6 +293,25 @@ export function grow(genome: Genome): Phenotype {
       const flank = surfaceExtent(base, [sideX, 0, 0]);
       startPos = [base.pos[0] + sideX * flank * (0.92 + splay * 0.35), base.pos[1] + base.radius * 0.2, base.pos[2]];
       dir = norm([sideX * splay, -1, 0]);
+      // ARTHROPOD legs (a hexapod or more, or an extreme sprawl): not a mammal's column folding fore-aft
+      // at the knee but an ARCH in the leg's own vertical plane — the femur rises up-and-out, the knee
+      // peaks above the body, the shin drops to a foot planted far out to the side. Each pair also
+      // fans fore-aft by its slot (front legs reach forward, hind legs back), so 8 legs radiate like a
+      // spider's instead of hanging in a row of identical columns.
+      if (legPairsHere >= 3 || splay > 0.72) {
+        const zf = (app.attachT - 0.5) * 1.4;
+        const n = app.segments - 1; // segment advances (n nodes span n-1 lengths)
+        arch = [];
+        if (n <= 1) arch.push(norm([sideX * 0.7, -0.7, zf]));
+        else
+          for (let k = 0; k < n; k++) {
+            if (k === 0) arch.push(norm([sideX, 0.55, zf]));
+            else if (k === n - 1) arch.push(norm([sideX * 0.22, -1, zf * 0.35]));
+            else arch.push(norm([sideX * 0.6, -0.45, zf * 0.8]));
+          }
+        dir = arch[0];
+        startPos = [base.pos[0] + sideX * flank * 0.9, base.pos[1] + base.radius * 0.05, base.pos[2]];
+      }
       dir0 = dir;
     } else {
       // Seat a face organ (eye/mouth/ear) proud of the body by a fraction of ITS OWN radius, so it
@@ -263,7 +330,7 @@ export function grow(genome: Genome): Phenotype {
     // orient +Z → aim direction, then roll about that axis (orients flat parts)
     let quat = qMul(qFromAxisAngle(dir0, app.roll), qFromTo([0, 0, 1], dir0));
     let pos: Vec3 = startPos;
-    let prev = nodes.indexOf(base);
+    let prev = parentIdx;
 
     let pitch = app.curl[0];
     for (let j = 0; j < app.segments; j++) {
@@ -274,15 +341,24 @@ export function grow(genome: Genome): Phenotype {
       // paw/hoof terminator, which spreads wider than its node) — so legs read as powerful, not vestigial.
       if (app.kind === 'leg') {
         const t = app.segments > 1 ? j / (app.segments - 1) : 0;
-        r *= 1.32 - 0.62 * t; // ~1.32× at the hip → ~0.7× at the ankle
+        // arthropod legs are slender jointed rods (a spider's leg is a fraction of its body's girth);
+        // vertebrate legs are a muscular haunch tapering to a slim ankle
+        r *= arch ? 0.62 - 0.22 * t : 1.32 - 0.62 * t; // ~1.32× at the hip → ~0.7× at the ankle
       }
       // the eye is the emotional anchor — floor the grown bulb so even a tapered/stalked eye on a
       // small head always reads (M19/M24), regardless of how the gene tapered down its tip.
       if (last && app.terminal === 'eye') r = Math.max(r, EYE_R_MIN);
+      if (arch) quat = qFromTo([0, 0, 1], arch[Math.min(j, arch.length - 1)]);
       const idx = addNode(pos, quat, r, last ? 'terminal' : 'limb', last ? app.terminal : undefined);
       nodes[idx].part = { kind: app.kind, style: app.style };
       edges.push([prev, idx]);
       prev = idx;
+      if (arch) {
+        const d = arch[Math.min(j, arch.length - 1)];
+        const L = app.length * 1.2; // long spindly segments
+        pos = [pos[0] + d[0] * L, pos[1] + d[1] * L, pos[2] + d[2] * L];
+        continue;
+      }
 
       quat = qMul(quat, qFromEuler(pitch, app.curl[1]));
       dir = qRotate([0, 0, 1], quat);

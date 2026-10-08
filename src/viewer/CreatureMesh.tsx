@@ -20,7 +20,7 @@ import { Mouth } from './mouths';
 import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
-import { buildSmoothGeometry, type SkinQuality } from './smoothSkin';
+import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
 import { getGeometry, retainGeometry, releaseGeometry } from './geometryCache';
 import { mouthCarves } from './mouthLine';
 import { sampleTrajectory, type Trajectory } from '../physics/fitness';
@@ -125,6 +125,40 @@ export function CreatureMesh({
     retainGeometry(phenotype, smoothKey);
     return () => releaseGeometry(phenotype, smoothKey);
   }, [smoothGeo, phenotype, smoothKey]);
+  // a conforming carapace shell (turtle / crab), built from the trunk's own field — shared + cached
+  // like the skin. Drawn in every skin mode: it is a separate solid, not part of the body field.
+  const hasShell = useMemo(() => phenotype.nodes.some((n) => n.terminal === 'carapace'), [phenotype]);
+  const shellKey = `shell:${quality}`;
+  const shellGeo = useMemo(() => {
+    if (!hasShell) return null;
+    return getGeometry(phenotype, shellKey, () => {
+      const g = buildShellGeometry(phenotype, quality);
+      if (!g) return new THREE.BufferGeometry();
+      g.setAttribute('aBodyPos', (g.getAttribute('position') as THREE.BufferAttribute).clone());
+      return g;
+    });
+  }, [hasShell, phenotype, quality, shellKey]);
+  useEffect(() => {
+    if (!shellGeo) return;
+    retainGeometry(phenotype, shellKey);
+    return () => releaseGeometry(phenotype, shellKey);
+  }, [shellGeo, phenotype, shellKey]);
+  // the shell wears hard scutes: plates (turtle) or the body's own chitin (crab), a darker tone of
+  // the body hue with a bold reticulate seam pattern
+  const shellMat = useMemo(() => {
+    if (!hasShell) return null;
+    const shellPal = { ...pal, light: pal.light * 0.82, sat: pal.sat * 0.9, hueB: pal.hueA };
+    const shellCov = {
+      ...cov,
+      type: cov.type === 'chitin' ? ('chitin' as const) : ('plates' as const),
+      pattern: 'reticulate' as const,
+      patternScale: 2.4,
+      patternContrast: 0.55,
+    };
+    return makeCreatureMaterial(shellPal, shellCov, seed ^ 0x5e11);
+  }, [hasShell, pal, cov, seed]);
+  useEffect(() => () => shellMat?.dispose(), [shellMat]);
+
   const playing = !!trajectory; // the recorded physics gait is the only motion left
 
   const footColor = useMemo(
@@ -292,6 +326,7 @@ export function CreatureMesh({
           ))}
         </>
       )}
+      {shellGeo && shellMat && <mesh geometry={shellGeo} material={shellMat} castShadow receiveShadow />}
       {data.features.map((f, k) => (
         <group
           key={`f${k}`}
@@ -366,7 +401,7 @@ function Feature({
     case 'crest':
       return <Crest f={f} color={finColor} />;
     case 'carapace':
-      return <Carapace f={f} color={finColor} />;
+      return null; // the conforming shell is drawn by CreatureMesh from the trunk field
     case 'whisker':
       return <Whisker f={f} color={footColor} />;
     case 'paw':
@@ -827,19 +862,6 @@ function Crest({ f, color }: { f: MeshFeature; color: number }) {
         </group>
       ))}
     </group>
-  );
-}
-
-// A carapace: a big domed shell over a body region (turtle / crab / armadillo). World-aligned
-// (broad in X·Z, domed in Y) and shifted down so it caps the back rather than floating.
-function Carapace({ f, color }: { f: MeshFeature; color: number }) {
-  const r = Math.max(f.radius, 0.06);
-  const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.85).getHex(), [color]);
-  return (
-    <mesh position={[0, -r * 0.5, 0]} scale={[r * 3.2, r * 2.2, r * 4.0]} castShadow receiveShadow>
-      <sphereGeometry args={[1, 20, 16]} />
-      <meshStandardMaterial color={dark} roughness={0.5} metalness={0.05} side={THREE.DoubleSide} />
-    </mesh>
   );
 }
 
