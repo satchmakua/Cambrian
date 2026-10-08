@@ -91,7 +91,10 @@ export function isHybridNode(n: BodyNode): boolean {
  */
 export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'): FieldPrims {
   const include = mode === 'hybrid' ? isHybridNode : isBodyNode;
-  let bodyEdges = p.edges.filter(([a, b]) => include(p.nodes[a]) && include(p.nodes[b]));
+  // an eyestalk's last link runs INTO the eyeball (which draws itself): mesh it as a thin cone ending
+  // at the eye, or the eye hangs in the air above a stump
+  const stalkTip = (a: BodyNode, b: BodyNode) => mode === 'hybrid' && b.terminal === 'eye' && a.kind === 'limb' && a.part?.kind === 'eyestalk';
+  let bodyEdges = p.edges.filter(([a, b]) => include(p.nodes[a]) && (include(p.nodes[b]) || stalkTip(p.nodes[a], p.nodes[b])));
   if (bodyEdges.length === 0) bodyEdges = p.edges;
   const edges = bodyEdges.length > 0 ? bodyEdges : null;
   const nc = edges ? edges.length : p.nodes.length;
@@ -129,9 +132,10 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
       }
       ax[i] = a.pos[0]; ay[i] = a.pos[1]; az[i] = a.pos[2];
       bx[i] = b.pos[0]; by[i] = b.pos[1]; bz[i] = b.pos[2];
-      pr[i] = (a.radius + b.radius) * 0.5;
+      const rB = stalkTip(a, b) ? Math.min(a.radius * 0.8, b.radius * 0.45) : b.radius;
+      pr[i] = (a.radius + rB) * 0.5;
       ra[i] = a.radius;
-      rb[i] = b.radius;
+      rb[i] = rB;
       included.add(a);
       included.add(b);
     }
