@@ -40,6 +40,42 @@ function clock(phase: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+function capital(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** "a rodent", "an ungulate" */
+function an(name: string): string {
+  return (/^[aeiou]/i.test(name) ? 'an ' : 'a ') + name;
+}
+
+/** The lower-third line for documentary mode: what the subject is doing, and to whom. */
+function narrate(c: NonNullable<Snapshot['selected']>): string {
+  const a = c.about;
+  switch (c.action) {
+    case 'hunt':
+      return a ? `stalks ${an(a)}${c.flying ? ' from the air' : ''}` : 'is on the hunt';
+    case 'flee':
+      return a ? `bolts from ${an(a)}${c.flying ? ', taking to the air' : ''}` : 'runs for its life';
+    case 'mate':
+      return 'courts a mate';
+    case 'eat':
+      return a ? `feeds on the ${a} it brought down` : 'feeds on its kill';
+    case 'scavenge':
+      return a ? `goes for ${an(a)} carcass` : 'scavenges';
+    case 'sleep':
+      return 'sleeps';
+    case 'graze':
+      return 'grazes the meadow';
+    case 'forage':
+      return c.flying ? 'flies in to a fruiting bush' : 'strips a bush of fruit';
+    case 'filter':
+      return 'sieves the shallows';
+    default:
+      return c.flying ? 'is on the wing' : c.adult ? 'roams' : 'keeps close to its parent';
+  }
+}
+
 function hueCss(h: number, l = 58): string {
   return `hsl(${Math.round(h * 360)} 62% ${l}%)`;
 }
@@ -90,9 +126,10 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
   const follow = useWorldUi((s) => s.follow);
   const snap = useWorldUi((s) => s.snapshot);
   const emotes = useWorldUi((s) => s.emotes);
+  const documentary = useWorldUi((s) => s.documentary);
   // (dev: ?tree=1 opens it, for inspection screenshots)
   const [showTree, setShowTree] = useState(() => import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('tree') === '1');
-  const { setRunning, setSpeed, setFollow, setEmotes, select, reset, releaseGenome, refresh } = useWorldUi.getState();
+  const { setRunning, setSpeed, setFollow, setEmotes, setDocumentary, select, reset, releaseGenome, refresh } = useWorldUi.getState();
 
   // first visit: populate the starter ecosystem (+ the breeder's creature)
   useEffect(() => {
@@ -120,6 +157,7 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
         }
       }
       if (q.get('paused') === '1') setRunning(false);
+      if (q.get('doc') === '1') setDocumentary(true);
       bumpVersion();
     }
     refresh();
@@ -153,6 +191,7 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
           ))}
         </div>
         <div className="releases">
+          <button className={documentary ? 'active' : ''} onClick={() => setDocumentary(!documentary)} title="documentary mode: the camera finds the most interesting things happening and follows them">▶ documentary</button>
           <button className={emotes ? 'active' : ''} onClick={() => setEmotes(!emotes)} title="mood icons over the creatures: asleep, courting, alarmed, hunting">moods</button>
           <button onClick={() => releaseGenome(founder, 6)} title="release six of the creature you're breeding">+ your creature</button>
           <button onClick={() => releaseGenome(strangerGenome((Date.now() * 2654435761) >>> 0), 6)} title="release six of a random new species">+ a stranger</button>
@@ -215,6 +254,13 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
             <button onClick={() => onAdopt(sel.genome)} title="make this creature the parent in the breeder">take home</button>
           </div>
         </aside>
+      )}
+
+      {documentary && sel && (
+        <div className="doc-caption">
+          <b>{sel.adult ? capital(sel.species) : `A young ${sel.species}`}</b>
+          <span>{narrate(sel)}</span>
+        </div>
       )}
 
       {snap && showTree && (

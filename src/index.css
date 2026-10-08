@@ -1277,3 +1277,29 @@ body,
   text-transform: capitalize;
   color: var(--accent);
 }
+
+/* --- documentary lower-third ------------------------------------------------------------------- */
+.doc-caption {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%);
+  padding: 10px 22px 12px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(10, 12, 16, 0), rgba(10, 12, 16, 0.72) 18%, rgba(10, 12, 16, 0.72) 82%, rgba(10, 12, 16, 0));
+  text-align: center;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.doc-caption b {
+  display: block;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  font-weight: 600;
+}
+.doc-caption span {
+  font-size: 14px;
+  color: var(--muted);
+  font-style: italic;
+}

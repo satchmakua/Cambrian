@@ -14,6 +14,7 @@ import { stepWorld, STEP, dayPhase, type World } from '../sim/world';
 import { heightAt } from '../sim/terrain';
 import { TerrainMesh, Water, Bushes, Decor, updateSeasonLook } from './Landscape';
 import { Grass } from './Flora';
+import { Director } from './Director';
 import { Actor, Carcass, useSkinScheduler } from './Actors';
 import { getWorld, useWorldUi, worldVersion, bumpVersion } from './worldStore';
 import { StudioEnvironment } from '../viewer/StudioEnvironment';
@@ -221,6 +222,7 @@ export function WorldScene() {
         enableDamping
       />
       <FollowCam />
+      <Director />
     </>
   );
 }

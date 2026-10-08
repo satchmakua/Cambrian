@@ -59,6 +59,8 @@ export interface CreatureCard {
   genome: Genome;
   alive: boolean;
   flying: boolean; // on the wing right now
+  /** the other party in what it is doing — the prey it hunts, what it flees, the carcass it eats */
+  about: string | null;
 }
 
 /** One species as a branch of the tree of life (every species ever, extinct ones included). */
@@ -94,6 +96,9 @@ interface WorldUi {
   follow: boolean;
   /** mood icons over the creatures (asleep, courting, alarmed, hunting) */
   emotes: boolean;
+  /** the auto-director: the camera cuts between the most interesting things happening */
+  documentary: boolean;
+  setDocumentary: (v: boolean) => void;
   snapshot: Snapshot | null;
   setEmotes: (v: boolean) => void;
   setRunning: (v: boolean) => void;
@@ -120,6 +125,18 @@ const STARTER: [string, number][] = [
 export function populate(w: World, founder?: Genome | null): void {
   STARTER.forEach(([kind, n], i) => release(w, genomeOfMorphotype((w.seed * 97 + i * 13) >>> 0, kind), n, undefined, kind));
   if (founder) release(w, founder, 6);
+}
+
+function aboutOf(w: World, c: World['creatures'][number]): string | null {
+  if (c.action === 'hunt' || c.action === 'flee' || c.action === 'mate') {
+    const o = w.creatures.find((x) => x.id === c.target && x.alive);
+    return o ? speciesById(w, o.species)?.name ?? null : null;
+  }
+  if (c.action === 'eat' || c.action === 'scavenge') {
+    const k = w.corpses.find((x) => x.id === c.target);
+    return k ? speciesById(w, k.species)?.name ?? null : null;
+  }
+  return null;
 }
 
 export function snapshotOf(w: World, selected: number | null): Snapshot {
@@ -156,6 +173,7 @@ export function snapshotOf(w: World, selected: number | null): Snapshot {
         age: c.age / (c.traits.lifespan * c.lifeFactor),
         adult: c.age > c.traits.maturity,
         flying: c.alt > AIRBORNE,
+        about: aboutOf(w, c),
         generation: c.generation,
         children: c.children,
         kills: c.kills,
@@ -187,6 +205,8 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
   selected: null,
   follow: false,
   emotes: true,
+  documentary: false,
+  setDocumentary: (documentary) => set({ documentary, follow: documentary ? true : get().follow }),
   snapshot: null,
   setEmotes: (emotes) => set({ emotes }),
   setRunning: (running) => set({ running }),
