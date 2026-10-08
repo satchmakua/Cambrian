@@ -16,6 +16,7 @@ import { heightAt } from '../sim/terrain';
 import { TerrainMesh, Water, Bushes, Decor, updateSeasonLook } from './Landscape';
 import { Grass } from './Flora';
 import { Nests } from './Nests';
+import { Ambient } from './Ambient';
 import { Precipitation, WEATHER_LOOK, setPrecipDaylight, updateWeatherLook } from './Weather';
 import { Director } from './Director';
 import { Actor, Carcass, useSkinScheduler } from './Actors';
@@ -244,6 +245,7 @@ export function WorldScene() {
       <Decor key={`d${wid}`} terrain={world.terrain} world={world} />
       <Grass key={`g${wid}`} world={world} />
       <Precipitation />
+      <Ambient />
       <Cast world={world} />
       <OrbitControls
         makeDefault
