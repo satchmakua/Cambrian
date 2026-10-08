@@ -518,11 +518,27 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   heads under segment mutations. Over 4 seeds × 2 years every kind survives in most runs (before:
   three species left). **Test:** `world.test.ts › a living balance`, `mutate.test.ts › head`.
 
+- [x] **M50 — Evolution you can read.** Species portraits (an offscreen R3F root renders any genome,
+  cached by share string) on the census rows, the creature card and the fast-forward chronicle; the
+  card sets a species' founder beside the animal you're watching and says what changed, in words
+  (`howItDiffers`), and where the species branched from. **Test:** `tests/sim/lineage.test.ts`.
+
+- [x] **M51 — A river and a voice.** Every valley drains its lake through a meandering stream (a
+  valley lowered toward meadow height, a channel cut in its floor); the documentary's captions can
+  be read aloud by the browser's speech synthesis. Dev: `?look=river`.
+
+- [x] **M52 — Faces and fur.** Readable mammal eyes, muzzles that narrow to the nose, a lip line that
+  ends under the eye, no lip fold hanging under the chin, no beaked cats (a mouth-band audit and
+  test); leopard rosettes break into arcs; new sessions start on a russet fox-dog, framed closer;
+  **shell fur** — twelve combed, tapering strand layers over a pelt in the close-up views (hero,
+  Studio, portraits, the World's selected animal), skinned on the rig, fading out where a strand
+  would be sub-pixel.
+
 ### Next up (unchecked — pick from here)
 
-- [ ] **Richer world.** Drought years, a second lake / river, burrows and nests.
-- [ ] **Evolution you can read.** Compare an evolved species with its founder side by side; a
-  lineage view of a wild species' body changes over the generations.
+- [ ] **Richer world.** Drought years, burrows and nests, a second lake.
+- [ ] **Feet that grip the ground.** Foot planting / IK so strides don't slide.
+- [ ] **A lineage film.** A wild species' body changes over the generations, as a strip of portraits.
 
 ---
 

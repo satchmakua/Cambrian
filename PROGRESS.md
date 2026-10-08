@@ -45,6 +45,22 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ---
 
+## Part 3f — Portraits, a river, faces and fur (M50–M52) · 2026-10-08
+
+- **Portraits** are an offscreen R3F root (`createRoot` on a detached canvas, `frameloop: 'never'`,
+  one `advance()` per portrait, read back with `toDataURL`) — one extra WebGL context in total.
+- **A beak on a cat.** Retuning felid/canid mouth styles to [0.2, 0.28] crossed the beak band (fanged
+  is [0.125, 0.25) — the Morpho comment's band values were stale), so a third of cats and dogs grew
+  bills, and the ecology tuning that day ran with them as omnivores. Fixed, audited every morph's
+  range against the real bands, pinned with a test, and the 6-seed × 2-year survival re-run.
+- **The pale band under every chin** was the upper-lip fold (built to hide a reptile's tooth roots)
+  drawn in the coat below the lip line; found by hiding the jaw's sub-meshes one at a time.
+- **Recolonisation** rolled each dawn on the shared RNG stream; one test world drew ten > 0.5 in a
+  row. It now rolls on its own hash of (seed, day, species).
+- **Fur**: the same creature material with a shell uniform (one program for all); the strand mask
+  samples the rest-pose body position, so every shell slices the same cells and hairs stay rooted;
+  a backward-and-down lean turns the towel-pile dots into combed hair.
+
 ## Part 3e — Courtship, weather, fast-forward, a lasting balance (M46–M49) · 2026-10-08
 
 - **Why the ecology work.** With fast-forward, a three-year run of the default valley ended with three
