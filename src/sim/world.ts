@@ -281,9 +281,11 @@ function canStand(w: World, t: Traits, x: number, z: number): boolean {
   return true;
 }
 
-function speciesFor(w: World, genome: Genome, parent: number | null): Species {
+function speciesFor(w: World, genome: Genome, parent: number | null, label?: string): Species {
   const { phenotype } = bodyOf(genome);
-  const kind = coherence(phenotype).nearest;
+  // a known label (the morphotype it was released as, or its parent species' kind) beats the
+  // morphospace classifier's guess, which can mislabel close basins (an ungulate read as a canid)
+  const kind = label ?? (parent !== null ? speciesById(w, parent)?.kind : undefined) ?? coherence(phenotype).nearest;
   const sameKind = w.species.filter((s) => s.kind === kind).length;
   const sp: Species = {
     id: w.nextId++,
@@ -343,10 +345,10 @@ function spawn(w: World, genome: Genome, species: Species, x: number, z: number,
 }
 
 /** Release `count` adults of a genome into the world (a new species unless one has this founder). */
-export function release(w: World, genome: Genome, count: number, near?: { x: number; z: number }): Creature[] {
+export function release(w: World, genome: Genome, count: number, near?: { x: number; z: number }, label?: string): Creature[] {
   const { traits } = bodyOf(genome);
   let sp = w.species.find((s) => s.founder === genome && s.extinctAt === null);
-  if (!sp) sp = speciesFor(w, genome, null);
+  if (!sp) sp = speciesFor(w, genome, null, label);
   const base = near ?? spawnPoint(w, traits);
   const out: Creature[] = [];
   for (let i = 0; i < count && liveCount(w) < MAX_POP; i++) {

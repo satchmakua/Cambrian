@@ -81,6 +81,22 @@ function bakeBodyPos(geo: THREE.BufferGeometry, matrix: THREE.Matrix4): void {
   geo.setAttribute('aAO', new THREE.BufferAttribute(new Float32Array(pos.count).fill(1), 1));
 }
 
+const skinKey = (full: boolean, quality: SkinQuality) => `${full ? 'hybrid' : 'smooth'}:${quality}`;
+
+function buildSkin(phenotype: Phenotype, full: boolean, carves: readonly Carve[], quality: SkinQuality): THREE.BufferGeometry {
+  const g = buildSmoothGeometry(phenotype, full, carves, quality);
+  // smooth mesh is untransformed, so its local position *is* the body-space coord (M17)
+  g.setAttribute('aBodyPos', (g.getAttribute('position') as THREE.BufferAttribute).clone());
+  return g;
+}
+
+/** Build (and cache) a creature's smooth surface ahead of mounting it — the World schedules these
+ *  one per frame so a burst of new genomes never stalls rendering. Same key/builder as CreatureMesh. */
+export function prebuildSkin(phenotype: Phenotype, mode: 'smooth' | 'hybrid', quality: SkinQuality): void {
+  const full = mode === 'hybrid';
+  getGeometry(phenotype, skinKey(full, quality), () => buildSkin(phenotype, full, mouthCarves(phenotype), quality));
+}
+
 export function CreatureMesh({
   phenotype,
   skinMode = 'capsules',
@@ -112,15 +128,10 @@ export function CreatureMesh({
   // M15: one organic surface over the node field, built once (only when toggled on). The
   // smooth body is static, so motion is paused while it's shown (re-meshing per frame is dear).
   // Shared through the geometry cache: the Studio shows one creature in five viewports at once.
-  const smoothKey = `${full ? 'hybrid' : 'smooth'}:${quality}`;
+  const smoothKey = skinKey(full, quality);
   const smoothGeo = useMemo(() => {
     if (!showSmooth) return null;
-    return getGeometry(phenotype, smoothKey, () => {
-      const g = buildSmoothGeometry(phenotype, full, carves, quality);
-      // smooth mesh is untransformed, so its local position *is* the body-space coord (M17)
-      g.setAttribute('aBodyPos', (g.getAttribute('position') as THREE.BufferAttribute).clone());
-      return g;
-    });
+    return getGeometry(phenotype, smoothKey, () => buildSkin(phenotype, full, carves, quality));
   }, [showSmooth, full, phenotype, carves, quality, smoothKey]);
   useEffect(() => {
     if (!smoothGeo) return;

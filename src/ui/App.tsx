@@ -12,6 +12,7 @@ import { binKey, MENAGERIE_GRID } from '../viewer/archive';
 import { downloadCreatureGlb } from '../viewer/exportGltf';
 import { MORPHOTYPE_IDS } from '../engine/random';
 import { Studio } from '../viewer/Studio';
+import { WorldView } from '../world/WorldView';
 import { useStore } from './store';
 
 export function App() {
@@ -62,6 +63,18 @@ export function App() {
       </div>
     );
   }
+  if (view === 'world') {
+    return (
+      <WorldView
+        founder={genome}
+        onExit={() => setView('breed')}
+        onAdopt={(g) => {
+          adopt(g);
+          setView('breed');
+        }}
+      />
+    );
+  }
   if (view === 'studio') {
     return (
       <Studio genome={genome} skinMode={skinMode} onSkinMode={setSkinMode} onAdopt={adopt} onExit={() => setView('breed')} />
@@ -82,6 +95,7 @@ export function App() {
               <nav className="view-tabs">
                 <button className="active">Breed</button>
                 <button onClick={() => setView('studio')} title="inspect this creature from every angle">Studio</button>
+                <button onClick={() => setView('world')} title="release creatures into a living ecosystem">World</button>
               </nav>
             </div>
             <p className="tag">
