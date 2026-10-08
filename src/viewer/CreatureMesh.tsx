@@ -10,7 +10,7 @@
  * recorded trajectory. Pure viewer concern either way: grow() stays static and deterministic.
  */
 import { useEffect, useMemo, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, createPortal } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
 import { mix32 } from '../engine/rng';
@@ -22,6 +22,7 @@ import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
 import { buildFeatheredWing, buildMembraneWing, buildTailFan, conformToSurface } from './wings';
+import { ensureSkinWeights, type RigInstance } from './rig';
 import { buildFieldPrims, fieldAt } from './bodyField';
 import { getGeometry, retainGeometry, releaseGeometry } from './geometryCache';
 import { mouthCarves } from './mouthLine';
@@ -102,11 +103,15 @@ export function CreatureMesh({
   skinMode = 'capsules',
   trajectory = null,
   quality = 'high',
+  rig = null,
 }: {
   phenotype: Phenotype;
   skinMode?: SkinMode;
   trajectory?: Trajectory | null;
   quality?: SkinQuality;
+  /** an animation rig (World): the smooth skin becomes a SkinnedMesh on its skeleton and every
+   *  feature rides its node's bone. Ignored by the capsule kit. */
+  rig?: RigInstance | null;
 }) {
   const data = useMemo(() => buildMeshData(phenotype), [phenotype]);
   const pal = phenotype.genomeRef.palette;
@@ -305,6 +310,77 @@ export function CreatureMesh({
     }
   });
 
+  // rigged (World): the shared smooth surface gains skin weights once, and each creature binds its own
+  // skeleton to it. Bones are children of the skinned mesh ('attached' bind mode follows the actor).
+  const rigged = !!rig && showSmooth && !!smoothGeo;
+  const skinned = useMemo(() => {
+    if (!rigged || !rig || !smoothGeo) return null;
+    ensureSkinWeights(smoothGeo, phenotype);
+    const sm = new THREE.SkinnedMesh(smoothGeo, bodyMat);
+    sm.castShadow = true;
+    sm.receiveShadow = true;
+    sm.add(rig.root);
+    sm.bind(rig.skeleton, new THREE.Matrix4());
+    return sm;
+  }, [rigged, rig, smoothGeo, bodyMat, phenotype]);
+  useEffect(
+    () => () => {
+      if (skinned && rig) skinned.remove(rig.root);
+    },
+    [skinned, rig],
+  );
+  // the shell rides the trunk bone nearest its middle
+  const shellMount = useMemo(() => {
+    if (!rig || !shellGeo) return null;
+    const shell = phenotype.nodes.findIndex((n) => n.terminal === 'carapace');
+    const par = rig.template.parent[shell];
+    // the shell geometry is in body space; inside the bone it is offset by the bone's REST position
+    const at = par >= 0 ? phenotype.nodes[par].pos : [0, 0, 0];
+    return { bone: par >= 0 ? rig.bones[par] : rig.root, at };
+  }, [rig, shellGeo, phenotype]);
+
+  const featureNodes = data.features.map((f, k) => {
+    const el = (
+      <Feature
+        f={f}
+        footColor={footColor}
+        finColor={finColor}
+        irisColor={irisColor}
+        phenotype={phenotype}
+        carves={showSmooth ? carves : NO_CARVES}
+        recessed={showSmooth && carves.length > 0}
+        surface={showSmooth ? (full ? 'hybrid' : 'smooth') : 'kit'}
+      />
+    );
+    // rigged: the feature sits at its bone's origin (= its node at rest) and moves with it
+    if (skinned && rig) return <group key={`f${k}`}>{createPortal(el, rig.bones[f.idx])}</group>;
+    return (
+      <group
+        key={`f${k}`}
+        ref={(o) => {
+          if (o) featureRefs.current[k] = o;
+        }}
+        position={data.nodes[f.idx].pos}
+      >
+        {el}
+      </group>
+    );
+  });
+
+  if (skinned && rig) {
+    return (
+      <group>
+        <primitive object={skinned} />
+        {shellGeo && shellMat && shellMount &&
+          createPortal(
+            <mesh geometry={shellGeo} material={shellMat} position={[-shellMount.at[0], -shellMount.at[1], -shellMount.at[2]]} castShadow />,
+            shellMount.bone,
+          )}
+        {featureNodes}
+      </group>
+    );
+  }
+
   return (
     <group>
       {showSmooth && smoothGeo ? (
@@ -340,26 +416,7 @@ export function CreatureMesh({
         </>
       )}
       {shellGeo && shellMat && <mesh geometry={shellGeo} material={shellMat} castShadow receiveShadow />}
-      {data.features.map((f, k) => (
-        <group
-          key={`f${k}`}
-          ref={(el) => {
-            if (el) featureRefs.current[k] = el;
-          }}
-          position={data.nodes[f.idx].pos}
-        >
-          <Feature
-            f={f}
-            footColor={footColor}
-            finColor={finColor}
-            irisColor={irisColor}
-            phenotype={phenotype}
-            carves={showSmooth ? carves : NO_CARVES}
-            recessed={showSmooth && carves.length > 0}
-            surface={showSmooth ? (full ? 'hybrid' : 'smooth') : 'kit'}
-          />
-        </group>
-      ))}
+      {featureNodes}
     </group>
   );
 }

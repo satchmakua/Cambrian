@@ -47,7 +47,7 @@ for (const q of queries) {
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForTimeout(wait);
   const name = q.replace(/[^a-z0-9=_-]+/gi, '_').slice(0, 120) + '.png';
-  await page.screenshot({ path: path.join(outdir, name) });
+  await page.screenshot({ path: path.join(outdir, name), timeout: 120000 });
   console.log('shot', name);
 }
 if (errors.length) console.log('console errors:\n' + errors.slice(0, 10).join('\n'));

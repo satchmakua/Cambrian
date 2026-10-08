@@ -4,9 +4,11 @@
  * fastest way to see *why* a body looks the way it does — which chain is the trunk, where the legs
  * root, how a tail or neck is articulated — without reading the genome.
  */
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
+import type { RigInstance } from './rig';
 
 /** Part-kind → colour (the legend the Studio inspector shows). */
 export const BONE_COLORS: Record<string, string> = {
@@ -27,7 +29,9 @@ export function boneColor(kind: string | undefined): string {
   return BONE_COLORS[kind ?? 'spine'] ?? BONE_COLORS.other;
 }
 
-export function SkeletonOverlay({ phenotype }: { phenotype: Phenotype }) {
+export function SkeletonOverlay({ phenotype, rig = null }: { phenotype: Phenotype; rig?: RigInstance | null }) {
+  const group = useRef<THREE.Group>(null);
+  const dotRefs = useRef<(THREE.Mesh | null)[]>([]);
   const { lines, dots } = useMemo(() => {
     const pos: number[] = [];
     const col: number[] = [];
@@ -50,13 +54,31 @@ export function SkeletonOverlay({ phenotype }: { phenotype: Phenotype }) {
     return { lines: lg, dots: ds };
   }, [phenotype]);
 
+  // animated (Studio motion preview): follow the bones instead of the rest pose
+  useFrame(() => {
+    if (!rig || !group.current) return;
+    const inv = new THREE.Matrix4().copy(group.current.matrixWorld).invert();
+    const v = new THREE.Vector3();
+    const at = (i: number) => v.setFromMatrixPosition(rig.bones[i].matrixWorld).applyMatrix4(inv);
+    const pos = lines.getAttribute('position') as THREE.BufferAttribute;
+    phenotype.edges.forEach(([a, b], k) => {
+      at(a);
+      pos.setXYZ(k * 2, v.x, v.y, v.z);
+      at(b);
+      pos.setXYZ(k * 2 + 1, v.x, v.y, v.z);
+    });
+    pos.needsUpdate = true;
+    dotRefs.current.forEach((m, i) => {
+      if (m) m.position.copy(at(i));
+    });
+  });
   return (
-    <group renderOrder={10}>
+    <group ref={group} renderOrder={10}>
       <lineSegments geometry={lines} renderOrder={10}>
         <lineBasicMaterial vertexColors depthTest={false} transparent opacity={0.95} toneMapped={false} />
       </lineSegments>
       {dots.map((d, i) => (
-        <mesh key={i} position={d.pos} renderOrder={11}>
+        <mesh key={i} ref={(m) => { dotRefs.current[i] = m; }} position={d.pos} renderOrder={11}>
           <sphereGeometry args={[d.r, 8, 6]} />
           <meshBasicMaterial color={d.color} depthTest={false} transparent opacity={0.9} toneMapped={false} />
         </mesh>

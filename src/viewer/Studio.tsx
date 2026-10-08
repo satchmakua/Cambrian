@@ -17,7 +17,7 @@
  * the main stage. The Bestiary tab lays out one specimen of every morphotype the same way.
  */
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { View, OrbitControls, PerspectiveCamera, OrthographicCamera } from '@react-three/drei';
 import * as THREE from 'three';
 import { grow, type Phenotype } from '../engine/grow';
@@ -30,6 +30,43 @@ import { SkeletonOverlay, BONE_COLORS } from './SkeletonOverlay';
 import { StudioEnvironment } from './StudioEnvironment';
 import { mouthVariant, eyeVariant } from './partStyles';
 import type { SkinQuality } from './smoothSkin';
+import { createRig, poseRig, type RigInstance } from './rig';
+import { traitsOf } from '../sim/traits';
+
+/** The Studio's motion preview: the World's gait, run in place so a body's movement can be judged. */
+export type Motion = 'still' | 'walk' | 'run' | 'eat' | 'sleep';
+
+function devGaitPhase(): number | null {
+  if (!import.meta.env.DEV || typeof location === 'undefined') return null;
+  const v = new URLSearchParams(location.search).get('gaitphase');
+  return v === null ? null : Number(v);
+}
+
+/** Animate a rig in place for the Studio preview (the canvas renders on demand, so keep asking). */
+function useMotion(phenotype: Phenotype, motion: Motion): RigInstance | null {
+  const rig = useMemo(() => (motion === 'still' ? null : createRig(phenotype)), [phenotype, motion]);
+  const traits = useMemo(() => traitsOf(phenotype), [phenotype]);
+  const cruise = traits.speed;
+  const swim = traits.habitat === 'water' || traits.locomotion === 'swim';
+  const invalidate = useThree((s) => s.invalidate);
+  const frozen = devGaitPhase();
+  useFrame((_, dt) => {
+    if (!rig) return;
+    const speed = motion === 'walk' ? cruise * 0.55 : motion === 'run' ? cruise * 1.7 : 0;
+    if (frozen !== null) rig.phase = frozen; // a zero-dt pose holds the frozen phase at full stride
+    poseRig(rig, {
+      dt: frozen !== null ? 0 : Math.min(dt, 0.05),
+      speed,
+      cruise,
+      sleep: motion === 'sleep' ? 1 : 0,
+      eat: motion === 'eat' ? 1 : 0,
+      swim,
+      turn: 0,
+    });
+    invalidate();
+  });
+  return rig;
+}
 
 // --- framing ------------------------------------------------------------------------------------
 
@@ -79,6 +116,7 @@ export function SpecimenContent({
   overlays,
   quality = 'high',
   background = '#0f1116',
+  motion = 'still',
 }: {
   phenotype: Phenotype;
   framing: Framing;
@@ -86,8 +124,10 @@ export function SpecimenContent({
   overlays: Overlays;
   quality?: SkinQuality;
   background?: string;
+  motion?: Motion;
 }) {
   const { center, size, groundY } = framing;
+  const rig = useMotion(phenotype, skinMode === 'capsules' ? 'still' : motion);
   return (
     <>
       <color attach="background" args={[background]} />
@@ -97,8 +137,8 @@ export function SpecimenContent({
       <directionalLight position={[size * 1.2, size * 1.8, size * 1.0]} intensity={1.15} />
       <directionalLight position={[-size * 1.0, size * 0.6, -size * 0.8]} intensity={0.35} color="#a7c0ff" />
       <group position={[-center[0], -center[1], -center[2]]}>
-        <CreatureMesh phenotype={phenotype} skinMode={skinMode} quality={quality} />
-        {overlays.skeleton && <SkeletonOverlay phenotype={phenotype} />}
+        <CreatureMesh phenotype={phenotype} skinMode={skinMode} quality={quality} rig={rig} />
+        {overlays.skeleton && <SkeletonOverlay phenotype={phenotype} rig={rig} />}
       </group>
       {overlays.grid && <GroundGrid y={groundY - 0.01} size={size} />}
     </>
@@ -223,6 +263,7 @@ function Plate({
   framing,
   skinMode,
   overlays,
+  motion,
 }: {
   kind: PlateKind;
   label: string;
@@ -230,6 +271,7 @@ function Plate({
   framing: Framing;
   skinMode: SkinMode;
   overlays: Overlays;
+  motion: Motion;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const px = usePixelSize(box);
@@ -247,7 +289,7 @@ function Plate({
     <div className="plate" ref={box}>
       <View className="plate-view">
         <PlateCamera kind={kind} framing={framing} px={px} />
-        <SpecimenContent phenotype={phenotype} framing={framing} skinMode={skinMode} overlays={overlays} background="#11141a" />
+        <SpecimenContent phenotype={phenotype} framing={framing} skinMode={skinMode} overlays={overlays} background="#11141a" motion={motion} />
       </View>
       <span className="plate-label">{label}</span>
       {bar && (
@@ -265,20 +307,26 @@ function MainView({
   framing,
   skinMode,
   overlays,
+  motion,
 }: {
   phenotype: Phenotype;
   framing: Framing;
   skinMode: SkinMode;
   overlays: Overlays;
+  motion: Motion;
 }) {
   const track = useRef<HTMLDivElement>(null);
   const d = framing.size * 1.9;
+  // dev/headless: ?studiocam=side|front|top for a canonical main-view angle
+  const cam = import.meta.env.DEV && typeof location !== 'undefined' ? new URLSearchParams(location.search).get('studiocam') : null;
+  const camPos: [number, number, number] =
+    cam === 'side' ? [d * 0.95, d * 0.12, 0.01] : cam === 'front' ? [0.01, d * 0.15, d * 0.95] : cam === 'top' ? [0.01, d, 0.02] : [d * 0.62, d * 0.38, d * 0.7];
   return (
     <div className="studio-main" ref={track}>
       <View className="studio-main-view" track={track as MutableRefObject<HTMLElement>}>
-        <PerspectiveCamera makeDefault position={[d * 0.62, d * 0.38, d * 0.7]} fov={38} near={Math.max(0.02, framing.size * 0.01)} far={framing.size * 40} />
+        <PerspectiveCamera makeDefault position={camPos} fov={38} near={Math.max(0.02, framing.size * 0.01)} far={framing.size * 40} />
         <OrbitControls makeDefault target={[0, 0, 0]} enablePan={false} minDistance={framing.size * 0.4} maxDistance={framing.size * 7} />
-        <SpecimenContent phenotype={phenotype} framing={framing} skinMode={skinMode} overlays={overlays} />
+        <SpecimenContent phenotype={phenotype} framing={framing} skinMode={skinMode} overlays={overlays} motion={motion} />
       </View>
     </div>
   );
@@ -377,16 +425,16 @@ function Inspector({ genome, phenotype, framing }: { genome: Genome; phenotype: 
   );
 }
 
-function Bench({ genome, skinMode, overlays }: { genome: Genome; skinMode: SkinMode; overlays: Overlays }) {
+function Bench({ genome, skinMode, overlays, motion }: { genome: Genome; skinMode: SkinMode; overlays: Overlays; motion: Motion }) {
   const phenotype = useMemo(() => grow(genome), [genome]);
   const framing = useMemo(() => framingOf(phenotype), [phenotype]);
   return (
     <div className="bench">
       <div className="bench-views">
-        <MainView phenotype={phenotype} framing={framing} skinMode={skinMode} overlays={overlays} />
+        <MainView phenotype={phenotype} framing={framing} skinMode={skinMode} overlays={overlays} motion={motion} />
         <div className="plates">
           {PLATES.map((pl) => (
-            <Plate key={pl.kind} kind={pl.kind} label={pl.label} phenotype={phenotype} framing={framing} skinMode={skinMode} overlays={overlays} />
+            <Plate key={pl.kind} kind={pl.kind} label={pl.label} phenotype={phenotype} framing={framing} skinMode={skinMode} overlays={overlays} motion={motion} />
           ))}
         </div>
       </div>
@@ -482,6 +530,10 @@ export function Studio({
     grid: true,
   }));
   const [bestiarySeed, setBestiarySeed] = useState(1);
+  const [motion, setMotion] = useState<Motion>(() => {
+    const m = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('motion') : null;
+    return m === 'walk' || m === 'run' || m === 'eat' || m === 'sleep' ? m : 'still';
+  });
   return (
     <div className="studio" ref={container}>
       <header className="studio-bar">
@@ -493,6 +545,15 @@ export function Studio({
         <div className="studio-tools">
           <label><input type="checkbox" checked={overlays.skeleton} onChange={(e) => setOverlays((o) => ({ ...o, skeleton: e.target.checked }))} /> skeleton</label>
           <label><input type="checkbox" checked={overlays.grid} onChange={(e) => setOverlays((o) => ({ ...o, grid: e.target.checked }))} /> grid</label>
+          {tab === 'bench' && (
+            <select className="motion-pick" value={motion} onChange={(e) => setMotion(e.target.value as Motion)} title="preview the creature's gait and poses (smooth skins)">
+              <option value="still">still</option>
+              <option value="walk">walk</option>
+              <option value="run">run</option>
+              <option value="eat">eat</option>
+              <option value="sleep">sleep</option>
+            </select>
+          )}
           <span className="sep" />
           {(['capsules', 'smooth', 'hybrid'] as const).map((m) => (
             <button key={m} className={skinMode === m ? 'active' : ''} onClick={() => onSkinMode(m)}>{m}</button>
@@ -503,7 +564,7 @@ export function Studio({
         </div>
       </header>
       {tab === 'bench' ? (
-        <Bench genome={genome} skinMode={skinMode} overlays={overlays} />
+        <Bench genome={genome} skinMode={skinMode} overlays={overlays} motion={motion} />
       ) : (
         <Bestiary seed={bestiarySeed} skinMode={skinMode} overlays={overlays} onAdopt={(g) => { onAdopt(g); setTab('bench'); }} />
       )}

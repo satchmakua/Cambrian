@@ -16,6 +16,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
 import { CreatureMesh, prebuildSkin } from '../viewer/CreatureMesh';
+import { createRig, poseRig } from '../viewer/rig';
 import { bodyOf, growthOf, type Corpse, type Creature, type World } from '../sim/world';
 import { heightAt, WATER_LEVEL } from '../sim/terrain';
 
@@ -89,33 +90,53 @@ function angleLerp(a: number, b: number, t: number): number {
 
 export function Actor({ c, world, onPick, selected }: { c: Creature; world: World; onPick: (id: number) => void; selected: boolean }) {
   const { phenotype, traits } = bodyOf(c.genome);
-  const rig = rigOf(phenotype);
+  const place = rigOf(phenotype);
   const mode = useSkinMode(phenotype);
   const ref = useRef<THREE.Group>(null);
   const body = useRef<THREE.Group>(null);
   const ring = useRef<THREE.Mesh>(null);
-  const pose = useRef({ x: c.x, z: c.z, h: c.heading, sleep: 0, bob: Math.random() * 10 });
+  const pose = useRef({ x: c.x, z: c.z, h: c.heading, sleep: 0, eat: 0, bob: Math.random() * 10, turn: 0 });
   const swimmer = traits.habitat === 'water' || traits.locomotion === 'swim' || traits.locomotion === 'drift';
+  // each actor animates its own skeleton (bones can't be shared between skinned meshes)
+  const rig = useMemo(() => createRig(phenotype), [phenotype]);
 
   useFrame((_, dt) => {
     const g = ref.current;
     if (!g) return;
     const k = Math.min(1, dt * 10);
     const P = pose.current;
+    const px = P.x, pz = P.z, ph = P.h;
     P.x += (c.x - P.x) * k;
     P.z += (c.z - P.z) * k;
     P.h = angleLerp(P.h, c.heading, Math.min(1, dt * 6));
     P.sleep += ((c.action === 'sleep' ? 1 : 0) - P.sleep) * Math.min(1, dt * 2);
+    const feeding = c.action === 'graze' || c.action === 'eat' || c.action === 'forage' || c.action === 'filter';
+    P.eat += ((feeding && c.speed < 0.6 ? 1 : 0) - P.eat) * Math.min(1, dt * 3);
     const s = growthOf(c);
+    // drive the gait from the speed the body actually shows on screen (in its own body units)
+    if (dt > 0) {
+      const vis = Math.hypot(P.x - px, P.z - pz) / dt;
+      const turn = Math.atan2(Math.sin(P.h - ph), Math.cos(P.h - ph)) / dt;
+      P.turn += (turn - P.turn) * Math.min(1, dt * 4);
+      poseRig(rig, {
+        dt,
+        speed: vis / s,
+        cruise: traits.speed / s,
+        sleep: P.sleep,
+        eat: P.eat,
+        swim: swimmer,
+        turn: P.turn,
+      });
+    }
     const ground = heightAt(world.terrain, P.x, P.z);
-    let y = ground + rig.lift * s;
+    let y = ground + place.lift * s;
     if (swimmer && ground < WATER_LEVEL) {
       // ride just under the surface (never below the lakebed)
-      y = Math.max(ground + rig.lift * s, WATER_LEVEL - rig.height * s * 0.55);
+      y = Math.max(ground + place.lift * s, WATER_LEVEL - place.height * s * 0.55);
       P.bob += dt * (1 + c.speed);
       y += Math.sin(P.bob) * 0.06 * s;
     }
-    y -= P.sleep * rig.height * s * 0.28; // settle low to sleep
+    y -= P.sleep * place.height * s * 0.28; // settle low to sleep
     g.position.set(P.x, y, P.z);
     g.rotation.set(0, P.h, 0);
     g.scale.setScalar(s);
@@ -135,8 +156,8 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
       }}
     >
       <group ref={body}>
-        <group position={[-rig.center[0], 0, -rig.center[2]]}>
-          <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" />
+        <group position={[-place.center[0], 0, -place.center[2]]}>
+          <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" rig={rig} />
         </group>
       </group>
       <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} visible={false}>
