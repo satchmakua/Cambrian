@@ -496,12 +496,33 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   **Test:** `tests/viewer/feet.test.ts`, `jawed.test.ts › seam`, `random.test.ts › marking
   colours`, `rng.test.ts › unitHash`.
 
+- [x] **M46 — Courtship & young.** A pair circle each other for a display (head high and bobbing,
+  tail raised, a bird's wings half-open and shivering) before they mate; an idle partner joins the
+  dance. A juvenile bolts with its fleeing parent, even from sleep. Dev: `?follow=courting`.
+  **Test:** `world.test.ts › courtship & young`.
+
+- [x] **M47 — Weather.** Half-day spells, wet or dry by a hash of (seed, spell) with seasonal odds;
+  a wet spell clouds over, rains (snows, in the cold) and clears. GPU rain streaks and snowflakes
+  ride the camera; the sun dims, the sky greys, the fog closes in, soaked ground darkens and shines;
+  a rain hiss joins the soundscape; showers bring the grass on. A pure function of seed and time.
+  Dev: `?wx=rain|snow`. **Test:** `tests/sim/weather.test.ts`.
+
+- [x] **M48 — Fast-forward.** Skip a day, a season or a year: the world runs in a Web Worker (shipped
+  over as a save, folded back with `adoptWorld`), then a chronicle says what happened — births,
+  deaths by cause, species that arose and died out. **Test:** `tests/sim/fastForward.test.ts`
+  (worker round-trip ≡ running in place, bit for bit).
+
+- [x] **M49 — A balance that lasts.** Guild caps (water / hunters / grazers), stalk-and-pounce
+  hunting (prey notice a crouching stalker late; a failed dash is given up), cover (small prey dive
+  into bushes), recolonisation (a lost founding stock may wander back in), lineages that keep their
+  heads under segment mutations. Over 4 seeds × 2 years every kind survives in most runs (before:
+  three species left). **Test:** `world.test.ts › a living balance`, `mutate.test.ts › head`.
+
 ### Next up (unchecked — pick from here)
 
-- [ ] **Courtship & young.** Circling displays before mating; newborns that follow a parent through
-  a flight or a flee, not just a stroll.
-- [ ] **Richer world.** Drought years, a second lake / river, weather (rain, falling snow).
-- [ ] **Run the World headless at ×1000** to show long-term evolution (lineage trees of wild species).
+- [ ] **Richer world.** Drought years, a second lake / river, burrows and nests.
+- [ ] **Evolution you can read.** Compare an evolved species with its founder side by side; a
+  lineage view of a wild species' body changes over the generations.
 
 ---
 

@@ -45,6 +45,25 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ---
 
+## Part 3e — Courtship, weather, fast-forward, a lasting balance (M46–M49) · 2026-10-08
+
+- **Why the ecology work.** With fast-forward, a three-year run of the default valley ended with three
+  species: fish and insects drifted out with their food at 100% (a global soft cap let a species with
+  ≥10 members breed only while the world was under 135 — the grazers kept it over), every hunter
+  starved mid-chase as a young adult (ungulates outran canids; hunters sprinted the whole chase), and
+  rodents lost to generalists. Diagnosed by instrumenting deaths by cause and per-kind populations
+  each season (scratch tests, not committed). Fixes in M49; the regression test is a one-year
+  diversity check.
+- **Overshoot on the way.** Stalking alone let predators wipe out rodents and insects (canids → 58):
+  notice distances were raised (0.32 → 0.42 for a stalker) and the pounce shortened (6 → 4.5 s).
+  "Canids" with a maw-style mouth were omnivores competing with every grazer — they now get fanged
+  mouths; mutations across the fanged/maw boundary still make omnivores (emergent, kept).
+- **Weather** is a function, not state: nothing to save, identical on replay. The rain was first
+  invisible (0.16 mean alpha, light grey on a light scene); snow was white on white — both re-tuned.
+- **The worker** reuses persistence: `saveWorld` → worker `loadWorld` + `runFor` → `saveWorld` →
+  `adoptWorld` into the live object (keeps the landscape). `bodyOf` caches by content too, so the
+  adopted world's fresh genome objects find their built skins.
+
 ## Part 3d — Saved worlds and anatomy pass III (M44–M45) · 2026-10-08
 
 - **Saved worlds.** The world RNG is now `mulberry32State` (its 32-bit state readable), so a save
