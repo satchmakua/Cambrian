@@ -16,7 +16,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { FlightContext } from './flight';
 import { blinkAt, LidContext } from './eyelids';
 import type { Phenotype } from '../engine/grow';
-import { mix32 } from '../engine/rng';
+import { unitHash } from '../engine/rng';
 import { buildMeshData, type MeshFeature } from './meshData';
 import { eyeVariant, earVariant } from './partStyles';
 import { Mouth } from './mouths';
@@ -55,13 +55,13 @@ const IRIS_PALETTE: [number, number, number, number][] = [
 function irisFor(seed: number): number {
   const total = IRIS_PALETTE.reduce((t, e) => t + e[0], 0);
   // two independent hashes: one picks the swatch, one jitters hue/sat a touch for within-type variety
-  let r = (mix32(seed, 0x1e5) / 0xffffffff) * total;
+  let r = unitHash(seed, 0x1e5) * total;
   let e = IRIS_PALETTE[0];
   for (const c of IRIS_PALETTE) {
     r -= c[0];
     if (r <= 0) { e = c; break; }
   }
-  const j = (mix32(seed, 0x2e5) / 0xffffffff - 0.5) * 0.05;
+  const j = (unitHash(seed, 0x2e5) - 0.5) * 0.05;
   return new THREE.Color().setHSL((e[1] + j + 1) % 1, e[2], e[3]).getHex();
 }
 
@@ -530,7 +530,7 @@ function Feature({
 }) {
   switch (f.type) {
     case 'eye':
-      return <Eye f={f} socket={footColor} iris={irisColor} lid={finColor} seed={phenotype.genomeRef.seed} />;
+      return <Eye f={f} socket={footColor} iris={irisColor} lid={finColor} seed={phenotype.genomeRef.seed} skin={skin} phenotype={phenotype} />;
     case 'mouth':
       return (
         <Mouth f={f} dark={footColor} skin={skin} phenotype={phenotype} carves={carves} recessed={recessed} surface={surface} />
@@ -584,15 +584,66 @@ function Feature({
 const UPPER_LID = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2);
 const LOWER_LID = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
 
-function Eye({ f, socket, iris, lid, seed }: { f: MeshFeature; socket: number; iris: number; lid: number; seed: number }) {
+const LID_OPEN = { upper: -0.62, lower: 0.72 } as const;
+
+/** One eye's lids in the body's own covering: the shared hemispheres scaled to the eye, with the
+ *  covering shader's body-space coordinates baked at the open pose (so the coat runs onto the lids
+ *  and the eye sits in the face rather than in a coloured cup). Blinks rotate the meshes. */
+function lidGeometry(base: THREE.BufferGeometry, scale: number, openX: number, sink: number, quat: readonly number[], origin: readonly number[]): THREE.BufferGeometry {
+  const g = base.clone();
+  g.scale(scale, scale, scale);
+  const m = new THREE.Matrix4().compose(
+    new THREE.Vector3(origin[0], origin[1], origin[2]),
+    new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3]),
+    new THREE.Vector3(1, 1, 1),
+  )
+    .multiply(new THREE.Matrix4().makeTranslation(0, 0, -sink))
+    .multiply(new THREE.Matrix4().makeRotationX(openX));
+  const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  const body = new Float32Array(pos.count * 3);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).applyMatrix4(m);
+    body[i * 3] = v.x;
+    body[i * 3 + 1] = v.y;
+    body[i * 3 + 2] = v.z;
+  }
+  g.setAttribute('aBodyPos', new THREE.BufferAttribute(body, 3));
+  g.setAttribute('aFlesh', new THREE.BufferAttribute(new Float32Array(pos.count), 1));
+  g.setAttribute('aAO', new THREE.BufferAttribute(new Float32Array(pos.count).fill(0.8), 1));
+  return g;
+}
+
+function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; socket: number; iris: number; lid: number; seed: number; skin?: THREE.Material; phenotype?: Phenotype }) {
   const r = Math.max(f.radius, 0.06);
   const v = eyeVariant(f.style);
+  // A vertebrate eye on the face (not up a stalk) sits IN the skull: the grown eye node rides proud of
+  // the surface (so it always clears it), which drew the whole eyeball bulging out like a marble.
+  // Sink it along its aim, so the lids and the head swallow its back half.
+  const onFace = useMemo(() => {
+    if (!phenotype) return false;
+    const e = phenotype.edges.find(([, b]) => b === f.idx);
+    return !!e && phenotype.nodes[e[0]].kind === 'spine';
+  }, [phenotype, f.idx]);
   // a dark bony orbit tone
   const socketDark = useMemo(() => new THREE.Color(socket).multiplyScalar(0.5).getHex(), [socket]);
   // vertebrate eyes have lids that blink — and shut in sleep; an insect's facets and a glowing alien
   // eye stare
   const lidded = v === 'round' || v === 'beady' || v === 'slit';
+  const sink = lidded && onFace ? r * 0.5 : 0;
   const lidColor = useMemo(() => new THREE.Color(lid).multiplyScalar(0.82).getHex(), [lid]);
+  const origin = phenotype?.nodes[f.idx].pos;
+  const lidGeo = useMemo(() => {
+    if (!lidded || !skin || !origin) return null;
+    return {
+      upper: lidGeometry(UPPER_LID, r * 0.97, LID_OPEN.upper, sink, f.quat, origin),
+      lower: lidGeometry(LOWER_LID, r * 0.96, LID_OPEN.lower, sink, f.quat, origin),
+    };
+  }, [lidded, skin, origin, r, sink, f.quat]);
+  useEffect(() => () => {
+    lidGeo?.upper.dispose();
+    lidGeo?.lower.dispose();
+  }, [lidGeo]);
   const lids = useContext(LidContext);
   const upper = useRef<THREE.Mesh>(null);
   const lower = useRef<THREE.Mesh>(null);
@@ -602,21 +653,28 @@ function Eye({ f, socket, iris, lid, seed }: { f: MeshFeature; socket: number; i
     const close = Math.max(lids ? lids.shut : 0, blinkAt(st.clock.elapsedTime, phase));
     // open: the upper margin rides ~35° above the eye's equator, the lower ~42° below; shut: they meet
     // a little below centre
-    upper.current.rotation.x = -0.62 + close * 0.78;
-    lower.current.rotation.x = 0.72 - close * 0.62;
+    upper.current.rotation.x = LID_OPEN.upper + close * 0.78;
+    lower.current.rotation.x = LID_OPEN.lower - close * 0.62;
   });
   return (
     <group quaternion={f.quat}>
-      {lidded && (
+      <group position={[0, 0, -sink]}>
+      {lidded && lidGeo && skin ? (
         <>
-          <mesh ref={upper} geometry={UPPER_LID} scale={r * 0.97} rotation-x={-0.62}>
+          {/* (geometry pre-scaled; the open rotation is baked into aBodyPos only — the mesh rotates) */}
+          <mesh ref={upper} geometry={lidGeo.upper} material={skin} rotation-x={LID_OPEN.upper} />
+          <mesh ref={lower} geometry={lidGeo.lower} material={skin} rotation-x={LID_OPEN.lower} />
+        </>
+      ) : lidded ? (
+        <>
+          <mesh ref={upper} geometry={UPPER_LID} scale={r * 0.97} rotation-x={LID_OPEN.upper}>
             <meshStandardMaterial color={lidColor} roughness={0.72} side={THREE.DoubleSide} />
           </mesh>
-          <mesh ref={lower} geometry={LOWER_LID} scale={r * 0.96} rotation-x={0.72}>
+          <mesh ref={lower} geometry={LOWER_LID} scale={r * 0.96} rotation-x={LID_OPEN.lower}>
             <meshStandardMaterial color={lidColor} roughness={0.72} side={THREE.DoubleSide} />
           </mesh>
         </>
-      )}
+      ) : null}
       {/* The brow ridge and lower lid used to live here as open hemispherical shells. Whatever
           their orientation, the shell's RIM cut a hard crescent across the sclera — an eyelid has
           to lie flat on a curved eye and a capped sphere never does. Removed; the orbit ring below
@@ -626,10 +684,13 @@ function Eye({ f, socket, iris, lid, seed }: { f: MeshFeature; socket: number; i
           The ring must CLEAR the eyeball: its inner edge is (major − tube), which has to stay wider
           than the 0.9r ball or the torus drives straight through the sclera as a hard ridge. It also
           sits back along −Z so it rings the eye's equator like an orbit rather than a hoop in front. */}
-      <mesh position={[0, 0, -r * 0.18]}>
-        <torusGeometry args={[r * 1.2, r * 0.26, 12, 28]} />
-        <meshStandardMaterial color={socketDark} roughness={0.85} metalness={0.0} />
-      </mesh>
+      {/* (a lidded eye needs no ring: its coat-covered lids set it into the face) */}
+      {!lidded && (
+        <mesh position={[0, 0, -r * 0.18]}>
+          <torusGeometry args={[r * 1.2, r * 0.26, 12, 28]} />
+          <meshStandardMaterial color={socketDark} roughness={0.85} metalness={0.0} />
+        </mesh>
+      )}
       {v === 'round' || v === 'beady' ? (
         // a wet animal eye set deep under a heavy brow — dark, glassy, watching. No cream sclera,
         // no fat white sticker; the low-roughness ball catches the environment like real moisture.
@@ -691,6 +752,7 @@ function Eye({ f, socket, iris, lid, seed }: { f: MeshFeature; socket: number; i
           </mesh>
         </>
       )}
+      </group>
     </group>
   );
 }

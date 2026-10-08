@@ -12,11 +12,11 @@
  *
  * The same module derives the `Carve` ops (`mouthCarves`) that subtract the actual cavity from the
  * smooth-skin field, so the curve, the carve, and the teeth all agree on one geometry. Everything
- * is deterministic from the phenotype (seeded via the engine's mix32 — no Math.random).
+ * is deterministic from the phenotype (seeded via the engine's unitHash — no Math.random).
  */
 import type { Phenotype, BodyNode } from '../engine/grow';
 import type { Vec3 } from '../engine/genome';
-import { mix32 } from '../engine/rng';
+import { unitHash } from '../engine/rng';
 import {
   buildFieldPrims,
   carveDist,
@@ -108,7 +108,7 @@ function surfacePrims(p: Phenotype, surface: SkinSurface): FieldPrims {
 
 /** Deterministic per-creature 0..1 from the genome seed + a salt (the viewer-side jig, but seeded). */
 export function hash01(seed: number, salt: number): number {
-  return mix32(seed ^ (salt * 0x9e3779b9)) / 0xffffffff;
+  return unitHash(seed, salt);
 }
 
 /** Locate the body node a mouth seats on: walk parents until a node that is part of the skin field. */

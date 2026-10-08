@@ -15,7 +15,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../engine/rng';
 import { heightAt, biomeAt, moistureAt, normalAt, WATER_LEVEL, type Terrain } from '../sim/terrain';
-import { seasonal, type World } from '../sim/world';
+import type { World } from '../sim/world';
+import { yearLook } from './seasonLook';
 
 const RES = 200; // terrain grid quads per side
 
@@ -87,11 +88,9 @@ export const SEASON_LOOK = {
 };
 
 export function updateSeasonLook(time: number): void {
-  const r = seasonal(time, [0.94, 1.06, 1.16, 0.86]);
-  const g = seasonal(time, [1.08, 1.0, 0.9, 0.86]);
-  const b = seasonal(time, [0.86, 0.78, 0.66, 0.9]);
-  SEASON_LOOK.tint.value.setRGB(r, g, b);
-  SEASON_LOOK.snow.value = Math.max(0, seasonal(time, [0, 0, 0.05, 0.92]) - 0.05);
+  const look = yearLook(time);
+  SEASON_LOOK.tint.value.setRGB(...look.tint);
+  SEASON_LOOK.snow.value = look.snow;
 }
 
 function groundMaterial(): THREE.MeshStandardMaterial {
@@ -488,9 +487,7 @@ export function Decor({ terrain, world }: { terrain: Terrain; world?: World }) {
     const key = Math.round(world.time / 6); // re-tint every few seconds of sim time
     if (key === seasonKey.current) return;
     seasonKey.current = key;
-    const turn = Math.max(0, seasonal(world.time, [0, 0.15, 1, 0.35]));
-    const bare = Math.max(0, seasonal(world.time, [0.05, 0, 0.15, 1]));
-    const snow = SEASON_LOOK.snow.value;
+    const { turn, bare, snow } = yearLook(world.time);
     const o = new THREE.Object3D();
     const c = new THREE.Color();
     const crown = crownRef.current;

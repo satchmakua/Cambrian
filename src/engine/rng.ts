@@ -48,6 +48,20 @@ export function mix32(...xs: number[]): number {
   return h >>> 0;
 }
 
+/** A well-mixed hash of 32-bit words as a uniform float in [0, 1). `mix32` alone is a bare FNV-1a
+ *  over whole words — fine as a SEED (mulberry32 scrambles it), but its high bits barely move for
+ *  small consecutive inputs, so read directly as a fraction it bunches (every creature's eyes came
+ *  out of the same few swatches). The murmur3 finaliser avalanches it first. */
+export function unitHash(...xs: number[]): number {
+  let h = mix32(...xs);
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
 /** Uniform float in [min, max) from an Rng. */
 export function range(rng: Rng, min: number, max: number): number {
   return min + (max - min) * rng();
