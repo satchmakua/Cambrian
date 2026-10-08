@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../engine/rng';
 import { heightAt, biomeAt, moistureAt, normalAt, WATER_LEVEL, type Terrain } from '../sim/terrain';
 import type { World } from '../sim/world';
@@ -211,28 +212,71 @@ export function Bushes({ world }: { world: World }) {
 
 // --- decor: trees + rocks -------------------------------------------------------------------------
 
+/** A broadleaf crown: three overlapping lobes (one round blob read as a lollipop). */
+function broadleafCrown(): THREE.BufferGeometry {
+  const lobes: [number, number, number, number][] = [
+    [0, 0.1, 0, 1],
+    [0.62, -0.22, 0.2, 0.74],
+    [-0.5, -0.18, -0.36, 0.7],
+    [0.05, -0.3, 0.6, 0.62],
+  ];
+  const parts = lobes.map(([x, y, z, r]) => {
+    const g = new THREE.IcosahedronGeometry(r, 1);
+    g.translate(x, y, z);
+    return g.toNonIndexed();
+  });
+  const g = mergeGeometries(parts, false) ?? parts[0];
+  g.computeVertexNormals();
+  return g;
+}
+
+/** A conifer: three stacked cones tapering to a spire. */
+function coniferCrown(): THREE.BufferGeometry {
+  const tiers: [number, number, number][] = [
+    [1.0, 1.5, 0.0],
+    [0.78, 1.3, 0.85],
+    [0.52, 1.1, 1.6],
+  ];
+  const parts = tiers.map(([r, h, y]) => {
+    const g = new THREE.ConeGeometry(r, h, 8, 1);
+    g.translate(0, y + h / 2, 0);
+    return g.toNonIndexed();
+  });
+  const g = mergeGeometries(parts, false) ?? parts[0];
+  g.computeVertexNormals();
+  return g;
+}
+
 export function Decor({ terrain }: { terrain: Terrain }) {
-  const { trees, rocks } = useMemo(() => {
+  const { trees, pines, rocks } = useMemo(() => {
     const rng = mulberry32(terrain.seed ^ 0x7ee5);
     const trees: { x: number; y: number; z: number; s: number; r: number }[] = [];
+    const pines: { x: number; y: number; z: number; s: number; r: number }[] = [];
     const rocks: { x: number; y: number; z: number; s: number; r: number }[] = [];
-    for (let i = 0; i < 9000 && (trees.length < 260 || rocks.length < 160); i++) {
+    for (let i = 0; i < 9000 && (trees.length + pines.length < 300 || rocks.length < 160); i++) {
       const x = (rng() - 0.5) * terrain.size * 0.97;
       const z = (rng() - 0.5) * terrain.size * 0.97;
       const b = biomeAt(terrain, x, z);
       const y = heightAt(terrain, x, z);
-      if (b === 'wood' && trees.length < 260 && rng() < 0.6) trees.push({ x, y, z, s: 0.8 + rng() * 0.9, r: rng() * 6.28 });
-      else if (b === 'meadow' && trees.length < 260 && rng() < 0.03) trees.push({ x, y, z, s: 0.7 + rng() * 0.6, r: rng() * 6.28 });
+      const full = trees.length + pines.length >= 300;
+      // conifers climb the high woods and the edge of the rock; broadleaves keep the low woods
+      const pine = y > 4.2 || rng() < 0.18;
+      if (b === 'wood' && !full && rng() < 0.6) (pine ? pines : trees).push({ x, y, z, s: 0.8 + rng() * 0.9, r: rng() * 6.28 });
+      else if (b === 'meadow' && !full && rng() < 0.03) trees.push({ x, y, z, s: 0.7 + rng() * 0.6, r: rng() * 6.28 });
+      else if (b === 'rock' && !full && y < 9.5 && rng() < 0.12) pines.push({ x, y, z, s: 0.6 + rng() * 0.5, r: rng() * 6.28 });
       else if ((b === 'rock' || b === 'sand') && rocks.length < 160 && rng() < 0.4) rocks.push({ x, y, z, s: 0.3 + rng() * 1.1, r: rng() * 6.28 });
     }
-    return { trees, rocks };
+    return { trees, pines, rocks };
   }, [terrain]);
   const trunkRef = useRef<THREE.InstancedMesh>(null);
   const crownRef = useRef<THREE.InstancedMesh>(null);
+  const pineTrunkRef = useRef<THREE.InstancedMesh>(null);
+  const pineRef = useRef<THREE.InstancedMesh>(null);
   const rockRef = useRef<THREE.InstancedMesh>(null);
   const geos = useMemo(() => ({
     trunk: new THREE.CylinderGeometry(0.22, 0.34, 1, 6),
-    crown: new THREE.IcosahedronGeometry(1, 1),
+    crown: broadleafCrown(),
+    pine: coniferCrown(),
     rock: new THREE.DodecahedronGeometry(1, 0),
   }), []);
   useEffect(() => () => Object.values(geos).forEach((g) => g.dispose()), [geos]);
@@ -246,11 +290,26 @@ export function Decor({ terrain }: { terrain: Terrain }) {
       o.scale.set(t.s, H, t.s);
       o.updateMatrix();
       trunkRef.current?.setMatrixAt(i, o.matrix);
-      o.position.set(t.x, t.y + H + 1.1 * t.s, t.z);
-      o.scale.set(2.0 * t.s, 2.3 * t.s, 2.0 * t.s);
+      o.position.set(t.x, t.y + H + 0.9 * t.s, t.z);
+      o.scale.set(1.9 * t.s, 1.75 * t.s, 1.9 * t.s);
       o.updateMatrix();
       crownRef.current?.setMatrixAt(i, o.matrix);
-      crownRef.current?.setColorAt(i, c.setHSL(0.25 + (i % 7) * 0.012, 0.42, 0.18 + (i % 5) * 0.015));
+      // a spread of greens, a few going gold
+      const gold = (i * 7) % 23 === 0;
+      crownRef.current?.setColorAt(i, gold ? c.setHSL(0.13, 0.55, 0.3) : c.setHSL(0.24 + (i % 7) * 0.014, 0.45, 0.17 + (i % 5) * 0.018));
+    });
+    pines.forEach((t, i) => {
+      const H = 1.4 * t.s;
+      o.position.set(t.x, t.y + H / 2, t.z);
+      o.rotation.set(0, t.r, 0);
+      o.scale.set(t.s * 0.8, H, t.s * 0.8);
+      o.updateMatrix();
+      pineTrunkRef.current?.setMatrixAt(i, o.matrix);
+      o.position.set(t.x, t.y + H * 0.7, t.z);
+      o.scale.set(1.3 * t.s, 1.6 * t.s, 1.3 * t.s);
+      o.updateMatrix();
+      pineRef.current?.setMatrixAt(i, o.matrix);
+      pineRef.current?.setColorAt(i, c.setHSL(0.36 + (i % 5) * 0.01, 0.38, 0.13 + (i % 4) * 0.015));
     });
     rocks.forEach((r, i) => {
       o.position.set(r.x, r.y + r.s * 0.25, r.z);
@@ -259,9 +318,9 @@ export function Decor({ terrain }: { terrain: Terrain }) {
       o.updateMatrix();
       rockRef.current?.setMatrixAt(i, o.matrix);
     });
-    for (const m of [trunkRef.current, crownRef.current, rockRef.current]) if (m) m.instanceMatrix.needsUpdate = true;
-    if (crownRef.current?.instanceColor) crownRef.current.instanceColor.needsUpdate = true;
-  }, [trees, rocks]);
+    for (const m of [trunkRef.current, crownRef.current, pineTrunkRef.current, pineRef.current, rockRef.current]) if (m) m.instanceMatrix.needsUpdate = true;
+    for (const m of [crownRef.current, pineRef.current]) if (m?.instanceColor) m.instanceColor.needsUpdate = true;
+  }, [trees, pines, rocks]);
   return (
     <>
       <instancedMesh ref={trunkRef} args={[geos.trunk, undefined, trees.length]} castShadow>
@@ -269,6 +328,12 @@ export function Decor({ terrain }: { terrain: Terrain }) {
       </instancedMesh>
       <instancedMesh ref={crownRef} args={[geos.crown, undefined, trees.length]} castShadow receiveShadow>
         <meshStandardMaterial roughness={0.85} flatShading />
+      </instancedMesh>
+      <instancedMesh ref={pineTrunkRef} args={[geos.trunk, undefined, pines.length]} castShadow>
+        <meshStandardMaterial color={0x3e2c20} roughness={0.9} />
+      </instancedMesh>
+      <instancedMesh ref={pineRef} args={[geos.pine, undefined, pines.length]} castShadow receiveShadow>
+        <meshStandardMaterial roughness={0.88} flatShading />
       </instancedMesh>
       <instancedMesh ref={rockRef} args={[geos.rock, undefined, rocks.length]} castShadow receiveShadow>
         <meshStandardMaterial color={0x6f6a62} roughness={0.92} flatShading />

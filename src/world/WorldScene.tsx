@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { stepWorld, STEP, dayPhase, type World } from '../sim/world';
 import { heightAt } from '../sim/terrain';
 import { TerrainMesh, Water, Bushes, Decor } from './Landscape';
+import { Grass } from './Flora';
 import { Actor, Carcass, useSkinScheduler } from './Actors';
 import { getWorld, useWorldUi, worldVersion, bumpVersion } from './worldStore';
 import { StudioEnvironment } from '../viewer/StudioEnvironment';
@@ -208,6 +209,7 @@ export function WorldScene() {
       <Water terrain={world.terrain} />
       <Bushes key={`b${world.seed}`} world={world} />
       <Decor key={`d${world.seed}`} terrain={world.terrain} />
+      <Grass key={`g${world.seed}`} world={world} />
       <Cast world={world} />
       <OrbitControls
         makeDefault
