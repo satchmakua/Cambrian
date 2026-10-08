@@ -8,10 +8,11 @@
  *               take it home to the breeder
  *   bottom      the field journal: births, kills, starvation, speciation, extinction as they happen
  */
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { Genome } from '../engine/genome';
 import { WorldScene } from './WorldScene';
+import { TreeOfLife } from './TreeOfLife';
 import { useWorldUi, getWorld, populate, strangerGenome, bumpVersion, type Snapshot } from './worldStore';
 import { stepWorld, type HistorySample } from '../sim/world';
 
@@ -88,6 +89,8 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
   const follow = useWorldUi((s) => s.follow);
   const snap = useWorldUi((s) => s.snapshot);
   const emotes = useWorldUi((s) => s.emotes);
+  // (dev: ?tree=1 opens it, for inspection screenshots)
+  const [showTree, setShowTree] = useState(() => import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('tree') === '1');
   const { setRunning, setSpeed, setFollow, setEmotes, select, reset, releaseGenome, refresh } = useWorldUi.getState();
 
   // first visit: populate the starter ecosystem (+ the breeder's creature)
@@ -158,6 +161,7 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
         <aside className="census">
           <h3>
             Census <span>{snap.pop} alive</span>
+            <button className={`tol-toggle${showTree ? ' active' : ''}`} onClick={() => setShowTree(!showTree)} title="every species the world has known, as a branching tree through time">tree of life</button>
           </h3>
           <PopulationChart history={snap.history} species={snap.species} />
           <ul>
@@ -208,6 +212,21 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
             <button onClick={() => onAdopt(sel.genome)} title="make this creature the parent in the breeder">take home</button>
           </div>
         </aside>
+      )}
+
+      {snap && showTree && (
+        <TreeOfLife
+          tree={snap.tree}
+          now={snap.time}
+          onClose={() => setShowTree(false)}
+          onPick={(id) => {
+            const c = getWorld().creatures.find((x) => x.species === id && x.alive);
+            if (c) {
+              select(c.id);
+              setFollow(true);
+            }
+          }}
+        />
       )}
 
       {snap && (

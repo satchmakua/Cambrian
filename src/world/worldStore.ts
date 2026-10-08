@@ -61,7 +61,19 @@ export interface CreatureCard {
   flying: boolean; // on the wing right now
 }
 
+/** One species as a branch of the tree of life (every species ever, extinct ones included). */
+export interface TreeNode {
+  id: number;
+  name: string;
+  hue: number;
+  parent: number | null;
+  born: number; // sim time it was founded
+  extinctAt: number | null;
+  alive: number;
+}
+
 export interface Snapshot {
+  tree: TreeNode[];
   time: number;
   day: number;
   phase: number;
@@ -153,6 +165,7 @@ export function snapshotOf(w: World, selected: number | null): Snapshot {
     }
   }
   return {
+    tree: w.species.map((sp) => ({ id: sp.id, name: sp.name, hue: sp.hue, parent: sp.parent, born: sp.firstSeen, extinctAt: sp.extinctAt, alive: sp.alive })),
     time: w.time,
     day: dayNumber(w.time),
     phase: dayPhase(w.time),
