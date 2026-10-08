@@ -121,6 +121,7 @@ export function CreatureMesh({
   rig = null,
   detail = 'full',
   carved = true,
+  fur = false,
 }: {
   phenotype: Phenotype;
   skinMode?: SkinMode;
@@ -135,6 +136,8 @@ export function CreatureMesh({
   /** carve the mouth cavity into the smooth skin (the rest pose). An articulated jaw (World) wants
    *  intact skin: the static cavity would show beneath a mouth that closes. */
   carved?: boolean;
+  /** shell fur over a furred coat (close-up views: a dozen extra passes of the body) */
+  fur?: boolean;
 }) {
   const data = useMemo(() => buildMeshData(phenotype), [phenotype]);
   const pal = phenotype.genomeRef.palette;
@@ -143,6 +146,16 @@ export function CreatureMesh({
 
   const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed, bareLegsOf(phenotype)), [pal, cov, seed, phenotype]);
   useEffect(() => () => bodyMat.dispose(), [bodyMat]);
+  // shell fur: FUR_SHELLS layers of the body out to a pile scaled to the creature
+  const furMats = useMemo(() => {
+    if (!fur || cov.type !== 'fur' || skinMode === 'capsules') return [];
+    const { min, max } = phenotype.bounds;
+    const size = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
+    const len = Math.min(0.08, Math.max(0.022, size * 0.0095));
+    const bare = bareLegsOf(phenotype);
+    return Array.from({ length: FUR_SHELLS }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / FUR_SHELLS, len, density: 3.2 / len }));
+  }, [fur, cov, skinMode, phenotype, pal, seed]);
+  useEffect(() => () => furMats.forEach((m) => m.dispose()), [furMats]);
 
   // physics playback (post-roadmap): when a recorded gait is present, capsules re-pose from it
   // each frame — so the body must be the capsule kit (the smooth mesh is static), and it animates.
@@ -369,8 +382,15 @@ export function CreatureMesh({
     sm.receiveShadow = true;
     sm.add(rig.root);
     sm.bind(rig.skeleton, new THREE.Matrix4());
+    // fur shells ride the same skeleton (children with an identity transform, so 'attached' binding
+    // sees the same world matrix)
+    for (const m of furMats) {
+      const sh = new THREE.SkinnedMesh(smoothGeo, m);
+      sh.bind(rig.skeleton, new THREE.Matrix4());
+      sm.add(sh);
+    }
     return sm;
-  }, [rigged, rig, smoothGeo, bodyMat, phenotype]);
+  }, [rigged, rig, smoothGeo, bodyMat, phenotype, furMats]);
   useEffect(
     () => () => {
       if (skinned && rig) skinned.remove(rig.root);
@@ -439,7 +459,12 @@ export function CreatureMesh({
     <group>
       {showSmooth && smoothGeo ? (
         // M15: a single welded organic surface replaces the capsule kit
-        <mesh geometry={smoothGeo} material={bodyMat} castShadow receiveShadow />
+        <>
+          <mesh geometry={smoothGeo} material={bodyMat} castShadow receiveShadow />
+          {furMats.map((m, i) => (
+            <mesh key={`fur${i}`} geometry={smoothGeo} material={m} receiveShadow />
+          ))}
+        </>
       ) : kitGeo ? (
         <mesh geometry={kitGeo} material={bodyMat} castShadow receiveShadow />
       ) : (
@@ -487,6 +512,9 @@ function keepAt(detail: Detail, f: MeshFeature): boolean {
   if (detail === 'none') return silhouette;
   return silhouette || f.type === 'eye' || f.type === 'ear' || f.type === 'pincer' || f.type === 'club' || f.type === 'barb';
 }
+
+/** layers of shell fur in the close-up views */
+const FUR_SHELLS = 12;
 
 const LITE_BALL = new THREE.SphereGeometry(1, 10, 8);
 const LITE_DARK = new THREE.MeshStandardMaterial({ color: 0x0b0a0c, roughness: 0.15 });

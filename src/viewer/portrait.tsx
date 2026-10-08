@@ -50,7 +50,7 @@ function Scene({ phenotype, onReady }: { phenotype: Phenotype; onReady: (draw: (
       <hemisphereLight args={['#cfe0ff', '#2a2620', 0.55]} />
       <directionalLight position={[f.size, f.size * 1.6, f.size]} intensity={1.15} />
       <group position={[-c[0], -c[1], -c[2]]}>
-        <CreatureMesh phenotype={phenotype} skinMode="hybrid" quality="low" />
+        <CreatureMesh phenotype={phenotype} skinMode="hybrid" quality="low" fur />
       </group>
     </>
   );

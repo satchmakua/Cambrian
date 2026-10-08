@@ -78,7 +78,16 @@ export interface BareLegs {
   color: number;
 }
 
-export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, bare: BareLegs | null = null): THREE.MeshPhysicalMaterial {
+/** One layer of shell fur: the body redrawn `h` (0 root … 1 tip) of the way out along its normals
+ *  over a pile `len` deep, keeping only fragments inside a strand (see the shader). */
+export interface FurShell {
+  h: number;
+  len: number;
+  /** strands per body unit */
+  density: number;
+}
+
+export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, bare: BareLegs | null = null, shell: FurShell | null = null): THREE.MeshPhysicalMaterial {
   // A moodier base than the raw palette: real integument is rarely a bright, saturated toy. We
   // desaturate and darken a touch so creatures read as living tissue, not painted plastic.
   const main = new THREE.Color().setHSL(pal.hueA, pal.sat * 0.8, pal.light * 0.88);
@@ -135,6 +144,9 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
     shader.uniforms.uBareY = { value: bare ? bare.y : -1e6 };
     shader.uniforms.uBareBand = { value: bare ? Math.max(bare.band, 1e-3) : 1 };
     shader.uniforms.uBareCol = { value: new THREE.Color(bare ? bare.color : 0) };
+    shader.uniforms.uShellH = { value: shell ? shell.h : -1 };
+    shader.uniforms.uShellLen = { value: shell ? shell.len : 0 };
+    shader.uniforms.uShellDen = { value: shell ? shell.density : 1 };
 
     // Pattern + relief sample `aBodyPos` — a per-vertex *body-space* coordinate (the vertex's
     // rest-pose position, baked into the geometry by CreatureMesh). Because it's fixed to the mesh,
@@ -151,6 +163,11 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
         '#include <common>\nattribute vec3 aBodyPos;\nattribute float aFlesh;\nattribute float aAO;\nvarying vec3 vBodyPos;\nvarying vec3 vWNrm;\nvarying float vFlesh;\nvarying float vAO;',
       )
       .replace('#include <project_vertex>', '  vBodyPos = aBodyPos;\n  vFlesh = aFlesh;\n  vAO = aAO;\n#include <project_vertex>')
+      // a fur shell rides out along the (skinned) normal
+      // …and the outer shells lean back along the body and down, so the slices stack into combed
+      // hairs rather than standing straight up like the pile of a towel
+      .replace('#include <skinning_vertex>', '#include <skinning_vertex>\n  if (uShellH >= 0.0) transformed += (normalize(objectNormal) + vec3(0.0, -0.45, -1.1) * uShellH) * uShellH * uShellLen;')
+      .replace('#include <common>', '#include <common>\nuniform float uShellH;\nuniform float uShellLen;')
       .replace(
         '#include <beginnormal_vertex>',
         '#include <beginnormal_vertex>\n  vWNrm = normalize(mat3(modelMatrix) * objectNormal);',
@@ -197,6 +214,23 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
           vec3 gum = mix(vec3(0.16, 0.035, 0.045), vec3(0.045, 0.008, 0.012), smoothstep(0.4, 1.0, vFlesh));
           skin = mix(skin, gum, fw);
           diffuseColor.rgb = skin;
+          // FUR SHELL: keep only what lies inside a strand. Strands are cells of a body-space grid
+          // (so they stay rooted to the skin through any pose), each with its own length, tapering
+          // to a point; every shell slices the same cells, so the slices stack into straight hairs.
+          // Where a strand would be smaller than a pixel the shells fade out and the base coat
+          // carries the look (no shimmer at a distance).
+          if (uShellH >= 0.0) {
+            vec3 q = vBodyPos * uShellDen + uOff;
+            vec3 cell = floor(q);
+            vec3 jit = hash33(cell) - 0.5;
+            float sLen = 0.45 + 0.55 * hash13(cell + 17.0);
+            float u = uShellH / sLen;
+            float dc = length(fract(q) - 0.5 - jit * 0.5);
+            float far = smoothstep(0.28, 1.15, gFw * uShellDen);
+            if (u > 1.0 || dc > 0.62 * (1.0 - u) || far > hash13(cell + 5.0) || vFlesh > 0.05 || bare > 0.3) discard;
+            // depth in the pile: shadowed at the root, catching light at the tips
+            diffuseColor.rgb *= mix(0.62, 1.12, uShellH);
+          }
           if (uDebug == 1) diffuseColor.rgb = vec3(pat);
           if (uDebug == 2) diffuseColor.rgb = vec3(gH);
           if (uDebug == 3) diffuseColor.rgb = vec3(gM + 0.5);
@@ -272,6 +306,7 @@ uniform float uPScale; uniform float uContrast; uniform float uSheen; uniform fl
 uniform vec3 uOff;
 uniform int uDebug;
 uniform float uBareY; uniform float uBareBand; uniform vec3 uBareCol;
+uniform float uShellH; uniform float uShellDen;
 
 // Per-fragment globals, primed at the top of the colour stage and reused by the roughness + normal
 // stages (so the expensive relief is evaluated once per pixel, not three times).

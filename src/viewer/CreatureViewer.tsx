@@ -186,5 +186,5 @@ function IdleCreature({ phenotype, skinMode, trajectory, alive }: { phenotype: P
     // a swimmer idles with a slow fin-and-tail scull; a walker stands
     poseRig(rig, { dt: Math.min(dt, 0.05), speed: swim ? 0.25 : 0, cruise: 1, sleep: 0, eat: 0, swim, turn: 0, idle: 1 });
   });
-  return <CreatureMesh phenotype={phenotype} skinMode={skinMode} trajectory={trajectory} rig={rig} carved={!rig} />;
+  return <CreatureMesh phenotype={phenotype} skinMode={skinMode} trajectory={trajectory} rig={rig} carved={!rig} fur />;
 }

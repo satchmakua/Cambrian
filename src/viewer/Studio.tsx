@@ -159,7 +159,7 @@ export function SpecimenContent({
         <JawContext.Provider value={rig ? jaw : null}>
           <FlightContext.Provider value={rig ? flight : null}>
             <LidContext.Provider value={lids}>
-              <CreatureMesh phenotype={phenotype} skinMode={skinMode} quality={quality} rig={rig} carved={!rig} />
+              <CreatureMesh phenotype={phenotype} skinMode={skinMode} quality={quality} rig={rig} carved={!rig} fur={quality === 'high'} />
             </LidContext.Provider>
           </FlightContext.Provider>
         </JawContext.Provider>
