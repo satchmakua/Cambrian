@@ -434,13 +434,32 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
 - [x] **M35 — World performance.** Per-actor LOD (full / lite / silhouette), merged capsule kit,
   budgeted skin builds, hitbox picking: ~5–7k → ~520 draw calls at 150 creatures.
 
+- [x] **M36 — Mouths that close.** Jaws hinge on the lip bisector and articulate in the World
+  (shut at rest, chewing, agape on the hunt); a mammal's mouth rests shut everywhere.
+
+- [x] **M37 — Mammals.** Necks between trunk and head (rising per link, the head held level),
+  narrower skulls, a **cranium + muzzle** skull (two or three links: eyes and ears on the cranium,
+  nose, whiskers and mouth on the muzzle), **muzzled mouths** (a thin lip line on the muzzle, only
+  the mandible drops, canines/incisors only, the jaw wearing the coat, a wet nose pad), plain tails
+  sized per kind (bear stub, horse switch, cat sweep), legs rooted inside the torso under the
+  shoulders and hips, coat-covered paws with toes, forward-facing ears with an inner ear, upright
+  apes and bipeds standing on their hips. Dev: `?studiocam=face|headside`.
+  **Test:** cats, dogs, bears, deer and mice read as themselves in the Studio side and face views
+  (mouthLine muzzled test, anatomy stance test).
+
+- [x] **M38 — Flight.** Winged walkers take off, cruise, bank, stoop and land: an altitude in the
+  sim (trips, escapes and approaches are flown; feeding and sleeping wait for touchdown; nothing
+  lands on the lake; walkers can't reach a bird on the wing), spread feathered wings that beat
+  about the shoulder, legs tucked in flight, a Studio `fly` preview.
+  **Test:** in the World (`?world=1&warm=60&follow=aloft`) birds fly between meals and land to eat;
+  `tests/sim/world.test.ts › flight`.
+
 ### Next up (unchecked — pick from here)
 
-- [ ] **Mouths that close.** Jaws rest closed and open to eat / bite / call (the open maw everywhere
-  reads as a gape).
 - [ ] **Behaviour you can see.** Attack lunges and flinches, courtship circling, a mother leading
   young, herds that flee together, carcasses picked over by scavengers.
-- [ ] **Flight.** Winged creatures take off, glide and land (flap from the shoulder, the rig is there).
+- [ ] **Reptile & amphibian faces.** Lizards, crocs and frogs still wear the wide reptile grin on a
+  ball; give them proper snouts, lidded eyes and sprawling elbows.
 - [ ] **Richer world.** Seasons, drought years, a second lake / river, grass you can see sway.
 - [ ] **Save & share a world.** Serialize the world (seed + releases + state) like `CAM2:` creatures.
 - [ ] **Run the World headless at ×1000** to show long-term evolution (lineage trees of wild species).
