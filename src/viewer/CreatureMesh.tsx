@@ -21,6 +21,8 @@ import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
+import { buildFeatheredWing, buildMembraneWing, buildTailFan, conformToSurface } from './wings';
+import { buildFieldPrims, fieldAt } from './bodyField';
 import { getGeometry, retainGeometry, releaseGeometry } from './geometryCache';
 import { mouthCarves } from './mouthLine';
 import { sampleTrajectory, type Trajectory } from '../physics/fitness';
@@ -382,7 +384,9 @@ function Feature({
       return <Pincer f={f} color={footColor} />;
     case 'fin':
       return f.kind === 'wing' ? (
-        <Wing f={f} color={finColor} />
+        <Wing f={f} color={finColor} phenotype={phenotype} />
+      ) : f.kind === 'tail' && phenotype.genomeRef.covering.type === 'feathers' ? (
+        <TailFan phenotype={phenotype} />
       ) : f.kind === 'frill' ? (
         <Frill f={f} color={finColor} />
       ) : (
@@ -698,71 +702,120 @@ function Frill({ f, color }: { f: MeshFeature; color: number }) {
   );
 }
 
-// A wing: a big webbed membrane on an articulated arm — a humerus to the wrist, a leading spar, and a
-// fan of finger-digits with skin webbed between them and a trailing edge back to the body (bat/dragon
-// read). Built spanwise along the aim (+Z), fanning chordwise (±Y), thin along X. Much larger and more
-// structured than a single membrane blob.
-function Wing({ f, color }: { f: MeshFeature; color: number }) {
-  const r = Math.max(f.radius, 0.06);
-  const S = r * 15; // wing span — deliberately large so the wing reads at body scale, not a petal
-  const bone = useMemo(() => new THREE.Color(color).multiplyScalar(0.5).getHex(), [color]);
-
-  // skeleton points in the wing plane (X ≈ 0, the membrane normal)
-  const P = useMemo(() => {
-    const v = (y: number, z: number) => new THREE.Vector3(0, y * S, z * S);
-    return {
-      root: v(0, 0), // shoulder
-      wrist: v(0.05, 0.5), // elbow/wrist knuckle mid-span
-      tips: [v(0.42, 1.0), v(0.08, 1.05), v(-0.3, 0.86), v(-0.62, 0.55)] as const, // 4 finger tips
-      trail: v(-0.5, 0.06), // trailing edge anchor back at the body
-    };
-  }, [S]);
-
-  // one welded membrane surface: a triangle fan from the shoulder across the digit tips + trailing edge
-  const membrane = useMemo(() => {
-    const chord = [P.tips[0], P.tips[1], P.tips[2], P.tips[3], P.trail];
-    const verts: number[] = [];
-    for (let i = 0; i < chord.length - 1; i++) {
-      verts.push(P.root.x, P.root.y, P.root.z, chord[i].x, chord[i].y, chord[i].z, chord[i + 1].x, chord[i + 1].y, chord[i + 1].z);
+// A wing, built from the SHOULDER in the body frame (see wings.ts): a folded feathered wing for a
+// feathered creature, a spread membrane (arm + finger bones + scalloped billowing skin) otherwise.
+// The feature group sits at the wing's tip node, so the build is offset back to the shoulder.
+function Wing({ f, color, phenotype }: { f: MeshFeature; color: number; phenotype: Phenotype }) {
+  const g = phenotype.genomeRef;
+  const feathered = g.covering.type === 'feathers';
+  const build = useMemo(() => {
+    // walk back from the tip to the shoulder (the first wing node off the body)
+    const parent = new Int32Array(phenotype.nodes.length).fill(-1);
+    for (const [a, b] of phenotype.edges) parent[b] = a;
+    let root = f.idx;
+    while (parent[root] >= 0 && phenotype.nodes[parent[root]].part?.kind === 'wing') root = parent[root];
+    const shoulder = phenotype.nodes[root].pos;
+    const tip = phenotype.nodes[f.idx].pos;
+    const side = shoulder[0] >= 0 ? 1 : -1;
+    // size the wing off the trunk it has to carry, nudged by the part's own thickness gene
+    const trunk = phenotype.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0);
+    let z0 = Infinity, z1 = -Infinity, girth = 0;
+    for (const n of trunk) {
+      z0 = Math.min(z0, n.pos[2] - n.radius);
+      z1 = Math.max(z1, n.pos[2] + n.radius);
+      girth = Math.max(girth, n.radius);
     }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-    g.computeVertexNormals();
-    return g;
-  }, [P]);
-  useEffect(() => () => membrane.dispose(), [membrane]);
-
-  // bones as tapered cylinders between two skeleton points (cylinder is +Y; orient Y → the bone axis)
-  const bones = useMemo(() => {
-    const mk = (a: THREE.Vector3, b: THREE.Vector3, w: number) => {
-      const mid = a.clone().add(b).multiplyScalar(0.5);
-      const d = b.clone().sub(a);
-      const len = Math.max(d.length(), 1e-3);
-      const q = new THREE.Quaternion().setFromUnitVectors(UP, d.clone().normalize());
-      return { pos: [mid.x, mid.y, mid.z] as [number, number, number], quat: [q.x, q.y, q.z, q.w] as [number, number, number, number], len, w };
-    };
-    return [
-      mk(P.root, P.wrist, r * 0.24), // humerus/forearm (thick arm bone)
-      mk(P.root, P.tips[0], r * 0.16), // leading-edge spar (thumb)
-      mk(P.wrist, P.tips[0], r * 0.11),
-      mk(P.wrist, P.tips[1], r * 0.1),
-      mk(P.wrist, P.tips[2], r * 0.1),
-      mk(P.wrist, P.tips[3], r * 0.09),
-    ];
-  }, [P, r]);
-
+    const trunkLen = Number.isFinite(z1 - z0) ? z1 - z0 : 1;
+    const gene = Math.max(f.radius, 0.06) / Math.max(girth, 0.1); // ~0.4–0.6 typical
+    const pal = g.palette;
+    const plumage = new THREE.Color().setHSL(pal.hueA, pal.sat * 0.8, pal.light * 0.88);
+    const accent = new THREE.Color().setHSL(pal.hueB, Math.min(1, pal.sat * 1.1), 0.42);
+    const w = feathered
+      ? buildFeatheredWing(side, (trunkLen * 1.05 + girth * 0.9) * (0.85 + gene * 0.3), plumage, accent)
+      : buildMembraneWing(side, Math.max(trunkLen * 1.15, girth * 3) * (0.75 + gene * 0.5), 0.55 + 0.3 * (g.seed % 7) / 7);
+    // a folded wing tucks against the UPPER FLANK (a bird's wing lies along its side, not on its
+    // spine): anchor it on the trunk node nearest the shoulder, out at its side and a little above
+    // the midline, slightly forward — rather than at the dorsal attach point the gene aimed for.
+    let anchor: readonly number[] = shoulder;
+    if (feathered && trunk.length) {
+      let near = trunk[0];
+      for (const n of trunk) if (Math.abs(n.pos[2] - shoulder[2]) < Math.abs(near.pos[2] - shoulder[2])) near = n;
+      const rx = near.radius * (near.scale?.[0] ?? 1);
+      anchor = [near.pos[0] + side * rx * 0.86, near.pos[1] + near.radius * 0.28, near.pos[2] + near.radius * 0.35];
+    }
+    const off: [number, number, number] = [anchor[0] - tip[0], anchor[1] - tip[1], anchor[2] - tip[2]];
+    if (feathered) {
+      // wrap the folded wing around the flank (the same field the hybrid skin is meshed from)
+      const prims = buildFieldPrims(phenotype, 'hybrid');
+      let meanR = 0;
+      for (let i = 0; i < prims.nc; i++) meanR += prims.pr[i];
+      prims.k = 0.34 * (meanR / Math.max(prims.nc, 1));
+      conformToSurface(w.surface, (x, y, z) => fieldAt(prims, x, y, z), anchor, girth * 0.04);
+    }
+    const bones = w.bones.map((b) => {
+      const d = b.b.clone().sub(b.a);
+      const len = Math.max(d.length(), 1e-4);
+      const q = new THREE.Quaternion().setFromUnitVectors(UP, d.normalize());
+      const mid = b.a.clone().add(b.b).multiplyScalar(0.5);
+      return { pos: [mid.x, mid.y, mid.z] as [number, number, number], quat: [q.x, q.y, q.z, q.w] as [number, number, number, number], len, r0: b.r0, r1: b.r1 };
+    });
+    return { w, off, bones };
+  }, [phenotype, f.idx, f.radius, feathered, g]);
+  useEffect(() => () => build.w.surface.dispose(), [build]);
+  const bone = useMemo(() => new THREE.Color(color).multiplyScalar(0.45).getHex(), [color]);
+  const skin = useMemo(() => new THREE.Color(color).multiplyScalar(0.85).getHex(), [color]);
   return (
-    <group quaternion={f.quat}>
-      <mesh geometry={membrane} castShadow>
-        <meshStandardMaterial color={color} roughness={0.72} metalness={0.0} side={THREE.DoubleSide} transparent opacity={0.95} />
-      </mesh>
-      {bones.map((b, i) => (
-        <mesh key={i} position={b.pos} quaternion={b.quat} castShadow>
-          <cylinderGeometry args={[b.w * 0.5, b.w, b.len, 6]} />
-          <meshStandardMaterial color={bone} roughness={0.5} />
+    <group position={build.off}>
+      {feathered ? (
+        <mesh geometry={build.w.surface} castShadow>
+          <meshPhysicalMaterial vertexColors roughness={0.72} sheen={0.6} sheenRoughness={0.4} side={THREE.DoubleSide} />
         </mesh>
-      ))}
+      ) : (
+        <>
+          <mesh geometry={build.w.surface} castShadow>
+            <meshPhysicalMaterial color={skin} roughness={0.62} sheen={0.3} sheenRoughness={0.5} side={THREE.DoubleSide} transparent opacity={0.93} />
+          </mesh>
+          {build.bones.map((b, i) => (
+            <mesh key={i} position={b.pos} quaternion={b.quat} castShadow>
+              <cylinderGeometry args={[b.r1, b.r0, b.len, 8]} />
+              <meshStandardMaterial color={bone} roughness={0.5} />
+            </mesh>
+          ))}
+          {build.w.wrist && (
+            <mesh position={[build.w.wrist.x, build.w.wrist.y + build.bones[0].r1 * 0.6, build.w.wrist.z]} rotation={[-0.4, 0, 0]} castShadow>
+              <coneGeometry args={[build.bones[0].r1 * 0.7, build.bones[0].r1 * 3.2, 7]} />
+              <meshStandardMaterial color={0x2a2420} roughness={0.45} />
+            </mesh>
+          )}
+        </>
+      )}
     </group>
+  );
+}
+
+// A feathered tail: a fan of long rectrices spread behind the tail tip (wings.ts), sized to the trunk.
+function TailFan({ phenotype }: { phenotype: Phenotype }) {
+  const g = phenotype.genomeRef;
+  const geo = useMemo(() => {
+    const trunk = phenotype.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0);
+    let girth = 0.3;
+    let z0 = Infinity, z1 = -Infinity;
+    for (const n of trunk) {
+      girth = Math.max(girth, n.radius);
+      z0 = Math.min(z0, n.pos[2] - n.radius);
+      z1 = Math.max(z1, n.pos[2] + n.radius);
+    }
+    const len = Number.isFinite(z1 - z0) ? z1 - z0 : 1;
+    const pal = g.palette;
+    const plumage = new THREE.Color().setHSL(pal.hueA, pal.sat * 0.8, pal.light * 0.88);
+    const accent = new THREE.Color().setHSL(pal.hueB, Math.min(1, pal.sat * 1.1), 0.42);
+    return buildTailFan(Math.max(len * 0.55, girth * 1.6), plumage, accent, 0.2 + (g.seed % 5) * 0.06);
+  }, [phenotype, g]);
+  useEffect(() => () => geo.dispose(), [geo]);
+  return (
+    <mesh geometry={geo} castShadow>
+      <meshPhysicalMaterial vertexColors roughness={0.72} sheen={0.6} sheenRoughness={0.4} side={THREE.DoubleSide} />
+    </mesh>
   );
 }
 

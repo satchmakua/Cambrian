@@ -57,6 +57,8 @@ interface Morpho {
   pectoral?: number;
   tail?: number;
   tailTerm?: readonly Terminal[];
+  tailLen?: Rg; // tail segment length ×girth — default [0.7, 1.4]; birds keep a short stub under a feather fan
+  tailSegs?: readonly [number, number]; // default [3, 6]
   horns?: number;
   spines?: number;
   frill?: number;
@@ -100,8 +102,8 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'anuran', cluster: 'familiar', weight: 0.6, girth: [0.5, 0.7], repeat: [1, 2], height: [0.85, 1.05], legPairs: [2], posture: 'sprawling', legLen: [0.55, 0.8], tail: 0.0, eyeStyle: [0, 0.2], eyeAz: [1.3, 1.7], mouthStyle: [0.07, 0.12], covering: ['skin'], pattern: ['spots', 'mottle'], sheen: [0.55, 0.85], hue: [0.25, 0.45], sat: [0.5, 0.85] },
   { id: 'fish', cluster: 'familiar', weight: 0.7, girth: [0.4, 0.58], repeat: [4, 6], height: [1.05, 1.45], elong: [1.3, 1.6], taper: [0.78, 0.9], legPairs: [0], dorsal: 1, pectoral: 1, tail: 1, tailTerm: ['fin'], gills: 0.9, head: 0.3, eyeStyle: [0, 0.2], eyeAz: [0.3, 0.6], mouthStyle: [0.07, 0.12], covering: ['scales'], pattern: ['plain', 'spots', 'stripes'], sheen: [0.35, 0.6], hue: [0.45, 0.65], sat: [0.4, 0.8] },
   { id: 'shark', cluster: 'familiar', weight: 0.6, girth: [0.45, 0.62], repeat: [5, 7], height: [0.95, 1.2], elong: [1.4, 1.7], taper: [0.78, 0.9], legPairs: [0], dorsal: 1, pectoral: 1, tail: 1, tailTerm: ['fin'], gills: 0.95, head: 0.3, eyeStyle: [0.1, 0.3], eyeAz: [0.3, 0.6], mouthStyle: [0.13, 0.24], covering: ['skin'], pattern: ['plain', 'gradient'], hue: [0.55, 0.62], sat: [0.2, 0.45] },
-  { id: 'bird', cluster: 'familiar', weight: 1.3, girth: [0.34, 0.5], repeat: [2, 3], height: [1.0, 1.3], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 1.0], legTerm: ['claw'], wings: 0.95, tail: 0.7, tailTerm: ['fin'], crest: 0.45, eyeStyle: [0, 0.2], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'plain', 'spots'], hue: [0.05, 0.65], sat: [0.5, 0.9] },
-  { id: 'raptor', cluster: 'familiar', weight: 1.2, girth: [0.4, 0.54], repeat: [2, 3], height: [1.0, 1.25], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 0.95], legTerm: ['claw'], wings: 1, tail: 0.7, tailTerm: ['fin'], crest: 0.3, headShape: ['wedge'], eyeStyle: [0, 0.15], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'mottle'], hue: [0.06, 0.12] },
+  { id: 'bird', cluster: 'familiar', weight: 1.3, girth: [0.34, 0.5], repeat: [2, 3], height: [1.0, 1.3], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 1.0], legTerm: ['claw'], wings: 0.95, tail: 0.85, tailTerm: ['fin'], tailLen: [0.22, 0.36], tailSegs: [2, 2], rear: [-0.22, -0.1], crest: 0.45, eyeStyle: [0, 0.2], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'plain', 'spots'], hue: [0.05, 0.65], sat: [0.5, 0.9] },
+  { id: 'raptor', cluster: 'familiar', weight: 1.2, girth: [0.4, 0.54], repeat: [2, 3], height: [1.0, 1.25], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 0.95], legTerm: ['claw'], wings: 1, tail: 0.85, tailTerm: ['fin'], tailLen: [0.22, 0.36], tailSegs: [2, 2], rear: [-0.2, -0.08], crest: 0.3, headShape: ['wedge'], eyeStyle: [0, 0.15], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'mottle'], hue: [0.06, 0.12] },
   { id: 'crab', cluster: 'familiar', weight: 1.2, girth: [0.45, 0.62], repeat: [1, 2], height: [0.5, 0.7], elong: [0.7, 0.95], legPairs: [3], posture: 'sprawling', legLen: [0.6, 0.85], legAz: [3.6, 4.0], legTerm: ['pincer', 'claw'], tail: 0.0, antennae: 0.6, carapace: 0.85, stalkEyes: 0.9, eyeStyle: [0, 0.3], eyeAz: [1.2, 1.6], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['mottle', 'reticulate'], sheen: [0.3, 0.55], hue: [0.02, 0.1], sat: [0.5, 0.85] },
   { id: 'insectoid', cluster: 'familiar', weight: 1.2, girth: [0.3, 0.44], repeat: [4, 6], height: [0.75, 0.95], legPairs: [3], posture: 'sprawling', legLen: [0.55, 0.8], legAz: [3.7, 4.1], legTerm: ['claw'], antennae: 0.9, eyeStyle: [0.6, 0.8], eyeCount: [2], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['bands', 'reticulate'], sheen: [0.6, 0.95], hue: [0.1, 0.6], sat: [0.5, 0.9] },
   { id: 'arachnid', cluster: 'familiar', weight: 0.9, girth: [0.36, 0.52], repeat: [1, 2], height: [0.8, 1.05], legPairs: [4], posture: 'sprawling', legLen: [0.72, 1.35], legAz: [3.6, 4.0], legTerm: ['claw'], eyeStyle: [0.2, 0.4], eyeCount: [4, 6], mouthStyle: [0.38, 0.49], covering: ['fur', 'chitin'], pattern: ['mottle', 'bands'], hue: [0.02, 0.09], sat: [0.3, 0.6] },
@@ -209,11 +211,12 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
   // a forward-reaching grasping arm pair (primate) near the shoulders
   if (chance(rng, m.arms ?? 0)) apps.push(graspArm(rng, range(rng, 0.62, 0.78), girth));
   // wings, fins
-  if (chance(rng, m.wings ?? 0)) apps.push(wing(rng, range(rng, 0.3, 0.5), girth));
+  // wings root at the SHOULDERS — the front of the trunk (t → 1 is toward the head)
+  if (chance(rng, m.wings ?? 0)) apps.push(wing(rng, range(rng, 0.68, 0.86), girth));
   if (chance(rng, m.dorsal ?? 0)) apps.push(dorsalFin(rng, range(rng, 0.3, 0.6), girth));
   if (chance(rng, m.pectoral ?? 0)) apps.push(pectoralFin(rng, range(rng, 0.25, 0.45), girth));
   // tail
-  if (chance(rng, m.tail ?? 0.5)) apps.push(tail(rng, girth, pick(rng, m.tailTerm ?? (['none', 'fin'] as const))));
+  if (chance(rng, m.tail ?? 0.5)) apps.push(tail(rng, girth, pick(rng, m.tailTerm ?? (['none', 'fin'] as const)), m));
   // dorsal spine ridge
   if (chance(rng, m.spines ?? 0)) for (let i = 0; i < 3; i++) apps.push(spine(rng, 0.2 + i * 0.25, girth));
   // a collar / fanned frill near the head
@@ -451,13 +454,14 @@ function wing(rng: Rng, attachT: number, girth: number): AppendageGene {
   });
 }
 
-function tail(rng: Rng, girth: number, terminal: Terminal): AppendageGene {
+function tail(rng: Rng, girth: number, terminal: Terminal, m?: Morpho): AppendageGene {
+  const segs = m?.tailSegs ?? [3, 6];
   return part('tail', terminal, false, range(rng, 0, 0.4), {
     attachT: range(rng, 0.0, 0.06),
     attachAzimuth: range(rng, 4.4, 5.0),
     attachElevation: range(rng, -1.25, -0.75),
-    segments: randint(rng, 3, 6),
-    length: clamp(girth * range(rng, 0.7, 1.4), A.length),
+    segments: randint(rng, segs[0], segs[1]),
+    length: clamp(girth * rg(rng, m?.tailLen, [0.7, 1.4]), A.length),
     thickness: clamp(girth * range(rng, 0.18, 0.34), A.thickness),
     taper: range(rng, 0.62, 0.82),
     curl: [range(rng, -0.1, 0.15), range(rng, -0.05, 0.05)],

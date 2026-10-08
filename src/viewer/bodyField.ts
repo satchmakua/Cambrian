@@ -67,7 +67,8 @@ export function isBodyNode(n: BodyNode): boolean {
 // as solids — best of both: an organic surface like smooth, but nothing drops out like capsules keep.
 export function isHybridNode(n: BodyNode): boolean {
   // the carapace stub is drawn as a conforming shell of its own (smoothSkin.buildShellGeometry)
-  return n.terminal !== 'eye' && n.terminal !== 'mouth' && n.terminal !== 'carapace';
+  // wings are drawn whole from the shoulder (wings.ts) — meshing their stub chain only made a lump
+  return n.terminal !== 'eye' && n.terminal !== 'mouth' && n.terminal !== 'carapace' && n.part?.kind !== 'wing';
 }
 
 /**
