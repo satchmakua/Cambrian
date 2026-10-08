@@ -175,8 +175,16 @@ body,
 }
 
 .gallery-body {
+  position: relative;
   display: flex;
   flex-direction: column;
+}
+
+/* the shared canvas the thumbnails' Views draw into — laid over the gallery, clicks pass through */
+.gallery-canvas {
+  position: absolute !important;
+  inset: 0;
+  pointer-events: none;
 }
 
 .gallery-head {
@@ -235,11 +243,6 @@ body,
   transform: translateY(-2px);
 }
 
-.thumb canvas {
-  display: block;
-  width: 100% !important;
-  height: 100% !important;
-}
 
 /* --- directed-evolution panel --- */
 
@@ -1302,4 +1305,9 @@ body,
   font-size: 14px;
   color: var(--muted);
   font-style: italic;
+}
+
+.thumb-view {
+  position: absolute;
+  inset: 0;
 }
