@@ -19,11 +19,11 @@ import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import type { Phenotype } from '../../engine/grow';
 import type { Vec3 } from '../../engine/genome';
-import { buildFieldPrims, norm3, projectToSurface, type Carve } from '../bodyField';
+import { buildFieldPrims, norm3, projectToSurface, qRotateV, type Carve } from '../bodyField';
 import type { MeshFeature } from '../meshData';
 import { buildMouthRing, hash01, mouthSpec, type MouthSample, type MouthSpec, type SkinSurface } from '../mouthLine';
 import { sweepTube } from '../sweep';
-import { INTERIOR, KERATIN } from './palette';
+import { INTERIOR } from './palette';
 
 export interface BeakBuild {
   spec: MouthSpec;
@@ -36,9 +36,13 @@ export interface BeakBuild {
   seat: { p: Vec3; n: Vec3 }; // node-relative on-surface mouth center + outward normal
   upperPath: Vec3[]; // node-relative loft spines (tests: protrusion, hook, symmetry)
   lowerPath: Vec3[];
-  upperLen: number; // forward run along the aim (world units)
+  upperLen: number; // forward run along the bill axis (world units)
   lowerLen: number;
   hook: number; // tip pull-down (world units) — 0.25r..0.45r
+  /** the bill's own frame: `dir` runs out along the beak (mostly the head's forward, a little down
+   *  toward the mouth aim), `up` is its top side */
+  dir: Vec3;
+  up: Vec3;
 }
 
 /**
@@ -77,25 +81,38 @@ export function buildBeak(
   const style = spec.node.part?.style ?? 0.3;
   const sPos = Math.min(1, Math.max(0, (style - 0.25) / 0.125));
   const deep = hash01(seed, idx + 61) > 0.5;
-  const upperLen = r * (1.0 + 0.35 * sPos + 0.12 * (hash01(seed, idx + 13) - 0.5));
+  const upperLen = r * (1.15 + 0.4 * sPos + 0.12 * (hash01(seed, idx + 13) - 0.5));
   const lowerLen = upperLen * 0.75;
   const hook = r * Math.min(0.45, 0.25 + 0.08 * sPos + (deep ? 0.12 : 0));
   const slim = 1 - 0.22 * sPos + 0.06 * (hash01(seed, idx + 47) - 0.5);
-  const upperR0 = r * 0.42 * slim;
+  // a bill is broad at the root — it spans the front of the face — and tapers to the tip (thin
+  // cones from a narrow root hung below the face like a walrus's tusks)
+  const upperR0 = r * 0.62 * slim;
 
-  // both mandibles root a touch behind the skin so they emerge through the cere, not rest on it
-  const back = 0.15 * r;
-  const baseU: Vec3 = [cu[0] - spec.aim[0] * back, cu[1] - spec.aim[1] * back, cu[2] - spec.aim[2] * back];
-  const baseL: Vec3 = [cl[0] - spec.aim[0] * back, cl[1] - spec.aim[1] * back, cl[2] - spec.aim[2] * back];
-  const upperPathW = loftPath(baseU, spec.aim, upperLen, spec.up, (u) => hook * Math.pow(u, 2.7));
-  // the lower pitches down off the aim by gape·0.3 — the hanging-open counter-piece
-  const phi = spec.gape * 0.3;
+  // The bill's axis: mostly the HEAD's forward, tipped a little toward the mouth's downward aim. Run
+  // along the mouth aim itself (pitched ~40° down to seat the maw on the face front) the mandibles
+  // pointed at the ground.
+  const fwd = qRotateV(spec.anchor.quat, [0, 0, 1]);
+  const dir = norm3([fwd[0] * 0.75 + spec.aim[0] * 0.25, fwd[1] * 0.75 + spec.aim[1] * 0.25, fwd[2] * 0.75 + spec.aim[2] * 0.25]);
+  const ud = spec.up[0] * dir[0] + spec.up[1] * dir[1] + spec.up[2] * dir[2];
+  const bup = norm3([spec.up[0] - dir[0] * ud, spec.up[1] - dir[1] * ud, spec.up[2] - dir[2] * ud], [0, 1, 0]);
+
+  // both mandibles root behind the skin (the wide base emerges through the face), the upper above the
+  // seat and the lower below it, so together they read as one closed cone
+  const back = 0.3 * r;
+  const baseU: Vec3 = [c0.p[0] + bup[0] * 0.14 * r - dir[0] * back, c0.p[1] + bup[1] * 0.14 * r - dir[1] * back, c0.p[2] + bup[2] * 0.14 * r - dir[2] * back];
+  const baseL: Vec3 = [c0.p[0] - bup[0] * 0.2 * r - dir[0] * back * 0.9, c0.p[1] - bup[1] * 0.2 * r - dir[1] * back * 0.9, c0.p[2] - bup[2] * 0.2 * r - dir[2] * back * 0.9];
+  void cu;
+  void cl;
+  const upperPathW = loftPath(baseU, dir, upperLen, bup, (u) => hook * Math.pow(u, 2.7));
+  // the lower mandible rests closed under the upper (a hair of gape, so the bill reads as two parts)
+  const phi = 0.07;
   const dirL = norm3([
-    spec.aim[0] * Math.cos(phi) - spec.up[0] * Math.sin(phi),
-    spec.aim[1] * Math.cos(phi) - spec.up[1] * Math.sin(phi),
-    spec.aim[2] * Math.cos(phi) - spec.up[2] * Math.sin(phi),
+    dir[0] * Math.cos(phi) - bup[0] * Math.sin(phi),
+    dir[1] * Math.cos(phi) - bup[1] * Math.sin(phi),
+    dir[2] * Math.cos(phi) - bup[2] * Math.sin(phi),
   ]);
-  const lowerPathW = loftPath(baseL, dirL, lowerLen, spec.up, () => 0);
+  const lowerPathW = loftPath(baseL, dirL, lowerLen, bup, () => 0);
 
   const rel = (v: Vec3): Vec3 => [v[0] - o[0], v[1] - o[1], v[2] - o[2]];
   const ring = ringW.map((s) => ({ ...s, p: rel(s.p) }));
@@ -111,11 +128,11 @@ export function buildBeak(
   // along `up` reads flat duck-bill/cartoon; a tall narrow blade reads raptor.
   const upper = sweepTube(
     upperPath.map((p) => ({ p, n: spec.right })),
-    { radius: (u) => Math.max(r * 0.04, upperR0 * Math.pow(1 - u, 1.2)), flatten: 0.55, radialSegments: 10 },
+    { radius: (u) => Math.max(r * 0.03, upperR0 * Math.pow(1 - u, 0.95)), flatten: 0.3 + 0.2 * sPos, radialSegments: 10 },
   );
   const lower = sweepTube(
     lowerPath.map((p) => ({ p, n: spec.right })),
-    { radius: (u) => Math.max(r * 0.03, upperR0 * 0.75 * Math.pow(1 - u, 1.2)), flatten: 0.55, radialSegments: 10 },
+    { radius: (u) => Math.max(r * 0.025, upperR0 * 0.72 * Math.pow(1 - u, 1.05)), flatten: 0.3, radialSegments: 10 },
   );
 
   // the interior wedge: rim near the skin, throat point sunk — into the real carve when recessed,
@@ -126,7 +143,7 @@ export function buildBeak(
   const centerInset = recessed ? -0.65 * r : 0.012 * r;
   const interior = interiorWedge(seat.p, seat.n, spec.right, spec.up, w, h, rimInset, centerInset);
 
-  return { spec, r, collar, upper, lower, interior, ring, seat, upperPath, lowerPath, upperLen, lowerLen, hook };
+  return { spec, r, collar, upper, lower, interior, ring, seat, upperPath, lowerPath, upperLen, lowerLen, hook, dir, up: bup };
 }
 
 /** Loft spine: `len` forward along `dir` from `base`, pulled down along `up` by `drop(u)`. */
@@ -190,10 +207,15 @@ export function BeakMouth({
     [phenotype, f.idx, carves, recessed, surface],
   );
 
+  const bill = useMemo(() => {
+    // a bill's colour: yellow-orange, slate-black or pale horn, per creature
+    const h = hash01(phenotype.genomeRef.seed, 0xb111);
+    return h < 0.4 ? 0xd99a2b : h < 0.75 ? 0x34373c : 0xcbb98d;
+  }, [phenotype]);
   const mats = useMemo(() => {
-    // keratin darkened toward the body tone — horn, never toy plastic; the lower mandible darker
-    const horn = new THREE.Color(KERATIN).lerp(new THREE.Color(dark), 0.3);
-    const hornLo = new THREE.Color(KERATIN).lerp(new THREE.Color(dark), 0.5);
+    // glossy keratin (nudged a touch toward the body tone); the lower mandible a shade darker
+    const horn = new THREE.Color(bill).lerp(new THREE.Color(dark), 0.12);
+    const hornLo = new THREE.Color(bill).lerp(new THREE.Color(dark), 0.28);
     const cere = new THREE.Color(dark).lerp(new THREE.Color(0x33201a), 0.45);
     return {
       upper: new THREE.MeshStandardMaterial({ color: horn, roughness: 0.38 }),
@@ -201,7 +223,7 @@ export function BeakMouth({
       cere: new THREE.MeshStandardMaterial({ color: cere, roughness: 0.62 }),
       interior: new THREE.MeshStandardMaterial({ color: INTERIOR, roughness: 0.3, side: THREE.DoubleSide }),
     };
-  }, [dark]);
+  }, [dark, bill]);
 
   // dispose per lifetime: the per-creature geometries turn over with `built`, but the materials
   // must NOT be disposed on every phenotype swap while still in use
@@ -221,8 +243,9 @@ export function BeakMouth({
   if (!built) return null;
   return (
     <group>
+      {/* (the cere ring is built — it anchors the socket — but no longer drawn: around a bill's broad
+          root it read as a hoop) */}
       <mesh geometry={built.interior} material={mats.interior} />
-      <mesh geometry={built.collar} material={mats.cere} />
       <mesh geometry={built.upper} material={mats.upper} castShadow />
       <mesh geometry={built.lower} material={mats.lower} castShadow />
     </group>
