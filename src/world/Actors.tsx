@@ -154,7 +154,7 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
   const voice = useMemo(() => voiceOf(traits), [traits]);
   const heard = useRef({ action: c.action, bitten: c.attackedAt, last: -1e9, born: c.age < 2 });
   const shown = useRef<{ e: Emote | null; pop: number }>({ e: null, pop: 0 });
-  const pose = useRef({ x: c.x, z: c.z, h: c.heading, sleep: 0, eat: 0, bob: Math.random() * 10, turn: 0, alt: c.alt, fly: 0, beat: Math.random() * 6, climb: 0, display: 0 });
+  const pose = useRef({ x: c.x, z: c.z, h: c.heading, sleep: 0, eat: 0, bob: Math.random() * 10, turn: 0, alt: c.alt, fly: 0, beat: Math.random() * 6, climb: 0, display: 0, stalk: 0 });
   const swimmer = traits.habitat === 'water' || traits.locomotion === 'swim' || traits.locomotion === 'drift';
   // each actor animates its own skeleton (bones can't be shared between skinned meshes)
   const rig = useMemo(() => createRig(phenotype), [phenotype]);
@@ -186,6 +186,8 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
     // courting: the pair circling each other put on a display
     const courting = c.action === 'mate' && c.courtT > 0 && c.courtT < COURT_TIME;
     P.display += ((courting ? 1 : 0) - P.display) * Math.min(1, dt * 3);
+    // stalking: hunting, but not yet charging
+    P.stalk += ((c.action === 'hunt' && c.chaseT <= 0 && c.alt <= AIRBORNE ? 1 : 0) - P.stalk) * Math.min(1, dt * 4);
     if (flight) {
       // (a displaying bird half-opens its wings and shivers them; the flight beat takes over aloft)
       flight.spread = Math.max(P.fly, 0.55 * P.display * (1 - P.fly));
@@ -212,6 +214,7 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
         // standing about: breathe and glance around
         idle: Math.max(0, 1 - vis / Math.max(0.3, traits.speed * 0.3)) * (1 - P.eat) * (1 - P.sleep) * (1 - P.fly) * (1 - P.display),
         display: P.display,
+        stalk: P.stalk,
       });
     }
     const ground = heightAt(world.terrain, P.x, P.z);
@@ -226,6 +229,7 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
       y = Math.max(y, WATER_LEVEL - place.height * s * 0.4);
     }
     y -= P.sleep * place.height * s * 0.28; // settle low to sleep
+    y -= P.stalk * place.height * s * 0.12; // crouch to stalk
     // aloft: ride above the ground or the water, nose up into a climb, bank into turns
     if (P.alt > 0.01) y = Math.max(y, Math.max(ground, WATER_LEVEL) + place.lift * s * (1 - P.fly * 0.5)) + P.alt;
     g.position.set(P.x, y, P.z);

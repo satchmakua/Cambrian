@@ -181,13 +181,18 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
       DEV_WARMED = true;
       for (let i = 0; i < warm * 20; i++) stepWorld(w);
       const f = q.get('follow');
-      // follow=courting: run on (up to ten minutes) until a pair is mid-display
-      if (f === 'courting') for (let i = 0; i < 12000 && !w.creatures.some((x) => x.action === 'mate' && x.courtT > 1.2); i++) stepWorld(w);
+      // follow=aloft: the first creature on the wing; follow=courting / stalking: run on (up to ten
+      // minutes) until a pair is mid-display, or a hunter is creeping up on something
+      const wanted: Record<string, (x: (typeof w.creatures)[number]) => boolean> = {
+        aloft: (x) => x.alt > 1,
+        courting: (x) => x.action === 'mate' && x.courtT > 1.2,
+        stalking: (x) => x.action === 'hunt' && x.chaseT <= 0 && x.alt <= 0.1,
+      };
+      const special = f ? wanted[f] : undefined;
+      if (special && f !== 'aloft') for (let i = 0; i < 12000 && !w.creatures.some(special); i++) stepWorld(w);
       if (f) {
-        // follow=aloft: the first creature on the wing
-        const special = f === 'aloft' || f === 'courting';
         const sp = special ? undefined : w.species.find((x) => f === '1' || x.name.includes(f) || x.kind.includes(f));
-        const c = w.creatures.find((x) => (f === 'aloft' ? x.alt > 1 : f === 'courting' ? x.action === 'mate' && x.courtT > 1.2 : sp ? x.species === sp.id : true));
+        const c = w.creatures.find((x) => (special ? special(x) : sp ? x.species === sp.id : true));
         if (c) {
           select(c.id);
           setFollow(true);
@@ -247,11 +252,15 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
           <button className={sound ? 'active' : ''} onClick={() => setSound(!sound)} title="synthesized wind, birdsong and crickets, and the creatures' own calls">{sound ? '♪ sound' : '♪ sound off'}</button>
           <button className={documentary ? 'active' : ''} onClick={() => setDocumentary(!documentary)} title="documentary mode: the camera finds the most interesting things happening and follows them">▶ documentary</button>
           <button className={emotes ? 'active' : ''} onClick={() => setEmotes(!emotes)} title="mood icons over the creatures: asleep, courting, alarmed, hunting">moods</button>
-          <button onClick={() => releaseGenome(founder, 6)} title="release six of the creature you're breeding">+ your creature</button>
-          <button onClick={() => releaseGenome(strangerGenome((Date.now() * 2654435761) >>> 0), 6)} title="release six of a random new species">+ a stranger</button>
-          <button onClick={() => reset((Date.now() >>> 0) % 100000, founder)} title="a fresh world">new world</button>
-          <button onClick={downloadWorld} title="save this world to a file (it is also kept in your browser between visits)">save</button>
-          <button onClick={() => fileRef.current?.click()} title="open a saved world file">open</button>
+          <Menu label="+ release" title="release new animals into the valley">
+            <button onClick={() => releaseGenome(founder, 6)} title="release six of the creature you're breeding">six of your creature</button>
+            <button onClick={() => releaseGenome(strangerGenome((Date.now() * 2654435761) >>> 0), 6)} title="release six of a random new species">six strangers</button>
+          </Menu>
+          <Menu label="world ▾" title="new, save and open worlds">
+            <button onClick={() => reset((Date.now() >>> 0) % 100000, founder)} title="a fresh world">new world</button>
+            <button onClick={downloadWorld} title="save this world to a file (it is also kept in your browser between visits)">save to a file</button>
+            <button onClick={() => fileRef.current?.click()} title="open a saved world file">open a file…</button>
+          </Menu>
           <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => { void openFile(e.target.files?.[0]); e.target.value = ''; }} />
         </div>
         {notice && <div className="world-notice">{notice}</div>}
@@ -386,5 +395,31 @@ function spanWords(seconds: number): string {
   if (days === YEAR_DAYS) return 'A year';
   if (days === 3) return 'A season';
   return `${days} days`;
+}
+
+/** A small dropdown: a button that opens a column of actions (closing on a pick or a click away). */
+function Menu({ label, title, children }: { label: string; title?: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener('pointerdown', away);
+    return () => window.removeEventListener('pointerdown', away);
+  }, [open]);
+  return (
+    <div className="menu" ref={box}>
+      <button className={open ? 'active' : ''} onClick={() => setOpen(!open)} title={title}>
+        {label}
+      </button>
+      {open && (
+        <div className="menu-list" onClick={() => setOpen(false)}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
 }
 
