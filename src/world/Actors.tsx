@@ -12,10 +12,10 @@
  * of births never stalls the frame. Same-genome creatures share their surface via the geometry cache.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
-import { CreatureMesh, prebuildSkin } from '../viewer/CreatureMesh';
+import { CreatureMesh, prebuildSkin, type Detail } from '../viewer/CreatureMesh';
 import { createRig, poseRig } from '../viewer/rig';
 import { bodyOf, growthOf, type Corpse, type Creature, type World } from '../sim/world';
 import { heightAt, WATER_LEVEL } from '../sim/terrain';
@@ -43,7 +43,10 @@ function requestSmooth(p: Phenotype, onReady: () => void): () => void {
 /** Build at most one queued surface per frame (call from a useFrame). */
 export function useSkinScheduler(): void {
   useFrame(() => {
-    while (QUEUE.length) {
+    // a time budget per frame (always at least one build), so a burst of new genomes drains quickly
+    // on a fast machine without ever stalling a frame for long on a slow one
+    const t0 = performance.now();
+    while (QUEUE.length && performance.now() - t0 < 6) {
       const p = QUEUE.shift()!;
       const ls = LISTENERS.get(p);
       if (!ls || ls.size === 0) {
@@ -54,7 +57,6 @@ export function useSkinScheduler(): void {
       READY.add(p);
       LISTENERS.delete(p);
       for (const f of ls) f();
-      break;
     }
   });
 }
@@ -88,6 +90,53 @@ function angleLerp(a: number, b: number, t: number): number {
   return a + d * t;
 }
 
+// --- level of detail -------------------------------------------------------------------------------
+
+const LOD_FULL = 24; // bu from the camera: full detail inside this
+const LOD_LITE = 62; // simplified features inside this; silhouette only beyond
+
+/** Pick a detail level from the camera distance, with hysteresis so actors don't flicker at a band
+ *  edge. Re-renders only when the level actually changes. */
+function useDetail(get: () => THREE.Vector3 | null, force: boolean): Detail {
+  const camera = useThree((s) => s.camera);
+  const [detail, setDetail] = useState<Detail>('lite');
+  const cur = useRef<Detail>('lite');
+  const timer = useRef(Math.random() * 0.3);
+  useFrame((_, dt) => {
+    timer.current -= dt;
+    if (timer.current > 0) return;
+    timer.current = 0.3;
+    const p = get();
+    if (!p) return;
+    const d = camera.position.distanceTo(p);
+    const was = cur.current;
+    let next: Detail = d < LOD_FULL ? 'full' : d < LOD_LITE ? 'lite' : 'none';
+    // hysteresis: hold the finer level until 15% past its band edge
+    if (was === 'full' && next !== 'full' && d < LOD_FULL * 1.15) next = 'full';
+    if (was === 'lite' && next === 'none' && d < LOD_LITE * 1.15) next = 'lite';
+    if (force) next = 'full';
+    if (next !== was) {
+      cur.current = next;
+      setDetail(next);
+    }
+  });
+  return force ? 'full' : detail;
+}
+
+/** Shadows are for near things: features cast only at full detail, bodies until the far band. */
+function applyShadows(root: THREE.Object3D | null, detail: Detail): void {
+  if (!root) return;
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const body = (o as THREE.SkinnedMesh).isSkinnedMesh;
+    m.castShadow = body ? detail !== 'none' : detail === 'full';
+    // picking goes through the actor's hitbox, never through skinned/feature geometry (raycasting a
+    // skinned mesh walks every vertex through its bones — far too dear on every pointer move)
+    if (!(o.userData as { hitbox?: boolean }).hitbox) m.raycast = () => {};
+  });
+}
+
 export function Actor({ c, world, onPick, selected }: { c: Creature; world: World; onPick: (id: number) => void; selected: boolean }) {
   const { phenotype, traits } = bodyOf(c.genome);
   const place = rigOf(phenotype);
@@ -99,6 +148,8 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
   const swimmer = traits.habitat === 'water' || traits.locomotion === 'swim' || traits.locomotion === 'drift';
   // each actor animates its own skeleton (bones can't be shared between skinned meshes)
   const rig = useMemo(() => createRig(phenotype), [phenotype]);
+  const detail = useDetail(() => ref.current?.position ?? null, selected);
+  useEffect(() => applyShadows(ref.current, detail), [detail, mode]);
 
   useFrame((_, dt) => {
     const g = ref.current;
@@ -135,6 +186,9 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
       y = Math.max(ground + place.lift * s, WATER_LEVEL - place.height * s * 0.55);
       P.bob += dt * (1 + c.speed);
       y += Math.sin(P.bob) * 0.06 * s;
+    } else if (ground < WATER_LEVEL) {
+      // a walker out of its depth floats, back above the surface, paddling
+      y = Math.max(y, WATER_LEVEL - place.height * s * 0.4);
     }
     y -= P.sleep * place.height * s * 0.28; // settle low to sleep
     g.position.set(P.x, y, P.z);
@@ -148,18 +202,24 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
   });
 
   return (
-    <group
-      ref={ref}
-      onClick={(e) => {
-        e.stopPropagation();
-        onPick(c.id);
-      }}
-    >
+    <group ref={ref}>
       <group ref={body}>
         <group position={[-place.center[0], 0, -place.center[2]]}>
-          <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" rig={rig} />
+          <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" rig={rig} detail={detail} />
         </group>
       </group>
+      {/* an invisible pick target — the only thing in the actor that is raycast */}
+      <mesh
+        position={[0, -place.lift + place.height * 0.5, 0]}
+        userData={{ hitbox: true }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onPick(c.id);
+        }}
+      >
+        <boxGeometry args={[traits.radius * 2.2, place.height, traits.length * 0.9]} />
+        <meshBasicMaterial visible={false} />
+      </mesh>
       <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} visible={false}>
         <ringGeometry args={[traits.radius * 1.4, traits.radius * 1.4 + 0.18, 40]} />
         <meshBasicMaterial color="#7fd1b9" transparent opacity={0.85} depthWrite={false} />
@@ -183,10 +243,12 @@ export function Carcass({ k, world }: { k: Corpse; world: World }) {
     g.rotation.set(0, k.heading, side * Math.PI * 0.46); // keeled over onto its side
     g.scale.setScalar(k.growth * (1 - 0.35 * eaten));
   });
+  const mode = useSkinMode(phenotype);
+  useEffect(() => applyShadows(ref.current, 'none'), [mode]);
   return (
     <group ref={ref}>
       <group position={[-rig.center[0], 0, -rig.center[2]]}>
-        <CreatureMesh phenotype={phenotype} skinMode="capsules" />
+        <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" detail="none" />
       </group>
     </group>
   );

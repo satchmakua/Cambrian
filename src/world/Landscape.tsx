@@ -30,7 +30,7 @@ const C = {
 
 export function TerrainMesh({ world }: { world: World }) {
   const t = world.terrain;
-  const { geo, meadowW, cellIdx, baseCol } = useMemo(() => buildTerrain(world), [world]);
+  const { geo, meadowW, cellX, cellZ, baseCol } = useMemo(() => buildTerrain(world), [world]);
   useEffect(() => () => geo.dispose(), [geo]);
 
   // re-tint the meadows from the live grass field a couple of times a second
@@ -41,12 +41,26 @@ export function TerrainMesh({ world }: { world: World }) {
     clock.current = 0;
     const col = geo.getAttribute('color') as THREE.BufferAttribute;
     const tmp = new THREE.Color();
+    const N = world.gridN;
     for (let v = 0; v < meadowW.length; v++) {
       const w = meadowW[v];
       if (w <= 0) continue;
-      const k = cellIdx[v];
-      const cap = world.grassCap[k] || 1;
-      const lush = Math.min(1, world.grass[k] / cap);
+      // bilinear sample of the grass field at the vertex, so grazed patches have soft edges
+      const gx = cellX[v], gz = cellZ[v];
+      const i0 = Math.floor(gx), j0 = Math.floor(gz);
+      const fx = gx - i0, fz = gz - j0;
+      let lush = 0, wsum = 0;
+      for (let dj = 0; dj <= 1; dj++)
+        for (let di = 0; di <= 1; di++) {
+          const i = Math.min(N - 1, Math.max(0, i0 + di)), j = Math.min(N - 1, Math.max(0, j0 + dj));
+          const k = j * N + i;
+          const cap = world.grassCap[k];
+          if (cap <= 0) continue;
+          const wt = (di ? fx : 1 - fx) * (dj ? fz : 1 - fz);
+          lush += Math.min(1, world.grass[k] / cap) * wt;
+          wsum += wt;
+        }
+      lush = wsum > 0 ? lush / wsum : 1;
       tmp.setRGB(baseCol[v * 3], baseCol[v * 3 + 1], baseCol[v * 3 + 2]);
       // grazed → dry straw; lush → the biome colour
       tmp.lerp(C.dry, w * (1 - lush) * 0.85);
@@ -71,7 +85,8 @@ function buildTerrain(world: World) {
   const colors = new Float32Array(n * 3);
   const baseCol = new Float32Array(n * 3);
   const meadowW = new Float32Array(n);
-  const cellIdx = new Int32Array(n);
+  const cellX = new Float32Array(n);
+  const cellZ = new Float32Array(n);
   const rng = mulberry32(t.seed ^ 0x1234);
   const col = new THREE.Color();
   const cell = t.size / world.gridN;
@@ -100,13 +115,13 @@ function buildTerrain(world: World) {
     colors[v * 3 + 1] = baseCol[v * 3 + 1] = col.g;
     colors[v * 3 + 2] = baseCol[v * 3 + 2] = col.b;
     meadowW[v] = b === 'meadow' ? 1 : b === 'wood' ? 0.4 : 0;
-    const i = Math.min(world.gridN - 1, Math.max(0, Math.floor((x + t.size / 2) / cell)));
-    const k = Math.min(world.gridN - 1, Math.max(0, Math.floor((z + t.size / 2) / cell)));
-    cellIdx[v] = k * world.gridN + i;
+    // continuous grid coordinates (cell centres at integers)
+    cellX[v] = (x + t.size / 2) / cell - 0.5;
+    cellZ[v] = (z + t.size / 2) / cell - 0.5;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
-  return { geo, meadowW, cellIdx, baseCol };
+  return { geo, meadowW, cellX, cellZ, baseCol };
 }
 
 export function Water({ terrain }: { terrain: Terrain }) {

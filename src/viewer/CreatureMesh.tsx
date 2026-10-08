@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, createPortal } from '@react-three/fiber';
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Phenotype } from '../engine/grow';
 import { mix32 } from '../engine/rng';
 import { buildMeshData, type MeshFeature } from './meshData';
@@ -82,6 +83,8 @@ function bakeBodyPos(geo: THREE.BufferGeometry, matrix: THREE.Matrix4): void {
   geo.setAttribute('aAO', new THREE.BufferAttribute(new Float32Array(pos.count).fill(1), 1));
 }
 
+export type Detail = 'full' | 'lite' | 'none';
+
 const skinKey = (full: boolean, quality: SkinQuality) => `${full ? 'hybrid' : 'smooth'}:${quality}`;
 
 function buildSkin(phenotype: Phenotype, full: boolean, carves: readonly Carve[], quality: SkinQuality): THREE.BufferGeometry {
@@ -104,11 +107,15 @@ export function CreatureMesh({
   trajectory = null,
   quality = 'high',
   rig = null,
+  detail = 'full',
 }: {
   phenotype: Phenotype;
   skinMode?: SkinMode;
   trajectory?: Trajectory | null;
   quality?: SkinQuality;
+  /** level of detail (World): 'full' everything · 'lite' drops tiny features (teeth/mouth parts, toes,
+   *  whiskers, gills) and simplifies eyes · 'none' keeps only silhouette parts (wings, fins, horns, crests) */
+  detail?: Detail;
   /** an animation rig (World): the smooth skin becomes a SkinnedMesh on its skeleton and every
    *  feature rides its node's bone. Ignored by the capsule kit. */
   rig?: RigInstance | null;
@@ -247,6 +254,31 @@ export function CreatureMesh({
       return g;
     });
   }, [data, baseCaps]);
+  // A static kit (no recorded gait to play) is ONE merged mesh — the capsule kit is ~20–60 parts, and
+  // as separate meshes it cost a draw call each (the World's fallback while smooth skins build).
+  const kitGeo = useMemo(() => {
+    if (trajectory) return null; // a playing gait re-poses the individual parts every frame
+    const parts: THREE.BufferGeometry[] = [];
+    data.bodySpheres.forEach((i, k) => {
+      const g = sphereGeos[k].clone();
+      g.translate(data.nodes[i].pos[0], data.nodes[i].pos[1], data.nodes[i].pos[2]);
+      parts.push(g);
+    });
+    const m = new THREE.Matrix4();
+    const p = new THREE.Vector3();
+    const qq = new THREE.Quaternion();
+    const one = new THREE.Vector3(1, 1, 1);
+    data.edges.forEach((_e, k) => {
+      const g = capsuleGeos[k].clone();
+      g.applyMatrix4(m.compose(p.fromArray(baseCaps[k].pos), qq.fromArray(baseCaps[k].quat), one));
+      parts.push(g);
+    });
+    if (parts.length === 0) return null;
+    const merged = mergeGeometries(parts, false);
+    parts.forEach((g) => g.dispose());
+    return merged;
+  }, [trajectory, skinMode, data, sphereGeos, capsuleGeos, baseCaps]);
+  useEffect(() => () => kitGeo?.dispose(), [kitGeo]);
   useEffect(
     () => () => {
       sphereGeos.forEach((g) => g.dispose());
@@ -340,7 +372,10 @@ export function CreatureMesh({
   }, [rig, shellGeo, phenotype]);
 
   const featureNodes = data.features.map((f, k) => {
-    const el = (
+    if (detail !== 'full' && !keepAt(detail, f)) return null;
+    const el = detail === 'lite' && f.type === 'eye' ? (
+      <LiteEye f={f} iris={irisColor} />
+    ) : (
       <Feature
         f={f}
         footColor={footColor}
@@ -350,6 +385,7 @@ export function CreatureMesh({
         carves={showSmooth ? carves : NO_CARVES}
         recessed={showSmooth && carves.length > 0}
         surface={showSmooth ? (full ? 'hybrid' : 'smooth') : 'kit'}
+        lite={detail !== 'full'}
       />
     );
     // rigged: the feature sits at its bone's origin (= its node at rest) and moves with it
@@ -386,6 +422,8 @@ export function CreatureMesh({
       {showSmooth && smoothGeo ? (
         // M15: a single welded organic surface replaces the capsule kit
         <mesh geometry={smoothGeo} material={bodyMat} castShadow receiveShadow />
+      ) : kitGeo ? (
+        <mesh geometry={kitGeo} material={bodyMat} castShadow receiveShadow />
       ) : (
         <>
           {data.bodySpheres.map((i, s) => (
@@ -421,6 +459,33 @@ export function CreatureMesh({
   );
 }
 
+// --- level of detail ----------------------------------------------------------------------------
+
+/** Which features survive a reduced level of detail: the silhouette parts always (a wing, a fin, a
+ *  horn reads from across the meadow); at 'lite' also the eyes (simplified), ears, pincers and tail
+ *  weapons. Teeth/lips, toes, whiskers and gill slits are sub-pixel at a distance — dropped. */
+function keepAt(detail: Detail, f: MeshFeature): boolean {
+  const silhouette = f.type === 'fin' || f.type === 'crest' || (f.type === 'claw' && f.kind === 'horn');
+  if (detail === 'none') return silhouette;
+  return silhouette || f.type === 'eye' || f.type === 'ear' || f.type === 'pincer' || f.type === 'club' || f.type === 'barb';
+}
+
+const LITE_BALL = new THREE.SphereGeometry(1, 10, 8);
+const LITE_DARK = new THREE.MeshStandardMaterial({ color: 0x0b0a0c, roughness: 0.15 });
+
+/** A two-mesh eye for mid-distance: a glossy dark ball and an iris cap. */
+function LiteEye({ f, iris }: { f: MeshFeature; iris: number }) {
+  const r = Math.max(f.radius, 0.06);
+  return (
+    <group quaternion={f.quat}>
+      <mesh geometry={LITE_BALL} material={LITE_DARK} scale={r * 0.9} />
+      <mesh geometry={LITE_BALL} position={[0, 0, r * 0.7]} scale={[r * 0.6, r * 0.6, r * 0.2]}>
+        <meshStandardMaterial color={iris} roughness={0.2} />
+      </mesh>
+    </group>
+  );
+}
+
 // Features render at the local origin of their (animated) parent group.
 function Feature({
   f,
@@ -431,6 +496,7 @@ function Feature({
   carves,
   recessed,
   surface,
+  lite = false,
 }: {
   f: MeshFeature;
   footColor: number;
@@ -440,6 +506,7 @@ function Feature({
   carves: readonly Carve[];
   recessed: boolean;
   surface: SkinSurface;
+  lite?: boolean; // reduced detail: structural spars (fin rays, wing bones) are dropped
 }) {
   switch (f.type) {
     case 'eye':
@@ -452,13 +519,13 @@ function Feature({
       return <Pincer f={f} color={footColor} />;
     case 'fin':
       return f.kind === 'wing' ? (
-        <Wing f={f} color={finColor} phenotype={phenotype} />
+        <Wing f={f} color={finColor} phenotype={phenotype} lite={lite} />
       ) : f.kind === 'tail' && phenotype.genomeRef.covering.type === 'feathers' ? (
         <TailFan phenotype={phenotype} />
       ) : f.kind === 'frill' ? (
         <Frill f={f} color={finColor} />
       ) : (
-        <Fin f={f} color={finColor} />
+        <Fin f={f} color={finColor} lite={lite} />
       );
     case 'claw':
       return f.kind === 'horn' ? <Horn f={f} color={footColor} /> : <Claw f={f} color={footColor} />;
@@ -699,7 +766,7 @@ function Pincer({ f, color }: { f: MeshFeature; color: number }) {
 // The membrane fans from the root out along the node's aim (+Z), spread in ±Y, thin along X, with
 // radial fin-rays for the ribbed fish-fin look. A caudal (a tail-terminal fin, kind 'tail') is
 // bigger and FORKED — a proper tail fin — so a fish's tail reads as a caudal fan.
-function Fin({ f, color }: { f: MeshFeature; color: number }) {
+function Fin({ f, color, lite = false }: { f: MeshFeature; color: number; lite?: boolean }) {
   const r = Math.max(f.radius, 0.06);
   const caudal = f.kind === 'tail';
   const S = r * (caudal ? 7.5 : 5.5);
@@ -749,7 +816,7 @@ function Fin({ f, color }: { f: MeshFeature; color: number }) {
       <mesh geometry={membrane} castShadow>
         <meshStandardMaterial color={color} roughness={0.5} metalness={0.0} side={THREE.DoubleSide} transparent opacity={0.94} />
       </mesh>
-      {rays.map((b, i) => (
+      {!lite && rays.map((b, i) => (
         <mesh key={i} position={b.pos} quaternion={b.quat}>
           <cylinderGeometry args={[r * 0.04, r * 0.06, b.len, 4]} />
           <meshStandardMaterial color={ray} roughness={0.5} />
@@ -773,7 +840,7 @@ function Frill({ f, color }: { f: MeshFeature; color: number }) {
 // A wing, built from the SHOULDER in the body frame (see wings.ts): a folded feathered wing for a
 // feathered creature, a spread membrane (arm + finger bones + scalloped billowing skin) otherwise.
 // The feature group sits at the wing's tip node, so the build is offset back to the shoulder.
-function Wing({ f, color, phenotype }: { f: MeshFeature; color: number; phenotype: Phenotype }) {
+function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: number; phenotype: Phenotype; lite?: boolean }) {
   const g = phenotype.genomeRef;
   const feathered = g.covering.type === 'feathers';
   const build = useMemo(() => {
@@ -843,13 +910,13 @@ function Wing({ f, color, phenotype }: { f: MeshFeature; color: number; phenotyp
           <mesh geometry={build.w.surface} castShadow>
             <meshPhysicalMaterial color={skin} roughness={0.62} sheen={0.3} sheenRoughness={0.5} side={THREE.DoubleSide} transparent opacity={0.93} />
           </mesh>
-          {build.bones.map((b, i) => (
+          {!lite && build.bones.map((b, i) => (
             <mesh key={i} position={b.pos} quaternion={b.quat} castShadow>
               <cylinderGeometry args={[b.r1, b.r0, b.len, 8]} />
               <meshStandardMaterial color={bone} roughness={0.5} />
             </mesh>
           ))}
-          {build.w.wrist && (
+          {!lite && build.w.wrist && (
             <mesh position={[build.w.wrist.x, build.w.wrist.y + build.bones[0].r1 * 0.6, build.w.wrist.z]} rotation={[-0.4, 0, 0]} castShadow>
               <coneGeometry args={[build.bones[0].r1 * 0.7, build.bones[0].r1 * 3.2, 7]} />
               <meshStandardMaterial color={0x2a2420} roughness={0.45} />

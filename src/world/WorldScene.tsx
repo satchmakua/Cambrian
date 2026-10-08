@@ -20,6 +20,8 @@ import { StudioEnvironment } from '../viewer/StudioEnvironment';
 const MAX_STEPS_PER_FRAME = 90;
 
 function SimDriver() {
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
   const acc = useRef(0);
   const snapTimer = useRef(0);
   const lastShape = useRef('');
@@ -47,6 +49,15 @@ function SimDriver() {
     if (snapTimer.current > 0.25) {
       snapTimer.current = 0;
       refresh();
+      if (import.meta.env.DEV) {
+        (window as unknown as { __worldScene?: unknown }).__worldScene = scene;
+        (window as unknown as { __worldInfo?: unknown }).__worldInfo = {
+          calls: gl.info.render.calls,
+          triangles: gl.info.render.triangles,
+          geometries: gl.info.memory.geometries,
+          creatures: w.creatures.length,
+        };
+      }
     }
   });
   return null;
@@ -122,6 +133,8 @@ function DayNight() {
 
 /** Follow the selected creature: glide the orbit target (and the camera with it). */
 function FollowCam() {
+  const zoomFor = useRef<number | null>(null);
+  const zoomLeft = useRef(0);
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3; update: () => void } | null;
   useFrame((_, dt) => {
@@ -129,10 +142,23 @@ function FollowCam() {
     if (!follow || selected === null || !controls) return;
     const c = getWorld().creatures.find((x) => x.id === selected);
     if (!c) return;
-    const goal = new THREE.Vector3(c.x, heightAt(getWorld().terrain, c.x, c.z) + 1, c.z);
+    const goal = new THREE.Vector3(c.x, Math.max(heightAt(getWorld().terrain, c.x, c.z), -0.5) + c.traits.height * 0.5, c.z);
     const delta = goal.sub(controls.target).multiplyScalar(Math.min(1, dt * 3));
     controls.target.add(delta);
     camera.position.add(delta);
+    // glide in to a distance that frames this creature (the user can still orbit / zoom)
+    if (zoomFor.current !== selected) {
+      zoomFor.current = selected;
+      zoomLeft.current = 2.5; // seconds of easing
+    }
+    if (zoomLeft.current > 0) {
+      zoomLeft.current -= dt;
+      const want = Math.min(40, Math.max(6, c.traits.length * 3.2));
+      const off = camera.position.clone().sub(controls.target);
+      const d = off.length();
+      off.multiplyScalar((d + (want - d) * Math.min(1, dt * 2.5)) / Math.max(d, 1e-3));
+      camera.position.copy(controls.target).add(off);
+    }
     controls.update();
   });
   return null;

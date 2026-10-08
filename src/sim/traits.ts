@@ -104,7 +104,8 @@ export function traitsOf(p: Phenotype): Traits {
       if (k === 'wing') wings++;
       if (k === 'tail') {
         tails++;
-        if (n.terminal === 'fin') finTail = true;
+        // a fin-tipped tail is a caudal fin — unless it's feathered (then it's a bird's tail fan)
+        if (n.terminal === 'fin' && g.covering.type !== 'feathers') finTail = true;
       }
       if (k === 'gill' || n.terminal === 'gill') gills++;
       if (k === 'horn') horns++;
