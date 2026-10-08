@@ -7,9 +7,10 @@
  * the creature group by −centre so its centre sits at the origin, point OrbitControls' target at the
  * origin, and frame the camera by the creature's size — so it never lists off-screen as it rotates.
  */
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { OrbitControls, Environment, ContactShadows } from '@react-three/drei';
+import { OrbitControls, ContactShadows } from '@react-three/drei';
+import { StudioEnvironment } from './StudioEnvironment';
 
 // Dev/headless: a URL `view` param picks a canonical camera angle for reproducible face shots.
 // The creature faces +Z, so 'front' looks back along +Z at the head; 'side' from +X. `head=1`
@@ -147,13 +148,7 @@ export function CreatureViewer({
         shadow-bias={-0.0004}
       />
       <directionalLight position={[-size * 1.0, size * 0.6, -size * 0.8]} intensity={0.35} color="#a7c0ff" />
-      {/* The preset HDR is fetched from a CDN and SUSPENDS. Without its own boundary that suspense
-          propagates and blanks the whole canvas whenever the fetch is slow, cold-cached, or offline
-          (it silently broke headless captures). Isolated, the creature renders immediately and the
-          environment lighting pops in when — or if — it arrives. */}
-      <Suspense fallback={null}>
-        <Environment preset="city" />
-      </Suspense>
+      <StudioEnvironment />
 
       {/* centre the creature at the origin so the auto-rotate orbits its middle, not its tail */}
       <group position={[-center[0], -center[1], -center[2]]}>
