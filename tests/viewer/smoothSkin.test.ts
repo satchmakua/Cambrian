@@ -25,7 +25,14 @@ describe('smooth skin (M15)', () => {
     const pos = geo.getAttribute('position');
     const nrm = geo.getAttribute('normal');
     expect(pos.count).toBeGreaterThan(60); // a real mesh, not a stray triangle
-    expect(pos.count % 3).toBe(0); // whole triangles
+    const index = geo.getIndex();
+    expect(index).not.toBeNull(); // welded: an indexed mesh, not a triangle soup
+    expect(index!.count % 3).toBe(0); // whole triangles
+    let maxI = 0;
+    for (let i = 0; i < index!.count; i++) maxI = Math.max(maxI, index!.getX(i));
+    expect(maxI).toBeLessThan(pos.count);
+    // vertices are shared between triangles (a welded surface averages ~6 triangles per vertex)
+    expect(index!.count / 3).toBeGreaterThan(pos.count * 1.5);
     expect(scan(pos.array as ArrayLike<number>).finite).toBe(true);
     expect(scan(nrm.array as ArrayLike<number>).finite).toBe(true);
   });
@@ -98,5 +105,54 @@ describe('smooth skin (M15)', () => {
       expect(pos.count).toBeGreaterThan(0);
       expect(scan(pos.array as ArrayLike<number>).finite).toBe(true);
     }
+  });
+
+  it('shades smoothly: unit normals pointing out of the body, and baked AO in [0,1]', async () => {
+    const { buildFieldPrims, fieldAt } = await import('../../src/viewer/bodyField');
+    for (let s = 0; s < 8; s++) {
+      const p = grow(randomGenome(100 + s));
+      const geo = buildSmoothGeometry(p);
+      const pos = geo.getAttribute('position');
+      const nrm = geo.getAttribute('normal');
+      const ao = geo.getAttribute('aAO');
+      expect(ao.count).toBe(pos.count);
+      const f = buildFieldPrims(p, 'body');
+      let outward = 0;
+      for (let v = 0; v < pos.count; v++) {
+        const len = Math.hypot(nrm.getX(v), nrm.getY(v), nrm.getZ(v));
+        expect(Math.abs(len - 1)).toBeLessThan(1e-3);
+        const a = ao.getX(v);
+        expect(a).toBeGreaterThanOrEqual(0);
+        expect(a).toBeLessThanOrEqual(1);
+        // stepping along the normal moves AWAY from the body (the field rises)
+        const e = 0.05;
+        const out = fieldAt(f, pos.getX(v) + nrm.getX(v) * e, pos.getY(v) + nrm.getY(v) * e, pos.getZ(v) + nrm.getZ(v) * e);
+        const inn = fieldAt(f, pos.getX(v) - nrm.getX(v) * e, pos.getY(v) - nrm.getY(v) * e, pos.getZ(v) - nrm.getZ(v) * e);
+        if (out > inn) outward++;
+      }
+      expect(outward / pos.count).toBeGreaterThan(0.97);
+    }
+  });
+
+  it('round cones taper continuously: the exact distance matches both end spheres and the flank', async () => {
+    const { roundConeDist } = await import('../../src/viewer/bodyField');
+    // cone from (0,0,0) r=1 to (0,0,4) r=0.5
+    expect(roundConeDist(0, 0, -1, 0, 0, 0, 0, 0, 4, 1, 0.5)).toBeCloseTo(0, 6); // back cap
+    expect(roundConeDist(0, 0, 4.5, 0, 0, 0, 0, 0, 4, 1, 0.5)).toBeCloseTo(0, 6); // front cap
+    // the flank radius shrinks along the axis (between the caps, ~linear for a shallow cone)
+    const flank = (z: number) => {
+      // find the surface radius at height z by bisection on x
+      let lo = 0, hi = 3;
+      for (let i = 0; i < 60; i++) {
+        const m = (lo + hi) / 2;
+        if (roundConeDist(m, 0, z, 0, 0, 0, 0, 0, 4, 1, 0.5) < 0) lo = m;
+        else hi = m;
+      }
+      return lo;
+    };
+    expect(flank(1)).toBeGreaterThan(flank(2));
+    expect(flank(2)).toBeGreaterThan(flank(3));
+    // a swallowed end-sphere degenerates to the bigger sphere, never NaN
+    expect(roundConeDist(0, 0, 0, 0, 0, 0, 0, 0, 0.1, 1, 0.2)).toBeCloseTo(-1, 6);
   });
 });

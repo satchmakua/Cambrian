@@ -17,7 +17,7 @@ import type { Trajectory } from '../physics/fitness';
 
 const LITTER = 9;
 const STORAGE_KEY = 'cambrian.session.v2c'; // bumped for the M12 covering genes
-const SKIN_KEY = 'cambrian.skinMode.v1'; // a render preference, persisted on its own
+const SKIN_KEY = 'cambrian.skinMode.v2'; // a render preference, persisted on its own (v2: hybrid default)
 
 /** capsules (the kit) · smooth (organic SDF, body only) · hybrid (organic SDF over every part). */
 export type SkinMode = 'capsules' | 'smooth' | 'hybrid';
@@ -29,7 +29,8 @@ function loadSkinMode(): SkinMode {
   } catch {
     /* ignore */
   }
-  return 'capsules';
+  // the welded smooth surface over every part — the capsule kit is the fallback, not the face
+  return 'hybrid';
 }
 
 interface Session {

@@ -24,7 +24,17 @@ export interface FieldPrims {
   bx: Float64Array;
   by: Float64Array;
   bz: Float64Array;
-  pr: Float64Array;
+  pr: Float64Array; // mean radius (legacy consumers: mean-girth measures, the grid floor)
+  /** per-end radii: each edge is a ROUND CONE a(ra) → b(rb), so a chain of tapering nodes reads as one
+   *  smooth tapered limb/trunk instead of a string of beads joined by constant-radius tubes */
+  ra: Float64Array;
+  rb: Float64Array;
+  /** per-cone bounding sphere: centre (cx,cy,cz) and half-length hl (radius = hl + max(ra, rb)) —
+   *  lets fieldAt skip any primitive that provably cannot change the smooth union at a point */
+  cx: Float64Array;
+  cy: Float64Array;
+  cz: Float64Array;
+  hl: Float64Array;
   nc: number;
   /** ellipsoid nodes (per-node anisotropy): centers ec (3·ne), orientations eq (4·ne), semi-axes er (3·ne) */
   ec: Float64Array;
@@ -73,6 +83,8 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   const ax = new Float64Array(nc), ay = new Float64Array(nc), az = new Float64Array(nc);
   const bx = new Float64Array(nc), by = new Float64Array(nc), bz = new Float64Array(nc);
   const pr = new Float64Array(nc);
+  const ra = new Float64Array(nc);
+  const rb = new Float64Array(nc);
   const included = new Set<BodyNode>();
   if (edges) {
     for (let i = 0; i < edges.length; i++) {
@@ -81,6 +93,8 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
       ax[i] = a.pos[0]; ay[i] = a.pos[1]; az[i] = a.pos[2];
       bx[i] = b.pos[0]; by[i] = b.pos[1]; bz[i] = b.pos[2];
       pr[i] = (a.radius + b.radius) * 0.5;
+      ra[i] = a.radius;
+      rb[i] = b.radius;
       included.add(a);
       included.add(b);
     }
@@ -88,7 +102,7 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     for (let i = 0; i < p.nodes.length; i++) {
       const n = p.nodes[i];
       ax[i] = bx[i] = n.pos[0]; ay[i] = by[i] = n.pos[1]; az[i] = bz[i] = n.pos[2];
-      pr[i] = n.radius;
+      pr[i] = ra[i] = rb[i] = n.radius;
       included.add(n);
     }
   }
@@ -109,7 +123,14 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     er[i * 3] = n.radius * s[0]; er[i * 3 + 1] = n.radius * s[1]; er[i * 3 + 2] = n.radius * s[2];
     excess = Math.max(excess, n.radius * (Math.max(s[0], s[1], s[2]) - 1));
   }
-  return { ax, ay, az, bx, by, bz, pr, nc, ec, eq, er, ne, k: 0, excess };
+  const cx = new Float64Array(nc), cy = new Float64Array(nc), cz = new Float64Array(nc), hl = new Float64Array(nc);
+  for (let i = 0; i < nc; i++) {
+    cx[i] = (ax[i] + bx[i]) / 2;
+    cy[i] = (ay[i] + by[i]) / 2;
+    cz[i] = (az[i] + bz[i]) / 2;
+    hl[i] = Math.hypot(bx[i] - ax[i], by[i] - ay[i], bz[i] - az[i]) / 2;
+  }
+  return { ax, ay, az, bx, by, bz, pr, ra, rb, cx, cy, cz, hl, nc, ec, eq, er, ne, k: 0, excess };
 }
 
 // rotate v by the CONJUGATE of q (world → the prim's local frame), inlined, no allocation of q'
@@ -202,20 +223,65 @@ function smin(a: number, b: number, k: number): number {
   return a * (1 - h) + b * h - k * h * (1 - h);
 }
 
+/**
+ * Exact signed distance to a round cone — the convex hull of sphere(a, r1) and sphere(b, r2)
+ * (Quilez). This is what makes a tapering chain read as ONE smooth limb: consecutive cones share the
+ * joint sphere, so radius varies continuously along the skeleton instead of stepping per edge.
+ */
+export function roundConeDist(
+  px: number, py: number, pz: number,
+  ax: number, ay: number, az: number,
+  bx: number, by: number, bz: number,
+  r1: number, r2: number,
+): number {
+  const bax = bx - ax, bay = by - ay, baz = bz - az;
+  const l2 = bax * bax + bay * bay + baz * baz;
+  const pax = px - ax, pay = py - ay, paz = pz - az;
+  const rr = r1 - r2;
+  const a2 = l2 - rr * rr;
+  // degenerate: a zero-length edge, or one end-sphere swallows the other → the bigger sphere
+  if (l2 < 1e-12 || a2 <= 1e-12) {
+    const da = Math.sqrt(pax * pax + pay * pay + paz * paz) - r1;
+    const qx = px - bx, qy = py - by, qz = pz - bz;
+    const db = Math.sqrt(qx * qx + qy * qy + qz * qz) - r2;
+    return da < db ? da : db;
+  }
+  const il2 = 1 / l2;
+  const y = pax * bax + pay * bay + paz * baz;
+  const z = y - l2;
+  const wx = pax * l2 - bax * y, wy = pay * l2 - bay * y, wz = paz * l2 - baz * y;
+  const x2 = wx * wx + wy * wy + wz * wz;
+  const y2 = y * y * l2;
+  const z2 = z * z * l2;
+  const k = Math.sign(rr) * rr * rr * x2;
+  if (Math.sign(z) * a2 * z2 > k) return Math.sqrt(x2 + z2) * il2 - r2;
+  if (Math.sign(y) * a2 * y2 < k) return Math.sqrt(x2 + y2) * il2 - r1;
+  return (Math.sqrt(x2 * a2 * il2) + y * rr) * il2 - r1;
+}
+
 /** The body field: < 0 inside the creature, 0 on the skin, > 0 outside. */
 export function fieldAt(f: FieldPrims, x: number, y: number, z: number): number {
   let d = Infinity;
+  const k = f.k;
   for (let m = 0; m < f.nc; m++) {
-    const pax = x - f.ax[m], pay = y - f.ay[m], paz = z - f.az[m];
-    const bxx = f.bx[m] - f.ax[m], byy = f.by[m] - f.ay[m], bzz = f.bz[m] - f.az[m];
-    const dot = bxx * bxx + byy * byy + bzz * bzz;
-    let h = dot > 1e-9 ? (pax * bxx + pay * byy + paz * bzz) / dot : 0;
-    h = h < 0 ? 0 : h > 1 ? 1 : h;
-    const ex = pax - bxx * h, ey = pay - byy * h, ez = paz - bzz * h;
-    const val = Math.sqrt(ex * ex + ey * ey + ez * ez) - f.pr[m];
+    // Exact culling: smin(val, d, k) returns d unchanged whenever val ≥ d + k, and val is at least
+    // the distance to the cone's bounding sphere — so a cone whose sphere is that far away is skipped.
+    if (d !== Infinity) {
+      const ox = x - f.cx[m], oy = y - f.cy[m], oz = z - f.cz[m];
+      const R = f.hl[m] + (f.ra[m] > f.rb[m] ? f.ra[m] : f.rb[m]);
+      const lim = d + k + R;
+      if (lim > 0 && ox * ox + oy * oy + oz * oz > lim * lim) continue;
+    }
+    const val = roundConeDist(x, y, z, f.ax[m], f.ay[m], f.az[m], f.bx[m], f.by[m], f.bz[m], f.ra[m], f.rb[m]);
     d = d === Infinity ? val : smin(val, d, f.k);
   }
   for (let m = 0; m < f.ne; m++) {
+    if (d !== Infinity) {
+      const ox = x - f.ec[m * 3], oy = y - f.ec[m * 3 + 1], oz = z - f.ec[m * 3 + 2];
+      const R = Math.max(f.er[m * 3], f.er[m * 3 + 1], f.er[m * 3 + 2]);
+      const lim = d + k + R;
+      if (lim > 0 && ox * ox + oy * oy + oz * oz > lim * lim) continue;
+    }
     // scaled-space ellipsoid distance (underestimates on long axes — safe for a union)
     rotConj(f.eq[m * 4], f.eq[m * 4 + 1], f.eq[m * 4 + 2], f.eq[m * 4 + 3], x - f.ec[m * 3], y - f.ec[m * 3 + 1], z - f.ec[m * 3 + 2], SCRATCH);
     const rx = f.er[m * 3], ry = f.er[m * 3 + 1], rz = f.er[m * 3 + 2];
