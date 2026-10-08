@@ -70,11 +70,54 @@ export function TerrainMesh({ world }: { world: World }) {
     col.needsUpdate = true;
   });
   void t;
-  return (
-    <mesh geometry={geo} receiveShadow>
-      <meshStandardMaterial vertexColors roughness={0.94} metalness={0} />
-    </mesh>
-  );
+  const mat = useMemo(() => groundMaterial(), []);
+  useEffect(() => () => mat.dispose(), [mat]);
+  return <mesh geometry={geo} receiveShadow material={mat} />;
+}
+
+/**
+ * The ground's surface detail, in world space so it never swims: broad patches (soil showing through,
+ * lusher swales), a fine grain, and on steep faces horizontal rock strata — so a meadow reads as turf
+ * and a cliff as stone up close, instead of a flat swatch of vertex colour.
+ */
+function groundMaterial(): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0 });
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGP;\nvarying vec3 vGN;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvGP = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvGN = normalize(mat3(modelMatrix) * objectNormal);');
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        varying vec3 vGP;
+        varying vec3 vGN;
+        float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float gNoise(vec2 p) {
+          vec2 i = floor(p), f = fract(p);
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          return mix(mix(gHash(i), gHash(i + vec2(1, 0)), u.x), mix(gHash(i + vec2(0, 1)), gHash(i + vec2(1, 1)), u.x), u.y);
+        }
+        float gFbm(vec2 p) { return gNoise(p) * 0.55 + gNoise(p * 2.03 + 7.1) * 0.28 + gNoise(p * 4.1 - 3.3) * 0.17; }`,
+      )
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        // pixel footprint: fade the fine grain out where it would alias
+        float fw = length(fwidth(vGP.xz));
+        float patches = gFbm(vGP.xz * 0.09);
+        float grain = mix(gFbm(vGP.xz * 1.7), 0.5, smoothstep(0.15, 0.6, fw));
+        float steep = 1.0 - clamp(vGN.y, 0.0, 1.0);
+        diffuseColor.rgb *= 0.82 + 0.3 * patches;
+        diffuseColor.rgb *= 0.92 + 0.16 * grain;
+        // soil showing through the turf in places (only on gentle ground)
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.08, 0.94, 0.78), smoothstep(0.62, 0.8, patches) * (1.0 - steep) * 0.6);
+        // strata on steep faces
+        float strata = gNoise(vec2(vGP.y * 3.2 + gNoise(vGP.xz * 0.3) * 2.0, 0.5));
+        diffuseColor.rgb *= mix(1.0, 0.8 + 0.35 * strata, smoothstep(0.18, 0.45, steep));`,
+      );
+  };
+  return m;
 }
 
 function buildTerrain(world: World) {
