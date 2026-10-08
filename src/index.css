@@ -1549,3 +1549,50 @@ body,
   margin: 6px 0 4px;
 }
 
+.ancestry {
+  margin-top: 8px;
+}
+
+.ancestry .lbl {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a96a6;
+}
+
+.ancestry .strip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 3px;
+}
+
+.ancestry .strip figure {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.ancestry .strip img,
+.ancestry .strip .ph {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 4px;
+  background: radial-gradient(circle at 50% 40%, #2a3140, #151921);
+}
+
+.ancestry .strip figcaption {
+  font-size: 9px;
+  color: #8a96a6;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ancestry .arrow {
+  color: #6b7686;
+  font-size: 11px;
+}
+

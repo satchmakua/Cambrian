@@ -8,7 +8,7 @@
  *               take it home to the breeder
  *   bottom      the field journal: births, kills, starvation, speciation, extinction as they happen
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { Genome } from '../engine/genome';
 import { WorldScene } from './WorldScene';
@@ -477,6 +477,7 @@ function Lineage({ genome, speciesId }: { genome: Genome; speciesId: number }) {
         </figure>
       </div>
       {diffs.length > 0 && <p>Since the founder: {diffs.join(', ')}.</p>}
+      <AncestryStrip speciesId={sp.id} />
       {parent && (
         <p className="from">
           Branched off {parent.name} on day {dayNumber(sp.firstSeen)}
@@ -521,5 +522,30 @@ function Narration({ subject, doing, id }: { subject: string; doing: string; id:
     NARRATOR.say(sentence(subject, doing, id + doing.length));
   }, [subject, doing, id]);
   return null;
+}
+
+/** The line of descent as a strip of founders: the original released stock, each species it branched
+ *  into on the way, down to this one's (only drawn when there is a line to draw). */
+function AncestryStrip({ speciesId }: { speciesId: number }) {
+  const w = getWorld();
+  const chain: { id: number; name: string }[] = [];
+  for (let sp = speciesById(w, speciesId); sp && chain.length < 8; sp = sp.parent !== null ? speciesById(w, sp.parent) : undefined) {
+    chain.unshift({ id: sp.id, name: sp.name });
+  }
+  if (chain.length < 2) return null;
+  const shown = chain.length > 5 ? [chain[0], ...chain.slice(-4)] : chain;
+  return (
+    <div className="ancestry">
+      <span className="lbl">line of descent</span>
+      <div className="strip">
+        {shown.map((c, i) => (
+          <Fragment key={c.id}>
+            {i > 0 && <span className="arrow">{i === 1 && chain.length > 5 ? '⋯›' : '›'}</span>}
+            <SpeciesPortrait speciesId={c.id} />
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  );
 }
 
