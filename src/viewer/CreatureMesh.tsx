@@ -851,7 +851,8 @@ function Hoof({ f, color }: { f: MeshFeature; color: number }) {
 
 // A hand: a palm + four fingers and a thumb, oriented along the arm (primate).
 function Hand({ f, color }: { f: MeshFeature; color: number }) {
-  const r = Math.max(f.radius, 0.06);
+  // a hand is broader and longer than the wrist it ends (at the wrist's own radius it vanished)
+  const r = Math.max(f.radius, 0.06) * 1.45;
   return (
     <group quaternion={f.quat}>
       <mesh scale={[r * 0.95, r * 0.42, r * 0.85]} castShadow>
