@@ -140,6 +140,7 @@ export function buildSmoothGeometry(p: Phenotype, full = false, carves: readonly
     }
   }
   geo.setAttribute('aFlesh', new THREE.BufferAttribute(flesh, 1));
+  geo.setAttribute('aAO', new THREE.BufferAttribute(new Float32Array(nVerts).fill(1), 1));
   geo.computeVertexNormals();
   return geo;
 }

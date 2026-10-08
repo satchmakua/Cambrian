@@ -75,6 +75,7 @@ function bakeBodyPos(geo: THREE.BufferGeometry, matrix: THREE.Matrix4): void {
   }
   geo.setAttribute('aBodyPos', new THREE.BufferAttribute(arr, 3));
   geo.setAttribute('aFlesh', new THREE.BufferAttribute(new Float32Array(pos.count), 1));
+  geo.setAttribute('aAO', new THREE.BufferAttribute(new Float32Array(pos.count).fill(1), 1));
 }
 
 export function CreatureMesh({
