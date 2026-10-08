@@ -125,11 +125,96 @@ function buildTerrain(world: World) {
   return { geo, meadowW, cellX, cellZ, baseCol };
 }
 
+/**
+ * The lake: one sheet at the water line, shaded from a baked height texture of the ground below it —
+ * turquoise over the shallows, deepening to a dark teal over the deeps, fading out at the waterline
+ * with a lapping foam edge, its surface rippled by a few travelling wave trains.
+ */
+const HEIGHT_TEX = 160;
+function heightTexture(terrain: Terrain): THREE.DataTexture {
+  const data = new Uint16Array(HEIGHT_TEX * HEIGHT_TEX);
+  for (let j = 0; j < HEIGHT_TEX; j++)
+    for (let i = 0; i < HEIGHT_TEX; i++) {
+      const x = ((i + 0.5) / HEIGHT_TEX - 0.5) * terrain.size;
+      const z = ((j + 0.5) / HEIGHT_TEX - 0.5) * terrain.size;
+      data[j * HEIGHT_TEX + i] = THREE.DataUtils.toHalfFloat(heightAt(terrain, x, z));
+    }
+  const tex = new THREE.DataTexture(data, HEIGHT_TEX, HEIGHT_TEX, THREE.RedFormat, THREE.HalfFloatType);
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 export function Water({ terrain }: { terrain: Terrain }) {
+  const tex = useMemo(() => heightTexture(terrain), [terrain]);
+  const time = useMemo(() => ({ value: 0 }), []);
+  const mat = useMemo(() => {
+    const m = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.08, metalness: 0, transparent: true, clearcoat: 1, clearcoatRoughness: 0.06, depthWrite: false });
+    m.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = time;
+      shader.uniforms.uHeight = { value: tex };
+      shader.uniforms.uSize = { value: terrain.size };
+      shader.uniforms.uLevel = { value: WATER_LEVEL };
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec2 vWXZ;')
+        .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          '#include <common>',
+          `#include <common>
+          varying vec2 vWXZ;
+          uniform float uTime, uSize, uLevel;
+          uniform sampler2D uHeight;
+          float wDepth;
+          // three travelling wave trains: (dir.x, dir.y, wavenumber, speed)
+          vec2 rippleGrad(vec2 p) {
+            vec2 g = vec2(0.0);
+            vec4 W[3];
+            W[0] = vec4(0.8, 0.6, 0.9, 1.1);
+            W[1] = vec4(-0.5, 0.86, 1.7, 1.6);
+            W[2] = vec4(0.2, -0.98, 3.1, 2.3);
+            for (int i = 0; i < 3; i++) {
+              vec2 d = normalize(W[i].xy);
+              float ph = dot(p, d) * W[i].z + uTime * W[i].w;
+              g += d * cos(ph) * (0.032 * (1.0 + 0.6 * float(i)));
+            }
+            return g;
+          }`,
+        )
+        .replace(
+          '#include <color_fragment>',
+          `#include <color_fragment>
+          float ground = texture2D(uHeight, vWXZ / uSize + 0.5).r;
+          wDepth = uLevel - ground;
+          vec3 shallow = vec3(0.16, 0.48, 0.5);
+          vec3 deep = vec3(0.03, 0.15, 0.2);
+          diffuseColor.rgb = mix(shallow, deep, smoothstep(0.0, 2.6, wDepth));
+          // a lapping foam line right at the waterline
+          float lap = 0.12 + 0.05 * sin(uTime * 1.4 + vWXZ.x * 0.35 + vWXZ.y * 0.27);
+          float foam = (1.0 - smoothstep(lap * 0.4, lap, wDepth)) * step(0.0, wDepth);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.92, 0.9), foam * 0.8);
+          diffuseColor.a = clamp(mix(0.25, 0.86, smoothstep(0.0, 1.4, wDepth)) + foam * 0.5, 0.0, 0.92) * step(-0.05, wDepth);`,
+        )
+        .replace(
+          '#include <normal_fragment_begin>',
+          `#include <normal_fragment_begin>
+          vec2 rg = rippleGrad(vWXZ);
+          normal = normalize(normal + (viewMatrix * vec4(-rg.x, 0.0, -rg.y, 0.0)).xyz);`,
+        );
+    };
+    return m;
+  }, [tex, time, terrain.size]);
+  useEffect(() => () => {
+    tex.dispose();
+    mat.dispose();
+  }, [tex, mat]);
+  useFrame((_, dt) => {
+    time.value += dt;
+  });
   return (
-    <mesh position={[0, WATER_LEVEL + 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+    <mesh position={[0, WATER_LEVEL + 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow material={mat}>
       <planeGeometry args={[terrain.size, terrain.size, 1, 1]} />
-      <meshPhysicalMaterial color={0x2b6574} roughness={0.06} metalness={0} transparent opacity={0.74} clearcoat={1} clearcoatRoughness={0.05} />
     </mesh>
   );
 }
