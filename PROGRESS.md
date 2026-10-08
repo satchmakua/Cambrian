@@ -45,6 +45,23 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ---
 
+## Part 3c — Behaviour, landscape, tree of life (M39–M41) · 2026-10-08
+
+- **Behaviour.** Alarm propagation is limited to close kin (≤ 9 bu) and threats within 0.8 vision —
+  over 8 seeds × 20 min it costs ~10% of kills and predators persist in all eight. Juveniles wander
+  around a living parent. `bitAt` drives the actor's lunge; `attackedAt` its flinch. Mood sprites
+  are four shared canvas textures (one SpriteMaterial each).
+- **Eyelids**: hemispheres just outside the eyeball rotated about the eye's X axis — the earlier
+  attempt's "crescent" problem was orientation, not the idea. `LidContext` carries sleep.
+- **All jawed mouths rest shut** (REST_PARTED 0.05) and no longer carve; carve tests use a lamprey.
+- **Flora**: 17k instanced tufts; three flips normals on back faces of double-sided materials,
+  which blacked out half the blades — patched out of `normal_fragment_begin` for grass.
+- **Water**: a 160² half-float height texture of the ground drives depth colour, alpha and foam.
+- **Radial** bodies now array parts about +Y. **Slimes** stay two links (three tapering links read
+  as "headed" in the M26 descriptor). **Stalk eyes** mesh their last link into the eyeball.
+- Process note: twice a commit was chained after piped test output (`vitest | grep && git commit`)
+  and went in with a failing test. Tests now run to a file and the exit code is checked first.
+
 ## Part 3b — Mammals, faces and flight (M36–M38) · 2026-10-08
 
 The Studio's side/face cameras made the remaining crudeness obvious: every mammal was a frog in a

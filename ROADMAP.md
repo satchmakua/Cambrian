@@ -454,12 +454,25 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   **Test:** in the World (`?world=1&warm=60&follow=aloft`) birds fly between meals and land to eat;
   `tests/sim/world.test.ts › flight`.
 
+- [x] **M39 — Behaviour you can see.** Herd alarms (kin bolt together), the young keep to a parent,
+  bites are lunges and the bitten flinch, mood bubbles (Zz / heart / ! / claws) with a `moods`
+  toggle; eyelids that blink and close in sleep; jawed mouths of every kind rest shut.
+  **Test:** in the World, a herd scatters together from a hunter, a courting pair shows hearts.
+
+- [x] **M40 — A living landscape.** Grass tufts that sway and show grazing (cropped straw stubble,
+  regrowth), wildflowers, lobed broadleaves and conifers, a depth-shaded rippling lake with a
+  lapping foam line, world-space ground detail (turf patches, soil, rock strata).
+
+- [x] **M41 — The tree of life.** A panel drawing every species ever as branches through time
+  (founding, splits, extinctions), click to follow a living member. Plus: radial bodies arrayed
+  about the vertical (sea stars lie flat, octopuses squat), slug-like slimes with eyestalks that
+  reach their eyes, low-domed turtles.
+
 ### Next up (unchecked — pick from here)
 
-- [ ] **Behaviour you can see.** Attack lunges and flinches, courtship circling, a mother leading
-  young, herds that flee together, carcasses picked over by scavengers.
-- [ ] **Reptile & amphibian faces.** Lizards, crocs and frogs still wear the wide reptile grin on a
-  ball; give them proper snouts, lidded eyes and sprawling elbows.
+- [ ] **Courtship & young.** Circling displays before mating; newborns that follow a parent through
+  a flight or a flee, not just a stroll.
+- [ ] **Seasons.** A year of days: a green spring flush, a dry summer, a lean winter with snow.
 - [ ] **Richer world.** Seasons, drought years, a second lake / river, grass you can see sway.
 - [ ] **Save & share a world.** Serialize the world (seed + releases + state) like `CAM2:` creatures.
 - [ ] **Run the World headless at ×1000** to show long-term evolution (lineage trees of wild species).
