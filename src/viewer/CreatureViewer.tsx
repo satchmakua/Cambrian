@@ -41,7 +41,7 @@ function Framer({ size, focus }: { size: number; focus: Focus | null }) {
     const [tx, ty, tz] = head ? focus.pt : [0, 0, 0];
     // head distance must clear the whole body (a small face on a fluffy body would otherwise clip
     // the camera inside the fur), so floor it at a fraction of the body size
-    const d = head ? Math.max(focus.r * 4.0, size * 0.85) : size * 2.1;
+    const d = head ? Math.max(focus.r * 4.0, size * 0.85) : size * 1.65;
     if (view === 'front') camera.position.set(tx + d * 0.2, ty + d * 0.3, tz + d * 0.95);
     else if (view === 'side') camera.position.set(tx + d * 1.0, ty + d * 0.28, tz + d * 0.16);
     else camera.position.set(tx + d * 0.52, ty + d * 0.42, tz + d * 0.78);
@@ -128,7 +128,7 @@ export function CreatureViewer({
     return { pt, r };
   }, [phenotype, center]);
 
-  const dist = size * 2.1;
+  const dist = size * 1.65;
 
   return (
     <Canvas

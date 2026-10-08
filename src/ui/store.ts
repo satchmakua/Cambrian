@@ -5,7 +5,7 @@
  */
 import { create } from 'zustand';
 import { mix32 } from '../engine/rng';
-import { defaultGenome, type Genome } from '../engine/genome';
+import type { Genome } from '../engine/genome';
 import { grow } from '../engine/grow';
 import { randomGenome, genomeOfMorphotype, type SymmetryMode } from '../engine/random';
 import { breederLitter } from '../engine/selection';
@@ -160,7 +160,9 @@ function loadInitial(): Session {
   } catch {
     /* fall through to a fresh session */
   }
-  return rootedAt(defaultGenome(), 'auto', {});
+  // a first visit starts on a creature from the library chosen to read well (a russet fox-dog); the
+  // hand-built demo genome (`defaultGenome`) stays the engine's fixture
+  return rootedAt(genomeOfMorphotype(3, 'canid'), 'auto', {});
 }
 
 export const useStore = create<AppState>((set, get) => {
