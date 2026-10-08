@@ -15,7 +15,8 @@
  * is a thin wrapper that adds materials. (The mandible used to idle open/shut; the idle
  * animation pass was removed — creatures hold the rest pose grow() produced.)
  */
-import { useEffect, useMemo } from 'react';
+import { useContext, useEffect, useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Phenotype } from '../../engine/grow';
 import type { Vec3 } from '../../engine/genome';
@@ -27,6 +28,7 @@ import { sweepTube, type SweepPoint } from '../sweep';
 import { bluntGeometry, fangGeometry, setToothInstances, toothRow, type ToothProfile, type ToothXform } from '../teeth';
 import { INTERIOR, LIP } from './palette';
 import { interiorBowl, muzzleSkirt, relRow } from './shared';
+import { JawContext, hingeOf, poseJaw } from './jaw';
 
 export type JawedVariant = 'herbivore' | 'maw' | 'fanged' | 'underbite';
 
@@ -99,6 +101,7 @@ function spike(u: number, c: number): number {
 
 export interface JawedBuild {
   r: number;
+  aim: Vec3; // the mouth's forward aim (node-relative frame)
   /** the node-relative, PROJECTED lip curves every piece is anchored to (tests verify against
    *  these: after projection the muzzle stands off the raw skull by design, so the anti-floating
    *  guarantee is "rooted in the mouth line", not "within sink-depth of the skull") */
@@ -209,7 +212,7 @@ export function buildJawed(
     r * (recessed ? 0.95 : 0.62));
 
 
-  return { r, upper, lower, muzzle, upperFold, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior };
+  return { r, aim: spec.aim, upper, lower, muzzle, upperFold, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior };
 }
 
 export function JawedMouth({
@@ -265,10 +268,24 @@ export function JawedMouth({
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
 
 
+  // the World articulates the lower jaw (closed at rest, chewing, biting); elsewhere it keeps the
+  // built gape. The hinge is measured from the built lip curves.
+  const jaw = useContext(JawContext);
+  const lowerJaw = useRef<THREE.Group>(null);
+  const hinge = useMemo(() => (built ? hingeOf(built.upper, built.lower, built.aim) : null), [built]);
+  const throat = useRef<THREE.Mesh>(null);
+  useFrame(() => {
+    if (!jaw || !hinge || !lowerJaw.current) return;
+    poseJaw(lowerJaw.current, hinge, jaw.open);
+    if (throat.current) throat.current.visible = jaw.open > 0.35;
+  });
+
   if (!built) return null;
   return (
     <group>
-      <mesh geometry={built.interior} material={mats.interior} />
+      {/* the throat stays with the skull; when the jaw nearly shuts there is no opening to show it
+          through (and swinging it with the jaw pushed its upper edge out through the face) */}
+      <mesh ref={throat} geometry={built.interior} material={mats.interior} />
       <mesh geometry={built.muzzle} material={mats.jaw} castShadow />
       <mesh geometry={built.upperLip} material={mats.lip} castShadow />
       <mesh geometry={built.upperFold} material={mats.lip} castShadow />
@@ -281,8 +298,8 @@ export function JawedMouth({
           }}
         />
       )}
-      {/* the lower jaw: lip, mass and tooth row */}
-      <group>
+      {/* the lower jaw: lip, mass and tooth row — one group, so it can swing on its hinge */}
+      <group ref={lowerJaw}>
             <mesh geometry={built.jawMass} material={mats.jaw} castShadow />
             <mesh geometry={built.lowerLip} material={mats.lip} castShadow />
             {built.lowerTeeth.length > 0 && (

@@ -65,6 +65,12 @@ function irisFor(seed: number): number {
 // when the carved one isn't rendered (a lip traced onto an invisible cavity is a buried lip)
 const NO_CARVES: readonly Carve[] = [];
 
+// Dev/headless: ?hide=mouth,eye,… suppresses feature types — for bisecting a rendering artefact.
+const DEV_HIDE: ReadonlySet<string> =
+  import.meta.env?.DEV && typeof location !== 'undefined'
+    ? new Set((new URLSearchParams(location.search).get('hide') ?? '').split(',').filter(Boolean))
+    : new Set();
+
 /** Bake an `aBodyPos` attribute = `matrix · localVertex` (the vertex's rest-pose body position).
  *  Also zero-fills `aFlesh` — only the carved smooth skin has real mouth-cavity weights, but the
  *  extended material reads the attribute on every body geometry, so it must always exist. */
@@ -85,7 +91,7 @@ function bakeBodyPos(geo: THREE.BufferGeometry, matrix: THREE.Matrix4): void {
 
 export type Detail = 'full' | 'lite' | 'none';
 
-const skinKey = (full: boolean, quality: SkinQuality) => `${full ? 'hybrid' : 'smooth'}:${quality}`;
+const skinKey = (full: boolean, quality: SkinQuality, carved = true) => `${full ? 'hybrid' : 'smooth'}:${quality}${carved ? '' : ':intact'}`;
 
 function buildSkin(phenotype: Phenotype, full: boolean, carves: readonly Carve[], quality: SkinQuality): THREE.BufferGeometry {
   const g = buildSmoothGeometry(phenotype, full, carves, quality);
@@ -96,9 +102,11 @@ function buildSkin(phenotype: Phenotype, full: boolean, carves: readonly Carve[]
 
 /** Build (and cache) a creature's smooth surface ahead of mounting it — the World schedules these
  *  one per frame so a burst of new genomes never stalls rendering. Same key/builder as CreatureMesh. */
-export function prebuildSkin(phenotype: Phenotype, mode: 'smooth' | 'hybrid', quality: SkinQuality): void {
+export function prebuildSkin(phenotype: Phenotype, mode: 'smooth' | 'hybrid', quality: SkinQuality, carved = true): void {
   const full = mode === 'hybrid';
-  getGeometry(phenotype, skinKey(full, quality), () => buildSkin(phenotype, full, mouthCarves(phenotype), quality));
+  getGeometry(phenotype, skinKey(full, quality, carved), () =>
+    buildSkin(phenotype, full, carved ? mouthCarves(phenotype) : NO_CARVES, quality),
+  );
 }
 
 export function CreatureMesh({
@@ -108,6 +116,7 @@ export function CreatureMesh({
   quality = 'high',
   rig = null,
   detail = 'full',
+  carved = true,
 }: {
   phenotype: Phenotype;
   skinMode?: SkinMode;
@@ -119,6 +128,9 @@ export function CreatureMesh({
   /** an animation rig (World): the smooth skin becomes a SkinnedMesh on its skeleton and every
    *  feature rides its node's bone. Ignored by the capsule kit. */
   rig?: RigInstance | null;
+  /** carve the mouth cavity into the smooth skin (the rest pose). An articulated jaw (World) wants
+   *  intact skin: the static cavity would show beneath a mouth that closes. */
+  carved?: boolean;
 }) {
   const data = useMemo(() => buildMeshData(phenotype), [phenotype]);
   const pal = phenotype.genomeRef.palette;
@@ -135,12 +147,12 @@ export function CreatureMesh({
 
   // mouth overhaul: the cavity carves — subtracted from the smooth skin so the maw is a true
   // recess, and shared with the mouth builds so lips/teeth land on the same carved rim.
-  const carves = useMemo(() => mouthCarves(phenotype), [phenotype]);
+  const carves = useMemo(() => (carved ? mouthCarves(phenotype) : NO_CARVES), [phenotype, carved]);
 
   // M15: one organic surface over the node field, built once (only when toggled on). The
   // smooth body is static, so motion is paused while it's shown (re-meshing per frame is dear).
   // Shared through the geometry cache: the Studio shows one creature in five viewports at once.
-  const smoothKey = skinKey(full, quality);
+  const smoothKey = skinKey(full, quality, carved);
   const smoothGeo = useMemo(() => {
     if (!showSmooth) return null;
     return getGeometry(phenotype, smoothKey, () => buildSkin(phenotype, full, carves, quality));
@@ -373,6 +385,7 @@ export function CreatureMesh({
 
   const featureNodes = data.features.map((f, k) => {
     if (detail !== 'full' && !keepAt(detail, f)) return null;
+    if (DEV_HIDE.has(f.type)) return null;
     const el = detail === 'lite' && f.type === 'eye' ? (
       <LiteEye f={f} iris={irisColor} />
     ) : (

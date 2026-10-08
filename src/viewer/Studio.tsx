@@ -31,10 +31,16 @@ import { StudioEnvironment } from './StudioEnvironment';
 import { mouthVariant, eyeVariant } from './partStyles';
 import type { SkinQuality } from './smoothSkin';
 import { createRig, poseRig, type RigInstance } from './rig';
+import { JawContext, type JawControl } from './mouths/jaw';
 import { traitsOf } from '../sim/traits';
 
 /** The Studio's motion preview: the World's gait, run in place so a body's movement can be judged. */
 export type Motion = 'still' | 'walk' | 'run' | 'eat' | 'sleep';
+
+const DEV_JAW: number | null =
+  import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('jawopen')
+    ? Number(new URLSearchParams(location.search).get('jawopen'))
+    : null;
 
 function devGaitPhase(): number | null {
   if (!import.meta.env.DEV || typeof location === 'undefined') return null;
@@ -43,7 +49,7 @@ function devGaitPhase(): number | null {
 }
 
 /** Animate a rig in place for the Studio preview (the canvas renders on demand, so keep asking). */
-function useMotion(phenotype: Phenotype, motion: Motion): RigInstance | null {
+function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl): RigInstance | null {
   const rig = useMemo(() => (motion === 'still' ? null : createRig(phenotype)), [phenotype, motion]);
   const traits = useMemo(() => traitsOf(phenotype), [phenotype]);
   const cruise = traits.speed;
@@ -54,6 +60,8 @@ function useMotion(phenotype: Phenotype, motion: Motion): RigInstance | null {
     if (!rig) return;
     const speed = motion === 'walk' ? cruise * 0.55 : motion === 'run' ? cruise * 1.7 : 0;
     if (frozen !== null) rig.phase = frozen; // a zero-dt pose holds the frozen phase at full stride
+    jaw.open = motion === 'eat' ? 0.3 + 0.45 * Math.max(0, Math.sin(rig.t * 9)) : motion === 'run' ? 0.7 : 0;
+    if (DEV_JAW !== null) jaw.open = DEV_JAW;
     poseRig(rig, {
       dt: frozen !== null ? 0 : Math.min(dt, 0.05),
       speed,
@@ -127,7 +135,8 @@ export function SpecimenContent({
   motion?: Motion;
 }) {
   const { center, size, groundY } = framing;
-  const rig = useMotion(phenotype, skinMode === 'capsules' ? 'still' : motion);
+  const jaw = useMemo<JawControl>(() => ({ open: 1 }), []);
+  const rig = useMotion(phenotype, skinMode === 'capsules' ? 'still' : motion, jaw);
   return (
     <>
       <color attach="background" args={[background]} />
@@ -137,7 +146,10 @@ export function SpecimenContent({
       <directionalLight position={[size * 1.2, size * 1.8, size * 1.0]} intensity={1.15} />
       <directionalLight position={[-size * 1.0, size * 0.6, -size * 0.8]} intensity={0.35} color="#a7c0ff" />
       <group position={[-center[0], -center[1], -center[2]]}>
-        <CreatureMesh phenotype={phenotype} skinMode={skinMode} quality={quality} rig={rig} />
+        {/* the jaw is articulated only while previewing motion; still keeps the built rest gape */}
+        <JawContext.Provider value={rig ? jaw : null}>
+          <CreatureMesh phenotype={phenotype} skinMode={skinMode} quality={quality} rig={rig} carved={!rig} />
+        </JawContext.Provider>
         {overlays.skeleton && <SkeletonOverlay phenotype={phenotype} rig={rig} />}
       </group>
       {overlays.grid && <GroundGrid y={groundY - 0.01} size={size} />}

@@ -17,6 +17,7 @@ import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
 import { CreatureMesh, prebuildSkin, type Detail } from '../viewer/CreatureMesh';
 import { createRig, poseRig } from '../viewer/rig';
+import { JawContext, type JawControl } from '../viewer/mouths/jaw';
 import { bodyOf, growthOf, type Corpse, type Creature, type World } from '../sim/world';
 import { heightAt, WATER_LEVEL } from '../sim/terrain';
 
@@ -53,7 +54,7 @@ export function useSkinScheduler(): void {
         LISTENERS.delete(p);
         continue; // nobody waiting any more
       }
-      prebuildSkin(p, 'hybrid', 'low');
+      prebuildSkin(p, 'hybrid', 'low', false);
       READY.add(p);
       LISTENERS.delete(p);
       for (const f of ls) f();
@@ -148,6 +149,7 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
   const swimmer = traits.habitat === 'water' || traits.locomotion === 'swim' || traits.locomotion === 'drift';
   // each actor animates its own skeleton (bones can't be shared between skinned meshes)
   const rig = useMemo(() => createRig(phenotype), [phenotype]);
+  const jaw = useMemo<JawControl>(() => ({ open: 0 }), []);
   const detail = useDetail(() => ref.current?.position ?? null, selected);
   useEffect(() => applyShadows(ref.current, detail), [detail, mode]);
 
@@ -195,6 +197,14 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
     g.rotation.set(0, P.h, 0);
     g.scale.setScalar(s);
     if (body.current) body.current.rotation.x = P.sleep * 0.08; // head drops a touch
+    // the jaw: shut while walking or asleep, chewing while it feeds, agape on the hunt or in flight
+    const want =
+      c.action === 'hunt' ? 1.35 :
+      c.action === 'flee' ? 0.55 :
+      P.eat > 0.4 ? 0.3 + 0.45 * Math.max(0, Math.sin(P.bob * 9)) :
+      0.0;
+    P.bob += dt;
+    jaw.open += (want - jaw.open) * Math.min(1, dt * 8);
     if (ring.current) {
       ring.current.visible = selected;
       ring.current.position.y = ground - y + 0.06;
@@ -205,7 +215,9 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
     <group ref={ref}>
       <group ref={body}>
         <group position={[-place.center[0], 0, -place.center[2]]}>
-          <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" rig={rig} detail={detail} />
+          <JawContext.Provider value={jaw}>
+            <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" rig={rig} detail={detail} carved={false} />
+          </JawContext.Provider>
         </group>
       </group>
       {/* an invisible pick target — the only thing in the actor that is raycast */}
@@ -248,7 +260,7 @@ export function Carcass({ k, world }: { k: Corpse; world: World }) {
   return (
     <group ref={ref}>
       <group position={[-rig.center[0], 0, -rig.center[2]]}>
-        <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" detail="none" />
+        <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" detail="none" carved={false} />
       </group>
     </group>
   );
