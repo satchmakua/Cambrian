@@ -37,13 +37,17 @@ const GRASS_ENERGY = 26; // energy per unit of grass biomass
 const ALGAE_ENERGY = 20;
 const FRUIT_ENERGY = 14;
 const MEAT_ENERGY = 1; // corpses store energy directly
-const GRASS_REGROW = 0.0042; // logistic rate (/s)
+const GRASS_REGROW = 0.0032; // logistic rate (/s)
 const FRUIT_REGROW = 0.028; // fruit per second per bush
 const CORPSE_LIFE = 120; // s before a carcass is gone
-export const MAX_POP = 150;
-/** No one species may hold more than this share of the world (so a prolific grazer can't crowd
- *  every other lineage out of the breeding cap). */
-const SPECIES_SHARE = 0.42;
+/** The hard population cap (a rendering budget, not an ecological limit). */
+export const MAX_POP = 165;
+/** Above this, only RARE species (fewer than RARE alive) may still breed — so a minority lineage
+ *  (a lake of fish, a pair of hunters) is never locked out of reproduction by a crowded world. */
+const SOFT_POP = 135;
+const RARE = 10;
+/** No one species may hold more than this share of the soft cap. */
+const SPECIES_SHARE = 0.36;
 const SPECIATION_DIST = 0.32; // morphospace distance from the species founder that founds a new one
 const WORLD_MUTATION: MutationRates = { point: 0.22, pointSigma: 0.05, structural: 0.05, duplication: 0.02, macro: 0.0 };
 const MUTATION_CHANCE = 0.3; // per offspring
@@ -220,7 +224,7 @@ export function createWorld(seed: number): World {
       const z = -terrain.size / 2 + (j + 0.5) * GRID_CELL;
       const b = biomeAt(terrain, x, z);
       const k = j * gridN + i;
-      grassCap[k] = b === 'meadow' ? 1 : b === 'wood' ? 0.55 : b === 'sand' ? 0.08 : 0;
+      grassCap[k] = b === 'meadow' ? 0.6 : b === 'wood' ? 0.32 : b === 'sand' ? 0.05 : 0;
       algaeCap[k] = b === 'shallow' ? 1 : b === 'deep' ? 0.55 : 0;
       grass[k] = grassCap[k] * (0.6 + 0.4 * rng());
       algae[k] = algaeCap[k] * (0.6 + 0.4 * rng());
@@ -532,8 +536,8 @@ function die(w: World, c: Creature, cause: DeathCause): void {
     z: c.z,
     y: c.y,
     heading: c.heading,
-    meat: (c.traits.maxEnergy * 0.55 + 20) * g * g,
-    maxMeat: (c.traits.maxEnergy * 0.55 + 20) * g * g,
+    meat: (c.traits.maxEnergy * 0.8 + 30) * g * g,
+    maxMeat: (c.traits.maxEnergy * 0.8 + 30) * g * g,
     rot: CORPSE_LIFE,
     genome: c.genome,
     growth: g,
@@ -603,7 +607,9 @@ function decide(w: World, c: Creature): void {
   }
 
   // 4. breed — well fed, adult, and not crowded: a dense herd breeds slowly, a full world not at all
-  const fedEnough = t.diet === 'carnivore' ? 0.5 : t.diet === 'herbivore' || t.diet === 'filter' ? 0.3 : 0.42;
+  // only animals in good condition breed — so a population that has stripped its food stops
+  // multiplying before it starves (the boom-bust brake). Hunters feast and fast, so their bar is lower.
+  const fedEnough = t.diet === 'carnivore' ? 0.45 : 0.28;
   if (c.age > t.maturity && c.breedCooldown <= 0 && hunger < fedEnough && roomToBreed(w, c, near)) {
     let mate: Creature | null = null;
     let md = Infinity;
@@ -628,7 +634,8 @@ function decide(w: World, c: Creature): void {
     }
     // no one in sight: call — head for the nearest of its kind within earshot (solitary hunters and
     // scattered shoals would otherwise never meet)
-    const far = nearby(w, c.x, c.z, t.vision * SCENT, SCENT_BUF);
+    // roaming hunters range far wider to find a mate than herd animals ever need to
+    const far = nearby(w, c.x, c.z, t.vision * SCENT * (t.diet === 'carnivore' ? 2 : 1), SCENT_BUF);
     let call: Creature | null = null;
     let cd = Infinity;
     for (const o of far) {
@@ -695,9 +702,11 @@ function decide(w: World, c: Creature): void {
 /** Is there room for this creature's kind to grow — under the world cap, under its species' share,
  *  and not packed in with its own kind? */
 function roomToBreed(w: World, c: Creature, near: Creature[]): boolean {
-  if (liveCount(w) >= MAX_POP) return false;
+  const live = liveCount(w);
+  if (live >= MAX_POP) return false;
   const sp = speciesById(w, c.species);
-  if (sp && sp.alive >= MAX_POP * SPECIES_SHARE) return false;
+  if (sp && sp.alive >= SOFT_POP * SPECIES_SHARE) return false;
+  if (live >= SOFT_POP && (!sp || sp.alive >= RARE)) return false;
   let crowd = 0;
   for (const o of near) if (o !== c && o.species === c.species && Math.hypot(o.x - c.x, o.z - c.z) < 9) crowd++;
   return crowd < 7;
@@ -987,7 +996,7 @@ function bite(w: World, a: Creature, b: Creature, dt: number): void {
 /** Mate (or bud, when `m` is null): pay the cost and drop a litter — possibly mutated. */
 function breed(w: World, a: Creature, m: Creature | null): void {
   const t = a.traits;
-  const cost = t.maxEnergy * 0.28;
+  const cost = t.maxEnergy * 0.34;
   if (a.energy < cost * 1.4) return;
   a.energy -= cost;
   a.breedCooldown = t.lifespan * 0.07;
@@ -1037,7 +1046,9 @@ function steer(w: World, c: Creature, goal: { x: number; z: number } | null, pac
   let terrainMul = 1;
   if (t.habitat === 'land' && ground < WATER_LEVEL) terrainMul = 0.45;
   if (t.habitat === 'amphibious' && ground < WATER_LEVEL) terrainMul = t.locomotion === 'walk' ? 0.7 : 1.1;
-  const targetSpeed = goal ? t.speed * pace * terrainMul * (0.75 + 0.25 * g) : 0;
+  // the cold-blooded are sluggish after dark
+  const chill = !t.endotherm && isNight(w.time) ? 0.65 : 1;
+  const targetSpeed = goal ? t.speed * pace * terrainMul * chill * (0.75 + 0.25 * g) : 0;
   c.speed += (targetSpeed - c.speed) * Math.min(1, dt * 3);
   if (!goal || c.speed < 0.01) {
     if (!goal) c.speed *= Math.max(0, 1 - dt * 4);

@@ -45,6 +45,9 @@ export interface Traits {
   herding: number; // 0..1 how strongly it keeps with its own kind
   legs: number;
   winged: boolean;
+  /** warm-blooded (fur / feathers): a high, steady burn, active in the cold of night. Everything else
+   *  is cold-blooded — a fraction of the running cost, but sluggish after dark. */
+  endotherm: boolean;
 }
 
 const LEG_TIPS = new Set<Terminal>(['foot', 'claw', 'pincer', 'paw', 'hoof', 'hand']);
@@ -147,6 +150,7 @@ export function traitsOf(p: Phenotype): Traits {
         ? 'amphibious'
         : 'land';
 
+  const cov = g.covering.type;
   const mouth = mouthVariant(mouthStyle);
   const diet = MOUTH_DIET[mouth];
   const s = Math.cbrt(mass); // linear size
@@ -173,7 +177,6 @@ export function traitsOf(p: Phenotype): Traits {
   // weapons & armour
   const weapon = MOUTH_BITE[mouth] + 0.12 * claws + 0.35 * Math.min(horns, 4) + 0.4 * Math.min(pincers, 2) + (barb ? 0.6 : 0) + (club ? 0.5 : 0);
   const attack = weapon * 6 * Math.pow(mass, 0.66);
-  const cov = g.covering.type;
   const armour =
     (shell ? 0.4 : 0) +
     (cov === 'plates' ? 0.25 : cov === 'chitin' ? 0.18 : cov === 'scales' ? 0.1 : 0) +
@@ -183,7 +186,10 @@ export function traitsOf(p: Phenotype): Traits {
 
   const maxHealth = 40 * Math.pow(mass, 0.9) + 10;
   const maxEnergy = 100 * mass + 20;
-  const metabolism = 0.42 * Math.pow(mass, 0.75) + 0.05;
+  // hunters are sit-and-wait engines: a low resting burn between big meals; cold-blooded bodies
+  // (scales, chitin, slime, bare skin, plates) run on roughly half the fuel of furred/feathered ones
+  const endotherm = cov === 'fur' || cov === 'feathers';
+  const metabolism = (0.42 * Math.pow(mass, 0.75) + 0.05) * (diet === 'carnivore' ? 0.7 : 1) * (endotherm ? 1 : 0.5);
   const lifespan = 900 * Math.pow(mass, 0.2) * (shell ? 1.4 : 1);
   const maturity = lifespan * 0.16;
   const litter = mass < 0.6 ? 3 : mass < 2 ? 2 : 1;
@@ -215,5 +221,6 @@ export function traitsOf(p: Phenotype): Traits {
     herding,
     legs,
     winged: wings > 0,
+    endotherm,
   };
 }
