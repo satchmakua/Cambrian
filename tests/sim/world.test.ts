@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  createWorld, release, stepWorld, worldHash, bodyOf, liveCount, preysOn, STEP, DAY_LENGTH, MAX_POP, AIRBORNE,
+  createWorld, release, stepWorld, worldHash, bodyOf, liveCount, preysOn, STEP, DAY_LENGTH, MAX_POP, AIRBORNE, climate, seasonOf, YEAR_DAYS,
 } from '../../src/sim/world';
 import { traitsOf } from '../../src/sim/traits';
 import { heightAt, makeTerrain, biomeAt, WORLD_SIZE, WATER_LEVEL } from '../../src/sim/terrain';
@@ -154,5 +154,18 @@ describe('flight', () => {
     }
     expect(aloft).toBeGreaterThan(20);
     expect(landed).toBeGreaterThan(aloft); // flight is for trips and escapes, not a way of life
+  });
+});
+
+describe('seasons', () => {
+  it('a year turns spring → summer → autumn → winter, and winter is lean and cold', () => {
+    const day = (d: number) => (d + 0.5) * DAY_LENGTH;
+    expect([day(1), day(4), day(7), day(10), day(13)].map(seasonOf)).toEqual(['spring', 'summer', 'autumn', 'winter', 'spring']);
+    const spring = climate(day(1)), winter = climate(day(10)), autumn = climate(day(7));
+    expect(winter.grass).toBeLessThan(spring.grass * 0.5);
+    expect(winter.fruit).toBeLessThan(autumn.fruit * 0.3);
+    expect(winter.cold).toBeGreaterThan(0.8);
+    // smooth: no jumps between neighbouring moments
+    for (let t = 0; t < DAY_LENGTH * YEAR_DAYS; t += 30) expect(Math.abs(climate(t + 30).grass - climate(t).grass)).toBeLessThan(0.08);
   });
 });

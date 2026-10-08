@@ -213,6 +213,36 @@ export function dayNumber(time: number): number {
   return Math.floor(time / DAY_LENGTH) + 1;
 }
 
+// --- seasons ----------------------------------------------------------------------------------------
+/** Days in a year: three per season. */
+export const YEAR_DAYS = 12;
+export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
+const SEASONS: Season[] = ['spring', 'summer', 'autumn', 'winter'];
+/** 0..1 through the year (0 = the first morning of spring). */
+export function yearPhase(time: number): number {
+  return ((time / (DAY_LENGTH * YEAR_DAYS)) % 1 + 1) % 1;
+}
+export function seasonOf(time: number): Season {
+  return SEASONS[Math.floor(yearPhase(time) * 4) % 4];
+}
+/** Smooth cyclic interpolation of one value per season (keyed at each season's middle). */
+export function seasonal(time: number, v: readonly [number, number, number, number]): number {
+  const x = yearPhase(time) * 4 - 0.5; // season centres at integers
+  const i = Math.floor(x);
+  const f = x - i;
+  const a = v[((i % 4) + 4) % 4], b = v[(((i + 1) % 4) + 4) % 4];
+  const u = f * f * (3 - 2 * f);
+  return a + (b - a) * u;
+}
+/** The climate right now: how fast grass and fruit come back, and how cold it is (0 mild … 1 hard frost). */
+export function climate(time: number): { grass: number; fruit: number; cold: number } {
+  return {
+    grass: seasonal(time, [1.45, 1.05, 0.78, 0.45]),
+    fruit: seasonal(time, [0.6, 1.3, 1.55, 0.3]),
+    cold: seasonal(time, [0.25, 0, 0.35, 1]),
+  };
+}
+
 /** Adult fraction of full size (newborns are ~40%; grown by maturity). */
 export function growthOf(c: Creature): number {
   return 0.4 + 0.6 * Math.min(1, c.age / Math.max(1, c.traits.maturity));
@@ -419,11 +449,12 @@ export function stepWorld(w: World, dt = STEP): void {
 
 function growFields(w: World, dt: number): void {
   const { grass, grassCap, algae, algaeCap } = w;
+  const cl = climate(w.time);
   for (let k = 0; k < grass.length; k++) {
     const K = grassCap[k];
     if (K > 0) {
       const b = grass[k];
-      grass[k] = Math.min(K, b + (GRASS_REGROW * b * (1 - b / K) + 0.0004 * K) * dt);
+      grass[k] = Math.min(K, b + (GRASS_REGROW * b * (1 - b / K) + 0.0004 * K) * cl.grass * dt);
     }
     const A = algaeCap[k];
     if (A > 0) {
@@ -431,7 +462,7 @@ function growFields(w: World, dt: number): void {
       algae[k] = Math.min(A, a + (GRASS_REGROW * 3 * a * (1 - a / A) + 0.001 * A) * dt);
     }
   }
-  for (const p of w.plants) p.fruit = Math.min(p.max, p.fruit + FRUIT_REGROW * dt);
+  for (const p of w.plants) p.fruit = Math.min(p.max, p.fruit + FRUIT_REGROW * cl.fruit * dt);
 }
 
 function sampleHistory(w: World): void {
@@ -520,7 +551,9 @@ function live(w: World, c: Creature, dt: number): void {
   // an airspeed above sprint would make ruinous) and it tires faster
   const aloft = c.alt > AIRBORNE;
   const moveCost = aloft ? t.metabolism * 0.8 : t.metabolism * 1.6 * (c.speed / Math.max(0.1, t.sprint)) ** 2;
-  c.energy -= (t.metabolism * (asleep ? 0.55 : 1) * growth ** 2 + moveCost) * dt;
+  // the warm-blooded burn more to keep warm through a hard winter
+  const warmth = t.endotherm ? 1 + 0.14 * climate(w.time).cold : 1;
+  c.energy -= (t.metabolism * warmth * (asleep ? 0.55 : 1) * growth ** 2 + moveCost) * dt;
   c.fatigue = Math.min(1, Math.max(0, c.fatigue + (asleep ? -dt / (DAY_LENGTH * 0.22) : (aloft ? 1.4 : 1) * dt / (DAY_LENGTH * 0.62))));
   if (c.energy <= 0) {
     c.energy = 0;
@@ -1167,8 +1200,8 @@ function steer(w: World, c: Creature, goal: { x: number; z: number } | null, pac
   let terrainMul = 1;
   if (!aloft && t.habitat === 'land' && ground < WATER_LEVEL) terrainMul = 0.45;
   if (!aloft && t.habitat === 'amphibious' && ground < WATER_LEVEL) terrainMul = t.locomotion === 'walk' ? 0.7 : 1.1;
-  // the cold-blooded are sluggish after dark
-  const chill = !t.endotherm && isNight(w.time) ? 0.65 : 1;
+  // the cold-blooded are sluggish after dark, and in the cold of the year
+  const chill = t.endotherm ? 1 : (isNight(w.time) ? 0.65 : 1) * (1 - 0.3 * climate(w.time).cold);
   // on the wing: a flier can't dawdle (a floor on the pace), sprints a little faster than it cruises,
   // and slows as it comes in to land
   const airPace = !c.fly ? (c.action === 'hunt' ? 1.1 : 0.5) : pace > 1 ? 1.25 : Math.max(0.7, pace);

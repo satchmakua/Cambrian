@@ -12,7 +12,7 @@ import { OrbitControls, Sky, Stars } from '@react-three/drei';
 import * as THREE from 'three';
 import { stepWorld, STEP, dayPhase, type World } from '../sim/world';
 import { heightAt } from '../sim/terrain';
-import { TerrainMesh, Water, Bushes, Decor } from './Landscape';
+import { TerrainMesh, Water, Bushes, Decor, updateSeasonLook } from './Landscape';
 import { Grass } from './Flora';
 import { Actor, Carcass, useSkinScheduler } from './Actors';
 import { getWorld, useWorldUi, worldVersion, bumpVersion } from './worldStore';
@@ -29,6 +29,7 @@ function SimDriver() {
   useFrame((_, dtRaw) => {
     const { running, speed, refresh } = useWorldUi.getState();
     const w = getWorld();
+    updateSeasonLook(w.time);
     const dt = Math.min(dtRaw, 0.1);
     if (running) {
       acc.current += dt * speed;
@@ -208,7 +209,7 @@ export function WorldScene() {
       <TerrainMesh key={`t${world.seed}`} world={world} />
       <Water terrain={world.terrain} />
       <Bushes key={`b${world.seed}`} world={world} />
-      <Decor key={`d${world.seed}`} terrain={world.terrain} />
+      <Decor key={`d${world.seed}`} terrain={world.terrain} world={world} />
       <Grass key={`g${world.seed}`} world={world} />
       <Cast world={world} />
       <OrbitControls

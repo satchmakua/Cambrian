@@ -15,7 +15,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../engine/rng';
 import { heightAt, biomeAt, moistureAt, normalAt, WATER_LEVEL, type Terrain } from '../sim/terrain';
-import type { World } from '../sim/world';
+import { seasonal, type World } from '../sim/world';
 
 const RES = 200; // terrain grid quads per side
 
@@ -80,9 +80,25 @@ export function TerrainMesh({ world }: { world: World }) {
  * lusher swales), a fine grain, and on steep faces horizontal rock strata — so a meadow reads as turf
  * and a cliff as stone up close, instead of a flat swatch of vertex colour.
  */
+/** The season's look, shared by the ground, the grass and the trees (updated each frame). */
+export const SEASON_LOOK = {
+  tint: { value: new THREE.Color(1, 1, 1) }, // multiplies living vegetation
+  snow: { value: 0 }, // 0 … 1 snow cover on open ground
+};
+
+export function updateSeasonLook(time: number): void {
+  const r = seasonal(time, [0.94, 1.06, 1.16, 0.86]);
+  const g = seasonal(time, [1.08, 1.0, 0.9, 0.86]);
+  const b = seasonal(time, [0.86, 0.78, 0.66, 0.9]);
+  SEASON_LOOK.tint.value.setRGB(r, g, b);
+  SEASON_LOOK.snow.value = Math.max(0, seasonal(time, [0, 0, 0.05, 0.92]) - 0.05);
+}
+
 function groundMaterial(): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0 });
   m.onBeforeCompile = (shader) => {
+    shader.uniforms.uTint = SEASON_LOOK.tint;
+    shader.uniforms.uSnow = SEASON_LOOK.snow;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vGP;\nvarying vec3 vGN;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvGP = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvGN = normalize(mat3(modelMatrix) * objectNormal);');
@@ -92,6 +108,8 @@ function groundMaterial(): THREE.MeshStandardMaterial {
         `#include <common>
         varying vec3 vGP;
         varying vec3 vGN;
+        uniform vec3 uTint;
+        uniform float uSnow;
         float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float gNoise(vec2 p) {
           vec2 i = floor(p), f = fract(p);
@@ -114,7 +132,12 @@ function groundMaterial(): THREE.MeshStandardMaterial {
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.08, 0.94, 0.78), smoothstep(0.62, 0.8, patches) * (1.0 - steep) * 0.6);
         // strata on steep faces
         float strata = gNoise(vec2(vGP.y * 3.2 + gNoise(vGP.xz * 0.3) * 2.0, 0.5));
-        diffuseColor.rgb *= mix(1.0, 0.8 + 0.35 * strata, smoothstep(0.18, 0.45, steep));`,
+        diffuseColor.rgb *= mix(1.0, 0.8 + 0.35 * strata, smoothstep(0.18, 0.45, steep));
+        // the season: living green takes the season's tint; winter lays patchy snow on open ground
+        float green = smoothstep(0.0, 0.08, diffuseColor.g - max(diffuseColor.r, diffuseColor.b) * 0.92);
+        diffuseColor.rgb *= mix(vec3(1.0), uTint, green);
+        float lying = smoothstep(0.72, 0.9, vGN.y) * step(0.15, vGP.y) * smoothstep(0.25, 0.55, gFbm(vGP.xz * 0.21) + uSnow * 0.6);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.88, 0.92), lying * uSnow);`,
       );
   };
   return m;
@@ -375,7 +398,11 @@ function coniferCrown(): THREE.BufferGeometry {
   return g;
 }
 
-export function Decor({ terrain }: { terrain: Terrain }) {
+const AUTUMN = [0xd9822b, 0xc4422b, 0xe0b23a, 0xb8562a, 0xd59a2f].map((c) => new THREE.Color(c));
+const BARE = new THREE.Color(0x8c7b68);
+const SNOWY = new THREE.Color(0xdfe4ea);
+
+export function Decor({ terrain, world }: { terrain: Terrain; world?: World }) {
   const { trees, pines, rocks } = useMemo(() => {
     const rng = mulberry32(terrain.seed ^ 0x7ee5);
     const trees: { x: number; y: number; z: number; s: number; r: number }[] = [];
@@ -439,6 +466,7 @@ export function Decor({ terrain }: { terrain: Terrain }) {
       pineRef.current?.setMatrixAt(i, o.matrix);
       pineRef.current?.setColorAt(i, c.setHSL(0.36 + (i % 5) * 0.01, 0.38, 0.13 + (i % 4) * 0.015));
     });
+    seasonKey.current = -1; // re-tint for the current season
     rocks.forEach((r, i) => {
       o.position.set(r.x, r.y + r.s * 0.25, r.z);
       o.rotation.set(r.r * 0.3, r.r, r.r * 0.7);
@@ -449,6 +477,45 @@ export function Decor({ terrain }: { terrain: Terrain }) {
     for (const m of [trunkRef.current, crownRef.current, pineTrunkRef.current, pineRef.current, rockRef.current]) if (m) m.instanceMatrix.needsUpdate = true;
     for (const m of [crownRef.current, pineRef.current]) if (m?.instanceColor) m.instanceColor.needsUpdate = true;
   }, [trees, pines, rocks]);
+
+  // the seasons on the trees: broadleaves turn (each its own autumn colour), drop their leaves for
+  // winter (the crown thins to a bare twiggy dome) and leaf out again; conifers just catch the snow
+  const seasonKey = useRef(-1);
+  const greens = useMemo(() => trees.map((_, i) => ((i * 7) % 23 === 0 ? new THREE.Color().setHSL(0.13, 0.55, 0.3) : new THREE.Color().setHSL(0.24 + (i % 7) * 0.014, 0.45, 0.17 + (i % 5) * 0.018))), [trees]);
+  const pineGreens = useMemo(() => pines.map((_, i) => new THREE.Color().setHSL(0.36 + (i % 5) * 0.01, 0.38, 0.13 + (i % 4) * 0.015)), [pines]);
+  useFrame(() => {
+    if (!world) return;
+    const key = Math.round(world.time / 6); // re-tint every few seconds of sim time
+    if (key === seasonKey.current) return;
+    seasonKey.current = key;
+    const turn = Math.max(0, seasonal(world.time, [0, 0.15, 1, 0.35]));
+    const bare = Math.max(0, seasonal(world.time, [0.05, 0, 0.15, 1]));
+    const snow = SEASON_LOOK.snow.value;
+    const o = new THREE.Object3D();
+    const c = new THREE.Color();
+    const crown = crownRef.current;
+    if (crown) {
+      trees.forEach((t, i) => {
+        c.copy(greens[i]).lerp(AUTUMN[i % AUTUMN.length], turn * (0.7 + 0.3 * ((i * 13) % 7) / 7)).lerp(BARE, bare * 0.85);
+        crown.setColorAt(i, c);
+        const H = 3.2 * t.s;
+        const k = 1 - 0.5 * bare;
+        o.position.set(t.x, t.y + H + 0.9 * t.s * k, t.z);
+        o.rotation.set(0, t.r, 0);
+        o.scale.set(1.9 * t.s * k, 1.75 * t.s * k, 1.9 * t.s * k);
+        o.updateMatrix();
+        crown.setMatrixAt(i, o.matrix);
+      });
+      crown.instanceMatrix.needsUpdate = true;
+      if (crown.instanceColor) crown.instanceColor.needsUpdate = true;
+    }
+    const pine = pineRef.current;
+    if (pine) {
+      pines.forEach((_, i) => pine.setColorAt(i, c.copy(pineGreens[i]).lerp(SNOWY, snow * 0.5)));
+      if (pine.instanceColor) pine.instanceColor.needsUpdate = true;
+    }
+  });
+
   return (
     <>
       <instancedMesh ref={trunkRef} args={[geos.trunk, undefined, trees.length]} castShadow>

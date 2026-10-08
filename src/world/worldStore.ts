@@ -11,7 +11,7 @@ import { create } from 'zustand';
 import type { Genome } from '../engine/genome';
 import { genomeOfMorphotype, randomGenome } from '../engine/random';
 import {
-  AIRBORNE, createWorld, release, dayNumber, dayPhase, isNight, growthOf, speciesById, liveCount,
+  AIRBORNE, createWorld, release, dayNumber, dayPhase, isNight, growthOf, speciesById, liveCount, seasonOf, type Season,
   type World, type Action, type HistorySample, type WorldEvent,
 } from '../sim/world';
 import type { Traits } from '../sim/traits';
@@ -74,6 +74,7 @@ export interface TreeNode {
 
 export interface Snapshot {
   tree: TreeNode[];
+  season: Season;
   time: number;
   day: number;
   phase: number;
@@ -166,6 +167,7 @@ export function snapshotOf(w: World, selected: number | null): Snapshot {
   }
   return {
     tree: w.species.map((sp) => ({ id: sp.id, name: sp.name, hue: sp.hue, parent: sp.parent, born: sp.firstSeen, extinctAt: sp.extinctAt, alive: sp.alive })),
+    season: seasonOf(w.time),
     time: w.time,
     day: dayNumber(w.time),
     phase: dayPhase(w.time),

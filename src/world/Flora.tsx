@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { mulberry32 } from '../engine/rng';
 import { biomeAt, heightAt, normalAt, type Terrain } from '../sim/terrain';
 import type { World } from '../sim/world';
+import { SEASON_LOOK } from './Landscape';
 
 const TUFTS = 17000;
 const FLOWERS = 900;
@@ -173,8 +174,12 @@ export function Grass({ world }: { world: World }) {
   const timer = useRef(1);
   const o = useMemo(() => new THREE.Object3D(), []);
   const c = useMemo(() => new THREE.Color(), []);
+  const white = useMemo(() => new THREE.Color(0xe8ecef), []);
   useFrame((_, dt) => {
     time.value += dt;
+    // the season's tint, and a frosting of snow on the blades in winter
+    const snow = SEASON_LOOK.snow.value;
+    mats.grass.color.copy(SEASON_LOOK.tint.value).lerp(white, snow * 0.4);
     timer.current += dt;
     if (timer.current < 0.5) return;
     timer.current = 0;
@@ -184,7 +189,7 @@ export function Grass({ world }: { world: World }) {
         const t = tufts[i];
         const cap = world.grassCap[t.cell];
         const lush = cap > 0 ? Math.min(1, world.grass[t.cell] / cap) : 0.6;
-        const h = t.s * (0.22 + 0.78 * lush);
+        const h = t.s * (0.22 + 0.78 * lush) * (1 - 0.4 * SEASON_LOOK.snow.value); // winter flattens it
         o.position.set(t.x, t.y - 0.02, t.z);
         o.rotation.set(t.tilt[0], t.r, t.tilt[1]);
         o.scale.set(t.s * 0.9, h, t.s * 0.9);
@@ -203,7 +208,7 @@ export function Grass({ world }: { world: World }) {
         const cap = world.grassCap[fl.cell];
         const lush = cap > 0 ? Math.min(1, world.grass[fl.cell] / cap) : 0.6;
         // grazed off with the grass; they come back when it does
-        const s = lush > 0.45 ? fl.s : 0;
+        const s = lush > 0.45 && SEASON_LOOK.snow.value < 0.3 ? fl.s : 0; // and no flowers under snow
         o.position.set(fl.x, fl.y + 0.55 * fl.s, fl.z);
         o.rotation.set(0, 0, 0);
         o.scale.setScalar(s);

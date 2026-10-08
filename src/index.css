@@ -1272,3 +1272,8 @@ body,
 .tol-extinct .tol-label {
   opacity: 0.55;
 }
+
+.clock .season {
+  text-transform: capitalize;
+  color: var(--accent);
+}

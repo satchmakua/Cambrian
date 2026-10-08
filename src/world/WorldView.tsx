@@ -138,7 +138,7 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
         </nav>
         {snap && (
           <div className="clock">
-            <b>Day {snap.day}</b> <span>{clock(snap.phase)}</span> <span className="sky">{snap.night ? '☾ night' : '☀ day'}</span>
+            <b>Day {snap.day}</b> <span className="season">{snap.season}</span> <span>{clock(snap.phase)}</span> <span className="sky">{snap.night ? '☾ night' : '☀ day'}</span>
           </div>
         )}
         <div className="transport">
