@@ -11,13 +11,14 @@
  */
 import type { Genome } from '../engine/genome';
 import { decodeGenome, encodeGenome } from '../engine/share';
-import { bodyOf, createWorld, type Corpse, type Creature, type Species, type World } from './world';
+import { bodyOf, createWorld, type Corpse, type Creature, type Egg, type Species, type World } from './world';
 
 export const SAVE_VERSION = 1;
 
 type SavedCreature = Omit<Creature, 'genome' | 'traits'> & { genome: number };
 type SavedCorpse = Omit<Corpse, 'genome'> & { genome: number };
 type SavedSpecies = Omit<Species, 'founder'> & { founder: number };
+type SavedEgg = Omit<Egg, 'genome'> & { genome: number };
 
 interface SavedWorld {
   format: 'cambrian-world';
@@ -36,6 +37,7 @@ interface SavedWorld {
   species: SavedSpecies[];
   creatures: SavedCreature[];
   corpses: SavedCorpse[];
+  eggs?: SavedEgg[];
   events: World['events'];
   history: World['history'];
   tally: World['tally'];
@@ -57,6 +59,7 @@ export function saveWorld(w: World): string {
   const species = w.species.map(({ founder, ...rest }) => ({ ...rest, founder: ref(founder) }));
   const creatures = w.creatures.map(({ genome, traits: _traits, ...rest }) => ({ ...rest, genome: ref(genome) }));
   const corpses = w.corpses.map(({ genome, ...rest }) => ({ ...rest, genome: ref(genome) }));
+  const eggs = w.eggs.map(({ genome, ...rest }) => ({ ...rest, genome: ref(genome) }));
   const out: SavedWorld = {
     format: 'cambrian-world',
     v: SAVE_VERSION,
@@ -74,6 +77,7 @@ export function saveWorld(w: World): string {
     species,
     creatures,
     corpses,
+    eggs,
     events: w.events,
     history: w.history,
     tally: w.tally,
@@ -119,6 +123,7 @@ export function loadWorld(json: string): World {
     return { ...rest, courtT: rest.courtT ?? 0, chaseT: rest.chaseT ?? 0, genome: g, traits: bodyOf(g).traits };
   });
   w.corpses = s.corpses.map(({ genome: gi, ...rest }) => ({ ...rest, genome: genome(gi) }));
+  w.eggs = (s.eggs ?? []).map(({ genome: gi, ...rest }) => ({ ...rest, genome: genome(gi) }));
   w.events = s.events.map((e) => ({ ...e }));
   w.history = s.history.map((h) => ({ ...h, pops: { ...h.pops } }));
   w.tally = { ...s.tally };

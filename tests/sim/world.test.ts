@@ -277,3 +277,67 @@ describe('a living balance', () => {
     expect(w.creatures.some((c) => c.traits.diet === 'carnivore')).toBe(true);
   }, 60000);
 });
+
+describe('nests and eggs', () => {
+  const pairUp = (w: ReturnType<typeof createWorld>, kind: string) => {
+    const pair = release(w, g(kind), 2);
+    pair[1].x = pair[0].x + 2.5;
+    pair[1].z = pair[0].z;
+    for (const c of pair) {
+      c.age = c.traits.maturity + 10;
+      c.energy = c.traits.maxEnergy;
+      c.fatigue = 0;
+      c.breedCooldown = 0;
+    }
+    return pair;
+  };
+
+  it('an egg-layer lays a clutch that hatches a third of a day later into its young', () => {
+    const w = createWorld(3);
+    const [a] = pairUp(w, 'bird');
+    expect(a.traits.oviparous).toBe(true);
+    let laidAt = -1;
+    for (let i = 0; i < 60 / STEP && laidAt < 0; i++) {
+      stepWorld(w);
+      if (w.eggs.length) laidAt = w.time;
+    }
+    expect(laidAt).toBeGreaterThan(0);
+    const clutch = w.eggs.length;
+    expect(clutch).toBeGreaterThanOrEqual(2);
+    expect(w.tally.births).toBe(0); // eggs, not young — yet
+    const mother = w.eggs[0].mother;
+    run(w, 110);
+    expect(w.eggs.filter((e) => e.mother === mother).length).toBe(0);
+    const young = w.creatures.filter((c) => c.parent === mother && c.age < 60);
+    expect(young.length).toBeGreaterThan(0);
+  });
+
+  it('a furred pair bears live young (no eggs)', () => {
+    const w = createWorld(3);
+    const [a] = pairUp(w, 'ungulate');
+    expect(a.traits.oviparous).toBe(false);
+    run(w, 60);
+    expect(w.eggs.length).toBe(0);
+    expect(w.tally.births).toBeGreaterThan(0);
+  });
+
+  it('a hungry hunter raids an unguarded nest', () => {
+    const w = createWorld(3);
+    const [a] = pairUp(w, 'bird');
+    for (let i = 0; i < 60 / STEP && w.eggs.length === 0; i++) stepWorld(w);
+    expect(w.eggs.length).toBeGreaterThan(0);
+    // the parents leave; a hungry cat comes by
+    for (const c of w.creatures) c.alive = false;
+    w.creatures = [];
+    const nest = w.eggs[0];
+    const [cat] = release(w, g('felid'), 1, { x: nest.x, z: nest.z });
+    cat.x = nest.x + 4;
+    cat.z = nest.z;
+    cat.energy = cat.traits.maxEnergy * 0.3;
+    cat.fatigue = 0;
+    const before = w.eggs.length;
+    run(w, 20);
+    expect(w.eggs.length).toBeLessThan(before);
+    void a;
+  });
+});

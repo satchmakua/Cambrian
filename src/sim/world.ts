@@ -42,6 +42,8 @@ const MEAT_ENERGY = 1; // corpses store energy directly
 const GRASS_REGROW = 0.0032; // logistic rate (/s)
 const FRUIT_REGROW = 0.028; // fruit per second per bush
 const CORPSE_LIFE = 120; // s before a carcass is gone
+const HATCH_TIME = 84; // s an egg takes to hatch (~a third of a day)
+const EGG_ENERGY = 30; // what a raided egg is worth
 /** The hard population cap (a rendering budget, not an ecological limit). */
 export const MAX_POP = 165;
 /** Above this, only RARE species (fewer than RARE alive) may still breed — so a minority lineage
@@ -164,6 +166,24 @@ export interface Corpse {
   species: number;
 }
 
+/** An egg: laid in a clutch (a nest on land, a spawn cluster in the water), it hatches into a
+ *  juvenile at `hatchAt` — unless something eats it first. */
+export interface Egg {
+  id: number;
+  x: number;
+  z: number;
+  y: number;
+  genome: Genome;
+  species: number;
+  mother: number; // creature id (it may be dead by the time the egg hatches)
+  generation: number;
+  laidAt: number;
+  hatchAt: number;
+  /** the clutch it belongs to (its first egg's id) — one nest */
+  nest: number;
+  water: boolean;
+}
+
 export interface WorldEvent {
   t: number;
   kind: 'birth' | 'death' | 'speciation' | 'extinction' | 'release' | 'kill' | 'mutation';
@@ -192,6 +212,7 @@ export interface World {
   plants: Plant[];
   creatures: Creature[];
   corpses: Corpse[];
+  eggs: Egg[];
   species: Species[];
   nextId: number;
   events: WorldEvent[];
@@ -313,6 +334,7 @@ export function createWorld(seed: number): World {
     plants: [],
     creatures: [],
     corpses: [],
+    eggs: [],
     species: [],
     nextId: 1,
     events: [],
@@ -464,6 +486,8 @@ export function stepWorld(w: World, dt = STEP): void {
   for (const c of w.creatures) if (c.alive) live(w, c, dt);
   // the dead are kept one step for the viewer's fade, then culled
   w.creatures = w.creatures.filter((c) => c.alive);
+  // eggs hatch
+  if (w.eggs.length) hatch(w);
   // carcasses rot
   for (const k of w.corpses) k.rot -= dt;
   w.corpses = w.corpses.filter((k) => k.rot > 0 && k.meat > 0.5);
@@ -788,6 +812,14 @@ function decide(w: World, c: Creature): void {
   // keep close to a parent
   c.action = 'wander';
   c.target = -1;
+  // a mother keeps close to her clutch until it hatches
+  const clutch = w.eggs.find((e) => e.mother === c.id);
+  if (clutch) {
+    const a = c.wanderSeed + w.time * 0.25;
+    c.tx = clutch.x + Math.sin(a) * 2.2;
+    c.tz = clutch.z + Math.cos(a) * 2.2;
+    return;
+  }
   if (c.age < t.maturity && c.parent !== null) {
     const mum = w.creatures.find((o) => o.id === c.parent && o.alive);
     if (mum && Math.hypot(mum.x - c.x, mum.z - c.z) < 60) {
@@ -945,6 +977,16 @@ function findFood(w: World, c: Creature, near: Creature[], sight: number, hunger
       const d = Math.hypot(k.x - c.x, k.z - c.z);
       if (d > sight || !reachable(w, t, k.x, k.z)) continue;
       consider(30 - d * 0.5 + Math.min(20, k.meat * 0.1), 'scavenge', k.id, k.x, k.z);
+    }
+    // a clutch left unguarded: eggs of another kind (raided only when properly hungry)
+    if (hunger > 0.35) {
+      for (const e of w.eggs) {
+        if (e.species === c.species) continue;
+        const d = Math.hypot(e.x - c.x, e.z - c.z);
+        if (d > sight || !reachable(w, t, e.x, e.z)) continue;
+        const guarded = w.creatures.some((o) => o.id === e.mother && o.alive && Math.hypot(o.x - e.x, o.z - e.z) < 3);
+        consider(22 - d * 0.6 - (guarded ? 14 : 0), 'scavenge', e.id, e.x, e.z);
+      }
     }
   }
   // prey
@@ -1135,6 +1177,25 @@ function act(w: World, c: Creature, dt: number): void {
     case 'scavenge':
     case 'eat': {
       const k = w.corpses.find((q) => q.id === c.target);
+      if (!k && c.action === 'scavenge') {
+        // raiding a nest
+        const ei = w.eggs.findIndex((q) => q.id === c.target);
+        if (ei < 0) {
+          done(c);
+          break;
+        }
+        const e = w.eggs[ei];
+        if (Math.hypot(e.x - c.x, e.z - c.z) > arrive + 0.4 || !landed) {
+          goal = e;
+          pace = 0.9;
+        } else {
+          w.eggs.splice(ei, 1);
+          c.energy = Math.min(t.maxEnergy * g, c.energy + EGG_ENERGY);
+          c.bitAt = w.time;
+          done(c);
+        }
+        break;
+      }
       if (!k || k.meat <= 0.5) {
         done(c);
         break;
@@ -1332,7 +1393,10 @@ function breed(w: World, a: Creature, m: Creature | null): void {
   }
   const sp = speciesById(w, a.species);
   if (!sp) return;
-  const n = t.litter;
+  // an egg-layer's clutch runs one larger than a live-bearer's litter (eggs are cheaper, and many
+  // never hatch)
+  const n = t.litter + (m && t.oviparous ? 1 : 0);
+  let nest: number | undefined;
   for (let i = 0; i < n && liveCount(w) < MAX_POP; i++) {
     let genome = a.genome;
     let species = sp;
@@ -1349,6 +1413,32 @@ function breed(w: World, a: Creature, m: Creature | null): void {
       }
     }
     const ct = bodyOf(genome).traits;
+    if (m && t.oviparous) {
+      // an egg in the clutch: a ring of them around the mother's spot, hatching in a third of a day
+      const ang = (i / Math.max(1, n)) * Math.PI * 2 + a.wanderSeed;
+      const r = 0.35 + 0.12 * n;
+      const x = a.x + Math.sin(ang) * r, z = a.z + Math.cos(ang) * r;
+      const id = w.nextId++;
+      nest ??= id;
+      w.eggs.push({
+        id,
+        x,
+        z,
+        y: heightAt(w.terrain, x, z),
+        genome,
+        species: species.id,
+        mother: a.id,
+        generation: a.generation + 1,
+        laidAt: w.time,
+        hatchAt: w.time + HATCH_TIME * (0.85 + 0.3 * w.rng()),
+        nest,
+        water: heightAt(w.terrain, a.x, a.z) < WATER_LEVEL,
+      });
+      a.children++;
+      m.children++;
+      if (i === 0) log(w, 'birth', `a ${species.name} laid ${n > 1 ? `${n} eggs` : 'an egg'}`, species.id, a.id);
+      continue;
+    }
     let x = a.x + (w.rng() - 0.5) * 3, z = a.z + (w.rng() - 0.5) * 3;
     if (!canStand(w, ct, x, z)) {
       x = a.x;
@@ -1361,6 +1451,34 @@ function breed(w: World, a: Creature, m: Creature | null): void {
     if (m) m.children++;
     if (i === 0) log(w, 'birth', `a ${species.name} was born${m ? '' : ' (budded)'}`, species.id, child.id);
   }
+}
+
+/** Eggs whose time has come hatch into juveniles (if the valley has room for them). */
+function hatch(w: World): void {
+  let hatched = 0;
+  const keep: Egg[] = [];
+  for (const e of w.eggs) {
+    if (w.time < e.hatchAt) {
+      keep.push(e);
+      continue;
+    }
+    const sp = speciesById(w, e.species);
+    if (!sp || liveCount(w) >= MAX_POP) continue; // no room: the egg fails
+    const mum = w.creatures.find((c) => c.id === e.mother && c.alive) ?? null;
+    const ct = bodyOf(e.genome).traits;
+    let x = e.x, z = e.z;
+    if (!canStand(w, ct, x, z) && mum) {
+      x = mum.x;
+      z = mum.z;
+    }
+    const child = spawn(w, e.genome, sp, x, z, false, mum);
+    child.generation = e.generation;
+    child.parent = e.mother;
+    child.heading = w.rng() * Math.PI * 2;
+    w.tally.births++;
+    if (hatched++ === 0) log(w, 'birth', `a ${sp.name} hatched`, sp.id, child.id);
+  }
+  w.eggs = keep;
 }
 
 /** Turn toward the goal within the turn rate, then move — respecting habitat, terrain and bounds. */
@@ -1433,7 +1551,7 @@ function steer(w: World, c: Creature, goal: { x: number; z: number } | null, pac
 
 /** A cheap deterministic fingerprint of the world state (for replay tests). */
 export function worldHash(w: World): number {
-  let h = mix32(w.stepCount, w.creatures.length, w.corpses.length, w.species.length);
+  let h = mix32(w.stepCount, w.creatures.length, w.corpses.length, w.species.length, w.eggs.length);
   for (const c of w.creatures) h = mix32(h, c.id, Math.round(c.x * 1000), Math.round(c.z * 1000), Math.round(c.energy * 10));
   return h >>> 0;
 }

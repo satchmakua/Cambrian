@@ -15,6 +15,7 @@ import { SOUND } from './audio';
 import { heightAt } from '../sim/terrain';
 import { TerrainMesh, Water, Bushes, Decor, updateSeasonLook } from './Landscape';
 import { Grass } from './Flora';
+import { Nests } from './Nests';
 import { Precipitation, WEATHER_LOOK, setPrecipDaylight, updateWeatherLook } from './Weather';
 import { Director } from './Director';
 import { Actor, Carcass, useSkinScheduler } from './Actors';
@@ -46,7 +47,7 @@ function SimDriver() {
       if (n === MAX_STEPS_PER_FRAME) acc.current = 0; // falling behind: drop the backlog
     }
     // re-render the actor list when births/deaths change the cast
-    const shape = `${w.creatures.length}:${w.creatures[w.creatures.length - 1]?.id ?? 0}:${w.corpses.length}:${w.corpses[w.corpses.length - 1]?.id ?? 0}`;
+    const shape = `${w.creatures.length}:${w.creatures[w.creatures.length - 1]?.id ?? 0}:${w.corpses.length}:${w.corpses[w.corpses.length - 1]?.id ?? 0}:${w.eggs.length}:${w.eggs[0]?.id ?? 0}`;
     if (shape !== lastShape.current) {
       lastShape.current = shape;
       bumpVersion();
@@ -212,6 +213,7 @@ function Cast({ world }: { world: World }) {
       {world.creatures.map((c) => (
         <Actor key={c.id} c={c} world={world} onPick={select} selected={c.id === selected} />
       ))}
+      <Nests world={world} />
       {world.corpses.map((k) => (
         <Carcass key={k.id} k={k} world={world} />
       ))}
@@ -271,7 +273,12 @@ function DevLook() {
     if (!q) return;
     const t = getWorld().terrain;
     let x = 0, z = 0;
-    if (q === 'river') {
+    const w0 = getWorld();
+    const egg = w0.eggs.find((e) => !e.water);
+    if (q === 'nest' && egg) {
+      x = egg.x;
+      z = egg.z;
+    } else if (q === 'river') {
       // a point some way down the river's course
       const s = t.lakeR * 0.6 + 34;
       x = t.lakeX + Math.sin(t.riverA) * s;
@@ -279,7 +286,8 @@ function DevLook() {
     } else [x, z] = q.split(',').map(Number);
     const y = Math.max(0, heightAt(t, x, z));
     controls.target.set(x, y, z);
-    camera.position.set(x + 14, y + 12, z + 16);
+    const k = q === 'nest' ? 0.3 : 1;
+    camera.position.set(x + 14 * k, y + 12 * k, z + 16 * k);
     controls.update();
   });
   return null;

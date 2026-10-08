@@ -191,6 +191,7 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
         aloft: (x) => x.alt > 1,
         courting: (x) => x.action === 'mate' && x.courtT > 1.2,
         stalking: (x) => x.action === 'hunt' && x.chaseT <= 0 && x.alt <= 0.1,
+        nesting: (x) => w.eggs.some((e) => e.mother === x.id && !e.water),
       };
       const special = f ? wanted[f] : undefined;
       if (special && f !== 'aloft') for (let i = 0; i < 12000 && !w.creatures.some(special); i++) stepWorld(w);

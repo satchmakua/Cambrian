@@ -35,6 +35,7 @@ export function adoptWorld(into: World, from: World): void {
   into.species = from.species;
   into.creatures = from.creatures;
   into.corpses = from.corpses;
+  into.eggs = from.eggs;
   into.events = from.events;
   into.history = from.history;
   into.tally = from.tally;

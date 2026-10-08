@@ -52,6 +52,8 @@ export interface Traits {
   /** warm-blooded (fur / feathers): a high, steady burn, active in the cold of night. Everything else
    *  is cold-blooded — a fraction of the running cost, but sluggish after dark. */
   endotherm: boolean;
+  /** lays eggs (everything but the furred, which bear live young; the budding kinds bud) */
+  oviparous: boolean;
 }
 
 const LEG_TIPS = new Set<Terminal>(['foot', 'claw', 'pincer', 'paw', 'hoof', 'hand']);
@@ -231,5 +233,6 @@ export function traitsOf(p: Phenotype): Traits {
     flies,
     flySpeed,
     endotherm,
+    oviparous: cov !== 'fur',
   };
 }
