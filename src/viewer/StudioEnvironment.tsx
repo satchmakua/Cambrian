@@ -3,28 +3,70 @@
  *
  * drei's `<Environment preset=…>` downloads an HDR from a CDN; when that fetch fails (offline, a
  * firewall, a headless capture) the loader *throws*, and a Suspense boundary does not catch throws,
- * so the whole canvas unmounted. Here the env map is rendered once into a cube target from a handful
- * of emissive `Lightformer` panels — a soft key, a cool rim, a warm ground bounce — so the creature's
- * PBR skin gets real reflections and wet highlights deterministically, on any machine, instantly.
+ * so the whole canvas unmounted. Here the env map is a tiny scene of emissive panels — a big overhead
+ * softbox, a key from front-right, a cool rim from behind-left, a warm ground bounce, and thin strip
+ * lights for crisp catch-lights in eyes and wet skin — prefiltered ONCE per renderer with PMREM and
+ * shared by every scene that renders on it (the main stage, the Studio plates, the Bestiary, the
+ * World). Deterministic, offline, and cheap to reuse across many viewports.
  */
-import { Environment, Lightformer } from '@react-three/drei';
+import { useEffect } from 'react';
+import { useThree } from '@react-three/fiber';
+import * as THREE from 'three';
 
-export function StudioEnvironment({ resolution = 256 }: { resolution?: number }) {
-  return (
-    <Environment resolution={resolution} frames={1}>
-      {/* dim backdrop so reflections aren't pitch black */}
-      <color attach="background" args={['#14161c']} />
-      {/* big overhead softbox — the main specular highlight along backs and heads */}
-      <Lightformer form="rect" intensity={2.2} color="#fff6ea" position={[0, 6, 0]} rotation-x={Math.PI / 2} scale={[10, 6, 1]} />
-      {/* key from front-right */}
-      <Lightformer form="rect" intensity={1.6} color="#ffffff" position={[5, 2.5, 4]} target={[0, 0, 0]} scale={[4, 3, 1]} />
-      {/* cool rim from behind-left — separates the silhouette */}
-      <Lightformer form="rect" intensity={1.4} color="#a9c4ff" position={[-5, 2, -4]} target={[0, 0, 0]} scale={[5, 2.5, 1]} />
-      {/* warm ground bounce — under-chin / belly fill */}
-      <Lightformer form="rect" intensity={0.5} color="#c9a37a" position={[0, -4, 0]} rotation-x={-Math.PI / 2} scale={[12, 12, 1]} />
-      {/* thin strip lights — the crisp catch-light in eyes and wet skin */}
-      <Lightformer form="rect" intensity={2.5} color="#ffffff" position={[-3, 3.5, 5]} target={[0, 0, 0]} scale={[0.4, 3, 1]} />
-      <Lightformer form="ring" intensity={1.2} color="#ffe2c0" position={[3, 1, -5]} target={[0, 0, 0]} scale={1.5} />
-    </Environment>
-  );
+const CACHE = new WeakMap<THREE.WebGLRenderer, THREE.Texture>();
+
+function panel(
+  scene: THREE.Scene,
+  color: THREE.ColorRepresentation,
+  intensity: number,
+  size: [number, number],
+  pos: [number, number, number],
+  look: [number, number, number] = [0, 0, 0],
+): void {
+  const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(intensity), side: THREE.DoubleSide });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(size[0], size[1]), mat);
+  m.position.set(...pos);
+  m.lookAt(...look);
+  scene.add(m);
+}
+
+/** The prefiltered studio environment texture for this renderer (built on first use, then cached). */
+export function studioEnvTexture(gl: THREE.WebGLRenderer): THREE.Texture {
+  const hit = CACHE.get(gl);
+  if (hit) return hit;
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x14161c); // dim backdrop so reflections aren't pitch black
+  panel(scene, 0xfff6ea, 2.2, [10, 6], [0, 6, 0]); // overhead softbox — the main highlight on backs
+  panel(scene, 0xffffff, 1.6, [4, 3], [5, 2.5, 4]); // key, front-right
+  panel(scene, 0xa9c4ff, 1.4, [5, 2.5], [-5, 2, -4]); // cool rim, behind-left
+  panel(scene, 0xc9a37a, 0.5, [12, 12], [0, -4, 0]); // warm ground bounce — belly fill
+  panel(scene, 0xffffff, 2.5, [0.4, 3], [-3, 3.5, 5]); // strip — eye catch-light
+  panel(scene, 0xffe2c0, 1.2, [1.6, 1.6], [3, 1, -5]); // warm kicker
+  const pmrem = new THREE.PMREMGenerator(gl);
+  const tex = pmrem.fromScene(scene, 0.03).texture;
+  pmrem.dispose();
+  scene.traverse((o) => {
+    if (o instanceof THREE.Mesh) {
+      o.geometry.dispose();
+      (o.material as THREE.Material).dispose();
+    }
+  });
+  CACHE.set(gl, tex);
+  return tex;
+}
+
+/** Light the enclosing scene (or View portal) with the shared studio environment. */
+export function StudioEnvironment() {
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    const prev = scene.environment;
+    scene.environment = studioEnvTexture(gl);
+    invalidate();
+    return () => {
+      scene.environment = prev;
+    };
+  }, [gl, scene, invalidate]);
+  return null;
 }

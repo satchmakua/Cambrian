@@ -22,6 +22,22 @@ const SKIN_KEY = 'cambrian.skinMode.v2'; // a render preference, persisted on it
 /** capsules (the kit) · smooth (organic SDF, body only) · hybrid (organic SDF over every part). */
 export type SkinMode = 'capsules' | 'smooth' | 'hybrid';
 
+/** The top-level screen: breed (the Biomorphs loop) · studio (inspect one specimen) · world (ecosystem). */
+export type AppView = 'breed' | 'studio' | 'world';
+
+function initialView(): AppView {
+  try {
+    if (typeof location !== 'undefined') {
+      const q = new URLSearchParams(location.search);
+      if (q.get('studio') === '1' || q.get('bestiary') === '1') return 'studio';
+      if (q.get('world') === '1') return 'world';
+    }
+  } catch {
+    /* ignore */
+  }
+  return 'breed';
+}
+
 function loadSkinMode(): SkinMode {
   try {
     const v = typeof localStorage !== 'undefined' ? localStorage.getItem(SKIN_KEY) : null;
@@ -44,6 +60,10 @@ interface Session {
 }
 
 interface AppState extends Session {
+  view: AppView;
+  setView: (view: AppView) => void;
+  /** Root a fresh lineage at this exact genome (the Bestiary's "adopt", the World's "take home"). */
+  adopt: (genome: Genome) => void;
   pressure: Pressure; // directed-evolution target (M4)
   skinMode: SkinMode; // capsules / smooth / hybrid (M15 + the hybrid)
   setSkinMode: (mode: SkinMode) => void;
@@ -151,6 +171,9 @@ export const useStore = create<AppState>((set, get) => {
   const CLEAR_GAIT = { playback: null, playbackOn: false } as const; // for the set-callback actions
   return {
     ...loadInitial(),
+    view: initialView(),
+    setView: (view) => set({ view }),
+    adopt: (genome) => commit(rootedAt(structuredClone(genome), get().symmetryMode, get().menagerie)),
     pressure: ZERO_PRESSURE,
     skinMode: loadSkinMode(),
     morphoFilter: null,

@@ -20,7 +20,8 @@ import { Mouth } from './mouths';
 import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
-import { buildSmoothGeometry } from './smoothSkin';
+import { buildSmoothGeometry, type SkinQuality } from './smoothSkin';
+import { getGeometry, retainGeometry, releaseGeometry } from './geometryCache';
 import { mouthCarves } from './mouthLine';
 import { sampleTrajectory, type Trajectory } from '../physics/fitness';
 import type { SkinMode } from '../ui/store';
@@ -82,10 +83,12 @@ export function CreatureMesh({
   phenotype,
   skinMode = 'capsules',
   trajectory = null,
+  quality = 'high',
 }: {
   phenotype: Phenotype;
   skinMode?: SkinMode;
   trajectory?: Trajectory | null;
+  quality?: SkinQuality;
 }) {
   const data = useMemo(() => buildMeshData(phenotype), [phenotype]);
   const pal = phenotype.genomeRef.palette;
@@ -106,14 +109,22 @@ export function CreatureMesh({
 
   // M15: one organic surface over the node field, built once (only when toggled on). The
   // smooth body is static, so motion is paused while it's shown (re-meshing per frame is dear).
+  // Shared through the geometry cache: the Studio shows one creature in five viewports at once.
+  const smoothKey = `${full ? 'hybrid' : 'smooth'}:${quality}`;
   const smoothGeo = useMemo(() => {
     if (!showSmooth) return null;
-    const g = buildSmoothGeometry(phenotype, full, carves);
-    // smooth mesh is untransformed, so its local position *is* the body-space coord (M17)
-    g.setAttribute('aBodyPos', (g.getAttribute('position') as THREE.BufferAttribute).clone());
-    return g;
-  }, [showSmooth, full, phenotype, carves]);
-  useEffect(() => () => smoothGeo?.dispose(), [smoothGeo]);
+    return getGeometry(phenotype, smoothKey, () => {
+      const g = buildSmoothGeometry(phenotype, full, carves, quality);
+      // smooth mesh is untransformed, so its local position *is* the body-space coord (M17)
+      g.setAttribute('aBodyPos', (g.getAttribute('position') as THREE.BufferAttribute).clone());
+      return g;
+    });
+  }, [showSmooth, full, phenotype, carves, quality, smoothKey]);
+  useEffect(() => {
+    if (!smoothGeo) return;
+    retainGeometry(phenotype, smoothKey);
+    return () => releaseGeometry(phenotype, smoothKey);
+  }, [smoothGeo, phenotype, smoothKey]);
   const playing = !!trajectory; // the recorded physics gait is the only motion left
 
   const footColor = useMemo(

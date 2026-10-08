@@ -11,6 +11,7 @@ import { Menagerie } from '../viewer/Menagerie';
 import { binKey, MENAGERIE_GRID } from '../viewer/archive';
 import { downloadCreatureGlb } from '../viewer/exportGltf';
 import { MORPHOTYPE_IDS } from '../engine/random';
+import { Studio } from '../viewer/Studio';
 import { useStore } from './store';
 
 export function App() {
@@ -40,11 +41,17 @@ export function App() {
   const playback = useStore((s) => s.playback);
   const playbackOn = useStore((s) => s.playbackOn);
   const togglePlayback = useStore((s) => s.togglePlayback);
+  const view = useStore((s) => s.view);
+  const setView = useStore((s) => s.setView);
+  const adopt = useStore((s) => s.adopt);
 
   const current = nodes[currentId];
   const genome = current.genome;
   const generation = current.generation;
   const phenotype = useMemo(() => grow(genome), [genome]);
+  // every hook runs before the screen-switching returns below (rules of hooks)
+  const vibe = useMemo(() => coherence(phenotype), [phenotype]);
+  const currentCell = useMemo(() => binKey(describe(phenotype)), [phenotype]);
 
   // Dev/headless: ?bare=1 renders just the creature full-bleed (no UI chrome) for clean face shots.
   const bare = import.meta.env.DEV && new URLSearchParams(location.search).get('bare') === '1';
@@ -55,8 +62,11 @@ export function App() {
       </div>
     );
   }
-  const vibe = useMemo(() => coherence(phenotype), [phenotype]);
-  const currentCell = useMemo(() => binKey(describe(phenotype)), [phenotype]);
+  if (view === 'studio') {
+    return (
+      <Studio genome={genome} skinMode={skinMode} onSkinMode={setSkinMode} onAdopt={adopt} onExit={() => setView('breed')} />
+    );
+  }
   const menagerieCount = Object.keys(menagerie).length;
   // play the recorded gait only while it belongs to the creature on screen
   const activeGait = playbackOn && playback && playback.seed === genome.seed ? playback : null;
@@ -67,7 +77,13 @@ export function App() {
         <main className="stage-wrap">
           <CreatureViewer phenotype={phenotype} skinMode={skinMode} trajectory={activeGait} />
           <header className="hud">
-            <h1>Cambrian</h1>
+            <div className="title-row">
+              <h1>Cambrian</h1>
+              <nav className="view-tabs">
+                <button className="active">Breed</button>
+                <button onClick={() => setView('studio')} title="inspect this creature from every angle">Studio</button>
+              </nav>
+            </div>
             <p className="tag">
               {vibe.score > 0.55 ? '≈ ' : '~ valley near '}
               {vibe.nearest} · {Math.round(vibe.score * 100)}%
