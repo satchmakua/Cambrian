@@ -34,9 +34,10 @@ export function getWorld(): World {
 const AUTOSAVE_KEY = 'cambrian.world';
 
 /** The world left running last visit, if there is one (and it still loads). Dev pages opened with
- *  query parameters (the screenshot harness) always start fresh, so they stay reproducible. */
+ *  query parameters (the screenshot harness) start fresh, so they stay reproducible — unless they
+ *  ask to `resume`. */
 function resumeWorld(): World | null {
-  if (import.meta.env.DEV && typeof location !== 'undefined' && location.search) return null;
+  if (import.meta.env.DEV && typeof location !== 'undefined' && location.search && !new URLSearchParams(location.search).has('resume')) return null;
   try {
     const s = localStorage.getItem(AUTOSAVE_KEY);
     return s ? loadWorld(s) : null;

@@ -50,6 +50,8 @@ export interface Chronicle {
   aged: number;
   /** names of species that arose */
   arose: string[];
+  /** …and their ids (for portraits of their founders) */
+  aroseIds: number[];
   /** names of species that died out */
   lost: string[];
   population: [number, number];
@@ -69,6 +71,7 @@ export function chronicle(before: { time: number; tally: World['tally']; species
     starved: t1.starvation - t0.starvation,
     aged: t1.oldAge - t0.oldAge,
     arose: after.species.filter((s) => !known.has(s.id)).map((s) => s.name),
+    aroseIds: after.species.filter((s) => !known.has(s.id)).map((s) => s.id),
     lost: after.species.filter((s) => s.extinctAt !== null && !extinctBefore.has(s.id)).map((s) => s.name),
     population: [before.pop, after.creatures.length],
   };

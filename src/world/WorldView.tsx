@@ -14,7 +14,9 @@ import type { Genome } from '../engine/genome';
 import { WorldScene } from './WorldScene';
 import { TreeOfLife } from './TreeOfLife';
 import { useWorldUi, getWorld, populate, strangerGenome, bumpVersion, autosave, downloadWorld, type Snapshot } from './worldStore';
-import { DAY_LENGTH, YEAR_DAYS, stepWorld, type HistorySample } from '../sim/world';
+import { DAY_LENGTH, YEAR_DAYS, dayNumber, speciesById, stepWorld, type HistorySample } from '../sim/world';
+import { howItDiffers } from '../sim/lineage';
+import { usePortrait } from '../viewer/portrait';
 import { spell, weatherAt } from '../sim/weather';
 
 const SPEEDS = [1, 4, 16, 48];
@@ -290,6 +292,13 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
             population {chron.population[0]} → <b>{chron.population[1]}</b>
           </p>
           {chron.arose.length > 0 && <p className="arose">New species: {chron.arose.join(', ')}</p>}
+          {chron.aroseIds.length > 0 && (
+            <div className="chron-portraits">
+              {chron.aroseIds.slice(0, 4).map((id) => (
+                <SpeciesPortrait key={id} speciesId={id} />
+              ))}
+            </div>
+          )}
           {chron.lost.length > 0 && <p className="lost">Died out: {chron.lost.join(', ')}</p>}
           {chron.arose.length === 0 && chron.lost.length === 0 && <p className="quiet">No species arose or died out.</p>}
         </div>
@@ -345,6 +354,7 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
             <dt>mass</dt><dd>{sel.traits.mass.toFixed(2)}</dd>
             <dt>offspring</dt><dd>{sel.children}{sel.kills ? ` · ${sel.kills} kills` : ''}</dd>
           </dl>
+          <Lineage genome={sel.genome} speciesId={sel.speciesId} />
           <div className="critter-actions">
             <button className={follow ? 'active' : ''} onClick={() => setFollow(!follow)}>{follow ? 'following' : 'follow'}</button>
             <button onClick={() => onAdopt(sel.genome)} title="make this creature the parent in the breeder">take home</button>
@@ -420,6 +430,59 @@ function Menu({ label, title, children }: { label: string; title?: string; child
         </div>
       )}
     </div>
+  );
+}
+
+/** Where this animal's species came from, and how it differs from the species' founder — two
+ *  portraits side by side when they differ (evolution you can see), in words underneath. */
+function Lineage({ genome, speciesId }: { genome: Genome; speciesId: number }) {
+  const w = getWorld();
+  const sp = speciesById(w, speciesId);
+  const parent = sp && sp.parent !== null ? speciesById(w, sp.parent) : undefined;
+  const founder = sp?.founder;
+  const diffs = useMemo(() => (founder ? howItDiffers(founder, genome) : []), [founder, genome]);
+  const mine = usePortrait(genome);
+  const theirs = usePortrait(diffs.length > 0 ? founder : null);
+  if (!sp) return null;
+  return (
+    <div className="lineage">
+      <div className="portraits">
+        {diffs.length > 0 && (
+          <figure>
+            {theirs ? <img src={theirs} alt="" /> : <div className="ph" />}
+            <figcaption>its species' founder</figcaption>
+          </figure>
+        )}
+        <figure>
+          {mine ? <img src={mine} alt="" /> : <div className="ph" />}
+          <figcaption>{diffs.length > 0 ? 'this one' : sp.name}</figcaption>
+        </figure>
+      </div>
+      {diffs.length > 0 && <p>Since the founder: {diffs.join(', ')}.</p>}
+      {parent && (
+        <p className="from">
+          Branched off {parent.name} on day {dayNumber(sp.firstSeen)}
+          {(() => {
+            const d = howItDiffers(parent.founder, sp.founder, 3);
+            return d.length ? ` — ${d.join(', ')}` : '';
+          })()}
+          .
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** A species' founder, drawn small, with its name. */
+function SpeciesPortrait({ speciesId }: { speciesId: number }) {
+  const sp = speciesById(getWorld(), speciesId);
+  const url = usePortrait(sp?.founder);
+  if (!sp) return null;
+  return (
+    <figure>
+      {url ? <img src={url} alt="" /> : <div className="ph" />}
+      <figcaption>{sp.name}</figcaption>
+    </figure>
   );
 }
 
