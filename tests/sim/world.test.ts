@@ -248,7 +248,7 @@ describe('a living balance', () => {
     expect(mouse.alive).toBe(true);
   });
 
-  it('a founding stock that dies out wanders back in from the edge a day or two later', () => {
+  it('a founding stock that dies out wanders back in from the edge within days', () => {
     const w = createWorld(3);
     const herd = release(w, g('ungulate'), 4);
     release(w, g('rodent'), 6);
@@ -259,7 +259,8 @@ describe('a living balance', () => {
     }
     w.creatures = w.creatures.filter((c) => c.alive);
     sp.extinctAt = w.time;
-    run(w, DAY_LENGTH * 6);
+    // (a 50% chance each eligible dawn: ten days makes a miss ~1 in 500)
+    run(w, DAY_LENGTH * 10);
     expect(sp.extinctAt).toBeNull();
     expect(w.creatures.some((c) => c.species === sp.id)).toBe(true);
   });

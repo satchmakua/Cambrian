@@ -27,6 +27,9 @@ export interface Terrain {
   lakeX: number;
   lakeZ: number;
   lakeR: number;
+  /** the river: it leaves the lake heading `riverA` (radians, 0 = +Z) and meanders to the edge */
+  riverA: number;
+  riverPh: [number, number];
 }
 
 export function makeTerrain(seed: number): Terrain {
@@ -39,7 +42,25 @@ export function makeTerrain(seed: number): Terrain {
     lakeX: (rng() - 0.5) * WORLD_SIZE * 0.25,
     lakeZ: (rng() - 0.5) * WORLD_SIZE * 0.25,
     lakeR: WORLD_SIZE * (0.14 + rng() * 0.06),
+    riverA: rng() * Math.PI * 2,
+    riverPh: [rng() * Math.PI * 2, rng() * Math.PI * 2],
   };
+}
+
+// --- the river ---------------------------------------------------------------------------------------
+
+/** Lateral distance from (x, z) to the river's centreline, and how far down its course that is
+ *  (Infinity when the point is behind its mouth, i.e. back in the lake). The course runs straight out
+ *  of the lake along `riverA`, swinging side to side in two superposed meanders that grow downstream. */
+export function riverDist(t: Terrain, x: number, z: number): { d: number; s: number } {
+  const ux = Math.sin(t.riverA), uz = Math.cos(t.riverA);
+  const dx = x - t.lakeX, dz = z - t.lakeZ;
+  const s = dx * ux + dz * uz - t.lakeR * 0.6; // distance along the course from its mouth
+  if (s < 0) return { d: Infinity, s };
+  const lat = dx * uz - dz * ux; // signed sideways offset from the straight course
+  const grow = Math.min(1, s / 30);
+  const meander = grow * (7 * Math.sin(s / 17 + t.riverPh[0]) + 3 * Math.sin(s / 7.5 + t.riverPh[1]));
+  return { d: Math.abs(lat - meander), s };
 }
 
 // --- value noise -------------------------------------------------------------------------------
@@ -81,7 +102,18 @@ export function heightAt(t: Terrain, x: number, z: number): number {
   const basin = smooth(0.55, 1.35, dl); // 0 in the lake → 1 on the land
   const rim = Math.max(0, Math.hypot(x, z) / (t.size * 0.5) - 0.62) * 2.6; // highlands near the edge
   const hills = (n - 0.45) * 7;
-  return -3.2 + basin * 4.6 + hills * (0.35 + 0.65 * basin) + rim * rim * 9;
+  let h = -3.2 + basin * 4.6 + hills * (0.35 + 0.65 * basin) + rim * rim * 9;
+  // the river: a broad valley lowered toward meadow height, and a channel cut into its floor that
+  // widens downstream (it runs on out past the world's edge)
+  const r = riverDist(t, x, z);
+  if (r.d < 40) {
+    const w = 2.2 + Math.min(1.6, r.s / 60);
+    const valley = 1 - smooth(w * 1.5, w * 7, r.d);
+    if (h > 0.9) h -= (h - 0.9) * 0.85 * valley;
+    const channel = 1 - smooth(w * 0.55, w * 1.35, r.d);
+    h += (-1.05 - h) * channel;
+  }
+  return h;
 }
 
 /** Moisture ∈ [0,1] — tilts dry meadow ↔ damp woodland. */

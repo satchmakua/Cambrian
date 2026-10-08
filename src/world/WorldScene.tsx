@@ -252,8 +252,36 @@ export function WorldScene() {
         enableDamping
       />
       <FollowCam />
+      {import.meta.env.DEV && <DevLook />}
       <Director />
       <SoundDriver />
     </>
   );
 }
+
+/** Dev/headless: ?look=river (or ?look=x,z) points the camera at a spot for inspection shots. */
+function DevLook() {
+  const camera = useThree((st) => st.camera);
+  const controls = useThree((st) => st.controls) as unknown as { target: THREE.Vector3; update: () => void } | null;
+  const done = useRef(false);
+  useFrame(() => {
+    if (done.current || !controls) return;
+    const q = new URLSearchParams(location.search).get('look');
+    done.current = true;
+    if (!q) return;
+    const t = getWorld().terrain;
+    let x = 0, z = 0;
+    if (q === 'river') {
+      // a point some way down the river's course
+      const s = t.lakeR * 0.6 + 34;
+      x = t.lakeX + Math.sin(t.riverA) * s;
+      z = t.lakeZ + Math.cos(t.riverA) * s;
+    } else [x, z] = q.split(',').map(Number);
+    const y = Math.max(0, heightAt(t, x, z));
+    controls.target.set(x, y, z);
+    camera.position.set(x + 14, y + 12, z + 16);
+    controls.update();
+  });
+  return null;
+}
+

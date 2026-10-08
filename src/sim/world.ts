@@ -19,7 +19,7 @@
  * bushes in the woods; carcasses rot. Determinism: all randomness flows from the world's seeded
  * mulberry32 and the engine's seeded mutate(); a fixed step reproduces a run exactly (Pillar 3).
  */
-import { mulberry32State, mix32, type StatefulRng } from '../engine/rng';
+import { mulberry32State, mix32, unitHash, type StatefulRng } from '../engine/rng';
 import { weatherAt } from './weather';
 import { grow, type Phenotype } from '../engine/grow';
 import type { Genome } from '../engine/genome';
@@ -853,10 +853,12 @@ function decide(w: World, c: Creature): void {
  */
 function immigrate(w: World): void {
   if (liveCount(w) > MAX_POP - 8) return;
+  const day = Math.floor(w.time / DAY_LENGTH);
   for (const sp of w.species) {
     if (sp.parent !== null || sp.extinctAt === null) continue;
     if (w.time - sp.extinctAt < DAY_LENGTH * 1.5) continue;
-    if (w.rng() > 0.5) continue;
+    // an even chance each dawn — rolled on its own hash, not the shared stream
+    if (unitHash(w.seed, day, sp.id, 0x1a7e) > 0.5) continue;
     const t = bodyOf(sp.founder).traits;
     let at: { x: number; z: number } | undefined;
     if (t.habitat !== 'water') {
