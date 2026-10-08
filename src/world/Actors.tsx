@@ -202,6 +202,8 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
         swim: swimmer,
         turn: P.turn,
         fly: P.fly,
+        // standing about: breathe and glance around
+        idle: Math.max(0, 1 - vis / Math.max(0.3, traits.speed * 0.3)) * (1 - P.eat) * (1 - P.sleep) * (1 - P.fly),
       });
     }
     const ground = heightAt(world.terrain, P.x, P.z);
