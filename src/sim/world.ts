@@ -53,6 +53,10 @@ const WORLD_MUTATION: MutationRates = { point: 0.22, pointSigma: 0.05, structura
 const MUTATION_CHANCE = 0.3; // per offspring
 const SPATIAL = 10; // spatial-hash cell (bu)
 const SCENT = 2.6; // hungry hunters smell prey this many vision-radii away
+/** above this altitude (bu) a flier is airborne: out of a walker's reach, free of the ground's rules */
+export const AIRBORNE = 0.45;
+const CLIMB = 2.6; // bu/s up
+const SINK = 3.4; // bu/s down (a stooping hunter drops twice as fast)
 
 /** Feeding rate while eating, in energy/s as a multiple of the eater's resting metabolism — a
  *  specialist eats its food fast (it can top up in a fraction of its day), a generalist slowly. */
@@ -113,6 +117,10 @@ export interface Creature {
   attacker: number; // last creature to bite it (-1 none)
   attackedAt: number;
   wanderSeed: number;
+  /** height above the ground (or the water) it is flying at — 0 on its feet */
+  alt: number;
+  /** a flier's wish to be airborne this step (set by the current action; landing is gradual) */
+  fly: boolean;
 }
 
 export interface Plant {
@@ -341,6 +349,8 @@ function spawn(w: World, genome: Genome, species: Species, x: number, z: number,
     attacker: -1,
     attackedAt: -1e9,
     wanderSeed: w.rng() * 1000,
+    alt: 0,
+    fly: false,
   };
   w.creatures.push(c);
   species.alive++;
@@ -503,9 +513,12 @@ function live(w: World, c: Creature, dt: number): void {
   const asleep = c.action === 'sleep';
 
   // metabolism: resting burn + the cost of moving fast; sleep is cheap
-  const moveCost = t.metabolism * 1.6 * (c.speed / Math.max(0.1, t.sprint)) ** 2;
+  // flapping flight is dear: a flat surcharge while aloft (instead of the speed² running cost, which
+  // an airspeed above sprint would make ruinous) and it tires faster
+  const aloft = c.alt > AIRBORNE;
+  const moveCost = aloft ? t.metabolism * 0.8 : t.metabolism * 1.6 * (c.speed / Math.max(0.1, t.sprint)) ** 2;
   c.energy -= (t.metabolism * (asleep ? 0.55 : 1) * growth ** 2 + moveCost) * dt;
-  c.fatigue = Math.min(1, Math.max(0, c.fatigue + (asleep ? -dt / (DAY_LENGTH * 0.22) : dt / (DAY_LENGTH * 0.62))));
+  c.fatigue = Math.min(1, Math.max(0, c.fatigue + (asleep ? -dt / (DAY_LENGTH * 0.22) : (aloft ? 1.4 : 1) * dt / (DAY_LENGTH * 0.62))));
   if (c.energy <= 0) {
     c.energy = 0;
     c.health -= t.maxHealth * 0.04 * dt; // starving
@@ -572,6 +585,7 @@ function decide(w: World, c: Creature): void {
     if (o === c) continue;
     const bitUs = o.id === c.attacker && w.time - c.attackedAt < 4;
     if (!bitUs && !preysOn(o, c)) continue;
+    if (c.alt > AIRBORNE * 3 && !o.traits.flies) continue; // safe on the wing from anything that walks
     const d = Math.hypot(o.x - c.x, o.z - c.z);
     if (d < threatD) {
       threatD = d;
@@ -655,6 +669,10 @@ function decide(w: World, c: Creature): void {
     }
   }
 
+  // a flight in progress finishes at its destination (re-picking a stroll every half-second would
+  // keep a flier circling aloft forever, never arriving anywhere to land)
+  if (c.action === 'wander' && c.alt > AIRBORNE && Math.hypot(c.tx - c.x, c.tz - c.z) > 6) return;
+
   // 5. wander — herd animals drift toward their own kind; a hungry hunter follows its nose
   c.action = 'wander';
   c.target = -1;
@@ -685,7 +703,9 @@ function decide(w: World, c: Creature): void {
       hn++;
     }
   }
-  const wanderR = 6 + t.speed * 4;
+  // a well-fed flier sometimes ranges far — the trip is flown
+  // (rolled at every deliberation, so the odds are per ~0.6 s: about one roam per half-minute adrift)
+  const wanderR = t.flies && hunger < 0.3 && w.rng() < 0.02 ? 24 + t.flySpeed * 3 : 6 + t.speed * 4;
   const a = c.heading + (w.rng() - 0.5) * 1.6;
   c.tx = c.x + Math.sin(a) * wanderR;
   c.tz = c.z + Math.cos(a) * wanderR;
@@ -697,6 +717,11 @@ function decide(w: World, c: Creature): void {
       c.tz = c.tz * (1 - t.herding * 0.7) + cz * t.herding * 0.7;
     }
   }
+  // keep the destination inside the world (a target past the edge was never reached: the walker
+  // turned back at the wall, but a flier on a long trip slid along it forever)
+  const half = w.terrain.size / 2 - 10;
+  c.tx = Math.max(-half, Math.min(half, c.tx));
+  c.tz = Math.max(-half, Math.min(half, c.tz));
 }
 
 /** Is there room for this creature's kind to grow — under the world cap, under its species' share,
@@ -740,6 +765,7 @@ function findFood(w: World, c: Creature, near: Creature[], sight: number, hunger
   if (eatsMeat && hunger > (t.diet === 'carnivore' ? 0.3 : 0.55)) {
     for (const o of near) {
       if (o === c || !preysOn(c, o)) continue;
+      if (!t.flies && o.alt > AIRBORNE * 3) continue; // out of reach in the air
       const d = Math.hypot(o.x - c.x, o.z - c.z);
       // the young, the weak, the asleep are easier
       const ease = (o.action === 'sleep' ? 8 : 0) + (1 - o.health / o.traits.maxHealth) * 10 + (o.age < o.traits.maturity ? 6 : 0);
@@ -827,6 +853,8 @@ function act(w: World, c: Creature, dt: number): void {
   let goal: { x: number; z: number } | null = null;
   let pace = 0; // fraction of cruise speed (>1 = sprinting)
   let arrive = 1.2 + t.radius * g;
+  // a flier comes down before it eats, grazes or courts (it keeps approaching while it settles)
+  const landed = c.alt <= AIRBORNE;
 
   switch (c.action) {
     case 'sleep':
@@ -860,7 +888,7 @@ function act(w: World, c: Creature, dt: number): void {
       const here = cellOf(w, c.x, c.z);
       const d = Math.hypot(c.tx - c.x, c.tz - c.z);
       // graze IN PLACE while the patch underfoot holds out; only travel when it is cropped bare
-      if (field[here] < 0.1 && d > arrive + 1.5) {
+      if ((field[here] < 0.1 && d > arrive + 1.5) || !landed) {
         goal = { x: c.tx, z: c.tz };
         pace = 0.8;
       } else {
@@ -886,7 +914,7 @@ function act(w: World, c: Creature, dt: number): void {
       }
       const d = Math.hypot(p.x - c.x, p.z - c.z);
       arrive += p.size;
-      if (d > arrive) {
+      if (d > arrive || !landed) {
         goal = p;
         pace = 0.85;
       } else {
@@ -908,7 +936,7 @@ function act(w: World, c: Creature, dt: number): void {
         break;
       }
       const d = Math.hypot(k.x - c.x, k.z - c.z);
-      if (d > arrive + 0.6) {
+      if (d > arrive + 0.6 || !landed) {
         goal = k;
         pace = 1;
       } else {
@@ -931,11 +959,13 @@ function act(w: World, c: Creature, dt: number): void {
       // lead the target a little
       goal = { x: prey.x + Math.sin(prey.heading) * prey.speed * 0.4, z: prey.z + Math.cos(prey.heading) * prey.speed * 0.4 };
       pace = t.sprint / t.speed;
-      if (d < reach) {
+      // jaws only meet at the same height: a walker can't bite a bird on the wing
+      if (d < reach && Math.abs(prey.alt - c.alt) < reach + 0.6) {
         bite(w, c, prey, dt);
         pace = 0.3;
       }
       if (d > t.vision * 1.3 && c.action === 'hunt') done(c); // lost it
+      else if (!t.flies && prey.alt > AIRBORNE * 3 && c.action === 'hunt') done(c); // it flew off
       break;
     }
     case 'mate': {
@@ -945,7 +975,7 @@ function act(w: World, c: Creature, dt: number): void {
         break;
       }
       const d = Math.hypot(m.x - c.x, m.z - c.z);
-      if (d > (t.radius + m.traits.radius) + 0.8) {
+      if (d > (t.radius + m.traits.radius) + 0.8 || !landed || m.alt > AIRBORNE) {
         goal = m;
         pace = 0.75;
       } else if (c.breedCooldown <= 0) {
@@ -956,7 +986,56 @@ function act(w: World, c: Creature, dt: number): void {
     }
   }
 
+  if (t.flies || c.alt > 0) goal = planFlight(w, c, goal);
   steer(w, c, goal, pace, dt);
+}
+
+/**
+ * Should a flier be in the air for what it is doing? Long trips, escapes and the approach to a
+ * distant meal are flown; feeding, sleeping and courting happen on the ground. A hunter cruises in
+ * high and stoops onto its prey from close range. It never sets down where it can't stand (over the
+ * lake): it keeps flying — making for the shore if it had nowhere to go.
+ */
+function planFlight(w: World, c: Creature, goal: { x: number; z: number } | null): { x: number; z: number } | null {
+  const t = c.traits;
+  const aloft = c.alt > AIRBORNE;
+  const d = goal ? Math.hypot(goal.x - c.x, goal.z - c.z) : 0;
+  // hysteresis on the INTENT, not the altitude: once it has decided to come down, a fresh nearby
+  // goal picked during the descent mustn't send it climbing again
+  const flying = c.fly;
+  let fly = false;
+  if (t.flies) {
+    switch (c.action) {
+      case 'flee':
+        fly = true;
+        break;
+      case 'wander':
+        // a stroll is walked; only a long trip (a far roam, a call to a distant mate) is flown
+        fly = d > (flying ? 6 : 24);
+        break;
+      case 'forage':
+      case 'scavenge':
+        fly = d > (flying ? 5 : 14);
+        break;
+      case 'hunt':
+        fly = d > (flying ? 6 : 16);
+        break;
+      default:
+        fly = false;
+    }
+    if (c.energy < t.maxEnergy * growthOf(c) * 0.06) fly = false; // too spent to take off
+  }
+  if (!fly && aloft && !canStand(w, t, c.x, c.z)) {
+    fly = true; // can't land here
+    if (!goal) {
+      // nowhere to be (asleep, feeding…) yet over water: head straight out from the lake
+      const dx = c.x - w.terrain.lakeX, dz = c.z - w.terrain.lakeZ;
+      const n = Math.hypot(dx, dz) || 1;
+      goal = { x: c.x + (dx / n) * 12, z: c.z + (dz / n) * 12 };
+    }
+  }
+  c.fly = fly;
+  return goal;
 }
 
 /** The current action is finished or impossible — drop it and deliberate next step. */
@@ -1042,13 +1121,30 @@ function steer(w: World, c: Creature, goal: { x: number; z: number } | null, pac
   const t = c.traits;
   const g = growthOf(c);
   const ground = heightAt(w.terrain, c.x, c.z);
+  // altitude: climb toward a per-creature cruising height while it wants the air, settle otherwise
+  // (a hunter stoops at twice the sink rate)
+  if (t.flies || c.alt > 0) {
+    const cruise = 5 + 4 * ((c.wanderSeed * 0.618) % 1) + (c.action === 'flee' ? 3 : 0);
+    const want = c.fly ? cruise : 0;
+    const sink = c.action === 'hunt' ? SINK * 2 : SINK;
+    c.alt = Math.max(0, c.alt + Math.max(-sink * dt, Math.min(CLIMB * dt, want - c.alt)));
+  }
+  const aloft = c.alt > AIRBORNE;
+  const flying = aloft || c.fly;
   // land animals wade slowly; swimmers crawl when stranded
   let terrainMul = 1;
-  if (t.habitat === 'land' && ground < WATER_LEVEL) terrainMul = 0.45;
-  if (t.habitat === 'amphibious' && ground < WATER_LEVEL) terrainMul = t.locomotion === 'walk' ? 0.7 : 1.1;
+  if (!aloft && t.habitat === 'land' && ground < WATER_LEVEL) terrainMul = 0.45;
+  if (!aloft && t.habitat === 'amphibious' && ground < WATER_LEVEL) terrainMul = t.locomotion === 'walk' ? 0.7 : 1.1;
   // the cold-blooded are sluggish after dark
   const chill = !t.endotherm && isNight(w.time) ? 0.65 : 1;
-  const targetSpeed = goal ? t.speed * pace * terrainMul * chill * (0.75 + 0.25 * g) : 0;
+  // on the wing: a flier can't dawdle (a floor on the pace), sprints a little faster than it cruises,
+  // and slows as it comes in to land
+  const airPace = !c.fly ? (c.action === 'hunt' ? 1.1 : 0.5) : pace > 1 ? 1.25 : Math.max(0.7, pace);
+  const targetSpeed = goal
+    ? flying
+      ? t.flySpeed * airPace
+      : t.speed * pace * terrainMul * chill * (0.75 + 0.25 * g)
+    : 0;
   c.speed += (targetSpeed - c.speed) * Math.min(1, dt * 3);
   if (!goal || c.speed < 0.01) {
     if (!goal) c.speed *= Math.max(0, 1 - dt * 4);
@@ -1057,19 +1153,20 @@ function steer(w: World, c: Creature, goal: { x: number; z: number } | null, pac
   const want = Math.atan2(goal.x - c.x, goal.z - c.z);
   let dh = want - c.heading;
   dh = Math.atan2(Math.sin(dh), Math.cos(dh));
-  const maxTurn = t.turnRate * dt * (pace > 1 ? 1.3 : 1);
+  const maxTurn = t.turnRate * dt * (pace > 1 ? 1.3 : 1) * (aloft ? 0.7 : 1); // a wide banking turn aloft
   c.heading += Math.max(-maxTurn, Math.min(maxTurn, dh));
 
   const step = c.speed * dt;
   let nx = c.x + Math.sin(c.heading) * step;
   let nz = c.z + Math.cos(c.heading) * step;
-  const ok = inBounds(w.terrain, nx, nz) && canStand(w, t, nx, nz);
+  // airborne, only the world's edge stops it — water and steep ground pass beneath
+  const ok = inBounds(w.terrain, nx, nz) && (aloft || canStand(w, t, nx, nz));
   if (!ok) {
     // blocked (shore / world edge): slide along by trying a turn either way
     for (const turn of [0.9, -0.9, 1.8, -1.8, Math.PI]) {
       const h = c.heading + turn;
       const tx = c.x + Math.sin(h) * step, tz = c.z + Math.cos(h) * step;
-      if (inBounds(w.terrain, tx, tz) && canStand(w, t, tx, tz)) {
+      if (inBounds(w.terrain, tx, tz) && (aloft || canStand(w, t, tx, tz))) {
         c.heading = h;
         nx = tx;
         nz = tz;

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { buildMembraneWing, buildFeatheredWing, buildTailFan, conformToSurface } from '../../src/viewer/wings';
+import { buildMembraneWing, buildFeatheredWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface } from '../../src/viewer/wings';
 
 function finite(g: THREE.BufferGeometry): boolean {
   const a = g.getAttribute('position').array as ArrayLike<number>;
@@ -84,3 +84,25 @@ describe('wings (shoulder-built, body frame)', () => {
   });
 });
 
+
+describe('spread feathered wing (flight posture)', () => {
+  it('reaches out along its own side in a near-horizontal plane, never across the midline', () => {
+    const base = new THREE.Color(0.5, 0.6, 0.4), accent = new THREE.Color(0.8, 0.3, 0.2);
+    for (const side of [1, -1]) {
+      const S = 2;
+      const { surface } = buildSpreadFeatheredWing(side, S, base, accent);
+      const pos = surface.getAttribute('position');
+      let reach = 0, minSide = Infinity, yLo = Infinity, yHi = -Infinity;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i) * side;
+        reach = Math.max(reach, x);
+        minSide = Math.min(minSide, x);
+        yLo = Math.min(yLo, pos.getY(i));
+        yHi = Math.max(yHi, pos.getY(i));
+      }
+      expect(reach).toBeGreaterThan(S * 0.85); // a span, not a stub
+      expect(minSide).toBeGreaterThan(-S * 0.05); // its own side of the body
+      expect(yHi - yLo).toBeLessThan(S * 0.35); // spread flat, not hanging
+    }
+  });
+});

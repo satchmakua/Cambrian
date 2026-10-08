@@ -260,6 +260,7 @@ export interface PoseInput {
   eat: number; // 0 … 1 head-down feeding
   swim: boolean; // in water as a swimmer
   turn: number; // signed turn rate (rad/s) — the spine leans into turns
+  fly?: number; // 0 on its feet … 1 airborne: legs tucked, stride suspended, neck stretched, tail streamed
 }
 
 const X = new THREE.Vector3(1, 0, 0);
@@ -278,8 +279,11 @@ function setRot(b: THREE.Bone, ax: number, ay: number, az: number): void {
 export function poseRig(r: RigInstance, inp: PoseInput): void {
   const T = r.template;
   r.t += inp.dt;
-  const moving = Math.min(1, inp.speed / Math.max(0.2, inp.cruise * 0.35));
-  r.phase = (r.phase + (inp.speed * inp.dt) / T.stride) % 1;
+  const fly = inp.fly ?? 0;
+  const grounded = 1 - fly;
+  // airborne, the legs don't stride (the airspeed would spin the gait clock) — they fold up
+  const moving = Math.min(1, inp.speed / Math.max(0.2, inp.cruise * 0.35)) * grounded;
+  r.phase = (r.phase + (inp.speed * grounded * inp.dt) / T.stride) % 1;
   const P = r.phase * Math.PI * 2;
   const awake = 1 - inp.sleep;
 
@@ -302,7 +306,8 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
   for (let k = 0; k < T.neck.length; k++) {
     const first = k === 0;
     const bob = (T.legless ? 0 : 0.05) * moving * Math.sin(P * 2);
-    const pitch = (first ? 0.55 * inp.eat + 0.35 * inp.sleep : 0.12 * inp.eat) + bob;
+    // in flight the neck stretches out level ahead of the body
+    const pitch = (first ? 0.55 * inp.eat + 0.35 * inp.sleep - 0.12 * fly : 0.12 * inp.eat) + bob;
     const look = first ? -inp.turn * 0.12 : 0;
     setRot(r.bones[T.neck[k]], pitch, look * awake, 0);
   }
@@ -324,13 +329,14 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
       const fold = 0.45 * inp.sleep; // feet draw up under a resting body
       setRot(hip, 0, sweep * awake, L.side * (lift * awake + fold));
     } else {
-      // swing fore-aft at the hip; flex the knee (shin back and up) through the swing phase
+      // swing fore-aft at the hip; flex the knee (shin back and up) through the swing phase. In flight
+      // the legs trail back along the belly with the feet folded up under the tail.
       const swing = 0.42 * moving * s * awake;
       const tuck = inp.sleep * 0.9;
-      setRot(hip, swing - tuck * 0.5, 0, 0);
+      setRot(hip, swing - tuck * 0.5 + 0.95 * fly, 0, 0);
       if (L.nodes.length > 1) {
         const knee = r.bones[L.nodes[1]];
-        setRot(knee, 0.6 * moving * swingPhase * awake + tuck * 1.1, 0, 0);
+        setRot(knee, 0.6 * moving * swingPhase * awake + tuck * 1.1 + 0.7 * fly, 0, 0);
       }
       if (L.nodes.length > 2) {
         const ankle = r.bones[L.nodes[2]];
@@ -346,9 +352,9 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
   // tails sway (a slow wag; a swimmer's tail drives the stroke)
   for (const chain of T.tails) {
     for (let j = 0; j < chain.length; j++) {
-      const amp = inp.swim || T.legless ? 0.28 * (0.4 + moving) : 0.08 + 0.1 * moving;
+      const amp = (inp.swim || T.legless ? 0.28 * (0.4 + moving) : 0.08 + 0.1 * moving) * (1 - 0.7 * fly);
       const yaw = amp * Math.sin((inp.swim ? P : r.t * 1.3 + P * 0.5) - j * 0.8);
-      setRot(r.bones[chain[j]], -0.08 * inp.sleep, yaw * awake, 0);
+      setRot(r.bones[chain[j]], -0.08 * inp.sleep - 0.1 * fly, yaw * awake, 0);
     }
   }
   // fins, tentacles and antennae drift

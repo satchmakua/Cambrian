@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-  createWorld, release, stepWorld, worldHash, bodyOf, liveCount, preysOn, STEP, DAY_LENGTH, MAX_POP,
+  createWorld, release, stepWorld, worldHash, bodyOf, liveCount, preysOn, STEP, DAY_LENGTH, MAX_POP, AIRBORNE,
 } from '../../src/sim/world';
 import { traitsOf } from '../../src/sim/traits';
-import { heightAt, makeTerrain, biomeAt, WORLD_SIZE } from '../../src/sim/terrain';
+import { heightAt, makeTerrain, biomeAt, WORLD_SIZE, WATER_LEVEL } from '../../src/sim/terrain';
 import { genomeOfMorphotype } from '../../src/engine/random';
 import { grow } from '../../src/engine/grow';
 
@@ -120,5 +120,39 @@ describe('the world', () => {
     for (const f of fish) if (f.alive) expect(heightAt(w.terrain, f.x, f.z)).toBeLessThan(0);
     for (const d of deer) if (d.alive) expect(heightAt(w.terrain, d.x, d.z)).toBeGreaterThan(-0.6);
     expect(bodyOf(fish[0].genome).traits.habitat).toBe('water');
+  });
+});
+
+describe('flight', () => {
+  it('wings on a walking body fly; everything else keeps its feet', () => {
+    for (const kind of ['bird', 'raptor']) {
+      const t = traitsOf(grow(g(kind)));
+      expect(t.flies).toBe(true);
+      expect(t.flySpeed).toBeGreaterThan(t.speed);
+    }
+    for (const kind of ['felid', 'ungulate', 'fish', 'arachnid']) expect(traitsOf(grow(g(kind))).flies).toBe(false);
+  });
+
+  it('birds take to the air and come back down — and never set down on the lake', () => {
+    const w = createWorld(3);
+    for (let s = 0; s < 3; s++) release(w, g('bird', 40 + s), 4);
+    release(w, g('felid'), 3);
+    let aloft = 0, landed = 0;
+    for (let i = 0; i < 180 / STEP; i++) {
+      stepWorld(w);
+      if (i % 10 !== 0) continue;
+      for (const c of w.creatures) {
+        if (!c.traits.flies) continue;
+        if (c.alt > AIRBORNE) aloft++;
+        else if (c.alt === 0) {
+          landed++;
+          // on its feet means on ground it can stand on
+          expect(heightAt(w.terrain, c.x, c.z)).toBeGreaterThan(WATER_LEVEL - 0.5);
+        }
+        expect(c.alt).toBeLessThan(15);
+      }
+    }
+    expect(aloft).toBeGreaterThan(20);
+    expect(landed).toBeGreaterThan(aloft); // flight is for trips and escapes, not a way of life
   });
 });

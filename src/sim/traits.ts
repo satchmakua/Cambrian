@@ -45,6 +45,10 @@ export interface Traits {
   herding: number; // 0..1 how strongly it keeps with its own kind
   legs: number;
   winged: boolean;
+  /** winged, legged and light enough to get airborne: it can take off, cross water and terrain, and
+   *  escape anything that can't follow it up — at a steep energy price while aloft */
+  flies: boolean;
+  flySpeed: number; // airspeed (bu/s)
   /** warm-blooded (fur / feathers): a high, steady burn, active in the cold of night. Everything else
    *  is cold-blooded — a fraction of the running cost, but sluggish after dark. */
   endotherm: boolean;
@@ -195,6 +199,9 @@ export function traitsOf(p: Phenotype): Traits {
   const litter = mass < 0.6 ? 3 : mass < 2 ? 2 : 1;
   const herding = diet === 'herbivore' ? 0.8 : diet === 'filter' ? 0.6 : diet === 'omnivore' ? 0.35 : 0.1;
   const turnRate = 2.6 / Math.pow(s, 0.3);
+  // flight: wings on a walking body that isn't too heavy to lift (a dragon just about manages)
+  const flies = wings > 0 && locomotion === 'walk' && mass < 9;
+  const flySpeed = flies ? Math.max(speed * 2.3, 5.5) * Math.pow(s, 0.12) : 0;
 
   return {
     mass,
@@ -221,6 +228,8 @@ export function traitsOf(p: Phenotype): Traits {
     herding,
     legs,
     winged: wings > 0,
+    flies,
+    flySpeed,
     endotherm,
   };
 }

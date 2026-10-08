@@ -142,7 +142,8 @@ function FollowCam() {
     if (!follow || selected === null || !controls) return;
     const c = getWorld().creatures.find((x) => x.id === selected);
     if (!c) return;
-    const goal = new THREE.Vector3(c.x, Math.max(heightAt(getWorld().terrain, c.x, c.z), -0.5) + c.traits.height * 0.5, c.z);
+    // (a flier is followed up into the air)
+    const goal = new THREE.Vector3(c.x, Math.max(heightAt(getWorld().terrain, c.x, c.z), -0.5) + c.traits.height * 0.5 + c.alt, c.z);
     const delta = goal.sub(controls.target).multiplyScalar(Math.min(1, dt * 3));
     controls.target.add(delta);
     camera.position.add(delta);

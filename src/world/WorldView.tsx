@@ -96,15 +96,17 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
       populate(w, founder);
     }
     // Dev/headless: ?warm=SECONDS fast-forwards the sim; ?follow=KIND selects + follows the first
-    // creature whose species name contains KIND (or any, with follow=1) — for inspection screenshots.
+    // creature whose species name contains KIND (or any, with follow=1; one in flight, with
+    // follow=aloft) — for inspection screenshots.
     if (import.meta.env.DEV) {
       const q = new URLSearchParams(location.search);
       const warm = Number(q.get('warm') ?? 0);
       for (let i = 0; i < warm * 20; i++) stepWorld(w);
       const f = q.get('follow');
       if (f) {
-        const sp = w.species.find((x) => f === '1' || x.name.includes(f) || x.kind.includes(f));
-        const c = w.creatures.find((x) => (sp ? x.species === sp.id : true));
+        // follow=aloft: the first creature on the wing
+        const sp = f === 'aloft' ? undefined : w.species.find((x) => f === '1' || x.name.includes(f) || x.kind.includes(f));
+        const c = w.creatures.find((x) => (f === 'aloft' ? x.alt > 1 : sp ? x.species === sp.id : true));
         if (c) {
           select(c.id);
           setFollow(true);
@@ -183,7 +185,7 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
             <button onClick={() => select(null)} title="deselect">✕</button>
           </div>
           <p className="doing">
-            {sel.adult ? 'adult' : 'juvenile'} · gen {sel.generation} · <b>{ACTION_LABEL[sel.action] ?? sel.action}</b>
+            {sel.adult ? 'adult' : 'juvenile'} · gen {sel.generation} · <b>{ACTION_LABEL[sel.action] ?? sel.action}{sel.flying ? ' · on the wing' : ''}</b>
           </p>
           <Bar label="energy" v={sel.energy} color="#e0b84f" />
           <Bar label="health" v={sel.health} color="#e06a5f" />
@@ -191,7 +193,7 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
           <Bar label="age" v={sel.age} color="#9a9a9a" />
           <dl className="kv">
             <dt>diet</dt><dd>{sel.traits.diet} ({sel.traits.mouth})</dd>
-            <dt>moves</dt><dd>{sel.traits.locomotion}, {sel.traits.habitat}</dd>
+            <dt>moves</dt><dd>{sel.traits.locomotion}{sel.traits.flies ? ' + flight' : ''}, {sel.traits.habitat}</dd>
             <dt>speed</dt><dd>{sel.traits.speed.toFixed(1)} / {sel.traits.sprint.toFixed(1)} bu/s</dd>
             <dt>vision</dt><dd>{sel.traits.vision.toFixed(0)} bu{sel.traits.nocturnal ? ', nocturnal' : ''}</dd>
             <dt>bite</dt><dd>{sel.traits.attack.toFixed(1)}</dd>

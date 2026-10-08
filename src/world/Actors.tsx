@@ -18,7 +18,8 @@ import type { Phenotype } from '../engine/grow';
 import { CreatureMesh, prebuildSkin, type Detail } from '../viewer/CreatureMesh';
 import { createRig, poseRig } from '../viewer/rig';
 import { JawContext, type JawControl } from '../viewer/mouths/jaw';
-import { bodyOf, growthOf, type Corpse, type Creature, type World } from '../sim/world';
+import { FlightContext, wingbeat, type FlightControl } from '../viewer/flight';
+import { AIRBORNE, bodyOf, growthOf, type Corpse, type Creature, type World } from '../sim/world';
 import { heightAt, WATER_LEVEL } from '../sim/terrain';
 
 // --- smooth-skin upgrade scheduler -----------------------------------------------------------------
@@ -145,11 +146,12 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
   const ref = useRef<THREE.Group>(null);
   const body = useRef<THREE.Group>(null);
   const ring = useRef<THREE.Mesh>(null);
-  const pose = useRef({ x: c.x, z: c.z, h: c.heading, sleep: 0, eat: 0, bob: Math.random() * 10, turn: 0 });
+  const pose = useRef({ x: c.x, z: c.z, h: c.heading, sleep: 0, eat: 0, bob: Math.random() * 10, turn: 0, alt: c.alt, fly: 0, beat: Math.random() * 6, climb: 0 });
   const swimmer = traits.habitat === 'water' || traits.locomotion === 'swim' || traits.locomotion === 'drift';
   // each actor animates its own skeleton (bones can't be shared between skinned meshes)
   const rig = useMemo(() => createRig(phenotype), [phenotype]);
   const jaw = useMemo<JawControl>(() => ({ open: 0 }), []);
+  const flight = useMemo<FlightControl | null>(() => (traits.winged ? { spread: 0, flap: 0 } : null), [traits.winged]);
   const detail = useDetail(() => ref.current?.position ?? null, selected);
   useEffect(() => applyShadows(ref.current, detail), [detail, mode]);
 
@@ -166,6 +168,19 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
     const feeding = c.action === 'graze' || c.action === 'eat' || c.action === 'forage' || c.action === 'filter';
     P.eat += ((feeding && c.speed < 0.6 ? 1 : 0) - P.eat) * Math.min(1, dt * 3);
     const s = growthOf(c);
+    // altitude: ease toward the sim's, and spread the wings while airborne
+    const prevAlt = P.alt;
+    P.alt += (c.alt - P.alt) * k;
+    P.fly += ((c.alt > AIRBORNE || (c.fly && c.alt > 0.05) ? 1 : 0) - P.fly) * Math.min(1, dt * 4);
+    if (dt > 0) P.climb += ((P.alt - prevAlt) / dt - P.climb) * Math.min(1, dt * 3);
+    if (flight) {
+      flight.spread = P.fly;
+      // beat hard climbing out, steadily cruising, and glide (wings held, a slow rock) coming down;
+      // small fliers beat faster than big ones
+      const power = P.climb > 0.4 ? 1 : P.climb < -0.6 ? 0.08 : 0.55;
+      P.beat += dt * (9 / Math.pow(Math.max(0.3, s * traits.length * 0.35), 0.35)) * (0.4 + 0.6 * power);
+      flight.flap = wingbeat(P.beat, power);
+    }
     // drive the gait from the speed the body actually shows on screen (in its own body units)
     if (dt > 0) {
       const vis = Math.hypot(P.x - px, P.z - pz) / dt;
@@ -179,6 +194,7 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
         eat: P.eat,
         swim: swimmer,
         turn: P.turn,
+        fly: P.fly,
       });
     }
     const ground = heightAt(world.terrain, P.x, P.z);
@@ -193,8 +209,12 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
       y = Math.max(y, WATER_LEVEL - place.height * s * 0.4);
     }
     y -= P.sleep * place.height * s * 0.28; // settle low to sleep
+    // aloft: ride above the ground or the water, nose up into a climb, bank into turns
+    if (P.alt > 0.01) y = Math.max(y, Math.max(ground, WATER_LEVEL) + place.lift * s * (1 - P.fly * 0.5)) + P.alt;
     g.position.set(P.x, y, P.z);
-    g.rotation.set(0, P.h, 0);
+    const pitch = -THREE.MathUtils.clamp(P.climb * 0.12, -0.35, 0.35) * P.fly;
+    const bank = -THREE.MathUtils.clamp(P.turn * 0.45, -0.6, 0.6) * P.fly;
+    g.rotation.set(pitch, P.h, bank, 'YXZ');
     g.scale.setScalar(s);
     if (body.current) body.current.rotation.x = P.sleep * 0.08; // head drops a touch
     // the jaw: shut while walking or asleep, chewing while it feeds, agape on the hunt or in flight
@@ -216,7 +236,9 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
       <group ref={body}>
         <group position={[-place.center[0], 0, -place.center[2]]}>
           <JawContext.Provider value={jaw}>
-            <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" rig={rig} detail={detail} carved={false} />
+            <FlightContext.Provider value={flight}>
+              <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" rig={rig} detail={detail} carved={false} />
+            </FlightContext.Provider>
           </JawContext.Provider>
         </group>
       </group>

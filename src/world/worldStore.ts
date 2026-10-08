@@ -11,7 +11,7 @@ import { create } from 'zustand';
 import type { Genome } from '../engine/genome';
 import { genomeOfMorphotype, randomGenome } from '../engine/random';
 import {
-  createWorld, release, dayNumber, dayPhase, isNight, growthOf, speciesById, liveCount,
+  AIRBORNE, createWorld, release, dayNumber, dayPhase, isNight, growthOf, speciesById, liveCount,
   type World, type Action, type HistorySample, type WorldEvent,
 } from '../sim/world';
 import type { Traits } from '../sim/traits';
@@ -58,6 +58,7 @@ export interface CreatureCard {
   traits: Traits;
   genome: Genome;
   alive: boolean;
+  flying: boolean; // on the wing right now
 }
 
 export interface Snapshot {
@@ -138,6 +139,7 @@ export function snapshotOf(w: World, selected: number | null): Snapshot {
         fatigue: c.fatigue,
         age: c.age / (c.traits.lifespan * c.lifeFactor),
         adult: c.age > c.traits.maturity,
+        flying: c.alt > AIRBORNE,
         generation: c.generation,
         children: c.children,
         kills: c.kills,

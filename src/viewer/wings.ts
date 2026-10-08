@@ -211,6 +211,65 @@ export function buildFeatheredWing(side: number, S: number, base: THREE.Color, a
 }
 
 /**
+ * A SPREAD feathered wing — the flight posture — on side `side` (±1), span `S` (shoulder → wingtip),
+ * relative to the shoulder at the origin, in the body frame. The wing plane is near-horizontal and
+ * swept a little back: coverts shingled along the leading edge, secondaries hanging back from the
+ * arm as the trailing edge (the speculum band among them), and primaries fanning from the wrist out
+ * to a fingered tip. The flap is a rotation of the whole build about the body axis at the shoulder.
+ */
+export function buildSpreadFeatheredWing(side: number, S: number, base: THREE.Color, accent: THREE.Color): WingBuild {
+  const s = side >= 0 ? 1 : -1;
+  const u = v3(s, 0.06, -0.14).normalize(); // span: out, a touch up and back
+  const c0 = v3(0, 0, -1);
+  const c = c0.sub(u.clone().multiplyScalar(c0.dot(u))).normalize(); // chord: back, ⟂ span
+  const n = new THREE.Vector3().crossVectors(u, c).multiplyScalar(s).normalize(); // up, either side
+
+  const pos: number[] = [];
+  const col: number[] = [];
+  const idx: number[] = [];
+  const at = (spanT: number, chordT = 0) => u.clone().multiplyScalar(spanT * S).add(c.clone().multiplyScalar(chordT * S));
+  const dark = base.clone().multiplyScalar(0.5);
+  const mid = base.clone().multiplyScalar(0.78);
+  const spec = base.clone().lerp(accent, 0.65).multiplyScalar(0.9);
+
+  // primaries: from the wrist, fanning from back-and-out (innermost) to straight out (the tip)
+  const NP = 8;
+  for (let i = 0; i < NP; i++) {
+    const k = i / (NP - 1);
+    const dir = u.clone().multiplyScalar(0.3 + 0.7 * k).add(c.clone().multiplyScalar((1 - k) * 0.95)).normalize();
+    const across = new THREE.Vector3().crossVectors(n, dir).normalize();
+    featherInto(pos, col, idx, at(0.46 + 0.1 * k, 0.02), dir, across, n,
+      S * (0.4 + 0.14 * k), S * 0.1, dark.clone().multiplyScalar(0.9 + 0.2 * k), -0.002 * S * i);
+  }
+  // secondaries: hanging back from the arm — the trailing edge
+  const NS = 9;
+  for (let i = 0; i < NS; i++) {
+    const k = i / (NS - 1);
+    const dir = c.clone().add(u.clone().multiplyScalar(0.12 + 0.2 * k)).normalize();
+    const across = new THREE.Vector3().crossVectors(n, dir).normalize();
+    featherInto(pos, col, idx, at(0.04 + 0.46 * k, 0.04), dir, across, n,
+      S * (0.3 + 0.06 * k), S * 0.1, (i % 2 === 0 ? spec : mid).clone(), 0.004 * S);
+  }
+  // coverts: two shingled rows over the leading edge and the feather roots
+  for (let row = 0; row < 2; row++) {
+    const NC = 9 - row * 2;
+    for (let i = 0; i < NC; i++) {
+      const k = i / (NC - 1);
+      const dir = c.clone().multiplyScalar(0.9).add(u.clone().multiplyScalar(0.3)).normalize();
+      const across = new THREE.Vector3().crossVectors(n, dir).normalize();
+      featherInto(pos, col, idx, at(0.02 + (0.6 - row * 0.1) * k, -0.03 + row * 0.07), dir, across, n,
+        S * (0.15 - row * 0.03) * (1 - 0.35 * k), S * 0.1, base.clone().multiplyScalar(1.0 - row * 0.08), 0.012 * S + row * 0.006 * S);
+    }
+  }
+  const surface = new THREE.BufferGeometry();
+  surface.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  surface.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  surface.setIndex(idx);
+  surface.computeVertexNormals();
+  return { surface, bones: [], wrist: null };
+}
+
+/**
  * A bird's tail: a fan of long rectrices spread in a near-horizontal plane, pointing back from the
  * tail tip (in the body frame, origin at the tail node). Replaces the fish caudal fin a feathered
  * creature's tail used to end in.

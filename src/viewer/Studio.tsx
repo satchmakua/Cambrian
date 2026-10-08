@@ -32,10 +32,11 @@ import { mouthVariant, eyeVariant } from './partStyles';
 import type { SkinQuality } from './smoothSkin';
 import { createRig, poseRig, type RigInstance } from './rig';
 import { JawContext, type JawControl } from './mouths/jaw';
+import { FlightContext, wingbeat, type FlightControl } from './flight';
 import { traitsOf } from '../sim/traits';
 
 /** The Studio's motion preview: the World's gait, run in place so a body's movement can be judged. */
-export type Motion = 'still' | 'walk' | 'run' | 'eat' | 'sleep';
+export type Motion = 'still' | 'walk' | 'run' | 'eat' | 'sleep' | 'fly';
 
 const DEV_JAW: number | null =
   import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('jawopen')
@@ -49,7 +50,7 @@ function devGaitPhase(): number | null {
 }
 
 /** Animate a rig in place for the Studio preview (the canvas renders on demand, so keep asking). */
-function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl): RigInstance | null {
+function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl, flight: FlightControl): RigInstance | null {
   const rig = useMemo(() => (motion === 'still' ? null : createRig(phenotype)), [phenotype, motion]);
   const traits = useMemo(() => traitsOf(phenotype), [phenotype]);
   const cruise = traits.speed;
@@ -61,6 +62,9 @@ function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl): RigIn
     const speed = motion === 'walk' ? cruise * 0.55 : motion === 'run' ? cruise * 1.7 : 0;
     if (frozen !== null) rig.phase = frozen; // a zero-dt pose holds the frozen phase at full stride
     jaw.open = motion === 'eat' ? 0.3 + 0.45 * Math.max(0, Math.sin(rig.t * 9)) : motion === 'run' ? 0.7 : 0;
+    // fly: wings out and beating (a frozen gait phase holds them at the top of the stroke)
+    flight.spread = motion === 'fly' ? 1 : 0;
+    flight.flap = motion === 'fly' ? wingbeat(frozen !== null ? 0 : rig.t * 7, 0.6) : 0;
     if (DEV_JAW !== null) jaw.open = DEV_JAW;
     poseRig(rig, {
       dt: frozen !== null ? 0 : Math.min(dt, 0.05),
@@ -68,6 +72,7 @@ function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl): RigIn
       cruise,
       sleep: motion === 'sleep' ? 1 : 0,
       eat: motion === 'eat' ? 1 : 0,
+      fly: motion === 'fly' ? 1 : 0,
       swim,
       turn: 0,
     });
@@ -136,7 +141,8 @@ export function SpecimenContent({
 }) {
   const { center, size, groundY } = framing;
   const jaw = useMemo<JawControl>(() => ({ open: 1 }), []);
-  const rig = useMotion(phenotype, skinMode === 'capsules' ? 'still' : motion, jaw);
+  const flight = useMemo<FlightControl>(() => ({ spread: 0, flap: 0 }), []);
+  const rig = useMotion(phenotype, skinMode === 'capsules' ? 'still' : motion, jaw, flight);
   return (
     <>
       <color attach="background" args={[background]} />
@@ -148,7 +154,9 @@ export function SpecimenContent({
       <group position={[-center[0], -center[1], -center[2]]}>
         {/* the jaw is articulated only while previewing motion; still keeps the built rest gape */}
         <JawContext.Provider value={rig ? jaw : null}>
-          <CreatureMesh phenotype={phenotype} skinMode={skinMode} quality={quality} rig={rig} carved={!rig} />
+          <FlightContext.Provider value={rig ? flight : null}>
+            <CreatureMesh phenotype={phenotype} skinMode={skinMode} quality={quality} rig={rig} carved={!rig} />
+          </FlightContext.Provider>
         </JawContext.Provider>
         {overlays.skeleton && <SkeletonOverlay phenotype={phenotype} rig={rig} />}
       </group>
@@ -551,8 +559,9 @@ export function Studio({
   const [bestiarySeed, setBestiarySeed] = useState(1);
   const [motion, setMotion] = useState<Motion>(() => {
     const m = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('motion') : null;
-    return m === 'walk' || m === 'run' || m === 'eat' || m === 'sleep' ? m : 'still';
+    return m === 'walk' || m === 'run' || m === 'eat' || m === 'sleep' || m === 'fly' ? m : 'still';
   });
+  const winged = useMemo(() => traitsOf(grow(genome)).winged, [genome]);
   return (
     <div className="studio" ref={container}>
       <header className="studio-bar">
@@ -571,6 +580,7 @@ export function Studio({
               <option value="run">run</option>
               <option value="eat">eat</option>
               <option value="sleep">sleep</option>
+              {winged && <option value="fly">fly</option>}
             </select>
           )}
           <span className="sep" />

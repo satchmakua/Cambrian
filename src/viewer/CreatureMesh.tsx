@@ -9,10 +9,11 @@
  * creature now is playback of a physics-recorded gait (M6), which re-poses the nodes from the
  * recorded trajectory. Pure viewer concern either way: grow() stays static and deterministic.
  */
-import { useEffect, useMemo, useRef } from 'react';
+import { useContext, useEffect, useMemo, useRef } from 'react';
 import { useFrame, createPortal } from '@react-three/fiber';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { FlightContext } from './flight';
 import type { Phenotype } from '../engine/grow';
 import { mix32 } from '../engine/rng';
 import { buildMeshData, type MeshFeature } from './meshData';
@@ -22,7 +23,7 @@ import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildMembraneWing, buildTailFan, conformToSurface, buildFin, finKindOf } from './wings';
+import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finKindOf } from './wings';
 import { ensureSkinWeights, type RigInstance } from './rig';
 import { buildFieldPrims, fieldAt } from './bodyField';
 import { getGeometry, retainGeometry, releaseGeometry } from './geometryCache';
@@ -902,9 +903,12 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
     const pal = g.palette;
     const plumage = new THREE.Color().setHSL(pal.hueA, pal.sat * 0.8, pal.light * 0.88);
     const accent = new THREE.Color().setHSL(pal.hueB, Math.min(1, pal.sat * 1.1), 0.42);
+    const foldS = (trunkLen * 1.05 + girth * 0.9) * (0.85 + gene * 0.3);
     const w = feathered
-      ? buildFeatheredWing(side, (trunkLen * 1.05 + girth * 0.9) * (0.85 + gene * 0.3), plumage, accent)
+      ? buildFeatheredWing(side, foldS, plumage, accent)
       : buildMembraneWing(side, Math.max(trunkLen * 1.15, girth * 3) * (0.75 + gene * 0.5), 0.55 + 0.3 * (g.seed % 7) / 7);
+    // the flight posture: the same plumage opened out — a wing reaches further spread than folded
+    const spread = feathered ? buildSpreadFeatheredWing(side, foldS * 1.35, plumage, accent).surface : null;
     // a folded wing tucks against the UPPER FLANK (a bird's wing lies along its side, not on its
     // spine): anchor it on the trunk node nearest the shoulder, out at its side and a little above
     // the midline, slightly forward — rather than at the dorsal attach point the gene aimed for.
@@ -931,17 +935,43 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
       const mid = b.a.clone().add(b.b).multiplyScalar(0.5);
       return { pos: [mid.x, mid.y, mid.z] as [number, number, number], quat: [q.x, q.y, q.z, q.w] as [number, number, number, number], len, r0: b.r0, r1: b.r1 };
     });
-    return { w, off, bones };
+    return { w, off, bones, side, spread };
   }, [phenotype, f.idx, f.radius, feathered, g]);
-  useEffect(() => () => build.w.surface.dispose(), [build]);
+  useEffect(() => () => {
+    build.w.surface.dispose();
+    build.spread?.dispose();
+  }, [build]);
+  // flight: fold ↔ spread, and the wingbeat as a roll about the body axis at the shoulder
+  const flight = useContext(FlightContext);
+  const flapRef = useRef<THREE.Group>(null);
+  const foldRef = useRef<THREE.Mesh>(null);
+  const spreadRef = useRef<THREE.Mesh>(null);
+  useFrame(() => {
+    const sp = flight ? flight.spread : 0;
+    if (flapRef.current) flapRef.current.rotation.z = build.side * (flight ? flight.flap * sp : 0);
+    if (foldRef.current) foldRef.current.visible = !build.spread || sp < 0.35;
+    if (spreadRef.current) {
+      spreadRef.current.visible = sp >= 0.35;
+      // opening out: the spread wing grows from the folded length as it unfolds
+      spreadRef.current.scale.setScalar(0.55 + 0.45 * THREE.MathUtils.smoothstep(sp, 0.35, 1));
+    }
+  });
   const bone = useMemo(() => new THREE.Color(color).multiplyScalar(0.45).getHex(), [color]);
   const skin = useMemo(() => new THREE.Color(color).multiplyScalar(0.85).getHex(), [color]);
   return (
     <group position={build.off}>
+     <group ref={flapRef}>
       {feathered ? (
-        <mesh geometry={build.w.surface} castShadow>
-          <meshPhysicalMaterial vertexColors roughness={0.72} sheen={0.6} sheenRoughness={0.4} side={THREE.DoubleSide} />
-        </mesh>
+        <>
+          <mesh ref={foldRef} geometry={build.w.surface} castShadow>
+            <meshPhysicalMaterial vertexColors roughness={0.72} sheen={0.6} sheenRoughness={0.4} side={THREE.DoubleSide} />
+          </mesh>
+          {build.spread && (
+            <mesh ref={spreadRef} geometry={build.spread} visible={false} castShadow>
+              <meshPhysicalMaterial vertexColors roughness={0.72} sheen={0.6} sheenRoughness={0.4} side={THREE.DoubleSide} />
+            </mesh>
+          )}
+        </>
       ) : (
         <>
           <mesh geometry={build.w.surface} castShadow>
@@ -961,6 +991,7 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
           )}
         </>
       )}
+     </group>
     </group>
   );
 }
