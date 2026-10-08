@@ -19,7 +19,7 @@
  * bushes in the woods; carcasses rot. Determinism: all randomness flows from the world's seeded
  * mulberry32 and the engine's seeded mutate(); a fixed step reproduces a run exactly (Pillar 3).
  */
-import { mulberry32, mix32, type Rng } from '../engine/rng';
+import { mulberry32State, mix32, type StatefulRng } from '../engine/rng';
 import { grow, type Phenotype } from '../engine/grow';
 import type { Genome } from '../engine/genome';
 import { mutate, type MutationRates } from '../engine/mutate';
@@ -164,7 +164,8 @@ export interface HistorySample {
 
 export interface World {
   seed: number;
-  rng: Rng;
+  /** the world's one random stream (its state is saved with the world) */
+  rng: StatefulRng;
   time: number;
   terrain: Terrain;
   gridN: number;
@@ -252,7 +253,7 @@ export function growthOf(c: Creature): number {
 
 export function createWorld(seed: number): World {
   const terrain = makeTerrain(seed);
-  const rng = mulberry32(mix32(seed, 0x3c0105));
+  const rng = mulberry32State(mix32(seed, 0x3c0105));
   const gridN = Math.ceil(terrain.size / GRID_CELL);
   const grass = new Float32Array(gridN * gridN);
   const grassCap = new Float32Array(gridN * gridN);

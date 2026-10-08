@@ -8,12 +8,12 @@
  *               take it home to the breeder
  *   bottom      the field journal: births, kills, starvation, speciation, extinction as they happen
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { Genome } from '../engine/genome';
 import { WorldScene } from './WorldScene';
 import { TreeOfLife } from './TreeOfLife';
-import { useWorldUi, getWorld, populate, strangerGenome, bumpVersion, type Snapshot } from './worldStore';
+import { useWorldUi, getWorld, populate, strangerGenome, bumpVersion, autosave, downloadWorld, type Snapshot } from './worldStore';
 import { stepWorld, type HistorySample } from '../sim/world';
 
 const SPEEDS = [1, 4, 16, 48];
@@ -130,7 +130,37 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
   const sound = useWorldUi((s) => s.sound);
   // (dev: ?tree=1 opens it, for inspection screenshots)
   const [showTree, setShowTree] = useState(() => import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('tree') === '1');
-  const { setRunning, setSpeed, setFollow, setEmotes, setDocumentary, setSound, select, reset, releaseGenome, refresh } = useWorldUi.getState();
+  const { setRunning, setSpeed, setFollow, setEmotes, setDocumentary, setSound, select, reset, open, releaseGenome, refresh } = useWorldUi.getState();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [notice]);
+  const openFile = async (f: File | undefined) => {
+    if (!f) return;
+    try {
+      open(await f.text());
+      setNotice(`Opened ${f.name}`);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : 'That file is not a saved world.');
+    }
+  };
+
+  // the world is kept in the browser: every minute, and whenever the page is hidden or left
+  useEffect(() => {
+    const t = setInterval(autosave, 60_000);
+    const hide = () => document.visibilityState === 'hidden' && autosave();
+    document.addEventListener('visibilitychange', hide);
+    window.addEventListener('pagehide', autosave);
+    return () => {
+      clearInterval(t);
+      autosave();
+      document.removeEventListener('visibilitychange', hide);
+      window.removeEventListener('pagehide', autosave);
+    };
+  }, []);
 
   // first visit: populate the starter ecosystem (+ the breeder's creature)
   useEffect(() => {
@@ -198,7 +228,11 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
           <button onClick={() => releaseGenome(founder, 6)} title="release six of the creature you're breeding">+ your creature</button>
           <button onClick={() => releaseGenome(strangerGenome((Date.now() * 2654435761) >>> 0), 6)} title="release six of a random new species">+ a stranger</button>
           <button onClick={() => reset((Date.now() >>> 0) % 100000, founder)} title="a fresh world">new world</button>
+          <button onClick={downloadWorld} title="save this world to a file (it is also kept in your browser between visits)">save</button>
+          <button onClick={() => fileRef.current?.click()} title="open a saved world file">open</button>
+          <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => { void openFile(e.target.files?.[0]); e.target.value = ''; }} />
         </div>
+        {notice && <div className="world-notice">{notice}</div>}
       </header>
 
       {snap && (

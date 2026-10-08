@@ -208,6 +208,8 @@ function Cast({ world }: { world: World }) {
   );
 }
 
+let WORLD_IDS = 0;
+
 export function WorldScene() {
   const [world, setWorld] = useState(() => getWorld());
   // a reset swaps the world object — pick it up
@@ -215,17 +217,19 @@ export function WorldScene() {
     const w = getWorld();
     if (w !== world) setWorld(w);
   });
+  // every world object gets its own landscape (a loaded world may share the old one's seed)
+  const wid = useMemo(() => ++WORLD_IDS, [world]);
   const lake = world.terrain;
   return (
     <>
       <SimDriver />
       <DayNight />
       <StudioEnvironment />
-      <TerrainMesh key={`t${world.seed}`} world={world} />
+      <TerrainMesh key={`t${wid}`} world={world} />
       <Water terrain={world.terrain} />
-      <Bushes key={`b${world.seed}`} world={world} />
-      <Decor key={`d${world.seed}`} terrain={world.terrain} world={world} />
-      <Grass key={`g${world.seed}`} world={world} />
+      <Bushes key={`b${wid}`} world={world} />
+      <Decor key={`d${wid}`} terrain={world.terrain} world={world} />
+      <Grass key={`g${wid}`} world={world} />
       <Cast world={world} />
       <OrbitControls
         makeDefault

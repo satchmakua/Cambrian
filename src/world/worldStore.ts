@@ -9,6 +9,7 @@
  */
 import { create } from 'zustand';
 import { SOUND } from './audio';
+import { loadWorld, saveWorld } from '../sim/persist';
 import type { Genome } from '../engine/genome';
 import { genomeOfMorphotype, randomGenome } from '../engine/random';
 import {
@@ -21,8 +22,45 @@ let WORLD: World | null = null;
 let VERSION = 0; // bumps whenever the set of live creatures/corpses changes shape (re-render actors)
 
 export function getWorld(): World {
-  if (!WORLD) WORLD = createWorld(1);
+  if (!WORLD) WORLD = resumeWorld() ?? createWorld(1);
   return WORLD;
+}
+
+// --- persistence: the world is kept in the browser between visits, and can be saved to a file -----
+
+const AUTOSAVE_KEY = 'cambrian.world';
+
+/** The world left running last visit, if there is one (and it still loads). Dev pages opened with
+ *  query parameters (the screenshot harness) always start fresh, so they stay reproducible. */
+function resumeWorld(): World | null {
+  if (import.meta.env.DEV && typeof location !== 'undefined' && location.search) return null;
+  try {
+    const s = localStorage.getItem(AUTOSAVE_KEY);
+    return s ? loadWorld(s) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Keep the current world in the browser (called periodically and when the page is hidden). */
+export function autosave(): void {
+  if (!WORLD || WORLD.creatures.length === 0) return;
+  try {
+    localStorage.setItem(AUTOSAVE_KEY, saveWorld(WORLD));
+  } catch {
+    // storage full or blocked — the world simply won't be there next visit
+  }
+}
+
+/** Download the current world as a file. */
+export function downloadWorld(): void {
+  const w = getWorld();
+  const blob = new Blob([saveWorld(w)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `cambrian-world-${w.seed}-day${dayNumber(w.time)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 export function worldVersion(): number {
@@ -112,6 +150,8 @@ interface WorldUi {
   refresh: () => void;
   /** Start a new world from a seed, populated with a starter ecosystem (and optionally `founder`). */
   reset: (seed: number, founder?: Genome | null) => void;
+  /** Swap in a loaded world (from a saved file). Throws, leaving the current world, if it won't load. */
+  open: (json: string) => void;
   releaseGenome: (g: Genome, count: number) => void;
 }
 
@@ -227,6 +267,11 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
   reset: (seed, founder) => {
     WORLD = createWorld(seed >>> 0);
     populate(WORLD, founder);
+    bumpVersion();
+    set({ selected: null, follow: false, snapshot: snapshotOf(WORLD, null) });
+  },
+  open: (json) => {
+    WORLD = loadWorld(json);
     bumpVersion();
     set({ selected: null, follow: false, snapshot: snapshotOf(WORLD, null) });
   },
