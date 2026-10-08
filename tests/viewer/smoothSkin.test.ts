@@ -184,5 +184,39 @@ describe('smooth skin (M15)', () => {
       }
     }
   });
+
+  it('an anisotropic trunk is one smooth elliptical tube — no per-node bulges (the caterpillar)', async () => {
+    const { buildFieldPrims, fieldAt } = await import('../../src/viewer/bodyField');
+    for (const id of ['fish', 'felid', 'crocodilian']) {
+      const p = grow(genomeOfMorphotype(4, id));
+      const f = buildFieldPrims(p, 'body');
+      f.k = 0;
+      const trunk = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 0);
+      if (trunk.length < 3 || !trunk.some((n) => n.scale)) continue;
+      // sample the top-of-back height along the trunk: it must vary smoothly (no bead-per-node ripple)
+      const zs = trunk.map((n) => n.pos[2]).sort((a, b) => a - b);
+      const top = (z: number) => {
+        let lo = 0, hi = 4;
+        for (let i = 0; i < 40; i++) {
+          const m = (lo + hi) / 2;
+          if (fieldAt(f, 0, m, z) < 0) lo = m;
+          else hi = m;
+        }
+        return lo;
+      };
+      const ys: number[] = [];
+      for (let i = 0; i <= 40; i++) ys.push(top(zs[0] + ((zs[zs.length - 1] - zs[0]) * i) / 40));
+      // beads show as one bump per node along the back; a smooth trunk has at most a bump per haunch
+      // (shoulder / hip) plus the fusiform middle
+      const girth = Math.max(...trunk.map((n) => n.radius));
+      let bumps = 0;
+      for (let i = 1; i < ys.length - 1; i++) {
+        if (ys[i] > ys[i - 1] + girth * 0.004 && ys[i] >= ys[i + 1] + girth * 0.004) bumps++;
+      }
+      const legPairs = p.genomeRef.body.appendages.filter((a) => a.kind === 'leg').length;
+      expect(bumps).toBeLessThanOrEqual(legPairs + 1);
+      expect(bumps).toBeLessThan(trunk.length); // and never one per node
+    }
+  });
 });
 

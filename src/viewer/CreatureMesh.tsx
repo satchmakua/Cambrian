@@ -22,7 +22,7 @@ import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildMembraneWing, buildTailFan, conformToSurface } from './wings';
+import { buildFeatheredWing, buildMembraneWing, buildTailFan, conformToSurface, buildFin, finKindOf } from './wings';
 import { ensureSkinWeights, type RigInstance } from './rig';
 import { buildFieldPrims, fieldAt } from './bodyField';
 import { getGeometry, retainGeometry, releaseGeometry } from './geometryCache';
@@ -538,7 +538,7 @@ function Feature({
       ) : f.kind === 'frill' ? (
         <Frill f={f} color={finColor} />
       ) : (
-        <Fin f={f} color={finColor} lite={lite} />
+        <Fin f={f} color={finColor} lite={lite} phenotype={phenotype} />
       );
     case 'claw':
       return f.kind === 'horn' ? <Horn f={f} color={footColor} /> : <Claw f={f} color={footColor} />;
@@ -774,69 +774,56 @@ function Pincer({ f, color }: { f: MeshFeature; color: number }) {
   );
 }
 
-// A fin: a thin blade, oriented outward by the node frame.
-// A fin — a broad fanned blade, not the old flattened bead on a stalk (which read as a limb stump).
-// The membrane fans from the root out along the node's aim (+Z), spread in ±Y, thin along X, with
-// radial fin-rays for the ribbed fish-fin look. A caudal (a tail-terminal fin, kind 'tail') is
-// bigger and FORKED — a proper tail fin — so a fish's tail reads as a caudal fan.
-function Fin({ f, color, lite = false }: { f: MeshFeature; color: number; lite?: boolean }) {
-  const r = Math.max(f.radius, 0.06);
-  const caudal = f.kind === 'tail';
-  const S = r * (caudal ? 7.5 : 5.5);
+// A fin, built in the body frame from its aim (wings.ts buildFin): a raked dorsal sail, swept
+// pectoral and pelvic paddles lying along the flank, a forked caudal fan — sized to the body's girth.
+function Fin({ f, color, lite = false, phenotype }: { f: MeshFeature; color: number; lite?: boolean; phenotype: Phenotype }) {
+  const build = useMemo(() => {
+    const q = new THREE.Quaternion(f.quat[0], f.quat[1], f.quat[2], f.quat[3]);
+    const aim = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+    // girth: the radius of the body node this fin grows from (walk up past the fin chain)
+    const parent = new Int32Array(phenotype.nodes.length).fill(-1);
+    for (const [a, b] of phenotype.edges) parent[b] = a;
+    let c = parent[f.idx];
+    while (c >= 0 && phenotype.nodes[c].kind !== 'spine') c = parent[c];
+    const girth = c >= 0 ? phenotype.nodes[c].radius : Math.max(f.radius, 0.2) * 2;
+    const kind = finKindOf(aim, f.kind);
+    // a caudal grows at the tail tip, where the body is thin — size it to the trunk instead
+    const g = kind === 'caudal' ? Math.max(girth, trunkGirth(phenotype) * 0.8) : girth;
+    return buildFin(kind, aim, g, 0.8 + f.style * 0.6);
+  }, [f, phenotype]);
+  useEffect(() => () => build.membrane.dispose(), [build]);
   const ray = useMemo(() => new THREE.Color(color).multiplyScalar(0.6).getHex(), [color]);
-
-  const { root, tips } = useMemo(() => {
-    const RAYS = 8;
-    const rt = new THREE.Vector3(0, 0, 0);
-    const ts: THREE.Vector3[] = [];
-    for (let i = 0; i < RAYS; i++) {
-      const t = i / (RAYS - 1);
-      const ang = -0.85 + t * 1.7; // fan from a leading edge to a trailing edge, around +Z
-      // reach: a rounded blade (fullest mid-fan). A caudal notches in the middle → a forked fork.
-      const round = 0.62 + 0.55 * Math.sin(t * Math.PI);
-      const reach = caudal ? round * (1 - 0.42 * Math.exp(-((t - 0.5) ** 2) / 0.02)) : round;
-      ts.push(new THREE.Vector3(0, Math.sin(ang) * reach * S, Math.cos(ang) * reach * S));
-    }
-    return { root: rt, tips: ts };
-  }, [S, caudal]);
-
-  const membrane = useMemo(() => {
-    const verts: number[] = [];
-    for (let i = 0; i < tips.length - 1; i++) {
-      verts.push(root.x, root.y, root.z, tips[i].x, tips[i].y, tips[i].z, tips[i + 1].x, tips[i + 1].y, tips[i + 1].z);
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-    g.computeVertexNormals();
-    return g;
-  }, [root, tips]);
-  useEffect(() => () => membrane.dispose(), [membrane]);
-
-  // fin rays — thin spars from the root to every other tip, the stiffening rods of a real fin
-  const rays = useMemo(
+  const bones = useMemo(
     () =>
-      tips.filter((_, i) => i % 2 === 0).map((tip) => {
-        const mid = tip.clone().multiplyScalar(0.5);
-        const len = Math.max(tip.length(), 1e-3);
-        const q = new THREE.Quaternion().setFromUnitVectors(UP, tip.clone().normalize());
+      build.rays.map((r) => {
+        const d = r.b.clone().sub(r.a);
+        const len = Math.max(d.length(), 1e-4);
+        const q = new THREE.Quaternion().setFromUnitVectors(UP, d.normalize());
+        const mid = r.a.clone().add(r.b).multiplyScalar(0.5);
         return { pos: [mid.x, mid.y, mid.z] as [number, number, number], quat: [q.x, q.y, q.z, q.w] as [number, number, number, number], len };
       }),
-    [tips],
+    [build],
   );
-
+  const w = Math.max(0.006, bones.length ? bones[0].len * 0.012 : 0.01);
   return (
-    <group quaternion={f.quat}>
-      <mesh geometry={membrane} castShadow>
-        <meshStandardMaterial color={color} roughness={0.5} metalness={0.0} side={THREE.DoubleSide} transparent opacity={0.94} />
+    <group>
+      <mesh geometry={build.membrane} castShadow>
+        <meshPhysicalMaterial color={color} roughness={0.45} sheen={0.4} side={THREE.DoubleSide} transparent opacity={0.9} />
       </mesh>
-      {!lite && rays.map((b, i) => (
+      {!lite && bones.map((b, i) => (
         <mesh key={i} position={b.pos} quaternion={b.quat}>
-          <cylinderGeometry args={[r * 0.04, r * 0.06, b.len, 4]} />
+          <cylinderGeometry args={[w * 0.5, w, b.len, 4]} />
           <meshStandardMaterial color={ray} roughness={0.5} />
         </mesh>
       ))}
     </group>
   );
+}
+
+function trunkGirth(p: Phenotype): number {
+  let g = 0;
+  for (const n of p.nodes) if (n.kind === 'spine' && (n.segment ?? 0) === 0) g = Math.max(g, n.radius);
+  return g || 0.4;
 }
 
 // A frill: a broad, thin fanned collar — wider and rounder than a fin.

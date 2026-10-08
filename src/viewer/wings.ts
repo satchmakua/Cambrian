@@ -275,3 +275,102 @@ export function conformToSurface(
   pos.needsUpdate = true;
   geo.computeVertexNormals();
 }
+
+// --- fins ---------------------------------------------------------------------------------------
+
+export type FinKind = 'dorsal' | 'pectoral' | 'pelvic' | 'caudal';
+
+export interface FinBuild {
+  membrane: THREE.BufferGeometry;
+  rays: { a: THREE.Vector3; b: THREE.Vector3 }[];
+}
+
+/** Classify a fin by where it points (body frame) and what grew it. */
+export function finKindOf(aim: THREE.Vector3, partKind: string | undefined): FinKind {
+  if (partKind === 'tail') return 'caudal';
+  if (aim.y > 0.55) return 'dorsal';
+  if (aim.y < -0.55) return 'pelvic';
+  return 'pectoral';
+}
+
+/**
+ * A fin built in the BODY frame: its span runs out along the fin's aim, its chord sweeps BACK along
+ * the body (a caudal fin's chord stands vertical), and it is sized to the body's girth `g` — so a
+ * pectoral fin is a swept paddle lying along the flank, a dorsal a raked sail, a caudal a forked
+ * fan, never the old billboards whose chord inherited an arbitrary axis from the growth quaternion.
+ * Origin at the fin root (on the skin); the root edge tucks a little into the body.
+ */
+export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 1): FinBuild {
+  const aim = aimIn.clone().normalize();
+  const back = v3(0, 0, -1);
+  // chord: the body-backward direction with the aim removed; a caudal's chord is vertical
+  let chord = kind === 'caudal' ? v3(0, 1, 0) : back.clone();
+  chord.addScaledVector(aim, -chord.dot(aim));
+  if (chord.lengthSq() < 1e-6) chord = v3(0, 1, 0).addScaledVector(aim, -aim.y);
+  chord.normalize();
+  const normal = new THREE.Vector3().crossVectors(aim, chord).normalize();
+  const k = Math.min(1.5, Math.max(0.6, gene));
+  // [span, chord, sweep (how far back the tip rakes, ×chord)] per kind, × girth
+  const dims: Record<FinKind, [number, number, number]> = {
+    dorsal: [1.45 * k, 1.9 * k, 0.75],
+    pectoral: [1.25 * k, 1.05 * k, 0.6],
+    pelvic: [0.75 * k, 0.8 * k, 0.5],
+    caudal: [2.0 * k, 2.6 * k, 0],
+  };
+  const [H, C, sweep] = dims[kind].map((x) => x * g) as [number, number, number];
+  const P = (along: number, out: number, bulge = 0) =>
+    chord.clone().multiplyScalar(along).add(aim.clone().multiplyScalar(out)).add(normal.clone().multiplyScalar(bulge));
+
+  // the outline, root-leading-edge → tip → trailing edge → root-trailing-edge
+  const outline: THREE.Vector3[] = [];
+  const N = 14;
+  if (kind === 'caudal') {
+    // a forked tail: two lobes (up and down along the chord) reaching back along the aim
+    for (let i = 0; i <= N; i++) {
+      const t = i / N; // −C/2 … +C/2 across the fork
+      const across = (t - 0.5) * C;
+      const lobe = Math.abs(t - 0.5) * 2; // 0 at the fork's notch → 1 at the lobe tips
+      const reach = H * (0.45 + 0.55 * Math.pow(lobe, 0.8));
+      outline.push(P(across, reach));
+    }
+  } else {
+    const root0 = -C * 0.15; // leading edge root (a touch forward of the node)
+    const root1 = C * 0.85; // trailing edge root
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      // leading edge: a gentle convex rake up to the tip; trailing edge: a concave sweep back down
+      if (t <= 0.5) {
+        const u = t / 0.5;
+        outline.push(P(root0 + (sweep * C) * Math.pow(u, 1.4), H * Math.sin((u * Math.PI) / 2)));
+      } else {
+        const u = (t - 0.5) / 0.5;
+        const tipAlong = root0 + sweep * C;
+        const along = tipAlong + (root1 - tipAlong) * u;
+        const out = H * (1 - u) * (1 - 0.35 * Math.sin(Math.PI * u));
+        outline.push(P(along, out));
+      }
+    }
+  }
+  const hub = kind === 'caudal' ? P(0, -g * 0.15) : P(C * 0.3, -g * 0.12); // tucked into the body
+  const pos: number[] = [hub.x, hub.y, hub.z];
+  for (const o of outline) pos.push(o.x, o.y, o.z);
+  // a slightly cambered surface: ring of mid points between hub and outline, bowed along the normal
+  const mids: number[] = [];
+  for (const o of outline) {
+    const m = hub.clone().lerp(o, 0.55).addScaledVector(normal, g * 0.03);
+    mids.push(m.x, m.y, m.z);
+  }
+  const base = 1 + outline.length;
+  pos.push(...mids);
+  const idx: number[] = [];
+  for (let i = 0; i < outline.length - 1; i++) {
+    const mi = base + i, mj = base + i + 1, oi = 1 + i, oj = 2 + i;
+    idx.push(0, mi, mj, mi, oi, oj, mi, oj, mj);
+  }
+  const membrane = new THREE.BufferGeometry();
+  membrane.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  membrane.setIndex(idx);
+  membrane.computeVertexNormals();
+  const rays = outline.filter((_, i) => i % 2 === 1).map((o) => ({ a: hub.clone(), b: o.clone() }));
+  return { membrane, rays };
+}

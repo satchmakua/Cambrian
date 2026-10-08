@@ -65,4 +65,22 @@ describe('wings (shoulder-built, body frame)', () => {
       expect(sphere(pos.getX(i) + 0.5, pos.getY(i), pos.getZ(i))).toBeGreaterThan(0.015);
     }
   });
+
+  it('fins are built in the body frame: chords sweep back along the body, caudals stand vertical', async () => {
+    const { buildFin, finKindOf } = await import('../../src/viewer/wings');
+    const side = new THREE.Vector3(1, -0.2, 0).normalize();
+    expect(finKindOf(new THREE.Vector3(0, 1, 0), 'fin')).toBe('dorsal');
+    expect(finKindOf(side, 'fin')).toBe('pectoral');
+    expect(finKindOf(new THREE.Vector3(0, 0, -1), 'tail')).toBe('caudal');
+    const pect = buildFin('pectoral', side, 0.5);
+    const pb = bbox(pect.membrane);
+    expect(finite(pect.membrane)).toBe(true);
+    expect(pb.min.z).toBeLessThan(-0.2); // the chord trails back along the flank
+    expect(pb.max.x).toBeGreaterThan(0.3); // and the span reaches out to its side
+    const caudal = buildFin('caudal', new THREE.Vector3(0, 0, -1), 0.5);
+    const cb = bbox(caudal.membrane);
+    expect(cb.max.y - cb.min.y).toBeGreaterThan(0.6); // a tall vertical fork
+    expect(cb.max.x - cb.min.x).toBeLessThan(0.15); // thin side to side
+  });
 });
+

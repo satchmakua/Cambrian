@@ -35,6 +35,16 @@ export interface FieldPrims {
   cy: Float64Array;
   cz: Float64Array;
   hl: Float64Array;
+  /** ELLIPTICAL cones (spine chains with an anisotropic cross-section): a flag, the segment's local
+   *  frame (the start node's orientation — +Z along the chain), and the cross-section x/y scale at each
+   *  end, interpolated along the segment. A tall fish or a broad croc is then one smooth elliptical
+   *  tube, instead of round cones studded with a bulging ellipsoid at every node (the caterpillar). */
+  an: Uint8Array;
+  aq: Float64Array; // 4·nc
+  sx0: Float64Array;
+  sy0: Float64Array;
+  sx1: Float64Array;
+  sy1: Float64Array;
   nc: number;
   /** ellipsoid nodes (per-node anisotropy): centers ec (3·ne), orientations eq (4·ne), semi-axes er (3·ne) */
   ec: Float64Array;
@@ -65,10 +75,13 @@ export function isBodyNode(n: BodyNode): boolean {
 }
 // The HYBRID mode meshes *everything* (full part definition) except the eyes/mouth, which always draw
 // as solids — best of both: an organic surface like smooth, but nothing drops out like capsules keep.
+// parts whose features draw themselves completely — meshing their 1-node stub into the skin only
+// raised a lump under the feature (a fish's fins and gills studded its flanks with bumps)
+const FEATURE_ONLY_KINDS = new Set(['wing', 'fin', 'gill', 'frill', 'crest', 'whisker']);
 export function isHybridNode(n: BodyNode): boolean {
   // the carapace stub is drawn as a conforming shell of its own (smoothSkin.buildShellGeometry)
-  // wings are drawn whole from the shoulder (wings.ts) — meshing their stub chain only made a lump
-  return n.terminal !== 'eye' && n.terminal !== 'mouth' && n.terminal !== 'carapace' && n.part?.kind !== 'wing';
+  // wings are drawn whole from the shoulder (wings.ts); fins from their root (buildFin)
+  return n.terminal !== 'eye' && n.terminal !== 'mouth' && n.terminal !== 'carapace' && !FEATURE_ONLY_KINDS.has(n.part?.kind ?? '');
 }
 
 /**
@@ -88,10 +101,32 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   const ra = new Float64Array(nc);
   const rb = new Float64Array(nc);
   const included = new Set<BodyNode>();
+  const an = new Uint8Array(nc);
+  const aq = new Float64Array(nc * 4);
+  const sx0 = new Float64Array(nc).fill(1), sy0 = new Float64Array(nc).fill(1);
+  const sx1 = new Float64Array(nc).fill(1), sy1 = new Float64Array(nc).fill(1);
+  // spine-chain degree (spine neighbours among the meshed edges): an interior spine node's shape is
+  // carried by its elliptical cones, so only chain ENDS keep a node ellipsoid (rump, snout tip)
+  const spineDeg = new Map<BodyNode, number>();
+  if (edges) {
+    for (const [ia, ib] of edges) {
+      const a = p.nodes[ia], b = p.nodes[ib];
+      if (a.kind === 'spine' && b.kind === 'spine') {
+        spineDeg.set(a, (spineDeg.get(a) ?? 0) + 1);
+        spineDeg.set(b, (spineDeg.get(b) ?? 0) + 1);
+      }
+    }
+  }
   if (edges) {
     for (let i = 0; i < edges.length; i++) {
       const a = p.nodes[edges[i][0]];
       const b = p.nodes[edges[i][1]];
+      if (a.kind === 'spine' && b.kind === 'spine' && (a.scale || b.scale)) {
+        an[i] = 1;
+        aq[i * 4] = a.quat[0]; aq[i * 4 + 1] = a.quat[1]; aq[i * 4 + 2] = a.quat[2]; aq[i * 4 + 3] = a.quat[3];
+        sx0[i] = a.scale?.[0] ?? 1; sy0[i] = a.scale?.[1] ?? 1;
+        sx1[i] = b.scale?.[0] ?? 1; sy1[i] = b.scale?.[1] ?? 1;
+      }
       ax[i] = a.pos[0]; ay[i] = a.pos[1]; az[i] = a.pos[2];
       bx[i] = b.pos[0]; by[i] = b.pos[1]; bz[i] = b.pos[2];
       pr[i] = (a.radius + b.radius) * 0.5;
@@ -109,9 +144,17 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     }
   }
 
-  // anisotropic nodes carry their shape as an ellipsoid primitive (capsules only know one radius)
+  // anisotropic nodes carry their shape as an ellipsoid primitive — except interior spine nodes, whose
+  // cross-section the elliptical cones on both sides already carry (see `an`)
   const shaped: BodyNode[] = [];
-  for (const n of included) if (n.scale) shaped.push(n);
+  // A z-stretched interior node (a long croc/mustelid segment) keeps its ellipsoid: those overlap down
+  // the chain and blur the haunch bumps into one long smooth back.
+  for (const n of included) {
+    if (!n.scale) continue;
+    const interior = n.kind === 'spine' && (spineDeg.get(n) ?? 0) >= 2;
+    if (interior && n.scale[2] <= 1.15) continue;
+    shaped.push(n);
+  }
   const ne = shaped.length;
   const ec = new Float64Array(ne * 3);
   const eq = new Float64Array(ne * 4);
@@ -132,7 +175,8 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     cz[i] = (az[i] + bz[i]) / 2;
     hl[i] = Math.hypot(bx[i] - ax[i], by[i] - ay[i], bz[i] - az[i]) / 2;
   }
-  return { ax, ay, az, bx, by, bz, pr, ra, rb, cx, cy, cz, hl, nc, ec, eq, er, ne, k: 0, excess };
+  for (let i = 0; i < nc; i++) if (an[i]) excess = Math.max(excess, Math.max(ra[i], rb[i]) * (Math.max(sx0[i], sy0[i], sx1[i], sy1[i]) - 1));
+  return { ax, ay, az, bx, by, bz, pr, ra, rb, cx, cy, cz, hl, an, aq, sx0, sy0, sx1, sy1, nc, ec, eq, er, ne, k: 0, excess };
 }
 
 // rotate v by the CONJUGATE of q (world → the prim's local frame), inlined, no allocation of q'
@@ -261,6 +305,33 @@ export function roundConeDist(
   return (Math.sqrt(x2 * a2 * il2) + y * rr) * il2 - r1;
 }
 
+const ELL_P: Vec3 = [0, 0, 0];
+const ELL_B: Vec3 = [0, 0, 0];
+/**
+ * Distance to an ELLIPTICAL round cone: in the segment's local frame (+Z along the chain), squash the
+ * cross-section by the scale interpolated at the point's position along the segment, measure the exact
+ * round-cone distance there, and scale back by the smaller cross-section axis (conservative — the
+ * union and the polygonizer only need a field that never overestimates).
+ */
+function ellipticConeDist(f: FieldPrims, m: number, x: number, y: number, z: number): number {
+  const qx = f.aq[m * 4], qy = f.aq[m * 4 + 1], qz = f.aq[m * 4 + 2], qw = f.aq[m * 4 + 3];
+  rotConj(qx, qy, qz, qw, x - f.ax[m], y - f.ay[m], z - f.az[m], ELL_P);
+  rotConj(qx, qy, qz, qw, f.bx[m] - f.ax[m], f.by[m] - f.ay[m], f.bz[m] - f.az[m], ELL_B);
+  const l2 = ELL_B[0] * ELL_B[0] + ELL_B[1] * ELL_B[1] + ELL_B[2] * ELL_B[2];
+  let t = l2 > 1e-12 ? (ELL_P[0] * ELL_B[0] + ELL_P[1] * ELL_B[1] + ELL_P[2] * ELL_B[2]) / l2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const sx = f.sx0[m] + (f.sx1[m] - f.sx0[m]) * t;
+  const sy = f.sy0[m] + (f.sy1[m] - f.sy0[m]) * t;
+  const d = roundConeDist(
+    ELL_P[0] / sx, ELL_P[1] / sy, ELL_P[2],
+    0, 0, 0,
+    ELL_B[0] / sx, ELL_B[1] / sy, ELL_B[2],
+    f.ra[m], f.rb[m],
+  );
+  // the squash is Lipschitz with constant 1/min(sx, sy, 1): scaling back by that bound never overestimates
+  return d * Math.min(sx, sy, 1);
+}
+
 /** The body field: < 0 inside the creature, 0 on the skin, > 0 outside. */
 export function fieldAt(f: FieldPrims, x: number, y: number, z: number): number {
   let d = Infinity;
@@ -272,12 +343,15 @@ export function fieldAt(f: FieldPrims, x: number, y: number, z: number): number 
     // definition instead of webbing into each other, while fat trunk sections still fuse softly
     const rMaxM = f.ra[m] > f.rb[m] ? f.ra[m] : f.rb[m];
     const km = k < rMaxM * 1.1 ? k : rMaxM * 1.1;
+    const sMax = f.an[m] ? Math.max(f.sx0[m], f.sy0[m], f.sx1[m], f.sy1[m], 1) : 1;
     if (d !== Infinity) {
       const ox = x - f.cx[m], oy = y - f.cy[m], oz = z - f.cz[m];
-      const lim = d + km + f.hl[m] + rMaxM;
+      const lim = d + km + f.hl[m] + rMaxM * sMax;
       if (lim > 0 && ox * ox + oy * oy + oz * oz > lim * lim) continue;
     }
-    const val = roundConeDist(x, y, z, f.ax[m], f.ay[m], f.az[m], f.bx[m], f.by[m], f.bz[m], f.ra[m], f.rb[m]);
+    const val = f.an[m]
+      ? ellipticConeDist(f, m, x, y, z)
+      : roundConeDist(x, y, z, f.ax[m], f.ay[m], f.az[m], f.bx[m], f.by[m], f.bz[m], f.ra[m], f.rb[m]);
     d = d === Infinity ? val : smin(val, d, km);
   }
   for (let m = 0; m < f.ne; m++) {
