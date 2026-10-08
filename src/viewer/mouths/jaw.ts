@@ -34,11 +34,20 @@ export function hingeOf(upper: { p: Vec3 }[], lower: { p: Vec3 }[], aim: Vec3): 
   const axis = b.clone().sub(a);
   if (axis.lengthSq() < 1e-10) return null;
   axis.normalize();
-  // the jaw pivots a little behind its corners (a real jaw hinges near the ear, not at the lip)
-  const back = new THREE.Vector3(...aim).normalize().multiplyScalar(-a.distanceTo(b) * 0.25);
-  const pivot = a.clone().add(b).multiplyScalar(0.5).add(back);
-  const U = new THREE.Vector3(...upper[upper.length >> 1].p).sub(pivot);
-  const L = new THREE.Vector3(...lower[lower.length >> 1].p).sub(pivot);
+  // The jaw hinges BEHIND the mouth (near the ear, not at the lip), and the pivot sits on the
+  // perpendicular bisector of the two lip centres — equidistant from both — so the closing arc carries
+  // the lower lip exactly onto the upper rather than merely near it.
+  const Uw = new THREE.Vector3(...upper[upper.length >> 1].p);
+  const Lw = new THREE.Vector3(...lower[lower.length >> 1].p);
+  const mid = Uw.clone().add(Lw).multiplyScalar(0.5);
+  const ul = Uw.clone().sub(Lw);
+  const inPlane = new THREE.Vector3().crossVectors(axis, ul); // ⟂ axis and ⟂ (U−L): along the bisector
+  if (inPlane.lengthSq() < 1e-12) return null;
+  inPlane.normalize();
+  if (inPlane.dot(new THREE.Vector3(...aim)) > 0) inPlane.negate(); // point back into the head
+  const pivot = mid.addScaledVector(inPlane, Math.max(a.distanceTo(b) * 0.55, ul.length()));
+  const U = Uw.sub(pivot);
+  const L = Lw.sub(pivot);
   // project both onto the plane ⟂ axis and measure the signed angle L → U
   U.addScaledVector(axis, -U.dot(axis));
   L.addScaledVector(axis, -L.dot(axis));
