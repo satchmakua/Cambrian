@@ -128,7 +128,7 @@ const MORPHOTYPES: readonly Morpho[] = [
   // turtle/tortoise: a deep domed body, short stumpy sprawled legs, a small beaked head, plated net skin
   { id: 'chelonian', cluster: 'familiar', weight: 1.0, girth: [0.55, 0.78], repeat: [1, 2], height: [1.15, 1.45], elong: [0.8, 1.0], legPairs: [2], posture: 'sprawling', legLen: [0.3, 0.44], legThick: [0.34, 0.5], legAz: [3.7, 4.0], legTerm: ['claw'], tail: 0.35, tailTerm: ['none'], carapace: 1, head: 0.6, eyeStyle: [0, 0.2], mouthStyle: [0.26, 0.37], covering: ['plates'], pattern: ['reticulate', 'mottle'], hue: [0.18, 0.35], sat: [0.35, 0.6] },
   // ostrich/emu: tall, heavy, two long stilt legs, a small beaked head, shaggy feathers (the neck is M24)
-  { id: 'ratite', cluster: 'familiar', weight: 1.2, girth: [0.34, 0.5], repeat: [2, 3], height: [1.0, 1.3], elong: [1.0, 1.2], neck: [0.3, 0.38], neckLinks: [3, 4], neckLift: [-0.36, -0.26], headSize: [0.5, 0.62], legPairs: [1], posture: 'upright', legLen: [1.2, 1.7], legThick: [0.18, 0.28], legTerm: ['claw'], tail: 0.3, tailTerm: ['none'], head: 0.5, eyeStyle: [0, 0.2], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['plain', 'mottle'], hue: [0.06, 0.12], sat: [0.3, 0.5] },
+  { id: 'ratite', cluster: 'familiar', weight: 1.2, girth: [0.34, 0.5], repeat: [2, 3], height: [1.0, 1.3], elong: [1.0, 1.2], neck: [0.3, 0.38], neckLinks: [3, 4], neckLift: [-0.36, -0.26], headSize: [0.5, 0.62], legPairs: [1], posture: 'upright', legLen: [1.2, 1.7], legThick: [0.18, 0.28], legTerm: ['claw'], tail: 0.3, tailTerm: ['none'], tailSegs: [1, 2], tailLen: [0.3, 0.5], tailThick: [0.24, 0.34], tailDroop: [-1.55, -1.3], tailCurl: [-0.3, -0.15], head: 0.5, eyeStyle: [0, 0.2], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['plain', 'mottle'], hue: [0.06, 0.12], sat: [0.3, 0.5] },
   // --- uncanny ---
   { id: 'dragon', cluster: 'uncanny', weight: 0.9, girth: [0.5, 0.72], repeat: [4, 6], elong: [1.2, 1.5], neck: [0.5, 0.6], neckLinks: [2, 2], neckLift: [-0.38, -0.26], headSize: [0.6, 0.75], legPairs: [2], posture: 'digitigrade', legLen: [0.5, 0.68], legTerm: ['claw'], wings: 0.85, tail: 0.95, tailTerm: ['none', 'barb', 'club'], headShape: ['broad', 'blocky'], horns: 0.9, spines: 0.8, crest: 0.3, eyeStyle: [0.4, 0.9], mouthStyle: [0.14, 0.24], covering: ['scales', 'plates'], pattern: ['reticulate', 'bands', 'mottle'], sheen: [0.35, 0.8], hue: [0.0, 0.95], sat: [0.5, 0.9] },
   { id: 'wyvern', cluster: 'uncanny', weight: 0.85, girth: [0.42, 0.58], repeat: [3, 5], elong: [1.2, 1.5], neck: [0.48, 0.58], neckLinks: [2, 2], neckLift: [-0.38, -0.26], headSize: [0.62, 0.78], legPairs: [1], posture: 'digitigrade', legLen: [0.55, 0.75], legTerm: ['claw'], wings: 1, tail: 0.95, tailTerm: ['barb'], horns: 0.8, spines: 0.6, eyeStyle: [0.4, 0.9], mouthStyle: [0.14, 0.24], covering: ['scales'], pattern: ['bands', 'reticulate'], sheen: [0.3, 0.7], hue: [0.0, 0.95], sat: [0.5, 0.9] },
@@ -375,27 +375,31 @@ function muzzleHead(rng: Rng, g: number, m: Morpho, eyeStyle: number): SegmentGe
   // eyes on the cranium's front, set high beside the muzzle bridge (attachT < 0.5 → the cranium link)
   const eyeCount = pick(rng, m.eyeCount ?? ([2] as const));
   for (let p = 0; p < Math.max(1, Math.round(eyeCount / 2)); p++) {
-    apps.push(eyes(rng, range(rng, 0.1, 0.35), false, g * 0.85, { style: [eyeStyle, eyeStyle], az: (m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.45, 0.7)) + p * 0.3 }));
+    apps.push(eyes(rng, range(rng, 0.05, 0.22), false, g * 0.85, { style: [eyeStyle, eyeStyle], az: (m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.45, 0.7)) + p * 0.3 }));
   }
   const mouthGene = mouth(rng, mg * 1.05, m.mouthStyle);
   mouthGene.attachT = 1; // the muzzle carries the mouth
   apps.push(mouthGene);
-  if (chance(rng, m.horns ?? 0)) apps.push({ ...horns(rng, g), attachT: range(rng, 0.0, 0.3) });
-  if (chance(rng, m.ears ?? 0)) apps.push({ ...ear(rng, g, m.earStyle), attachT: range(rng, 0.0, 0.3) });
+  if (chance(rng, m.horns ?? 0)) apps.push({ ...horns(rng, g), attachT: range(rng, 0.0, 0.2) });
+  if (chance(rng, m.ears ?? 0)) apps.push({ ...ear(rng, g, m.earStyle), attachT: range(rng, 0.0, 0.2) });
   // whiskers fan out sideways from the muzzle's flanks (the generic whisker hangs off a snout's underside)
   if (chance(rng, m.whiskers ?? 0)) apps.push({ ...whisker(rng, mg), attachT: 1, attachAzimuth: range(rng, 5.75, 6.05), attachElevation: range(rng, 0.15, 0.4) });
-  if (chance(rng, m.crest ?? 0)) apps.push({ ...crest(rng, g), attachT: range(rng, 0.0, 0.3) });
+  if (chance(rng, m.crest ?? 0)) apps.push({ ...crest(rng, g), attachT: range(rng, 0.0, 0.2) });
   const arch = HEAD_ARCHETYPES[m.headShape ? pick(rng, m.headShape) : 'round'];
   const wide = rg(rng, m.headWide, arch.wide);
   const domed = rg(rng, m.headDome, arch.domed);
   const sb = GENE_BOUNDS.segment.size;
+  const drop = rg(rng, m.muzzleDrop, [0.3, 0.42]);
+  // a LONG snout (dog, horse, weasel) is two muzzle links tapering to the nose — one stretched link
+  // only swelled into a bulb on the front of the face
+  const long = snout > 0.45;
   return {
-    // z sets the cranium→muzzle stride: a flat face overlaps them (~0.85 radii), a snout stretches
-    // both links long (grow turns the excess past 1.4 into a z-stretch of the node ellipsoids)
-    size: [clamp(g * wide, sb), clamp(g * domed, sb), clamp(g * (0.85 + snout * 1.3), sb)],
-    repeat: 2,
-    taper: ratio,
-    curve: [clamp(rg(rng, m.muzzleDrop, [0.3, 0.42]) - snout * 0.1, GENE_BOUNDS.segment.curvePitch), 0],
+    // z sets the cranium→muzzle stride: a flat face overlaps them (~0.85 radii), a snout reaches
+    // further (grow turns any excess past 1.4 into a z-stretch of the node ellipsoids)
+    size: [clamp(g * wide, sb), clamp(g * domed, sb), clamp(g * (long ? 1.0 + snout * 0.5 : 0.85 + snout * 1.3), sb)],
+    repeat: long ? 3 : 2,
+    taper: long ? clamp(Math.sqrt(ratio) * 0.98, GENE_BOUNDS.segment.taper) : ratio,
+    curve: [clamp(long ? drop * 0.55 : drop - snout * 0.1, GENE_BOUNDS.segment.curvePitch), 0],
     appendages: apps,
   };
 }

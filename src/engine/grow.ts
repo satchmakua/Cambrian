@@ -114,7 +114,10 @@ export function grow(genome: Genome): Phenotype {
     for (let i = 0; i < seg.repeat; i++) {
       if (atCap()) break;
       const u = seg.repeat > 1 ? i / (seg.repeat - 1) : 0.5;
-      const profile = 1 + BODY_BULGE * Math.sin(Math.PI * u);
+      // the fusiform swell is a TORSO's: a head (the chain's last segment) or a bare connector (a neck
+      // carries no limbs) tapers straight, or a long muzzle and an ostrich's neck bulge like sausages
+      const bulge = depth > 0 && (!seg.child || seg.appendages.length === 0) ? 0 : BODY_BULGE;
+      const profile = 1 + bulge * Math.sin(Math.PI * u);
       const radius = girth * Math.pow(seg.taper, i) * profile;
       const idx = addNode(pos, quat, radius, 'spine');
       nodes[idx].segment = depth;
