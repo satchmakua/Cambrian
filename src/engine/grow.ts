@@ -295,7 +295,8 @@ export function grow(genome: Genome): Phenotype {
   function growLimb(app: AppendageGene, base: BodyNode, dir0: Vec3, parentIdx: number): void {
     let dir = dir0;
     let startPos: Vec3;
-    let arch: Vec3[] | null = null; // an explicit arthropod leg polyline (segment directions)
+    let arch: Vec3[] | null = null; // an explicit leg polyline (segment directions): arthropod or sprawler
+    let sprawl = false; // the polyline is a vertebrate sprawler's (thick, normal-length segments)
     if (app.kind === 'leg' && dev.symmetry !== 'radial') {
       // Legs attach at the shoulder/hip — the body's *side*, a touch above the belly — not the
       // underbelly midline, then descend. This widens the stance and puts the limb's top where it
@@ -333,6 +334,25 @@ export function grow(genome: Genome): Phenotype {
           }
         dir = arch[0];
         startPos = [base.pos[0] + sideX * flank * 0.9, base.pos[1] + base.radius * 0.05, base.pos[2]];
+      } else if (splay > 0.5) {
+        // a SPRAWLER (lizard, croc, newt): the upper leg juts out sideways at hip height, the elbow /
+        // knee sits out beside the body and the shin drops to a foot planted wide — the push-up stance,
+        // not a mammal's column tucked under the belly. Same polyline machinery as the arthropod arch
+        // (the knee rides a hair above the hip, so planting the foot stretches only the shin), but a
+        // vertebrate's thickness and segment lengths.
+        const zf = (app.attachT - 0.5) * 0.9;
+        const n = app.segments - 1;
+        arch = [];
+        if (n <= 1) arch.push(norm([sideX * 0.8, -0.6, zf * 0.3]));
+        else
+          for (let k = 0; k < n; k++) {
+            if (k === 0) arch.push(norm([sideX, 0.06, zf * 0.4]));
+            else if (k === n - 1) arch.push(norm([sideX * 0.12, -1, zf * 0.5]));
+            else arch.push(norm([sideX * 0.3, -1, zf * 0.25]));
+          }
+        sprawl = true;
+        dir = arch[0];
+        startPos = [base.pos[0] + sideX * flank * 0.82, base.pos[1] - base.radius * 0.12, base.pos[2]];
       }
       dir0 = dir;
     } else {
@@ -364,8 +384,9 @@ export function grow(genome: Genome): Phenotype {
       if (app.kind === 'leg') {
         const t = app.segments > 1 ? j / (app.segments - 1) : 0;
         // arthropod legs are slender jointed rods (a spider's leg is a fraction of its body's girth);
-        // vertebrate legs are a muscular haunch tapering to a slim ankle
-        r *= arch ? 0.62 - 0.22 * t : 1.32 - 0.62 * t; // ~1.32× at the hip → ~0.7× at the ankle
+        // vertebrate legs are a muscular haunch that falls away fast to a slim shin: ~1.5× at the hip,
+        // ~1.05× by the knee, ~0.7× at the ankle (a straight taper read as a noodle)
+        r *= arch && !sprawl ? 0.62 - 0.22 * t : 0.7 + 0.8 * (1 - t) * (1 - t);
       }
       // the eye is the emotional anchor — floor the grown bulb so even a tapered/stalked eye on a
       // small head always reads (M19/M24), regardless of how the gene tapered down its tip.
@@ -377,7 +398,7 @@ export function grow(genome: Genome): Phenotype {
       prev = idx;
       if (arch) {
         const d = arch[Math.min(j, arch.length - 1)];
-        const L = app.length * 1.2; // long spindly segments
+        const L = app.length * (sprawl ? 1.0 : 1.2); // an arthropod's long spindly segments
         pos = [pos[0] + d[0] * L, pos[1] + d[1] * L, pos[2] + d[2] * L];
         continue;
       }
