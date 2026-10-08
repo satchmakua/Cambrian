@@ -102,6 +102,14 @@ export function grow(genome: Genome): Phenotype {
     let pos = startPos;
     let quat = startQuat;
     let prev = parentIdx;
+    // Head carriage: the last segment of the chain (the head) is held near level whatever the neck
+    // does — a raised neck lifts the head, it doesn't aim the face at the sky. In bilateral mode the
+    // chain only ever pitches (yaw is dropped), so the frame is a pure X rotation and 3/4 of its pitch
+    // can be taken back directly.
+    if (depth > 0 && !seg.child && dev.symmetry === 'bilateral') {
+      const f = qRotate([0, 0, 1], quat);
+      quat = qMul(quat, qFromAxisAngle([1, 0, 0], -0.75 * Math.atan2(-f[1], f[2])));
+    }
 
     for (let i = 0; i < seg.repeat; i++) {
       if (atCap()) break;
@@ -135,7 +143,8 @@ export function grow(genome: Genome): Phenotype {
       // a node, and compounding ×1.22 per pair swelled a spider's 1–2 node body into a giant ball.
       if (app.kind === 'leg' && !haunched.has(spine[ai])) {
         haunched.add(spine[ai]);
-        nodes[spine[ai]].radius = Math.min(nodes[spine[ai]].radius * 1.22, nodes[spine[ai]].radius + 0.35);
+        // (a gentle swell — at ×1.22 the shoulders and hips humped the back into a two-bump sway)
+        nodes[spine[ai]].radius = Math.min(nodes[spine[ai]].radius * 1.12, nodes[spine[ai]].radius + 0.2);
       }
       // Legs ride the CHAIN, not the nearest node: the slot is interpolated between neighbouring spine
       // nodes (and extrapolated past a 1-node trunk's ends), so a hexapod's or a spider's legs spread
