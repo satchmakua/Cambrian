@@ -394,6 +394,7 @@ export function CreatureMesh({
         footColor={footColor}
         finColor={finColor}
         irisColor={irisColor}
+        skin={bodyMat}
         phenotype={phenotype}
         carves={showSmooth ? carves : NO_CARVES}
         recessed={showSmooth && carves.length > 0}
@@ -505,6 +506,7 @@ function Feature({
   footColor,
   finColor,
   irisColor,
+  skin,
   phenotype,
   carves,
   recessed,
@@ -515,6 +517,7 @@ function Feature({
   footColor: number;
   finColor: number;
   irisColor: number;
+  skin: THREE.Material;
   phenotype: Phenotype;
   carves: readonly Carve[];
   recessed: boolean;
@@ -526,7 +529,7 @@ function Feature({
       return <Eye f={f} socket={footColor} iris={irisColor} lid={finColor} />;
     case 'mouth':
       return (
-        <Mouth f={f} dark={footColor} phenotype={phenotype} carves={carves} recessed={recessed} surface={surface} />
+        <Mouth f={f} dark={footColor} skin={skin} phenotype={phenotype} carves={carves} recessed={recessed} surface={surface} />
       );
     case 'pincer':
       return <Pincer f={f} color={footColor} />;

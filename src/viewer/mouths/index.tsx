@@ -10,6 +10,7 @@
  *   baleen                               → baleen.tsx  (fringe curtain in a heavy jaw line)
  *   proboscis · trunk                    → probe.tsx   (collared feeding tubes)
  */
+import type * as THREE from 'three';
 import type { Phenotype } from '../../engine/grow';
 import type { Carve } from '../bodyField';
 import type { MeshFeature } from '../meshData';
@@ -29,9 +30,11 @@ export function Mouth({
   carves,
   recessed,
   surface = 'kit',
+  skin,
 }: {
   f: MeshFeature;
   dark: number;
+  skin?: THREE.Material; // the body's covering material (a mammal's jaw wears it)
   phenotype: Phenotype;
   carves: readonly Carve[];
   recessed: boolean;
@@ -42,7 +45,7 @@ export function Mouth({
   if (v === 'herbivore' || v === 'maw' || v === 'fanged') {
     // the old fanged band split hinged (style < 0.22) vs underbite — kept as a parameter flip
     const variant: JawedVariant = v === 'fanged' && f.style >= 0.22 ? 'underbite' : v;
-    return <JawedMouth {...shared} variant={variant} />;
+    return <JawedMouth {...shared} variant={variant} skin={skin} />;
   }
   if (v === 'beak') return <BeakMouth {...shared} />;
   if (v === 'mandibles') return <MandiblesMouth {...shared} />;

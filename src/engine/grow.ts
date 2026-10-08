@@ -104,11 +104,11 @@ export function grow(genome: Genome): Phenotype {
     let prev = parentIdx;
     // Head carriage: the last segment of the chain (the head) is held near level whatever the neck
     // does — a raised neck lifts the head, it doesn't aim the face at the sky. In bilateral mode the
-    // chain only ever pitches (yaw is dropped), so the frame is a pure X rotation and 3/4 of its pitch
-    // can be taken back directly.
+    // chain only ever pitches (yaw is dropped), so the frame is a pure X rotation and its pitch
+    // can be taken back directly (most of it — a trace of the neck's rise keeps the brow alert).
     if (depth > 0 && !seg.child && dev.symmetry === 'bilateral') {
       const f = qRotate([0, 0, 1], quat);
-      quat = qMul(quat, qFromAxisAngle([1, 0, 0], -0.75 * Math.atan2(-f[1], f[2])));
+      quat = qMul(quat, qFromAxisAngle([1, 0, 0], -0.9 * Math.atan2(-f[1], f[2])));
     }
 
     for (let i = 0; i < seg.repeat; i++) {
@@ -261,7 +261,7 @@ export function grow(genome: Genome): Phenotype {
       const k = chain.length - 1;
       if (k < 1) continue;
       const dy = groundY - nodes[footIdx].pos[1];
-      if (dy > -1e-3) continue;
+      if (dy > -1e-9) continue;
       // hip fixed, foot → ground. An ARCHED leg (knee above the hip — an arthropod's) keeps its knee
       // and stretches only the shin, so planting the foot never flattens the arch; a column leg
       // spreads the stretch evenly down its length.
@@ -300,7 +300,12 @@ export function grow(genome: Genome): Phenotype {
       // measure the flank on the true surface — a wide flat body (croc/lizard) is broader than its
       // scalar radius, and attaching at the radius would bury the leg's top inside the torso.
       const flank = surfaceExtent(base, [sideX, 0, 0]);
-      startPos = [base.pos[0] + sideX * flank * (0.92 + splay * 0.35), base.pos[1] + base.radius * 0.2, base.pos[2]];
+      // A column leg's hip sits INSIDE the torso, below its midline: the thigh's top is buried in the
+      // body and the limb emerges from the underside of the flank, a mammal's silhouette. (Seated on
+      // the flank surface above the midline, every thick thigh ballooned out of the side as a lobe —
+      // shoulders and haunches read as balls stuck to a tube.) A sprawler's wider splay still carries
+      // its hip out to the side.
+      startPos = [base.pos[0] + sideX * flank * Math.min(0.98, 0.5 + splay * 0.7), base.pos[1] - base.radius * 0.18, base.pos[2]];
       dir = norm([sideX * splay, -1, 0]);
       // ARTHROPOD legs (a hexapod or more, or an extreme sprawl): not a mammal's column folding fore-aft
       // at the knee but an ARCH in the leg's own vertical plane — the femur rises up-and-out, the knee
@@ -472,12 +477,13 @@ function frontSegment(g: Genome): SegmentGene {
 
 function ensureBilateralFace(g: Genome): void {
   const head = frontSegment(g);
-  ensureFace(head.appendages, (head.size[0] + head.size[1]) / 2);
+  const girth = (head.size[0] + head.size[1]) / 2;
+  ensureFace(head.appendages, girth, girth * Math.pow(head.taper, Math.max(0, head.repeat - 1)));
 }
 
 /** Guarantee a prominent eye-set + a mouth (M24/M19): synthesize them if mutation deleted them,
  *  and floor the sizes so they always read. The mouth is kept on the face front. */
-function ensureFace(apps: AppendageGene[], girth: number): void {
+function ensureFace(apps: AppendageGene[], girth: number, frontR = girth): void {
   const eyes = apps.filter((p) => p.terminal === 'eye');
   if (eyes.length === 0) apps.push(faceEye(girth));
   else
@@ -498,7 +504,9 @@ function ensureFace(apps: AppendageGene[], girth: number): void {
   if (mouths.length === 0) apps.push(faceMouth(girth));
   else
     for (const m of mouths) {
-      m.thickness = clamp(Math.max(m.thickness, 0.26, girth * 0.46), AP.thickness); // a big, clearly-read mouth
+      // a big, clearly-read mouth — but never wider than the snout link that carries it (a mammal's
+      // muzzle is far narrower than its cranium; a skull-sized floor wrapped a frog's grin around it)
+      m.thickness = clamp(Math.max(m.thickness, Math.min(Math.max(0.26, girth * 0.46), frontR * 0.85)), AP.thickness);
       // Keep the maw on the FACE, not under the chin. `aim` is [cos(e)cos(a), cos(e)sin(a), sin(e)]
       // with the maw's azimuth ≈ 3π/2, so elevation IS the fore/aft tilt, and it sets where the
       // organ SEATS as well as where it points. At 0.4 the mouth aims ~66° at the ground; even at

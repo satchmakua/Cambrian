@@ -44,6 +44,8 @@ export interface MouthLine {
   upper: MouthSample[]; // corner → corner along the top lip line
   lower: MouthSample[]; // corner → corner along the bottom lip line (dropped by the gape)
   width: number; // world corner-to-corner distance
+  /** a muzzled mouth's nose seat: the skin point up the muzzle front from the upper lip's centre */
+  nose: { p: Vec3; n: Vec3 } | null;
 }
 
 /** Everything the mouth builds agree on — derived once, used by lips, teeth, carves, animation. */
@@ -54,6 +56,9 @@ export interface MouthSpec {
   gape: number; // 0 closed … 1 agape — deterministic per creature, always a little open
   arc: number; // corner half-angle around the muzzle (rad) — how far the slit wraps
   droop: number; // extra downward pitch at the corners (rad) — a grim, heavy mouth
+  /** a mammal mouth (furred, jawed): it rides a muzzle, rests CLOSED, and opens by dropping the
+   *  mandible only — the upper lip stays put on the muzzle the way a skull stays put */
+  muzzled: boolean;
   node: BodyNode;
   anchor: BodyNode; // the body node the mouth seats on (ray origin lives inside it)
   aim: Vec3; // world outward aim (+Z of the mouth frame)
@@ -63,6 +68,7 @@ export interface MouthSpec {
 
 // The jawed family carves a wedge maw; ring mouths carve a funnel; hard/tube mouths don't carve.
 const WEDGE: ReadonlySet<MouthVariant> = new Set(['herbivore', 'maw', 'fanged', 'baleen']);
+const JAWED: ReadonlySet<MouthVariant> = new Set(['herbivore', 'maw', 'fanged']);
 const FUNNEL: ReadonlySet<MouthVariant> = new Set(['sucker', 'lamprey']);
 
 /**
@@ -134,6 +140,7 @@ export function mouthSpec(p: Phenotype, mouthIdx: number): MouthSpec | null {
   const gape = base + hash01(seed, mouthIdx + 11) * 0.38;
   const arc = 0.85 + hash01(seed, mouthIdx + 23) * 0.5; // how far the slit wraps around the muzzle
   const droop = 0.12 + hash01(seed, mouthIdx + 37) * 0.22;
+  const muzzled = p.genomeRef.covering.type === 'fur' && JAWED.has(variant);
   return {
     idx: mouthIdx,
     variant,
@@ -141,6 +148,7 @@ export function mouthSpec(p: Phenotype, mouthIdx: number): MouthSpec | null {
     gape,
     arc,
     droop,
+    muzzled,
     node,
     anchor: findAnchor(p, mouthIdx),
     aim: qRotateV(node.quat, [0, 0, 1]),
@@ -172,6 +180,8 @@ export function mouthCarves(p: Phenotype): Carve[] {
   const out: Carve[] = [];
   for (const s of mouthSpecs(p)) {
     let carve: Carve | null = null;
+    // a muzzled mouth rests closed: a cavity behind shut lips is never seen, only felt as a dent
+    if (s.muzzled) continue;
     if (WEDGE.has(s.variant)) {
       const depth = s.r * (0.85 + s.gape * 0.3);
       carve = {
@@ -312,8 +322,15 @@ export function buildMouthLine(
   // apart on a typical head — a hairline that swallowed its own interior and teeth. Opened up so
   // the dark throat and the tooth rows actually have room to show.
   const gapeHalf = 0.5 * s.gape + 0.14;
-  const upperPitch = (t: number) => setDown + s.droop * Math.abs(t) - gapeHalf * Math.cos((t * Math.PI) / 2);
-  const lowerPitch = (t: number) => setDown + s.droop * Math.abs(t) + gapeHalf * Math.cos((t * Math.PI) / 2);
+  // a muzzle's upper lip is part of the skull: it sits a little below the muzzle's midline and only
+  // the mandible drops to open (the whole gape opens downward); everything else splits the gape
+  // about the mouth line
+  const upperPitch = s.muzzled
+    ? (t: number) => setDown + 0.08 + s.droop * 0.5 * Math.abs(t)
+    : (t: number) => setDown + s.droop * Math.abs(t) - gapeHalf * Math.cos((t * Math.PI) / 2);
+  const lowerPitch = s.muzzled
+    ? (t: number) => setDown + 0.08 + s.droop * 0.5 * Math.abs(t) + 2 * gapeHalf * Math.cos((t * Math.PI) / 2)
+    : (t: number) => setDown + s.droop * Math.abs(t) + gapeHalf * Math.cos((t * Math.PI) / 2);
 
   const upper = traceCurve(f, [], s, origin, samples, upperPitch);
   const lower = traceCurve(f, carves, s, origin, samples, lowerPitch);
@@ -327,10 +344,21 @@ export function buildMouthLine(
 
   const cl = upper[0].p;
   const cr = upper[samples - 1].p;
+  // the nose: straight up the muzzle front from the upper lip's centre — the same ray fan, pitched
+  // above the lip line, so it lands on the muzzle tip whatever the skull's shape
+  let nose: MouthLine['nose'] = null;
+  if (s.muzzled) {
+    const pitch = upperPitch(0) - 0.62;
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const dir = norm3([s.aim[0] * cp - s.up[0] * sp, s.aim[1] * cp - s.up[1] * sp, s.aim[2] * cp - s.up[2] * sp]);
+    const hit = rayToSurface(f, [], origin, dir);
+    if (hit) nose = { p: hit.p, n: hit.n };
+  }
   return {
     upper,
     lower,
     width: Math.hypot(cr[0] - cl[0], cr[1] - cl[1], cr[2] - cl[2]),
+    nose,
   };
 }
 
