@@ -127,9 +127,10 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
   const snap = useWorldUi((s) => s.snapshot);
   const emotes = useWorldUi((s) => s.emotes);
   const documentary = useWorldUi((s) => s.documentary);
+  const sound = useWorldUi((s) => s.sound);
   // (dev: ?tree=1 opens it, for inspection screenshots)
   const [showTree, setShowTree] = useState(() => import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('tree') === '1');
-  const { setRunning, setSpeed, setFollow, setEmotes, setDocumentary, select, reset, releaseGenome, refresh } = useWorldUi.getState();
+  const { setRunning, setSpeed, setFollow, setEmotes, setDocumentary, setSound, select, reset, releaseGenome, refresh } = useWorldUi.getState();
 
   // first visit: populate the starter ecosystem (+ the breeder's creature)
   useEffect(() => {
@@ -191,6 +192,7 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
           ))}
         </div>
         <div className="releases">
+          <button className={sound ? 'active' : ''} onClick={() => setSound(!sound)} title="synthesized wind, birdsong and crickets, and the creatures' own calls">{sound ? '♪ sound' : '♪ sound off'}</button>
           <button className={documentary ? 'active' : ''} onClick={() => setDocumentary(!documentary)} title="documentary mode: the camera finds the most interesting things happening and follows them">▶ documentary</button>
           <button className={emotes ? 'active' : ''} onClick={() => setEmotes(!emotes)} title="mood icons over the creatures: asleep, courting, alarmed, hunting">moods</button>
           <button onClick={() => releaseGenome(founder, 6)} title="release six of the creature you're breeding">+ your creature</button>

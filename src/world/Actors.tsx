@@ -23,6 +23,7 @@ import { LidContext, type LidControl } from '../viewer/eyelids';
 import { AIRBORNE, bodyOf, growthOf, type Corpse, type Creature, type World } from '../sim/world';
 import { heightAt, WATER_LEVEL } from '../sim/terrain';
 import { emoteFor, emoteMaterial, type Emote } from './emotes';
+import { SOUND, voiceOf, type Call } from './audio';
 import { useWorldUi } from './worldStore';
 
 // --- smooth-skin upgrade scheduler -----------------------------------------------------------------
@@ -150,6 +151,8 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
   const body = useRef<THREE.Group>(null);
   const ring = useRef<THREE.Mesh>(null);
   const bubble = useRef<THREE.Sprite>(null);
+  const voice = useMemo(() => voiceOf(traits), [traits]);
+  const heard = useRef({ action: c.action, bitten: c.attackedAt, last: -1e9, born: c.age < 2 });
   const shown = useRef<{ e: Emote | null; pop: number }>({ e: null, pop: 0 });
   const pose = useRef({ x: c.x, z: c.z, h: c.heading, sleep: 0, eat: 0, bob: Math.random() * 10, turn: 0, alt: c.alt, fly: 0, beat: Math.random() * 6, climb: 0 });
   const swimmer = traits.habitat === 'water' || traits.locomotion === 'swim' || traits.locomotion === 'drift';
@@ -233,6 +236,21 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
       const hit = Math.max(0, 1 - (world.time - c.attackedAt) / 0.5);
       body.current.position.z = lunge * place.height * 0.22;
       body.current.rotation.z = hit * 0.12 * Math.sin(world.time * 47);
+    }
+    // its calls: on the moments worth hearing, near the camera, at most one every ~1.5 s each
+    if (SOUND.running && detail !== 'none') {
+      const H = heard.current;
+      let call: Call | null = null;
+      if (c.attackedAt !== H.bitten && world.time - c.attackedAt < 0.3) call = 'hurt';
+      else if (c.action !== H.action) call = c.action === 'flee' ? 'alarm' : c.action === 'hunt' ? 'hunt' : c.action === 'mate' ? 'court' : null;
+      else if (H.born) call = 'young';
+      H.bitten = c.attackedAt;
+      H.action = c.action;
+      H.born = false;
+      if (call && world.time - H.last > 1.5) {
+        H.last = world.time;
+        SOUND.call(call, voice, { x: P.x, y: y + place.height * s * 0.6, z: P.z });
+      }
     }
     // the mood bubble: pops in when the mood changes, bobs above the head; near creatures only
     if (bubble.current) {

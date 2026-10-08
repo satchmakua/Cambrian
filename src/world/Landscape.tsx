@@ -374,7 +374,7 @@ function broadleafCrown(): THREE.BufferGeometry {
   const parts = lobes.map(([x, y, z, r]) => {
     const g = new THREE.IcosahedronGeometry(r, 1);
     g.translate(x, y, z);
-    return g.toNonIndexed();
+    return g.index ? g.toNonIndexed() : g;
   });
   const g = mergeGeometries(parts, false) ?? parts[0];
   g.computeVertexNormals();
@@ -391,7 +391,7 @@ function coniferCrown(): THREE.BufferGeometry {
   const parts = tiers.map(([r, h, y]) => {
     const g = new THREE.ConeGeometry(r, h, 8, 1);
     g.translate(0, y + h / 2, 0);
-    return g.toNonIndexed();
+    return g.index ? g.toNonIndexed() : g;
   });
   const g = mergeGeometries(parts, false) ?? parts[0];
   g.computeVertexNormals();

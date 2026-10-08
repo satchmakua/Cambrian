@@ -8,6 +8,7 @@
  * few times a second.
  */
 import { create } from 'zustand';
+import { SOUND } from './audio';
 import type { Genome } from '../engine/genome';
 import { genomeOfMorphotype, randomGenome } from '../engine/random';
 import {
@@ -96,6 +97,9 @@ interface WorldUi {
   follow: boolean;
   /** mood icons over the creatures (asleep, courting, alarmed, hunting) */
   emotes: boolean;
+  /** synthesized ambience and creature calls (starts on the user's click — browsers require it) */
+  sound: boolean;
+  setSound: (v: boolean) => void;
   /** the auto-director: the camera cuts between the most interesting things happening */
   documentary: boolean;
   setDocumentary: (v: boolean) => void;
@@ -205,6 +209,12 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
   selected: null,
   follow: false,
   emotes: true,
+  sound: false,
+  setSound: (sound) => {
+    if (sound) SOUND.start();
+    else SOUND.stop();
+    set({ sound });
+  },
   documentary: false,
   setDocumentary: (documentary) => set({ documentary, follow: documentary ? true : get().follow }),
   snapshot: null,

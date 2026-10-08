@@ -10,7 +10,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Sky, Stars } from '@react-three/drei';
 import * as THREE from 'three';
-import { stepWorld, STEP, dayPhase, type World } from '../sim/world';
+import { stepWorld, STEP, dayPhase, isNight, climate, type World } from '../sim/world';
+import { SOUND } from './audio';
 import { heightAt } from '../sim/terrain';
 import { TerrainMesh, Water, Bushes, Decor, updateSeasonLook } from './Landscape';
 import { Grass } from './Flora';
@@ -135,6 +136,19 @@ function DayNight() {
 }
 
 /** Follow the selected creature: glide the orbit target (and the camera with it). */
+/** Keeps the audio listener on the camera and the ambience in step with the day and the season. */
+function SoundDriver() {
+  const camera = useThree((s) => s.camera);
+  const fwd = useMemo(() => new THREE.Vector3(), []);
+  useFrame(() => {
+    if (!SOUND.running) return;
+    const w = getWorld();
+    camera.getWorldDirection(fwd);
+    SOUND.tick({ x: camera.position.x, y: camera.position.y, z: camera.position.z, fx: fwd.x, fy: fwd.y, fz: fwd.z }, isNight(w.time), climate(w.time).cold);
+  });
+  return null;
+}
+
 function FollowCam() {
   const zoomFor = useRef<number | null>(null);
   const zoomLeft = useRef(0);
@@ -223,6 +237,7 @@ export function WorldScene() {
       />
       <FollowCam />
       <Director />
+      <SoundDriver />
     </>
   );
 }
