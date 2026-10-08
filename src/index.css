@@ -1296,6 +1296,11 @@ body,
   color: var(--accent);
 }
 
+.clock .weather {
+  margin-left: 6px;
+  color: #b9c6d8;
+}
+
 /* --- documentary lower-third ------------------------------------------------------------------- */
 .doc-caption {
   position: absolute;

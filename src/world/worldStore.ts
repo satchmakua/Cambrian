@@ -10,6 +10,7 @@
 import { create } from 'zustand';
 import { SOUND } from './audio';
 import { loadWorld, saveWorld } from '../sim/persist';
+import { weatherAt, weatherWord } from '../sim/weather';
 import type { Genome } from '../engine/genome';
 import { genomeOfMorphotype, randomGenome } from '../engine/random';
 import {
@@ -116,6 +117,8 @@ export interface TreeNode {
 export interface Snapshot {
   tree: TreeNode[];
   season: Season;
+  /** '' when fair, else 'overcast' / 'rain' / 'downpour' / 'snow' / 'heavy snow' */
+  weather: string;
   time: number;
   day: number;
   phase: number;
@@ -230,6 +233,7 @@ export function snapshotOf(w: World, selected: number | null): Snapshot {
   return {
     tree: w.species.map((sp) => ({ id: sp.id, name: sp.name, hue: sp.hue, parent: sp.parent, born: sp.firstSeen, extinctAt: sp.extinctAt, alive: sp.alive })),
     season: seasonOf(w.time),
+    weather: weatherWord(weatherAt(w.seed, w.time)),
     time: w.time,
     day: dayNumber(w.time),
     phase: dayPhase(w.time),

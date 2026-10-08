@@ -15,6 +15,7 @@ import { WorldScene } from './WorldScene';
 import { TreeOfLife } from './TreeOfLife';
 import { useWorldUi, getWorld, populate, strangerGenome, bumpVersion, autosave, downloadWorld, type Snapshot } from './worldStore';
 import { stepWorld, type HistorySample } from '../sim/world';
+import { spell, weatherAt } from '../sim/weather';
 
 const SPEEDS = [1, 4, 16, 48];
 let DEV_WARMED = false;
@@ -190,6 +191,17 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
           setFollow(true);
         }
       }
+      // wx=rain|snow: jump the clock to the middle of the next such spell (to inspect the weather)
+      const wx = q.get('wx');
+      if (wx === 'rain' || wx === 'snow') {
+        for (let k = Math.floor(w.time / spell()); k < 2000; k++) {
+          const sky = weatherAt(w.seed, (k + 0.5) * spell());
+          if (k % 2 === 0 && sky.rain > 0.5 && sky.snow === (wx === 'snow')) { // (an even spell is centred on noon)
+            w.time = (k + 0.5) * spell();
+            break;
+          }
+        }
+      }
       if (q.get('paused') === '1') setRunning(false);
       if (q.get('doc') === '1') setDocumentary(true);
       bumpVersion();
@@ -213,7 +225,7 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
         </nav>
         {snap && (
           <div className="clock">
-            <b>Day {snap.day}</b> <span className="season">{snap.season}</span> <span>{clock(snap.phase)}</span> <span className="sky">{snap.night ? '☾ night' : '☀ day'}</span>
+            <b>Day {snap.day}</b> <span className="season">{snap.season}</span>{snap.weather && <span className="weather">{snap.weather === 'overcast' ? '☁' : snap.weather.includes('snow') ? '❄' : '☂'} {snap.weather}</span>} <span>{clock(snap.phase)}</span> <span className="sky">{snap.night ? '☾ night' : '☀ day'}</span>
           </div>
         )}
         <div className="transport">

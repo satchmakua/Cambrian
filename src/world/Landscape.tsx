@@ -85,6 +85,7 @@ export function TerrainMesh({ world }: { world: World }) {
 export const SEASON_LOOK = {
   tint: { value: new THREE.Color(1, 1, 1) }, // multiplies living vegetation
   snow: { value: 0 }, // 0 … 1 snow cover on open ground
+  wet: { value: 0 }, // 0 … 1 rain-soaked ground (darker, glossier)
 };
 
 export function updateSeasonLook(time: number): void {
@@ -98,6 +99,7 @@ function groundMaterial(): THREE.MeshStandardMaterial {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTint = SEASON_LOOK.tint;
     shader.uniforms.uSnow = SEASON_LOOK.snow;
+    shader.uniforms.uWet = SEASON_LOOK.wet;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vGP;\nvarying vec3 vGN;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvGP = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvGN = normalize(mat3(modelMatrix) * objectNormal);');
@@ -109,6 +111,7 @@ function groundMaterial(): THREE.MeshStandardMaterial {
         varying vec3 vGN;
         uniform vec3 uTint;
         uniform float uSnow;
+        uniform float uWet;
         float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float gNoise(vec2 p) {
           vec2 i = floor(p), f = fract(p);
@@ -136,7 +139,15 @@ function groundMaterial(): THREE.MeshStandardMaterial {
         float green = smoothstep(0.0, 0.08, diffuseColor.g - max(diffuseColor.r, diffuseColor.b) * 0.92);
         diffuseColor.rgb *= mix(vec3(1.0), uTint, green);
         float lying = smoothstep(0.72, 0.9, vGN.y) * step(0.15, vGP.y) * smoothstep(0.25, 0.55, gFbm(vGP.xz * 0.21) + uSnow * 0.6);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.88, 0.92), lying * uSnow);`,
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.88, 0.92), lying * uSnow);
+        // after rain: soaked ground darkens (the low swales wettest)
+        float soak = uWet * (0.75 + 0.25 * (1.0 - patches));
+        diffuseColor.rgb *= 1.0 - 0.3 * soak * (1.0 - lying * uSnow);`,
+      )
+      .replace(
+        '#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>
+        roughnessFactor *= 1.0 - 0.5 * uWet;`,
       );
   };
   return m;

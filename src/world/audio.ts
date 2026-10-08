@@ -43,6 +43,7 @@ class Engine {
   master: GainNode | null = null;
   private noise: AudioBuffer | null = null;
   private wind: { gain: GainNode; filter: BiquadFilterNode } | null = null;
+  private rain: { hiss: GainNode; patter: GainNode } | null = null;
   private night = 0;
   private recent = 0; // calls in the last second (global limiter)
   private lastTick = 0;
@@ -57,6 +58,7 @@ class Engine {
       this.master.connect(this.ctx.destination);
       this.noise = this.makeNoise();
       this.startWind();
+      this.startRain();
     }
     void this.ctx.resume();
   }
@@ -93,8 +95,30 @@ class Engine {
     this.wind = { gain, filter };
   }
 
+  /** Rain: a broad high hiss (the shower on the leaves) over a softer low patter — two filtered
+   *  noise beds, silent until a shower turns them up. */
+  private startRain(): void {
+    const ctx = this.ctx!;
+    const bed = (type: BiquadFilterType, f: number, q: number): GainNode => {
+      const src = ctx.createBufferSource();
+      src.buffer = this.noise;
+      src.loop = true;
+      src.playbackRate.value = 0.7 + Math.random() * 0.6; // decorrelate the two beds
+      const filter = ctx.createBiquadFilter();
+      filter.type = type;
+      filter.frequency.value = f;
+      filter.Q.value = q;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      src.connect(filter).connect(gain).connect(this.master!);
+      src.start();
+      return gain;
+    };
+    this.rain = { hiss: bed('highpass', 2400, 0.4), patter: bed('bandpass', 700, 0.8) };
+  }
+
   /** Per-frame: move the listener with the camera, breathe the wind, sprinkle ambient voices. */
-  tick(cam: { x: number; y: number; z: number; fx: number; fy: number; fz: number }, night: boolean, cold: number): void {
+  tick(cam: { x: number; y: number; z: number; fx: number; fy: number; fz: number }, night: boolean, cold: number, rain = 0): void {
     const ctx = this.ctx;
     if (!ctx || ctx.state !== 'running') return;
     const now = ctx.currentTime;
@@ -117,7 +141,13 @@ class Engine {
         this.wind.filter.frequency.setTargetAtTime(320 + 260 * Math.sin(now * 0.23) ** 2, now, 1);
       }
       this.night += ((night ? 1 : 0) - this.night) * 0.1;
+      if (this.rain) {
+        this.rain.hiss.gain.setTargetAtTime(0.09 * rain, now, 1.2);
+        this.rain.patter.gain.setTargetAtTime(0.06 * rain * (0.8 + 0.2 * Math.sin(now * 0.7)), now, 1.2);
+      }
     }
+    // the birds fall quiet in a downpour
+    if (now > this.nextAmbient && rain > 0.5) this.nextAmbient = now + 2;
     if (now > this.nextAmbient) {
       // a far-off bird by day, a cricket chorus by night (fewer in the cold)
       if (this.night < 0.5) this.chirp(1700 + Math.random() * 1600, 0.025 * (1 - cold));

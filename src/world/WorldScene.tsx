@@ -15,6 +15,7 @@ import { SOUND } from './audio';
 import { heightAt } from '../sim/terrain';
 import { TerrainMesh, Water, Bushes, Decor, updateSeasonLook } from './Landscape';
 import { Grass } from './Flora';
+import { Precipitation, WEATHER_LOOK, setPrecipDaylight, updateWeatherLook } from './Weather';
 import { Director } from './Director';
 import { Actor, Carcass, useSkinScheduler } from './Actors';
 import { getWorld, useWorldUi, worldVersion, bumpVersion } from './worldStore';
@@ -32,6 +33,7 @@ function SimDriver() {
     const { running, speed, refresh } = useWorldUi.getState();
     const w = getWorld();
     updateSeasonLook(w.time);
+    updateWeatherLook(w, dtRaw);
     const dt = Math.min(dtRaw, 0.1);
     if (running) {
       acc.current += dt * speed;
@@ -75,6 +77,7 @@ function DayNight() {
   const scene = useThree((s) => s.scene);
   const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3 } | null;
   const [sunPos, setSunPos] = useState<[number, number, number]>([100, 60, 40]);
+  const [overcast, setOvercast] = useState(0);
   const tick = useRef(0);
   const fog = useMemo(() => new THREE.Fog(0x9fb4c8, 90, 260), []);
   useEffect(() => {
@@ -92,6 +95,8 @@ function DayNight() {
     const elev = Math.sin(ang); // >0 day
     const dir = new THREE.Vector3(Math.cos(ang) * 0.8, Math.max(-0.2, elev), 0.35).normalize();
     const day = THREE.MathUtils.smoothstep(elev, -0.12, 0.25);
+    const cloud = WEATHER_LOOK.cloud;
+    setPrecipDaylight(day * (1 - 0.4 * cloud));
     const focus = controls?.target ?? new THREE.Vector3();
     if (sun.current) {
       // by night the "sun" light is a dim blue moon from the opposite sky
@@ -101,16 +106,22 @@ function DayNight() {
       sun.current.target = target;
       const warm = THREE.MathUtils.smoothstep(elev, 0.0, 0.35); // low sun is warm
       sun.current.color.setRGB(1, 0.72 + 0.26 * warm, 0.5 + 0.45 * warm).lerp(new THREE.Color(0x8ea8ff), 1 - day);
-      sun.current.intensity = 0.25 + 1.75 * day;
+      // under cloud the sun is a dim diffuse glow (the sky and the fog carry the light)
+      sun.current.intensity = (0.25 + 1.75 * day) * (1 - 0.68 * cloud);
     }
-    if (hemi.current) hemi.current.intensity = 0.18 + 0.5 * day;
-    (scene as unknown as { environmentIntensity: number }).environmentIntensity = 0.18 + 0.62 * day;
+    if (hemi.current) hemi.current.intensity = (0.18 + 0.5 * day) * (1 + 0.15 * cloud);
+    (scene as unknown as { environmentIntensity: number }).environmentIntensity = (0.18 + 0.62 * day) * (1 - 0.28 * cloud);
     fog.color.setRGB(0.04 + 0.58 * day, 0.06 + 0.64 * day, 0.11 + 0.68 * day);
+    // overcast: a flat grey sky, and the far hills lost in the murk of a shower
+    fog.color.lerp(new THREE.Color(0.06 + 0.42 * day, 0.07 + 0.45 * day, 0.09 + 0.48 * day), cloud * 0.8);
+    fog.near = 90 - 50 * cloud;
+    fog.far = 260 - 120 * WEATHER_LOOK.rain;
     scene.background = fog.color;
     tick.current += dt;
     if (tick.current > 0.2) {
       tick.current = 0;
       setSunPos([dir.x * 400, dir.y * 400, dir.z * 400]);
+      setOvercast(Math.round(cloud * 20) / 20);
     }
   });
   const night = sunPos[1] < 0;
@@ -129,8 +140,8 @@ function DayNight() {
         shadow-bias={-0.0005}
       />
       <hemisphereLight ref={hemi} args={['#cfe0ff', '#3a3022', 0.6]} />
-      <Sky distance={4500} sunPosition={sunPos} turbidity={6} rayleigh={night ? 0.2 : 1.6} mieCoefficient={0.006} mieDirectionalG={0.85} />
-      {night && <Stars radius={300} depth={60} count={2500} factor={5} fade speed={0.3} />}
+      <Sky distance={4500} sunPosition={sunPos} turbidity={6 + 14 * overcast} rayleigh={(night ? 0.2 : 1.6) * (1 - 0.75 * overcast)} mieCoefficient={0.006 + 0.02 * overcast} mieDirectionalG={0.85 - 0.3 * overcast} />
+      {night && overcast < 0.4 && <Stars radius={300} depth={60} count={2500} factor={5} fade speed={0.3} />}
     </>
   );
 }
@@ -144,7 +155,7 @@ function SoundDriver() {
     if (!SOUND.running) return;
     const w = getWorld();
     camera.getWorldDirection(fwd);
-    SOUND.tick({ x: camera.position.x, y: camera.position.y, z: camera.position.z, fx: fwd.x, fy: fwd.y, fz: fwd.z }, isNight(w.time), climate(w.time).cold);
+    SOUND.tick({ x: camera.position.x, y: camera.position.y, z: camera.position.z, fx: fwd.x, fy: fwd.y, fz: fwd.z }, isNight(w.time), climate(w.time).cold, WEATHER_LOOK.snow ? 0 : WEATHER_LOOK.rain);
   });
   return null;
 }
@@ -230,6 +241,7 @@ export function WorldScene() {
       <Bushes key={`b${wid}`} world={world} />
       <Decor key={`d${wid}`} terrain={world.terrain} world={world} />
       <Grass key={`g${wid}`} world={world} />
+      <Precipitation />
       <Cast world={world} />
       <OrbitControls
         makeDefault

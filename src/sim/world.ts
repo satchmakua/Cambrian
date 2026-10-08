@@ -20,6 +20,7 @@
  * mulberry32 and the engine's seeded mutate(); a fixed step reproduces a run exactly (Pillar 3).
  */
 import { mulberry32State, mix32, type StatefulRng } from '../engine/rng';
+import { weatherAt } from './weather';
 import { grow, type Phenotype } from '../engine/grow';
 import type { Genome } from '../engine/genome';
 import { mutate, type MutationRates } from '../engine/mutate';
@@ -456,11 +457,14 @@ export function stepWorld(w: World, dt = STEP): void {
 function growFields(w: World, dt: number): void {
   const { grass, grassCap, algae, algaeCap } = w;
   const cl = climate(w.time);
+  // a shower brings the grass on (snow doesn't)
+  const sky = weatherAt(w.seed, w.time);
+  const wet = 1 + (sky.snow ? 0 : 0.8 * sky.rain);
   for (let k = 0; k < grass.length; k++) {
     const K = grassCap[k];
     if (K > 0) {
       const b = grass[k];
-      grass[k] = Math.min(K, b + (GRASS_REGROW * b * (1 - b / K) + 0.0004 * K) * cl.grass * dt);
+      grass[k] = Math.min(K, b + (GRASS_REGROW * b * (1 - b / K) + 0.0004 * K) * cl.grass * wet * dt);
     }
     const A = algaeCap[k];
     if (A > 0) {
