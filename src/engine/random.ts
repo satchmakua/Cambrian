@@ -784,17 +784,21 @@ function arm(rng: Rng, girth: number, attachT: number, m: Morpho, spiky = false)
     });
   }
   const term: Terminal =
-    m.id === 'urchin' ? 'claw' : m.id === 'cephalopod' ? pick(rng, ['none', 'fin'] as const) : spiky ? pick(rng, ['claw', 'fin'] as const) : pick(rng, ['claw', 'fin', 'none'] as const);
+    // (an octopus's arms taper to bare tips — fin-tipped, they flew flat purple flags; the pick still
+    // draws, so the stream is unchanged)
+    m.id === 'urchin' ? 'claw' : m.id === 'cephalopod' ? pick(rng, ['none', 'none'] as const) : spiky ? pick(rng, ['claw', 'fin'] as const) : pick(rng, ['claw', 'fin', 'none'] as const);
   const long = m.id === 'cephalopod' || m.id === 'horror';
   return part(long ? 'tentacle' : 'spine', term, false, range(rng, 0, 1), {
     attachT: clamp(attachT, A.attachT),
     attachAzimuth: range(rng, 0, 0.4),
-    attachElevation: long ? range(rng, -0.6, -0.1) : range(rng, -0.3, 0.3),
+    // (an octopus sprawls its arms out along the ground rather than standing on them like stilts)
+    attachElevation: m.id === 'cephalopod' ? range(rng, -0.32, -0.08) : long ? range(rng, -0.6, -0.1) : range(rng, -0.3, 0.3),
     segments: spiky ? randint(rng, 1, 2) : long ? randint(rng, 3, 5) : randint(rng, 2, 4),
     length: clamp(girth * range(rng, spiky ? 0.4 : long ? 0.9 : 0.6, spiky ? 0.8 : long ? 1.8 : 1.4), A.length),
-    thickness: clamp(girth * range(rng, 0.12, 0.3), A.thickness),
-    taper: range(rng, 0.6, 0.88),
-    curl: [range(rng, -0.3, 0.4), range(rng, -0.1, 0.1)],
+    // an octopus's arms are thick at the mantle, taper and curl; the rest keep slender spines
+    thickness: clamp(girth * (m.id === 'cephalopod' ? range(rng, 0.26, 0.36) : range(rng, 0.12, 0.3)), A.thickness),
+    taper: m.id === 'cephalopod' ? range(rng, 0.7, 0.8) : range(rng, 0.6, 0.88),
+    curl: [m.id === 'cephalopod' ? range(rng, -0.42, -0.18) : range(rng, -0.3, 0.4), range(rng, -0.1, 0.1)],
   });
 }
 
