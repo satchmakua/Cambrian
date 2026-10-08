@@ -23,6 +23,7 @@ import { mulberry32State, mix32, type StatefulRng } from '../engine/rng';
 import { weatherAt } from './weather';
 import { grow, type Phenotype } from '../engine/grow';
 import type { Genome } from '../engine/genome';
+import { encodeGenome } from '../engine/share';
 import { mutate, type MutationRates } from '../engine/mutate';
 import { describe as describeMorph, distance as morphDistance, coherence } from '../engine/morphospace';
 import { traitsOf, type Traits } from './traits';
@@ -207,11 +208,24 @@ export interface World {
 // --- body cache: grow + traits once per genome object --------------------------------------------
 
 const BODY = new WeakMap<Genome, { phenotype: Phenotype; traits: Traits }>();
+// …and by CONTENT: a world loaded from a save (or folded back from a fast-forward) carries fresh
+// genome objects for the same genomes, and growing them again would also throw away every built skin
+// the viewer caches per phenotype. A bounded map from the canonical share string finds them again.
+const BY_CONTENT = new Map<string, { phenotype: Phenotype; traits: Traits }>();
+const BY_CONTENT_MAX = 600;
 export function bodyOf(genome: Genome): { phenotype: Phenotype; traits: Traits } {
   let b = BODY.get(genome);
   if (!b) {
-    const phenotype = grow(genome);
-    b = { phenotype, traits: traitsOf(phenotype) };
+    const key = encodeGenome(genome);
+    b = BY_CONTENT.get(key);
+    if (b) {
+      BY_CONTENT.delete(key); // refresh its place in the LRU order
+    } else {
+      const phenotype = grow(genome);
+      b = { phenotype, traits: traitsOf(phenotype) };
+      if (BY_CONTENT.size >= BY_CONTENT_MAX) BY_CONTENT.delete(BY_CONTENT.keys().next().value as string);
+    }
+    BY_CONTENT.set(key, b);
     BODY.set(genome, b);
   }
   return b;
