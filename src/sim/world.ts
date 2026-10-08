@@ -1,0 +1,1082 @@
+/**
+ * The World — a deterministic ecosystem the evolved creatures live, eat, sleep, breed and die in.
+ *
+ * Every creature is a grown genome with traits read off its anatomy (traits.ts). Each one carries
+ * needs — energy (hunger), fatigue (sleep), health, age — and every half-second or so chooses what to
+ * do from them and from what it can see:
+ *
+ *   flee    a predator is in sight                     (overrides everything, wakes a sleeper)
+ *   sleep   tired, and it's its night (diurnal) or day (nocturnal)
+ *   eat     hungry — graze the meadow, pick fruit, filter algae, scavenge a corpse, or HUNT
+ *   breed   well-fed adult with a willing mate of its species nearby (some kinds bud alone)
+ *   wander  otherwise — drifting, herd animals keeping close to their own kind
+ *
+ * Breeding copies the parent's genome — and with some probability MUTATES it with the breeder's own
+ * operators. When a lineage drifts far enough in morphospace from its species' founder, it is a new
+ * species. So natural selection, drift and speciation happen on screen, on the same bodies you breed.
+ *
+ * The plants are a grass biomass field over the meadows and woods, algae in the lake, and fruit
+ * bushes in the woods; carcasses rot. Determinism: all randomness flows from the world's seeded
+ * mulberry32 and the engine's seeded mutate(); a fixed step reproduces a run exactly (Pillar 3).
+ */
+import { mulberry32, mix32, type Rng } from '../engine/rng';
+import { grow, type Phenotype } from '../engine/grow';
+import type { Genome } from '../engine/genome';
+import { mutate, type MutationRates } from '../engine/mutate';
+import { describe as describeMorph, distance as morphDistance, coherence } from '../engine/morphospace';
+import { traitsOf, type Traits } from './traits';
+import { makeTerrain, heightAt, biomeAt, inBounds, WATER_LEVEL, type Terrain } from './terrain';
+
+// --- tunables -----------------------------------------------------------------------------------
+
+export const STEP = 1 / 20; // fixed simulation step (s)
+export const DAY_LENGTH = 240; // seconds of sim time per day/night cycle
+const DECIDE_EVERY = 0.6; // s between deliberations (staggered per creature)
+const GRID_CELL = 4; // grass / algae field resolution (bu)
+const GRASS_ENERGY = 26; // energy per unit of grass biomass
+const ALGAE_ENERGY = 20;
+const FRUIT_ENERGY = 14;
+const MEAT_ENERGY = 1; // corpses store energy directly
+const GRASS_REGROW = 0.0042; // logistic rate (/s)
+const FRUIT_REGROW = 0.028; // fruit per second per bush
+const CORPSE_LIFE = 120; // s before a carcass is gone
+export const MAX_POP = 150;
+/** No one species may hold more than this share of the world (so a prolific grazer can't crowd
+ *  every other lineage out of the breeding cap). */
+const SPECIES_SHARE = 0.42;
+const SPECIATION_DIST = 0.32; // morphospace distance from the species founder that founds a new one
+const WORLD_MUTATION: MutationRates = { point: 0.22, pointSigma: 0.05, structural: 0.05, duplication: 0.02, macro: 0.0 };
+const MUTATION_CHANCE = 0.3; // per offspring
+const SPATIAL = 10; // spatial-hash cell (bu)
+const SCENT = 2.6; // hungry hunters smell prey this many vision-radii away
+
+/** Feeding rate while eating, in energy/s as a multiple of the eater's resting metabolism — a
+ *  specialist eats its food fast (it can top up in a fraction of its day), a generalist slowly. */
+const INTAKE: Record<string, Partial<Record<'grass' | 'algae' | 'fruit' | 'meat', number>>> = {
+  herbivore: { grass: 4.5, fruit: 4 },
+  omnivore: { grass: 1.7, algae: 2.6, fruit: 4, meat: 3.5 },
+  carnivore: { meat: 7 },
+  filter: { algae: 5.5 },
+  nectar: { fruit: 6 },
+};
+
+// --- types --------------------------------------------------------------------------------------
+
+export type Action = 'wander' | 'graze' | 'forage' | 'scavenge' | 'filter' | 'hunt' | 'flee' | 'sleep' | 'mate' | 'eat';
+export type DeathCause = 'starvation' | 'predation' | 'old age';
+
+export interface Species {
+  id: number;
+  name: string;
+  kind: string; // nearest morphotype attractor
+  founder: Genome;
+  descriptor: number[];
+  hue: number; // UI colour
+  parent: number | null;
+  firstSeen: number;
+  extinctAt: number | null;
+  alive: number;
+  born: number;
+  deaths: number;
+}
+
+export interface Creature {
+  id: number;
+  species: number;
+  genome: Genome;
+  traits: Traits;
+  x: number;
+  z: number;
+  y: number; // ground height under it (kept fresh for the viewer)
+  heading: number; // radians; 0 faces +Z, π/2 faces +X
+  speed: number; // current ground speed (bu/s)
+  energy: number;
+  health: number;
+  fatigue: number; // 0 rested … 1 exhausted
+  age: number;
+  lifeFactor: number; // individual lifespan multiplier
+  action: Action;
+  target: number; // creature / plant / corpse id, or grid cell index, by action
+  tx: number;
+  tz: number;
+  decideIn: number;
+  breedCooldown: number;
+  generation: number;
+  parent: number | null;
+  children: number;
+  kills: number;
+  alive: boolean;
+  attacker: number; // last creature to bite it (-1 none)
+  attackedAt: number;
+  wanderSeed: number;
+}
+
+export interface Plant {
+  id: number;
+  x: number;
+  z: number;
+  fruit: number;
+  max: number;
+  size: number; // visual size
+}
+
+export interface Corpse {
+  id: number;
+  x: number;
+  z: number;
+  y: number;
+  heading: number;
+  meat: number;
+  maxMeat: number;
+  rot: number; // seconds left
+  genome: Genome;
+  growth: number;
+  species: number;
+}
+
+export interface WorldEvent {
+  t: number;
+  kind: 'birth' | 'death' | 'speciation' | 'extinction' | 'release' | 'kill' | 'mutation';
+  text: string;
+  species?: number;
+  creature?: number;
+}
+
+export interface HistorySample {
+  t: number;
+  pops: Record<number, number>;
+  grass: number;
+}
+
+export interface World {
+  seed: number;
+  rng: Rng;
+  time: number;
+  terrain: Terrain;
+  gridN: number;
+  grass: Float32Array; // biomass per cell (0..cap)
+  grassCap: Float32Array; // carrying capacity per cell
+  algae: Float32Array;
+  algaeCap: Float32Array;
+  plants: Plant[];
+  creatures: Creature[];
+  corpses: Corpse[];
+  species: Species[];
+  nextId: number;
+  events: WorldEvent[];
+  history: HistorySample[];
+  historyTimer: number;
+  fieldTimer: number;
+  stepCount: number;
+  /** cumulative tallies since the world began */
+  tally: { births: number; kills: number; starvation: number; oldAge: number; mutations: number; speciations: number };
+  /** spatial hash of live creatures, rebuilt each step */
+  buckets: Map<number, Creature[]>;
+}
+
+// --- body cache: grow + traits once per genome object --------------------------------------------
+
+const BODY = new WeakMap<Genome, { phenotype: Phenotype; traits: Traits }>();
+export function bodyOf(genome: Genome): { phenotype: Phenotype; traits: Traits } {
+  let b = BODY.get(genome);
+  if (!b) {
+    const phenotype = grow(genome);
+    b = { phenotype, traits: traitsOf(phenotype) };
+    BODY.set(genome, b);
+  }
+  return b;
+}
+
+/** 0 at dawn … 0.25 noon … 0.5 dusk … 0.75 midnight. */
+export function dayPhase(time: number): number {
+  return ((time / DAY_LENGTH) % 1 + 1) % 1;
+}
+export function isNight(time: number): boolean {
+  const p = dayPhase(time);
+  return p > 0.52 && p < 0.98;
+}
+export function dayNumber(time: number): number {
+  return Math.floor(time / DAY_LENGTH) + 1;
+}
+
+/** Adult fraction of full size (newborns are ~40%; grown by maturity). */
+export function growthOf(c: Creature): number {
+  return 0.4 + 0.6 * Math.min(1, c.age / Math.max(1, c.traits.maturity));
+}
+
+// --- construction --------------------------------------------------------------------------------
+
+export function createWorld(seed: number): World {
+  const terrain = makeTerrain(seed);
+  const rng = mulberry32(mix32(seed, 0x3c0105));
+  const gridN = Math.ceil(terrain.size / GRID_CELL);
+  const grass = new Float32Array(gridN * gridN);
+  const grassCap = new Float32Array(gridN * gridN);
+  const algae = new Float32Array(gridN * gridN);
+  const algaeCap = new Float32Array(gridN * gridN);
+  for (let j = 0; j < gridN; j++) {
+    for (let i = 0; i < gridN; i++) {
+      const x = -terrain.size / 2 + (i + 0.5) * GRID_CELL;
+      const z = -terrain.size / 2 + (j + 0.5) * GRID_CELL;
+      const b = biomeAt(terrain, x, z);
+      const k = j * gridN + i;
+      grassCap[k] = b === 'meadow' ? 1 : b === 'wood' ? 0.55 : b === 'sand' ? 0.08 : 0;
+      algaeCap[k] = b === 'shallow' ? 1 : b === 'deep' ? 0.55 : 0;
+      grass[k] = grassCap[k] * (0.6 + 0.4 * rng());
+      algae[k] = algaeCap[k] * (0.6 + 0.4 * rng());
+    }
+  }
+  const world: World = {
+    seed,
+    rng,
+    time: DAY_LENGTH * 0.08, // start just after dawn
+    terrain,
+    gridN,
+    grass,
+    grassCap,
+    algae,
+    algaeCap,
+    plants: [],
+    creatures: [],
+    corpses: [],
+    species: [],
+    nextId: 1,
+    events: [],
+    history: [],
+    historyTimer: 0,
+    fieldTimer: 0,
+    stepCount: 0,
+    tally: { births: 0, kills: 0, starvation: 0, oldAge: 0, mutations: 0, speciations: 0 },
+    buckets: new Map(),
+  };
+  // fruit bushes: dense in the woods, scattered across the meadows
+  let tries = 0;
+  while (world.plants.length < 170 && tries++ < 8000) {
+    const x = (rng() - 0.5) * terrain.size * 0.94;
+    const z = (rng() - 0.5) * terrain.size * 0.94;
+    const b = biomeAt(terrain, x, z);
+    if (b !== 'wood' && !(b === 'meadow' && rng() < 0.25)) continue;
+    const max = 3 + Math.floor(rng() * 5);
+    world.plants.push({ id: world.nextId++, x, z, fruit: max * rng(), max, size: 0.8 + rng() * 0.9 });
+  }
+  return world;
+}
+
+/** Find a spawn point suited to a habitat, near (cx, cz) if given. */
+function spawnPoint(w: World, t: Traits, cx?: number, cz?: number, spread = 14): { x: number; z: number } {
+  for (let i = 0; i < 400; i++) {
+    const far = cx === undefined || i > 200;
+    const x = far ? (w.rng() - 0.5) * w.terrain.size * 0.85 : (cx as number) + (w.rng() - 0.5) * spread;
+    const z = far ? (w.rng() - 0.5) * w.terrain.size * 0.85 : (cz as number) + (w.rng() - 0.5) * spread;
+    if (!inBounds(w.terrain, x, z, 8)) continue;
+    if (canStand(w, t, x, z)) return { x, z };
+  }
+  return { x: w.terrain.lakeX, z: w.terrain.lakeZ + w.terrain.lakeR * 1.3 };
+}
+
+function canStand(w: World, t: Traits, x: number, z: number): boolean {
+  const h = heightAt(w.terrain, x, z);
+  if (t.habitat === 'water') return h < WATER_LEVEL - 0.3;
+  if (t.habitat === 'land') return h > WATER_LEVEL - 0.5;
+  return true;
+}
+
+function speciesFor(w: World, genome: Genome, parent: number | null): Species {
+  const { phenotype } = bodyOf(genome);
+  const kind = coherence(phenotype).nearest;
+  const sameKind = w.species.filter((s) => s.kind === kind).length;
+  const sp: Species = {
+    id: w.nextId++,
+    name: `${kind} ${GREEK[sameKind % GREEK.length]}${sameKind >= GREEK.length ? Math.floor(sameKind / GREEK.length) + 1 : ''}`,
+    kind,
+    founder: genome,
+    descriptor: describeMorph(phenotype),
+    hue: genome.palette.hueA,
+    parent,
+    firstSeen: w.time,
+    extinctAt: null,
+    alive: 0,
+    born: 0,
+    deaths: 0,
+  };
+  w.species.push(sp);
+  return sp;
+}
+const GREEK = ['α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ', 'ι', 'κ', 'λ', 'μ'];
+
+function spawn(w: World, genome: Genome, species: Species, x: number, z: number, adult: boolean, parent: Creature | null): Creature {
+  const { traits } = bodyOf(genome);
+  const c: Creature = {
+    id: w.nextId++,
+    species: species.id,
+    genome,
+    traits,
+    x,
+    z,
+    y: Math.max(heightAt(w.terrain, x, z), WATER_LEVEL - 10),
+    heading: w.rng() * Math.PI * 2,
+    speed: 0,
+    energy: traits.maxEnergy * (adult ? 0.85 : 0.5),
+    health: traits.maxHealth,
+    fatigue: w.rng() * 0.3,
+    age: adult ? traits.maturity * (1 + w.rng()) : 0,
+    lifeFactor: 0.85 + w.rng() * 0.3,
+    action: 'wander',
+    target: -1,
+    tx: x,
+    tz: z,
+    decideIn: w.rng() * DECIDE_EVERY,
+    breedCooldown: adult ? traits.lifespan * 0.03 * w.rng() : traits.maturity,
+    generation: parent ? parent.generation + 1 : 0,
+    parent: parent ? parent.id : null,
+    children: 0,
+    kills: 0,
+    alive: true,
+    attacker: -1,
+    attackedAt: -1e9,
+    wanderSeed: w.rng() * 1000,
+  };
+  w.creatures.push(c);
+  species.alive++;
+  species.born++;
+  return c;
+}
+
+/** Release `count` adults of a genome into the world (a new species unless one has this founder). */
+export function release(w: World, genome: Genome, count: number, near?: { x: number; z: number }): Creature[] {
+  const { traits } = bodyOf(genome);
+  let sp = w.species.find((s) => s.founder === genome && s.extinctAt === null);
+  if (!sp) sp = speciesFor(w, genome, null);
+  const base = near ?? spawnPoint(w, traits);
+  const out: Creature[] = [];
+  for (let i = 0; i < count && liveCount(w) < MAX_POP; i++) {
+    const p = spawnPoint(w, traits, base.x, base.z, 18);
+    out.push(spawn(w, genome, sp, p.x, p.z, true, null));
+  }
+  log(w, 'release', `${count} ${sp.name} released`, sp.id);
+  return out;
+}
+
+export function liveCount(w: World): number {
+  let n = 0;
+  for (const c of w.creatures) if (c.alive) n++;
+  return n;
+}
+
+function log(w: World, kind: WorldEvent['kind'], text: string, species?: number, creature?: number): void {
+  w.events.push({ t: w.time, kind, text, species, creature });
+  if (w.events.length > 160) w.events.splice(0, w.events.length - 160);
+}
+
+export function speciesById(w: World, id: number): Species | undefined {
+  return w.species.find((s) => s.id === id);
+}
+
+// --- the step ------------------------------------------------------------------------------------
+
+export function stepWorld(w: World, dt = STEP): void {
+  w.time += dt;
+  w.stepCount++;
+  rebuildBuckets(w);
+  for (const c of w.creatures) if (c.alive) live(w, c, dt);
+  // the dead are kept one step for the viewer's fade, then culled
+  w.creatures = w.creatures.filter((c) => c.alive);
+  // carcasses rot
+  for (const k of w.corpses) k.rot -= dt;
+  w.corpses = w.corpses.filter((k) => k.rot > 0 && k.meat > 0.5);
+  // plants grow (the fields are slow — update them once a second)
+  w.fieldTimer += dt;
+  if (w.fieldTimer >= 1) {
+    growFields(w, w.fieldTimer);
+    w.fieldTimer = 0;
+  }
+  // a population sample every 5 s
+  w.historyTimer += dt;
+  if (w.historyTimer >= 5) {
+    w.historyTimer = 0;
+    sampleHistory(w);
+  }
+}
+
+function growFields(w: World, dt: number): void {
+  const { grass, grassCap, algae, algaeCap } = w;
+  for (let k = 0; k < grass.length; k++) {
+    const K = grassCap[k];
+    if (K > 0) {
+      const b = grass[k];
+      grass[k] = Math.min(K, b + (GRASS_REGROW * b * (1 - b / K) + 0.0004 * K) * dt);
+    }
+    const A = algaeCap[k];
+    if (A > 0) {
+      const a = algae[k];
+      algae[k] = Math.min(A, a + (GRASS_REGROW * 3 * a * (1 - a / A) + 0.001 * A) * dt);
+    }
+  }
+  for (const p of w.plants) p.fruit = Math.min(p.max, p.fruit + FRUIT_REGROW * dt);
+}
+
+function sampleHistory(w: World): void {
+  const pops: Record<number, number> = {};
+  for (const c of w.creatures) if (c.alive) pops[c.species] = (pops[c.species] ?? 0) + 1;
+  let g = 0;
+  for (let k = 0; k < w.grass.length; k++) g += w.grass[k];
+  w.history.push({ t: w.time, pops, grass: g });
+  if (w.history.length > 720) w.history.splice(0, w.history.length - 720);
+}
+
+function rebuildBuckets(w: World): void {
+  w.buckets.clear();
+  for (const c of w.creatures) {
+    if (!c.alive) continue;
+    const key = bucketKey(c.x, c.z);
+    let b = w.buckets.get(key);
+    if (!b) w.buckets.set(key, (b = []));
+    b.push(c);
+  }
+}
+function bucketKey(x: number, z: number): number {
+  return (Math.floor(x / SPATIAL) + 1000) * 4096 + (Math.floor(z / SPATIAL) + 1000);
+}
+/** Live creatures within `r` of (x, z). */
+export function nearby(w: World, x: number, z: number, r: number, out: Creature[] = []): Creature[] {
+  out.length = 0;
+  const i0 = Math.floor((x - r) / SPATIAL), i1 = Math.floor((x + r) / SPATIAL);
+  const j0 = Math.floor((z - r) / SPATIAL), j1 = Math.floor((z + r) / SPATIAL);
+  const r2 = r * r;
+  for (let i = i0; i <= i1; i++) {
+    for (let j = j0; j <= j1; j++) {
+      const b = w.buckets.get((i + 1000) * 4096 + (j + 1000));
+      if (!b) continue;
+      for (const c of b) {
+        const dx = c.x - x, dz = c.z - z;
+        if (dx * dx + dz * dz <= r2) out.push(c);
+      }
+    }
+  }
+  return out;
+}
+const NEAR: Creature[] = [];
+const FEEDING = new Set<Action>(['graze', 'filter', 'forage', 'scavenge', 'eat', 'hunt']);
+const SCENT_BUF: Creature[] = [];
+
+function cellOf(w: World, x: number, z: number): number {
+  const i = Math.min(w.gridN - 1, Math.max(0, Math.floor((x + w.terrain.size / 2) / GRID_CELL)));
+  const j = Math.min(w.gridN - 1, Math.max(0, Math.floor((z + w.terrain.size / 2) / GRID_CELL)));
+  return j * w.gridN + i;
+}
+function cellCenter(w: World, k: number): { x: number; z: number } {
+  const i = k % w.gridN, j = Math.floor(k / w.gridN);
+  return { x: -w.terrain.size / 2 + (i + 0.5) * GRID_CELL, z: -w.terrain.size / 2 + (j + 0.5) * GRID_CELL };
+}
+
+// --- predator/prey relations -----------------------------------------------------------------------
+
+/** Would `a` hunt `b`? Carnivores take anything they can overpower; omnivores only small prey. */
+export function preysOn(a: Creature, b: Creature): boolean {
+  if (a.species === b.species || !b.alive) return false;
+  const ta = a.traits, tb = b.traits;
+  if (ta.diet !== 'carnivore' && ta.diet !== 'omnivore') return false;
+  // can it reach it? land hunters don't chase into deep water and vice versa
+  if (ta.habitat === 'water' && tb.habitat === 'land') return false;
+  if (ta.habitat === 'land' && tb.habitat === 'water') return false;
+  const ma = ta.mass * growthOf(a) ** 3, mb = tb.mass * growthOf(b) ** 3;
+  const limit = ta.diet === 'carnivore' ? 1.6 : 0.45;
+  if (mb > ma * limit) return false;
+  // too well armed / armoured to be worth it?
+  const threat = tb.attack * (1 - ta.defense) / Math.max(1, ta.maxHealth);
+  return threat < 0.12;
+}
+
+// --- one creature's life, one step ---------------------------------------------------------------
+
+function live(w: World, c: Creature, dt: number): void {
+  const t = c.traits;
+  c.age += dt;
+  c.breedCooldown -= dt;
+  const growth = growthOf(c);
+  const asleep = c.action === 'sleep';
+
+  // metabolism: resting burn + the cost of moving fast; sleep is cheap
+  const moveCost = t.metabolism * 1.6 * (c.speed / Math.max(0.1, t.sprint)) ** 2;
+  c.energy -= (t.metabolism * (asleep ? 0.55 : 1) * growth ** 2 + moveCost) * dt;
+  c.fatigue = Math.min(1, Math.max(0, c.fatigue + (asleep ? -dt / (DAY_LENGTH * 0.22) : dt / (DAY_LENGTH * 0.62))));
+  if (c.energy <= 0) {
+    c.energy = 0;
+    c.health -= t.maxHealth * 0.04 * dt; // starving
+  } else if (c.energy > t.maxEnergy * 0.3) {
+    c.health = Math.min(t.maxHealth * growth, c.health + t.maxHealth * 0.006 * dt);
+  }
+  c.energy = Math.min(c.energy, t.maxEnergy * growth);
+
+  if (c.health <= 0) return die(w, c, c.energy <= 0 ? 'starvation' : 'predation');
+  if (c.age > t.lifespan * c.lifeFactor) return die(w, c, 'old age');
+
+  c.decideIn -= dt;
+  if (c.decideIn <= 0) {
+    c.decideIn = DECIDE_EVERY * (0.8 + 0.4 * w.rng());
+    decide(w, c);
+  }
+  act(w, c, dt);
+  c.y = heightAt(w.terrain, c.x, c.z);
+}
+
+function die(w: World, c: Creature, cause: DeathCause): void {
+  c.alive = false;
+  const sp = speciesById(w, c.species);
+  const g = growthOf(c);
+  w.corpses.push({
+    id: w.nextId++,
+    x: c.x,
+    z: c.z,
+    y: c.y,
+    heading: c.heading,
+    meat: (c.traits.maxEnergy * 0.55 + 20) * g * g,
+    maxMeat: (c.traits.maxEnergy * 0.55 + 20) * g * g,
+    rot: CORPSE_LIFE,
+    genome: c.genome,
+    growth: g,
+    species: c.species,
+  });
+  if (sp) {
+    sp.alive--;
+    sp.deaths++;
+    if (cause !== 'predation') log(w, 'death', `a ${sp.name} died of ${cause}`, sp.id, c.id);
+  }
+  if (cause === 'starvation') w.tally.starvation++;
+  else if (cause === 'old age') w.tally.oldAge++;
+  else w.tally.kills++;
+  if (sp) {
+    if (sp.alive <= 0 && sp.extinctAt === null) {
+      sp.extinctAt = w.time;
+      log(w, 'extinction', `${sp.name} went extinct`, sp.id);
+    }
+  }
+}
+
+function decide(w: World, c: Creature): void {
+  const t = c.traits;
+  const asleep = c.action === 'sleep';
+  const sight = t.vision * (asleep ? 0.35 : 1) * (isNight(w.time) && !t.nocturnal ? 0.6 : 1);
+  const near = nearby(w, c.x, c.z, sight, NEAR);
+
+  // 1. danger — the nearest thing that hunts us (or just bit us)
+  let threat: Creature | null = null;
+  let threatD = Infinity;
+  for (const o of near) {
+    if (o === c) continue;
+    const bitUs = o.id === c.attacker && w.time - c.attackedAt < 4;
+    if (!bitUs && !preysOn(o, c)) continue;
+    const d = Math.hypot(o.x - c.x, o.z - c.z);
+    if (d < threatD) {
+      threatD = d;
+      threat = o;
+    }
+  }
+  if (threat && (!asleep || threatD < sight)) {
+    c.action = 'flee';
+    c.target = threat.id;
+    return;
+  }
+
+  // hysteresis: a meal in progress continues until full, a courtship until it's done — re-deliberating
+  // every half-second would otherwise drop the food the moment hunger dipped under the threshold
+  // that started the meal, and nobody but the grazers ever got fed enough to breed
+  const hunger = 1 - c.energy / (t.maxEnergy * growthOf(c));
+  if (FEEDING.has(c.action) && hunger > 0.04) return;
+  if (c.action === 'mate' && c.breedCooldown <= 0) return;
+
+  // 2. sleep — when tired at its time of day; a sleeper keeps sleeping until rested
+  const night = isNight(w.time);
+  const myNight = t.nocturnal ? !night : night;
+  if (asleep && c.fatigue > 0.1 && hunger < 0.9) return;
+  if ((c.fatigue > 0.9 || (c.fatigue > 0.5 && myNight)) && hunger < 0.8) {
+    c.action = 'sleep';
+    return;
+  }
+
+  // 3. eat — grazers nibble whenever not full; others eat when properly hungry
+  const grazer = t.diet === 'herbivore' || t.diet === 'filter';
+  if (hunger > (grazer ? 0.25 : 0.4)) {
+    if (findFood(w, c, near, sight, hunger)) return;
+  }
+
+  // 4. breed — well fed, adult, and not crowded: a dense herd breeds slowly, a full world not at all
+  const fedEnough = t.diet === 'carnivore' ? 0.5 : t.diet === 'herbivore' || t.diet === 'filter' ? 0.3 : 0.42;
+  if (c.age > t.maturity && c.breedCooldown <= 0 && hunger < fedEnough && roomToBreed(w, c, near)) {
+    let mate: Creature | null = null;
+    let md = Infinity;
+    for (const o of near) {
+      if (o === c || o.species !== c.species || o.age < o.traits.maturity || o.breedCooldown > 0) continue;
+      if (o.energy < o.traits.maxEnergy * 0.45 || o.action === 'sleep' || o.action === 'flee') continue;
+      const d = Math.hypot(o.x - c.x, o.z - c.z);
+      if (d < md) {
+        md = d;
+        mate = o;
+      }
+    }
+    if (mate) {
+      c.action = 'mate';
+      c.target = mate.id;
+      return;
+    }
+    // radial / oozing kinds bud alone when there is no partner
+    if ((t.locomotion === 'drift' || t.locomotion === 'ooze') && hunger < 0.15) {
+      breed(w, c, null);
+      return;
+    }
+    // no one in sight: call — head for the nearest of its kind within earshot (solitary hunters and
+    // scattered shoals would otherwise never meet)
+    const far = nearby(w, c.x, c.z, t.vision * SCENT, SCENT_BUF);
+    let call: Creature | null = null;
+    let cd = Infinity;
+    for (const o of far) {
+      if (o === c || o.species !== c.species || o.age < o.traits.maturity) continue;
+      const d = Math.hypot(o.x - c.x, o.z - c.z);
+      if (d < cd) {
+        cd = d;
+        call = o;
+      }
+    }
+    if (call) {
+      c.action = 'wander';
+      c.target = -1;
+      c.tx = call.x;
+      c.tz = call.z;
+      return;
+    }
+  }
+
+  // 5. wander — herd animals drift toward their own kind; a hungry hunter follows its nose
+  c.action = 'wander';
+  c.target = -1;
+  if ((t.diet === 'carnivore' || t.diet === 'omnivore') && hunger > 0.45) {
+    const far = nearby(w, c.x, c.z, t.vision * SCENT, SCENT_BUF);
+    let best: Creature | null = null;
+    let bd = Infinity;
+    for (const o of far) {
+      if (!preysOn(c, o)) continue;
+      const d = Math.hypot(o.x - c.x, o.z - c.z);
+      if (d < bd) {
+        bd = d;
+        best = o;
+      }
+    }
+    if (best) {
+      c.tx = best.x + (w.rng() - 0.5) * 6;
+      c.tz = best.z + (w.rng() - 0.5) * 6;
+      return;
+    }
+  }
+  let hx = 0, hz = 0, hn = 0;
+  if (t.herding > 0) {
+    for (const o of near) {
+      if (o === c || o.species !== c.species) continue;
+      hx += o.x;
+      hz += o.z;
+      hn++;
+    }
+  }
+  const wanderR = 6 + t.speed * 4;
+  const a = c.heading + (w.rng() - 0.5) * 1.6;
+  c.tx = c.x + Math.sin(a) * wanderR;
+  c.tz = c.z + Math.cos(a) * wanderR;
+  if (hn > 0) {
+    const cx = hx / hn, cz = hz / hn;
+    const d = Math.hypot(cx - c.x, cz - c.z);
+    if (d > 5) {
+      c.tx = c.tx * (1 - t.herding * 0.7) + cx * t.herding * 0.7;
+      c.tz = c.tz * (1 - t.herding * 0.7) + cz * t.herding * 0.7;
+    }
+  }
+}
+
+/** Is there room for this creature's kind to grow — under the world cap, under its species' share,
+ *  and not packed in with its own kind? */
+function roomToBreed(w: World, c: Creature, near: Creature[]): boolean {
+  if (liveCount(w) >= MAX_POP) return false;
+  const sp = speciesById(w, c.species);
+  if (sp && sp.alive >= MAX_POP * SPECIES_SHARE) return false;
+  let crowd = 0;
+  for (const o of near) if (o !== c && o.species === c.species && Math.hypot(o.x - c.x, o.z - c.z) < 9) crowd++;
+  return crowd < 7;
+}
+
+/** Pick the best food in sight for this diet; returns true if a food action was chosen. */
+function findFood(w: World, c: Creature, near: Creature[], sight: number, hunger: number): boolean {
+  const t = c.traits;
+  const eatsPlants = t.diet === 'herbivore' || t.diet === 'omnivore';
+  const eatsFruit = t.diet === 'herbivore' || t.diet === 'omnivore' || t.diet === 'nectar';
+  const eatsMeat = t.diet === 'carnivore' || t.diet === 'omnivore';
+
+  let best = -Infinity;
+  let pick: { action: Action; target: number; x: number; z: number } | null = null;
+  const consider = (score: number, action: Action, target: number, x: number, z: number) => {
+    if (score > best) {
+      best = score;
+      pick = { action, target, x, z };
+    }
+  };
+
+  // carcasses — an easy meal for scavengers
+  if (eatsMeat) {
+    for (const k of w.corpses) {
+      const d = Math.hypot(k.x - c.x, k.z - c.z);
+      if (d > sight || !reachable(w, t, k.x, k.z)) continue;
+      consider(30 - d * 0.5 + Math.min(20, k.meat * 0.1), 'scavenge', k.id, k.x, k.z);
+    }
+  }
+  // prey
+  if (eatsMeat && hunger > (t.diet === 'carnivore' ? 0.3 : 0.55)) {
+    for (const o of near) {
+      if (o === c || !preysOn(c, o)) continue;
+      const d = Math.hypot(o.x - c.x, o.z - c.z);
+      // the young, the weak, the asleep are easier
+      const ease = (o.action === 'sleep' ? 8 : 0) + (1 - o.health / o.traits.maxHealth) * 10 + (o.age < o.traits.maturity ? 6 : 0);
+      consider((t.diet === 'carnivore' ? 22 : 8) - d * 0.6 + ease, 'hunt', o.id, o.x, o.z);
+    }
+  }
+  // fruit
+  if (eatsFruit) {
+    for (const p of w.plants) {
+      if (p.fruit < 1) continue;
+      const d = Math.hypot(p.x - c.x, p.z - c.z);
+      if (d > sight || !reachable(w, t, p.x, p.z)) continue;
+      consider((t.diet === 'nectar' ? 30 : t.diet === 'herbivore' ? 8 : 16) - d * 0.45 + p.fruit, 'forage', p.id, p.x, p.z);
+    }
+  }
+  // grass — search a ring of cells for the richest within reach
+  if (eatsPlants && t.habitat !== 'water') {
+    const here = cellOf(w, c.x, c.z);
+    let bk = -1, bs = -Infinity;
+    const r = Math.min(sight, 22);
+    const steps = 10;
+    for (let i = 0; i < steps * 2; i++) {
+      const ang = c.wanderSeed + i * 2.399; // golden-angle probes
+      const rr = r * Math.sqrt((i + 0.5) / (steps * 2));
+      const x = c.x + Math.sin(ang) * rr, z = c.z + Math.cos(ang) * rr;
+      if (!inBounds(w.terrain, x, z) || !reachable(w, t, x, z)) continue;
+      const k = cellOf(w, x, z);
+      const s = w.grass[k] * 10 - rr * 0.25;
+      if (s > bs) {
+        bs = s;
+        bk = k;
+      }
+    }
+    if (w.grass[here] > 0.25) {
+      bk = here;
+      bs = w.grass[here] * 10 + 2;
+    }
+    if (bk >= 0 && w.grass[bk] > 0.12) {
+      const cc = cellCenter(w, bk);
+      consider(bs + (t.diet === 'herbivore' ? 6 : -4), 'graze', bk, cc.x + (w.rng() - 0.5) * 2, cc.z + (w.rng() - 0.5) * 2);
+    }
+  }
+  // algae — filter feeders sieve the lake
+  if (t.diet === 'filter' || (t.habitat === 'water' && t.diet !== 'carnivore')) {
+    let bk = -1, bs = -Infinity;
+    for (let i = 0; i < 20; i++) {
+      const ang = c.wanderSeed + i * 2.399;
+      const rr = Math.min(sight, 26) * Math.sqrt((i + 0.5) / 20);
+      const x = c.x + Math.sin(ang) * rr, z = c.z + Math.cos(ang) * rr;
+      if (!inBounds(w.terrain, x, z) || !reachable(w, t, x, z) || heightAt(w.terrain, x, z) > WATER_LEVEL - 0.05) continue;
+      const k = cellOf(w, x, z);
+      const s = w.algae[k] * 10 - rr * 0.2;
+      if (s > bs) {
+        bs = s;
+        bk = k;
+      }
+    }
+    const hereA = cellOf(w, c.x, c.z);
+    if (w.algae[hereA] > 0.2) {
+      bk = hereA;
+      bs = w.algae[hereA] * 10 + 2;
+    }
+    if (bk >= 0 && w.algae[bk] > 0.1) {
+      const cc = cellCenter(w, bk);
+      consider(bs + 4, 'filter', bk, cc.x, cc.z);
+    }
+  }
+  if (!pick) return false;
+  const chosen = pick as { action: Action; target: number; x: number; z: number };
+  c.action = chosen.action;
+  c.target = chosen.target;
+  c.tx = chosen.x;
+  c.tz = chosen.z;
+  return true;
+}
+
+function reachable(w: World, t: Traits, x: number, z: number): boolean {
+  return canStand(w, t, x, z);
+}
+
+/** Carry out the current action for one step: steer, move, and eat / bite / mate on arrival. */
+function act(w: World, c: Creature, dt: number): void {
+  const t = c.traits;
+  const g = growthOf(c);
+  let goal: { x: number; z: number } | null = null;
+  let pace = 0; // fraction of cruise speed (>1 = sprinting)
+  let arrive = 1.2 + t.radius * g;
+
+  switch (c.action) {
+    case 'sleep':
+      pace = 0;
+      break;
+    case 'flee': {
+      const th = w.creatures.find((o) => o.id === c.target && o.alive);
+      if (!th) {
+        c.action = 'wander';
+        c.decideIn = 0;
+        break;
+      }
+      const dx = c.x - th.x, dz = c.z - th.z;
+      const d = Math.hypot(dx, dz) || 1;
+      goal = { x: c.x + (dx / d) * 10, z: c.z + (dz / d) * 10 };
+      pace = t.sprint / t.speed;
+      if (d > t.vision * 1.2) {
+        c.action = 'wander'; // escaped
+        c.decideIn = 0;
+      }
+      break;
+    }
+    case 'wander':
+      goal = { x: c.tx, z: c.tz };
+      pace = 0.45;
+      if (Math.hypot(c.tx - c.x, c.tz - c.z) < arrive) c.decideIn = Math.min(c.decideIn, 0.2);
+      break;
+    case 'graze':
+    case 'filter': {
+      const field = c.action === 'graze' ? w.grass : w.algae;
+      const here = cellOf(w, c.x, c.z);
+      const d = Math.hypot(c.tx - c.x, c.tz - c.z);
+      // graze IN PLACE while the patch underfoot holds out; only travel when it is cropped bare
+      if (field[here] < 0.1 && d > arrive + 1.5) {
+        goal = { x: c.tx, z: c.tz };
+        pace = 0.8;
+      } else {
+        // crop the cell underfoot
+        const k = here;
+        const per = c.action === 'graze' ? GRASS_ENERGY : ALGAE_ENERGY;
+        const rate = (INTAKE[t.diet][c.action === 'graze' ? 'grass' : 'algae'] ?? 1) * t.metabolism; // energy/s
+        const bite = Math.min(field[k], (rate / per) * dt);
+        field[k] -= bite;
+        c.energy += bite * per;
+        pace = 0.08; // shuffle while cropping
+        goal = { x: c.tx, z: c.tz };
+        if (c.energy > t.maxEnergy * g * 0.97) done(c);
+        else if (field[k] < 0.04 && d <= arrive + 1.5) done(c); // patch and target both cropped
+      }
+      break;
+    }
+    case 'forage': {
+      const p = w.plants.find((q) => q.id === c.target);
+      if (!p || p.fruit < 0.2) {
+        done(c);
+        break;
+      }
+      const d = Math.hypot(p.x - c.x, p.z - c.z);
+      arrive += p.size;
+      if (d > arrive) {
+        goal = p;
+        pace = 0.85;
+      } else {
+        // a fruit every ~1.2 s
+        const rate = (INTAKE[t.diet].fruit ?? 1) * t.metabolism;
+        const per = FRUIT_ENERGY * (1 + t.mass * 0.6); // a big animal strips a bush faster for the same fruit count
+        const take = Math.min(p.fruit, (rate / per) * dt);
+        p.fruit -= take;
+        c.energy += take * per;
+        if (c.energy > t.maxEnergy * g * 0.97) done(c);
+      }
+      break;
+    }
+    case 'scavenge':
+    case 'eat': {
+      const k = w.corpses.find((q) => q.id === c.target);
+      if (!k || k.meat <= 0.5) {
+        done(c);
+        break;
+      }
+      const d = Math.hypot(k.x - c.x, k.z - c.z);
+      if (d > arrive + 0.6) {
+        goal = k;
+        pace = 1;
+      } else {
+        c.action = 'eat';
+        const bite = Math.min(k.meat, (INTAKE[t.diet].meat ?? 1) * t.metabolism * dt);
+        k.meat -= bite;
+        c.energy += bite * MEAT_ENERGY;
+        if (c.energy > t.maxEnergy * g * 0.97) done(c);
+      }
+      break;
+    }
+    case 'hunt': {
+      const prey = w.creatures.find((o) => o.id === c.target && o.alive);
+      if (!prey) {
+        if (c.action === 'hunt') done(c);
+        break;
+      }
+      const d = Math.hypot(prey.x - c.x, prey.z - c.z);
+      const reach = (t.radius * g + prey.traits.radius * growthOf(prey)) * 0.9 + 0.5;
+      // lead the target a little
+      goal = { x: prey.x + Math.sin(prey.heading) * prey.speed * 0.4, z: prey.z + Math.cos(prey.heading) * prey.speed * 0.4 };
+      pace = t.sprint / t.speed;
+      if (d < reach) {
+        bite(w, c, prey, dt);
+        pace = 0.3;
+      }
+      if (d > t.vision * 1.3 && c.action === 'hunt') done(c); // lost it
+      break;
+    }
+    case 'mate': {
+      const m = w.creatures.find((o) => o.id === c.target && o.alive);
+      if (!m || m.breedCooldown > 0 || m.action === 'flee') {
+        done(c);
+        break;
+      }
+      const d = Math.hypot(m.x - c.x, m.z - c.z);
+      if (d > (t.radius + m.traits.radius) + 0.8) {
+        goal = m;
+        pace = 0.75;
+      } else if (c.breedCooldown <= 0) {
+        breed(w, c, m);
+        done(c);
+      }
+      break;
+    }
+  }
+
+  steer(w, c, goal, pace, dt);
+}
+
+/** The current action is finished or impossible — drop it and deliberate next step. */
+function done(c: Creature): void {
+  c.action = 'wander';
+  c.target = -1;
+  c.decideIn = 0;
+}
+
+function bite(w: World, a: Creature, b: Creature, dt: number): void {
+  const ga = growthOf(a);
+  const dmg = a.traits.attack * ga * ga * (1 - b.traits.defense) * dt;
+  b.health -= dmg;
+  b.attacker = a.id;
+  b.attackedAt = w.time;
+  if (b.action === 'sleep') b.decideIn = 0; // woken
+  // armed prey bite back
+  const gb = growthOf(b);
+  if (b.traits.attack * gb * gb > a.traits.attack * 0.35) {
+    a.health -= b.traits.attack * gb * gb * 0.45 * (1 - a.traits.defense) * dt;
+    if (a.health <= 0) {
+      a.kills += 0;
+      return;
+    }
+  }
+  if (b.health <= 0) {
+    const spA = speciesById(w, a.species), spB = speciesById(w, b.species);
+    log(w, 'kill', `a ${spA?.name ?? '?'} killed a ${spB?.name ?? '?'}`, a.species, b.id);
+    a.kills++;
+    die(w, b, 'predation');
+    const corpse = w.corpses[w.corpses.length - 1];
+    a.action = 'eat';
+    a.target = corpse.id;
+  }
+}
+
+/** Mate (or bud, when `m` is null): pay the cost and drop a litter — possibly mutated. */
+function breed(w: World, a: Creature, m: Creature | null): void {
+  const t = a.traits;
+  const cost = t.maxEnergy * 0.28;
+  if (a.energy < cost * 1.4) return;
+  a.energy -= cost;
+  a.breedCooldown = t.lifespan * 0.07;
+  if (m) {
+    m.energy -= m.traits.maxEnergy * 0.2;
+    m.breedCooldown = m.traits.lifespan * 0.07;
+  }
+  const sp = speciesById(w, a.species);
+  if (!sp) return;
+  const n = t.litter;
+  for (let i = 0; i < n && liveCount(w) < MAX_POP; i++) {
+    let genome = a.genome;
+    let species = sp;
+    // either parent's line can carry on; a mutation sometimes rides along
+    if (m && w.rng() < 0.5) genome = m.genome;
+    if (w.rng() < MUTATION_CHANCE) {
+      genome = mutate(genome, mix32(w.seed, w.stepCount, a.id, i), i, WORLD_MUTATION);
+      w.tally.mutations++;
+      const d = morphDistance(describeMorph(bodyOf(genome).phenotype), sp.descriptor);
+      if (d > SPECIATION_DIST) {
+        species = speciesFor(w, genome, sp.id);
+        w.tally.speciations++;
+        log(w, 'speciation', `${species.name} branched off ${sp.name}`, species.id);
+      }
+    }
+    const ct = bodyOf(genome).traits;
+    let x = a.x + (w.rng() - 0.5) * 3, z = a.z + (w.rng() - 0.5) * 3;
+    if (!canStand(w, ct, x, z)) {
+      x = a.x;
+      z = a.z;
+    }
+    const child = spawn(w, genome, species, x, z, false, a);
+    w.tally.births++;
+    child.heading = a.heading + (w.rng() - 0.5);
+    a.children++;
+    if (m) m.children++;
+    if (i === 0) log(w, 'birth', `a ${species.name} was born${m ? '' : ' (budded)'}`, species.id, child.id);
+  }
+}
+
+/** Turn toward the goal within the turn rate, then move — respecting habitat, terrain and bounds. */
+function steer(w: World, c: Creature, goal: { x: number; z: number } | null, pace: number, dt: number): void {
+  const t = c.traits;
+  const g = growthOf(c);
+  const ground = heightAt(w.terrain, c.x, c.z);
+  // land animals wade slowly; swimmers crawl when stranded
+  let terrainMul = 1;
+  if (t.habitat === 'land' && ground < WATER_LEVEL) terrainMul = 0.45;
+  if (t.habitat === 'amphibious' && ground < WATER_LEVEL) terrainMul = t.locomotion === 'walk' ? 0.7 : 1.1;
+  const targetSpeed = goal ? t.speed * pace * terrainMul * (0.75 + 0.25 * g) : 0;
+  c.speed += (targetSpeed - c.speed) * Math.min(1, dt * 3);
+  if (!goal || c.speed < 0.01) {
+    if (!goal) c.speed *= Math.max(0, 1 - dt * 4);
+    return;
+  }
+  const want = Math.atan2(goal.x - c.x, goal.z - c.z);
+  let dh = want - c.heading;
+  dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+  const maxTurn = t.turnRate * dt * (pace > 1 ? 1.3 : 1);
+  c.heading += Math.max(-maxTurn, Math.min(maxTurn, dh));
+
+  const step = c.speed * dt;
+  let nx = c.x + Math.sin(c.heading) * step;
+  let nz = c.z + Math.cos(c.heading) * step;
+  const ok = inBounds(w.terrain, nx, nz) && canStand(w, t, nx, nz);
+  if (!ok) {
+    // blocked (shore / world edge): slide along by trying a turn either way
+    for (const turn of [0.9, -0.9, 1.8, -1.8, Math.PI]) {
+      const h = c.heading + turn;
+      const tx = c.x + Math.sin(h) * step, tz = c.z + Math.cos(h) * step;
+      if (inBounds(w.terrain, tx, tz) && canStand(w, t, tx, tz)) {
+        c.heading = h;
+        nx = tx;
+        nz = tz;
+        break;
+      }
+      if (turn === Math.PI) {
+        nx = c.x;
+        nz = c.z;
+        c.decideIn = 0;
+      }
+    }
+  }
+  c.x = nx;
+  c.z = nz;
+  c.heading = Math.atan2(Math.sin(c.heading), Math.cos(c.heading));
+}
+
+/** A cheap deterministic fingerprint of the world state (for replay tests). */
+export function worldHash(w: World): number {
+  let h = mix32(w.stepCount, w.creatures.length, w.corpses.length, w.species.length);
+  for (const c of w.creatures) h = mix32(h, c.id, Math.round(c.x * 1000), Math.round(c.z * 1000), Math.round(c.energy * 10));
+  return h >>> 0;
+}

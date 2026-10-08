@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
  */
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ENGINE_DIR = join(HERE, '..', '..', 'src', 'engine');
+const SIM_DIR = join(HERE, '..', '..', 'src', 'sim'); // the ecosystem is held to the same discipline
 const BANNED = ['Math.random', 'Date.now', 'performance.now'];
 
 function engineFiles(dir: string): string[] {
@@ -19,9 +20,9 @@ function engineFiles(dir: string): string[] {
 }
 
 describe('engine determinism guard', () => {
-  it('contains no non-deterministic globals under src/engine/', () => {
+  it('contains no non-deterministic globals under src/engine/ or src/sim/', () => {
     const offenders: string[] = [];
-    for (const file of engineFiles(ENGINE_DIR)) {
+    for (const file of [...engineFiles(ENGINE_DIR), ...engineFiles(SIM_DIR)]) {
       // Strip comments first — documentation *mentioning* the ban is legitimate;
       // we only forbid the tokens appearing in actual code.
       const code = readFileSync(file, 'utf8')
