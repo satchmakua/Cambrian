@@ -735,6 +735,19 @@ function mouth(rng: Rng, refGirth: number, style?: Rg): AppendageGene {
 
 // A radial arm; grow arrays it `radialCount` times around the body axis.
 function arm(rng: Rng, girth: number, attachT: number, m: Morpho, spiky = false): AppendageGene {
+  if (m.id === 'starfish' && !spiky) {
+    // a sea star's arms: thick at the disc, tapering, laid flat on the ground
+    return part('spine', 'none', false, range(rng, 0, 1), {
+      attachT: clamp(attachT, A.attachT),
+      attachAzimuth: range(rng, 0, 0.4),
+      attachElevation: range(rng, -0.14, 0.02),
+      segments: randint(rng, 3, 4),
+      length: clamp(girth * range(rng, 0.62, 0.95), A.length),
+      thickness: clamp(girth * range(rng, 0.34, 0.46), A.thickness),
+      taper: range(rng, 0.68, 0.8),
+      curl: [range(rng, -0.04, 0.06), range(rng, -0.05, 0.05)],
+    });
+  }
   const term: Terminal =
     m.id === 'urchin' ? 'claw' : m.id === 'cephalopod' ? pick(rng, ['none', 'fin'] as const) : spiky ? pick(rng, ['claw', 'fin'] as const) : pick(rng, ['claw', 'fin', 'none'] as const);
   const long = m.id === 'cephalopod' || m.id === 'horror';

@@ -192,7 +192,12 @@ export function grow(genome: Genome): Phenotype {
     const aim = (a: number): Vec3 => norm([ce * Math.cos(a), ce * Math.sin(a), se]);
 
     if (dev.symmetry === 'radial') {
-      for (let k = 0; k < dev.radialCount; k++) growLimb(app, base, aim(az + (k * Math.PI * 2) / dev.radialCount), attachIdx);
+      // a radial body is arrayed about the VERTICAL: arms fan out over the ground and elevation tilts
+      // them up toward the crown (+) or down onto the ground (−) — a starfish lies flat, an octopus
+      // sits on its arms, the crown of eyes and the maw look up. (Arrayed about the forward axis, every
+      // radial creature stood on its rim like a wheel.)
+      const up = (a: number): Vec3 => norm([ce * Math.cos(a), se, ce * Math.sin(a)]);
+      for (let k = 0; k < dev.radialCount; k++) growLimb(app, base, up(az + (k * Math.PI * 2) / dev.radialCount), attachIdx);
       return;
     }
     // bilateral / none: grow one limb…
