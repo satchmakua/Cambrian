@@ -33,6 +33,7 @@ import type { SkinQuality } from './smoothSkin';
 import { createRig, poseRig, type RigInstance } from './rig';
 import { JawContext, type JawControl } from './mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from './flight';
+import { LidContext, type LidControl } from './eyelids';
 import { traitsOf } from '../sim/traits';
 
 /** The Studio's motion preview: the World's gait, run in place so a body's movement can be judged. */
@@ -142,6 +143,8 @@ export function SpecimenContent({
   const { center, size, groundY } = framing;
   const jaw = useMemo<JawControl>(() => ({ open: 1 }), []);
   const flight = useMemo<FlightControl>(() => ({ spread: 0, flap: 0 }), []);
+  const lids = useMemo<LidControl>(() => ({ shut: 0 }), []);
+  lids.shut = motion === 'sleep' ? 1 : 0;
   const rig = useMotion(phenotype, skinMode === 'capsules' ? 'still' : motion, jaw, flight);
   return (
     <>
@@ -155,7 +158,9 @@ export function SpecimenContent({
         {/* the jaw is articulated only while previewing motion; still keeps the built rest gape */}
         <JawContext.Provider value={rig ? jaw : null}>
           <FlightContext.Provider value={rig ? flight : null}>
-            <CreatureMesh phenotype={phenotype} skinMode={skinMode} quality={quality} rig={rig} carved={!rig} />
+            <LidContext.Provider value={lids}>
+              <CreatureMesh phenotype={phenotype} skinMode={skinMode} quality={quality} rig={rig} carved={!rig} />
+            </LidContext.Provider>
           </FlightContext.Provider>
         </JawContext.Provider>
         {overlays.skeleton && <SkeletonOverlay phenotype={phenotype} rig={rig} />}

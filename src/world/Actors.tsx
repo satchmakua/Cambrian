@@ -19,6 +19,7 @@ import { CreatureMesh, prebuildSkin, type Detail } from '../viewer/CreatureMesh'
 import { createRig, poseRig } from '../viewer/rig';
 import { JawContext, type JawControl } from '../viewer/mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from '../viewer/flight';
+import { LidContext, type LidControl } from '../viewer/eyelids';
 import { AIRBORNE, bodyOf, growthOf, type Corpse, type Creature, type World } from '../sim/world';
 import { heightAt, WATER_LEVEL } from '../sim/terrain';
 import { emoteFor, emoteMaterial, type Emote } from './emotes';
@@ -156,6 +157,7 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
   const rig = useMemo(() => createRig(phenotype), [phenotype]);
   const jaw = useMemo<JawControl>(() => ({ open: 0 }), []);
   const flight = useMemo<FlightControl | null>(() => (traits.winged ? { spread: 0, flap: 0 } : null), [traits.winged]);
+  const lids = useMemo<LidControl>(() => ({ shut: 0 }), []);
   const detail = useDetail(() => ref.current?.position ?? null, selected);
   useEffect(() => applyShadows(ref.current, detail), [detail, mode]);
 
@@ -169,6 +171,7 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
     P.z += (c.z - P.z) * k;
     P.h = angleLerp(P.h, c.heading, Math.min(1, dt * 6));
     P.sleep += ((c.action === 'sleep' ? 1 : 0) - P.sleep) * Math.min(1, dt * 2);
+    lids.shut = Math.min(1, P.sleep * 1.4); // eyes close as it settles to sleep
     const feeding = c.action === 'graze' || c.action === 'eat' || c.action === 'forage' || c.action === 'filter';
     P.eat += ((feeding && c.speed < 0.6 ? 1 : 0) - P.eat) * Math.min(1, dt * 3);
     const s = growthOf(c);
@@ -267,7 +270,9 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
         <group position={[-place.center[0], 0, -place.center[2]]}>
           <JawContext.Provider value={jaw}>
             <FlightContext.Provider value={flight}>
-              <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" rig={rig} detail={detail} carved={false} />
+              <LidContext.Provider value={lids}>
+                <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" rig={rig} detail={detail} carved={false} />
+              </LidContext.Provider>
             </FlightContext.Provider>
           </JawContext.Provider>
         </group>

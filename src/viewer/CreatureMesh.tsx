@@ -14,6 +14,7 @@ import { useFrame, createPortal } from '@react-three/fiber';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { FlightContext } from './flight';
+import { blinkAt, LidContext } from './eyelids';
 import type { Phenotype } from '../engine/grow';
 import { mix32 } from '../engine/rng';
 import { buildMeshData, type MeshFeature } from './meshData';
@@ -527,7 +528,7 @@ function Feature({
 }) {
   switch (f.type) {
     case 'eye':
-      return <Eye f={f} socket={footColor} iris={irisColor} lid={finColor} />;
+      return <Eye f={f} socket={footColor} iris={irisColor} lid={finColor} seed={phenotype.genomeRef.seed} />;
     case 'mouth':
       return (
         <Mouth f={f} dark={footColor} skin={skin} phenotype={phenotype} carves={carves} recessed={recessed} surface={surface} />
@@ -573,14 +574,44 @@ function Feature({
 
 // --- eyes (5 styles by `style`) — the emotional anchor -----------------------
 
-function Eye({ f, socket, iris, lid }: { f: MeshFeature; socket: number; iris: number; lid: number }) {
+// A lid: a hemisphere just outside the eyeball, rotated about the eye's X axis to open or close (its
+// front rim is the lid margin; the back rim hides in the head). Shared unit geometries.
+const UPPER_LID = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+const LOWER_LID = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+
+function Eye({ f, socket, iris, lid, seed }: { f: MeshFeature; socket: number; iris: number; lid: number; seed: number }) {
   const r = Math.max(f.radius, 0.06);
   const v = eyeVariant(f.style);
   // a dark bony orbit tone
   const socketDark = useMemo(() => new THREE.Color(socket).multiplyScalar(0.5).getHex(), [socket]);
-  void lid;
+  // vertebrate eyes have lids that blink — and shut in sleep; an insect's facets and a glowing alien
+  // eye stare
+  const lidded = v === 'round' || v === 'beady' || v === 'slit';
+  const lidColor = useMemo(() => new THREE.Color(lid).multiplyScalar(0.82).getHex(), [lid]);
+  const lids = useContext(LidContext);
+  const upper = useRef<THREE.Mesh>(null);
+  const lower = useRef<THREE.Mesh>(null);
+  const phase = useMemo(() => ((seed >>> 0) % 997) / 997, [seed]);
+  useFrame((st) => {
+    if (!lidded || !upper.current || !lower.current) return;
+    const close = Math.max(lids ? lids.shut : 0, blinkAt(st.clock.elapsedTime, phase));
+    // open: the upper margin rides ~35° above the eye's equator, the lower ~42° below; shut: they meet
+    // a little below centre
+    upper.current.rotation.x = -0.62 + close * 0.78;
+    lower.current.rotation.x = 0.72 - close * 0.62;
+  });
   return (
     <group quaternion={f.quat}>
+      {lidded && (
+        <>
+          <mesh ref={upper} geometry={UPPER_LID} scale={r * 0.97} rotation-x={-0.62}>
+            <meshStandardMaterial color={lidColor} roughness={0.72} side={THREE.DoubleSide} />
+          </mesh>
+          <mesh ref={lower} geometry={LOWER_LID} scale={r * 0.96} rotation-x={0.72}>
+            <meshStandardMaterial color={lidColor} roughness={0.72} side={THREE.DoubleSide} />
+          </mesh>
+        </>
+      )}
       {/* The brow ridge and lower lid used to live here as open hemispherical shells. Whatever
           their orientation, the shell's RIM cut a hard crescent across the sclera — an eyelid has
           to lie flat on a curved eye and a capped sphere never does. Removed; the orbit ring below
