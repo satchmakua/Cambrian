@@ -395,8 +395,9 @@ float patternField(vec3 p0, int type, float scale) {
 // bump is a crisp scale/plate/feather read up close and a clean surface at a distance.
 float surfaceHeight(vec3 p, int cover) {
   if (cover == 1) {                                             // scales — row-offset lenses
+    // (no row bricking: a floor(z) shift is a hard seam under the derivative bump — a 1-px streak
+    // at every row — and the 3-D cells are irregular enough on their own)
     vec3 q = p * 8.0;
-    q.x += floor(q.z) * 0.5;                                    // brick the rows
     vec2 F = voronoi(q);
     float lens = 1.0 - smoothstep(0.0, 0.9, F.x);               // each scale domes from its centre
     float seam = smoothstep(0.0, 0.08 + gFw * 8.0, F.y - F.x);  // and dips at the seams
@@ -410,13 +411,17 @@ float surfaceHeight(vec3 p, int cover) {
     gHb = clumps * 0.02 + streak * 0.005;
     return clumps * 0.55 + streak * 0.45;
   }
-  if (cover == 3) {                                             // feathers — overlapping rows
-    float row = p.z * 6.0;
-    float band = fract(row);
-    float across = voronoi(vec3(p.x * 6.0, floor(row), p.y * 6.0)).x;
-    float shingle = smoothstep(0.0, 0.85, band) * (1.0 - across);
-    float h = mix(0.35, shingle * 0.8, aaW(6.0));
-    gHb = h * 0.018;
+  if (cover == 3) {                                             // feathers — overlapping vanes
+    // elongated cells (stretched head-to-tail) each domed like a laid feather, seams between them,
+    // plus a fine barb grain along the body. (Straight constant-z rows read as planks, and their
+    // sawtooth step sat under the derivative bump as a 1-px streak at every row.)
+    vec3 q = vec3(p.x * 7.0, p.y * 7.0, p.z * 4.2);
+    vec2 F = voronoi(q);
+    float vane = 1.0 - smoothstep(0.0, 1.05, F.x);
+    float seam = smoothstep(0.0, 0.12 + gFw * 7.0, F.y - F.x);
+    float barbs = fbmA(vec3(p.x * 34.0, p.y * 34.0, p.z * 8.0), 34.0);
+    float h = mix(0.4, vane * 0.62 * mix(0.6, 1.0, seam) + 0.18, aaW(7.0)) + (barbs - 0.5) * 0.08;
+    gHb = h * 0.014;
     return h;
   }
   if (cover == 4) {                                             // chitin — large smooth plates
