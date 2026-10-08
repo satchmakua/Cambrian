@@ -14,7 +14,7 @@ import type { Genome } from '../engine/genome';
 import { WorldScene } from './WorldScene';
 import { TreeOfLife } from './TreeOfLife';
 import { useWorldUi, getWorld, populate, strangerGenome, bumpVersion, autosave, downloadWorld, type Snapshot } from './worldStore';
-import { stepWorld, type HistorySample } from '../sim/world';
+import { DAY_LENGTH, YEAR_DAYS, stepWorld, type HistorySample } from '../sim/world';
 import { spell, weatherAt } from '../sim/weather';
 
 const SPEEDS = [1, 4, 16, 48];
@@ -131,7 +131,9 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
   const sound = useWorldUi((s) => s.sound);
   // (dev: ?tree=1 opens it, for inspection screenshots)
   const [showTree, setShowTree] = useState(() => import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('tree') === '1');
-  const { setRunning, setSpeed, setFollow, setEmotes, setDocumentary, setSound, select, reset, open, releaseGenome, refresh } = useWorldUi.getState();
+  const { setRunning, setSpeed, setFollow, setEmotes, setDocumentary, setSound, select, reset, open, releaseGenome, refresh, fastForward, stopFastForward, dismissChronicle } = useWorldUi.getState();
+  const ff = useWorldUi((s) => s.ff);
+  const chron = useWorldUi((s) => s.chronicle);
   const fileRef = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
@@ -236,6 +238,11 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
             </button>
           ))}
         </div>
+        <div className="skip" title="fast-forward: the world runs on at full speed, then you see what happened">
+          <button disabled={!!ff} onClick={() => fastForward(DAY_LENGTH, 'a day')}>⏩ day</button>
+          <button disabled={!!ff} onClick={() => fastForward(DAY_LENGTH * 3, 'a season')}>season</button>
+          <button disabled={!!ff} onClick={() => fastForward(DAY_LENGTH * YEAR_DAYS, 'a year')}>year</button>
+        </div>
         <div className="releases">
           <button className={sound ? 'active' : ''} onClick={() => setSound(!sound)} title="synthesized wind, birdsong and crickets, and the creatures' own calls">{sound ? '♪ sound' : '♪ sound off'}</button>
           <button className={documentary ? 'active' : ''} onClick={() => setDocumentary(!documentary)} title="documentary mode: the camera finds the most interesting things happening and follows them">▶ documentary</button>
@@ -249,6 +256,35 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
         </div>
         {notice && <div className="world-notice">{notice}</div>}
       </header>
+
+
+      {ff && (
+        <div className="ff-overlay">
+          <div className="ff-panel">
+            <b>Time passes…</b>
+            <div className="ff-bar">
+              <i style={{ width: `${Math.round(ff.f * 100)}%` }} />
+            </div>
+            <span>{ff.label || 'starting'}</span>
+            <button onClick={stopFastForward}>stop here</button>
+          </div>
+        </div>
+      )}
+      {chron && !ff && (
+        <div className="chronicle">
+          <button className="close" onClick={dismissChronicle} title="dismiss">✕</button>
+          <h3>{spanWords(chron.seconds)} went by</h3>
+          <p>
+            <b>{chron.born}</b> born · <b>{chron.died}</b> died ({chron.killed} to hunters, {chron.starved} starved, {chron.aged} of old age)
+          </p>
+          <p>
+            population {chron.population[0]} → <b>{chron.population[1]}</b>
+          </p>
+          {chron.arose.length > 0 && <p className="arose">New species: {chron.arose.join(', ')}</p>}
+          {chron.lost.length > 0 && <p className="lost">Died out: {chron.lost.join(', ')}</p>}
+          {chron.arose.length === 0 && chron.lost.length === 0 && <p className="quiet">No species arose or died out.</p>}
+        </div>
+      )}
 
       {snap && (
         <aside className="census">
@@ -341,3 +377,14 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
     </div>
   );
 }
+
+/** "a day", "3 days", "a season and a day"… for the chronicle's heading */
+function spanWords(seconds: number): string {
+  const days = Math.round(seconds / DAY_LENGTH);
+  if (days <= 0) return 'A few hours';
+  if (days === 1) return 'A day';
+  if (days === YEAR_DAYS) return 'A year';
+  if (days === 3) return 'A season';
+  return `${days} days`;
+}
+

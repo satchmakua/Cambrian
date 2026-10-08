@@ -11,6 +11,7 @@ import { create } from 'zustand';
 import { SOUND } from './audio';
 import { loadWorld, saveWorld } from '../sim/persist';
 import { weatherAt, weatherWord } from '../sim/weather';
+import { adoptWorld, chronicle, snapshotForChronicle, type Chronicle } from '../sim/fastForward';
 import type { Genome } from '../engine/genome';
 import { genomeOfMorphotype, randomGenome } from '../engine/random';
 import {
@@ -20,6 +21,7 @@ import {
 import type { Traits } from '../sim/traits';
 
 let WORLD: World | null = null;
+let FF_WORKER: Worker | null = null;
 let VERSION = 0; // bumps whenever the set of live creatures/corpses changes shape (re-render actors)
 
 export function getWorld(): World {
@@ -155,6 +157,14 @@ interface WorldUi {
   reset: (seed: number, founder?: Genome | null) => void;
   /** Swap in a loaded world (from a saved file). Throws, leaving the current world, if it won't load. */
   open: (json: string) => void;
+  /** a fast-forward in progress (run in a worker): how far through, and a line of news */
+  ff: { f: number; label: string } | null;
+  /** what happened over the last fast-forward (shown until dismissed) */
+  chronicle: (Chronicle & { span: string }) | null;
+  /** run the world on `seconds` of sim time in a worker, then show what happened */
+  fastForward: (seconds: number, span: string) => void;
+  stopFastForward: () => void;
+  dismissChronicle: () => void;
   releaseGenome: (g: Genome, count: number) => void;
 }
 
@@ -279,6 +289,48 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
     bumpVersion();
     set({ selected: null, follow: false, snapshot: snapshotOf(WORLD, null) });
   },
+  ff: null,
+  chronicle: null,
+  fastForward: (seconds, span) => {
+    if (get().ff) return;
+    const w = getWorld();
+    const before = snapshotForChronicle(w);
+    const wasRunning = get().running;
+    set({ ff: { f: 0, label: '' }, running: false, chronicle: null });
+    const worker = new Worker(new URL('./ffWorker.ts', import.meta.url), { type: 'module' });
+    FF_WORKER = worker;
+    const finish = () => {
+      worker.terminate();
+      FF_WORKER = null;
+    };
+    worker.onmessage = (e: MessageEvent) => {
+      const m = e.data as { type: string; f?: number; time?: number; pop?: number; species?: number; json?: string; message?: string };
+      if (m.type === 'progress') {
+        set({ ff: { f: m.f ?? 0, label: `Day ${dayNumber(m.time ?? 0)} · ${m.pop} alive · ${m.species} species` } });
+      } else if (m.type === 'done' && m.json) {
+        finish();
+        const live = getWorld();
+        adoptWorld(live, loadWorld(m.json));
+        bumpVersion();
+        const sel = get().selected;
+        const keep = sel !== null && live.creatures.some((c) => c.id === sel) ? sel : null;
+        set({
+          ff: null,
+          running: wasRunning,
+          selected: keep,
+          follow: keep !== null && get().follow,
+          chronicle: { ...chronicle(before, live), span },
+          snapshot: snapshotOf(live, keep),
+        });
+      } else if (m.type === 'error') {
+        finish();
+        set({ ff: null, running: wasRunning });
+      }
+    };
+    worker.postMessage({ type: 'run', json: saveWorld(w), seconds });
+  },
+  stopFastForward: () => FF_WORKER?.postMessage({ type: 'stop' }),
+  dismissChronicle: () => set({ chronicle: null }),
   releaseGenome: (g, count) => {
     release(getWorld(), g, count);
     bumpVersion();
