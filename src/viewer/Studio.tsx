@@ -568,7 +568,7 @@ export function Studio({
     skeleton: typeof location !== 'undefined' && new URLSearchParams(location.search).get('bones') === '1',
     grid: true,
   }));
-  const [bestiarySeed, setBestiarySeed] = useState(1);
+  const [bestiarySeed, setBestiarySeed] = useState(() => (import.meta.env.DEV && typeof location !== 'undefined' ? Number(new URLSearchParams(location.search).get('bseed') ?? 1) : 1));
   const [motion, setMotion] = useState<Motion>(() => {
     const m = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('motion') : null;
     return m === 'walk' || m === 'run' || m === 'eat' || m === 'sleep' || m === 'fly' ? m : 'still';

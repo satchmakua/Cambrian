@@ -321,7 +321,9 @@ export function grow(genome: Genome): Phenotype {
       // peaks above the body, the shin drops to a foot planted far out to the side. Each pair also
       // fans fore-aft by its slot (front legs reach forward, hind legs back), so 8 legs radiate like a
       // spider's instead of hanging in a row of identical columns.
-      if (legPairsHere >= 3 || splay > 0.72) {
+      // (an extreme splay alone only arches a CHITINOUS body's legs: a frog or a lizard that drew a wide
+      // stance is still a vertebrate sprawler, not a spider standing on its knuckles)
+      if (legPairsHere >= 3 || (splay > 0.72 && dev.covering.type === 'chitin')) {
         const zf = (app.attachT - 0.5) * 1.4;
         const n = app.segments - 1; // segment advances (n nodes span n-1 lengths)
         arch = [];

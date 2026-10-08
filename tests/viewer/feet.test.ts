@@ -23,13 +23,14 @@ describe('feet', () => {
     expect(bareLegsOf(grow(genomeOfMorphotype(3, 'felid')))).toBeNull();
     expect(bareLegsOf(grow(genomeOfMorphotype(3, 'lizard')))).toBeNull();
     expect(footPlanOf(grow(genomeOfMorphotype(3, 'insectoid')))).toBeNull();
+    expect(footPlanOf(grow(genomeOfMorphotype(3, 'anuran')))).toBe('frog');
   });
 
   it('toes are finite, lie on the ground plane and reach forward of the ankle', () => {
-    for (const plan of ['bird', 'reptile'] as const) {
+    for (const plan of ['bird', 'reptile', 'frog'] as const) {
       const r = 0.07;
       const { toes, claws } = toedFootGeometry(plan, r, 0.6);
-      for (const g of [toes, claws]) {
+      for (const g of plan === 'frog' ? [toes] : [toes, claws]) {
         const pos = g.getAttribute('position');
         let minY = Infinity, maxZ = -Infinity;
         for (let i = 0; i < pos.count; i++) {

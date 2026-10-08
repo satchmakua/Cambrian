@@ -14,13 +14,15 @@ import type { Phenotype } from '../engine/grow';
 import { shankColor } from './keratin';
 import type { BareLegs } from './creatureMaterial';
 
-export type FootPlan = 'bird' | 'reptile';
+export type FootPlan = 'bird' | 'reptile' | 'frog';
 
-/** Which toed foot a clawed leg ends in, by covering (arthropods keep their single tarsal claw). */
+/** Which toed foot a clawed leg ends in, by covering (arthropods keep their single tarsal claw):
+ *  feathers → a bird's, scales/plates → a lizard's clawed fan, bare skin → a frog's pad-tipped toes. */
 export function footPlanOf(p: Phenotype): FootPlan | null {
   const t = p.genomeRef.covering.type;
   if (t === 'feathers') return 'bird';
-  if (t === 'scales' || t === 'skin' || t === 'plates') return 'reptile';
+  if (t === 'scales' || t === 'plates') return 'reptile';
+  if (t === 'skin') return 'frog';
   return null;
 }
 
@@ -88,6 +90,12 @@ function toesOf(plan: FootPlan, r: number, link: number): ToeSpec[] {
       { az: Math.PI, len: L * 0.5, r0: t * 0.9 }, // the hallux
     ];
   }
+  if (plan === 'frog') {
+    // long, thin, widely splayed toes
+    const L = Math.max(r * 2.8, link * 0.42);
+    const t = Math.max(r * 0.26, L * 0.075);
+    return [-1.15, -0.55, 0, 0.55, 1.15].map((az, i) => ({ az, len: L * (i === 0 || i === 4 ? 0.7 : i === 2 ? 1 : 0.88), r0: t }));
+  }
   const L = Math.max(r * 2.2, link * 0.32);
   const t = Math.max(r * 0.36, L * 0.13);
   return [-0.95, -0.48, 0, 0.48, 0.95].map((az, i) => ({ az, len: L * (i === 0 || i === 4 ? 0.62 : i === 2 ? 1 : 0.86), r0: t }));
@@ -101,7 +109,8 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number): { toe
   const up = new THREE.Vector3(0, 1, 0);
   // a pad under the ankle joining the toes
   const pad = new THREE.SphereGeometry(1, 12, 8);
-  pad.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(0, floor + r * 0.42, 0), new THREE.Quaternion(), new THREE.Vector3(r * 0.95, r * 0.5, r * 0.95)));
+  // (tall enough to swallow the end of the leg tube above it)
+  pad.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(0, floor + r * 0.62, 0), new THREE.Quaternion(), new THREE.Vector3(r * 1.08, r * 0.72, r * 1.08)));
   toes.push(pad);
   for (const t of toesOf(plan, r, link)) {
     const dir = new THREE.Vector3(Math.sin(t.az), 0, Math.cos(t.az));
@@ -122,6 +131,13 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number): { toe
       joint.translate(b.x, b.y, b.z);
       toes.push(joint);
     }
+    if (plan === 'frog') {
+      // no claw: a round adhesive pad on the toe tip
+      const pad = new THREE.SphereGeometry(t.r0 * 1.45, 10, 8);
+      pad.applyMatrix4(new THREE.Matrix4().compose(tip.clone().setY(floor + t.r0 * 0.9), new THREE.Quaternion(), new THREE.Vector3(1, 0.6, 1)));
+      toes.push(pad);
+      continue;
+    }
     // the claw: a curved-down cone off the tip
     const cdir = dir.clone().setY(-0.55).normalize();
     const cl = t.r0 * (plan === 'bird' ? 2.2 : 1.9);
@@ -136,5 +152,6 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number): { toe
     for (const g of gs) if (g !== m) g.dispose();
     return m;
   };
-  return { toes: merge(toes), claws: merge(claws) };
+  // (a frog's foot has no claws: an empty geometry keeps the mesh pair uniform)
+  return { toes: merge(toes), claws: claws.length ? merge(claws) : new THREE.BufferGeometry() };
 }
