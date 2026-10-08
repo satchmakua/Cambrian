@@ -223,3 +223,56 @@ describe('courtship & young', () => {
   });
 });
 
+
+describe('a living balance', () => {
+  it('small prey go to ground in the bushes, and the hunter gives them up', () => {
+    const w = createWorld(3);
+    const bush = w.plants[0];
+    const [mouse] = release(w, g('rodent'), 1, { x: bush.x, z: bush.z });
+    mouse.x = bush.x;
+    mouse.z = bush.z;
+    const [cat] = release(w, g('felid'), 1, { x: bush.x, z: bush.z });
+    cat.x = bush.x + 5;
+    cat.z = bush.z;
+    cat.energy = cat.traits.maxEnergy * 0.2;
+    cat.fatigue = 0;
+    mouse.fatigue = 0;
+    mouse.action = 'flee';
+    mouse.target = cat.id;
+    mouse.decideIn = 5;
+    cat.action = 'hunt';
+    cat.target = mouse.id;
+    cat.decideIn = 5;
+    stepWorld(w);
+    expect(cat.action).not.toBe('hunt');
+    expect(mouse.alive).toBe(true);
+  });
+
+  it('a founding stock that dies out wanders back in from the edge a day or two later', () => {
+    const w = createWorld(3);
+    const herd = release(w, g('ungulate'), 4);
+    release(w, g('rodent'), 6);
+    const sp = w.species.find((s) => s.id === herd[0].species)!;
+    for (const c of herd) {
+      c.alive = false;
+      sp.alive--;
+    }
+    w.creatures = w.creatures.filter((c) => c.alive);
+    sp.extinctAt = w.time;
+    run(w, DAY_LENGTH * 6);
+    expect(sp.extinctAt).toBeNull();
+    expect(w.creatures.some((c) => c.species === sp.id)).toBe(true);
+  });
+
+  it('a year on, the valley still holds most of its kinds', () => {
+    const seed = 4;
+    const w = createWorld(seed);
+    const kinds: [string, number][] = [['rodent', 8], ['ungulate', 6], ['insectoid', 6], ['bird', 6], ['fish', 7], ['canid', 3], ['felid', 2]];
+    kinds.forEach(([kind, n], i) => release(w, genomeOfMorphotype((seed * 97 + i * 13) >>> 0, kind), n, undefined, kind));
+    run(w, DAY_LENGTH * YEAR_DAYS);
+    const alive = new Set(w.creatures.map((c) => w.species.find((s) => s.id === c.species)!.name.split(' ')[0]));
+    expect(alive.size).toBeGreaterThanOrEqual(5);
+    // and the hunters are still hunting
+    expect(w.creatures.some((c) => c.traits.diet === 'carnivore')).toBe(true);
+  }, 60000);
+});

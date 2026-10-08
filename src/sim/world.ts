@@ -48,7 +48,15 @@ export const MAX_POP = 165;
 const SOFT_POP = 135;
 const RARE = 10;
 /** No one species may hold more than this share of the soft cap. */
-const SPECIES_SHARE = 0.36;
+const SPECIES_SHARE = 0.3;
+/** each guild's share of the soft cap (they sum past 1: a guild that is absent leaves room to others,
+ *  and MAX_POP is the hard ceiling) */
+const GUILD_SHARE = { water: 0.28, hunter: 0.16, grazer: 0.7 } as const;
+type Guild = keyof typeof GUILD_SHARE;
+function guildOf(c: Creature): Guild {
+  if (c.traits.habitat === 'water') return 'water';
+  return c.traits.diet === 'carnivore' ? 'hunter' : 'grazer';
+}
 const SPECIATION_DIST = 0.32; // morphospace distance from the species founder that founds a new one
 const WORLD_MUTATION: MutationRates = { point: 0.22, pointSigma: 0.05, structural: 0.05, duplication: 0.02, macro: 0.0 };
 const MUTATION_CHANCE = 0.3; // per offspring
@@ -128,6 +136,8 @@ export interface Creature {
   fly: boolean;
   /** seconds of courtship display danced with the current partner (0 when not courting) */
   courtT: number;
+  /** seconds into the current pounce (a hunter's all-out sprint); a hopeless chase is given up */
+  chaseT: number;
 }
 
 export interface Plant {
@@ -391,6 +401,7 @@ function spawn(w: World, genome: Genome, species: Species, x: number, z: number,
     alt: 0,
     fly: false,
     courtT: 0,
+    chaseT: 0,
   };
   w.creatures.push(c);
   species.alive++;
@@ -431,8 +442,10 @@ export function speciesById(w: World, id: number): Species | undefined {
 // --- the step ------------------------------------------------------------------------------------
 
 export function stepWorld(w: World, dt = STEP): void {
+  const day = Math.floor(w.time / DAY_LENGTH);
   w.time += dt;
   w.stepCount++;
+  if (Math.floor(w.time / DAY_LENGTH) !== day) immigrate(w);
   rebuildBuckets(w);
   for (const c of w.creatures) if (c.alive) live(w, c, dt);
   // the dead are kept one step for the viewer's fade, then culled
@@ -633,6 +646,13 @@ function decide(w: World, c: Creature): void {
     if (!bitUs && !preysOn(o, c)) continue;
     if (c.alt > AIRBORNE * 3 && !o.traits.flies) continue; // safe on the wing from anything that walks
     const d = Math.hypot(o.x - c.x, o.z - c.z);
+    // flight distance: a hunter charging is seen at once; one merely about is watched and only fled
+    // when it comes close; a stalker creeping in low goes unnoticed until it is nearly on top of you
+    if (!bitUs) {
+      const charging = o.action === 'hunt' && o.chaseT > 0;
+      const stalking = o.action === 'hunt' && !charging;
+      if (!charging && d > sight * (stalking ? 0.42 : 0.72)) continue;
+    }
     if (d < threatD) {
       threatD = d;
       threat = o;
@@ -811,6 +831,61 @@ function decide(w: World, c: Creature): void {
   c.tz = Math.max(-half, Math.min(half, c.tz));
 }
 
+/**
+ * Recolonisation. The valley is a patch of a wider country: a founding stock that has died out here
+ * may, a day or two later, return as a small band wandering in from the edge (checked each dawn).
+ * Without it a closed world of ~150 animals sheds its specialists one by one — rodents outcompeted
+ * by generalists, a hunter pair that missed each other — until three species are left.
+ */
+function immigrate(w: World): void {
+  if (liveCount(w) > MAX_POP - 8) return;
+  for (const sp of w.species) {
+    if (sp.parent !== null || sp.extinctAt === null) continue;
+    if (w.time - sp.extinctAt < DAY_LENGTH * 1.5) continue;
+    if (w.rng() > 0.5) continue;
+    const t = bodyOf(sp.founder).traits;
+    let at: { x: number; z: number } | undefined;
+    if (t.habitat !== 'water') {
+      for (let i = 0; i < 40 && !at; i++) {
+        const a = w.rng() * Math.PI * 2;
+        const x = Math.sin(a) * w.terrain.size * 0.42, z = Math.cos(a) * w.terrain.size * 0.42;
+        if (canStand(w, t, x, z)) at = { x, z };
+      }
+    }
+    const base = at ?? spawnPoint(w, t);
+    const n = 3 + Math.floor(w.rng() * 3);
+    sp.extinctAt = null;
+    for (let i = 0; i < n && liveCount(w) < MAX_POP; i++) {
+      const q = spawnPoint(w, t, base.x, base.z, 10);
+      spawn(w, sp.founder, sp, q.x, q.z, true, null);
+    }
+    log(w, 'release', `${n} ${sp.name} wandered in`, sp.id);
+  }
+}
+
+/** Below this mass, prey can hide from hunters in the bushes. */
+const COVER_MASS = 1.5;
+
+function nearestBush(w: World, x: number, z: number, within: number): Plant | null {
+  let best: Plant | null = null;
+  let bd = within;
+  for (const p of w.plants) {
+    const d = Math.hypot(p.x - x, p.z - z);
+    if (d < bd) {
+      bd = d;
+      best = p;
+    }
+  }
+  return best;
+}
+
+/** A small animal crouched in a thicket while it flees — out of any hunter's reach. */
+function hidden(w: World, c: Creature): boolean {
+  if (c.action !== 'flee' || c.traits.mass >= COVER_MASS || c.alt > AIRBORNE) return false;
+  const b = nearestBush(w, c.x, c.z, 4);
+  return !!b && Math.hypot(b.x - c.x, b.z - c.z) < b.size * 0.8 + 0.45;
+}
+
 /** Is there room for this creature's kind to grow — under the world cap, under its species' share,
  *  and not packed in with its own kind? */
 function roomToBreed(w: World, c: Creature, near: Creature[]): boolean {
@@ -818,7 +893,15 @@ function roomToBreed(w: World, c: Creature, near: Creature[]): boolean {
   if (live >= MAX_POP) return false;
   const sp = speciesById(w, c.species);
   if (sp && sp.alive >= SOFT_POP * SPECIES_SHARE) return false;
-  if (live >= SOFT_POP && (!sp || sp.alive >= RARE)) return false;
+  // the soft cap is shared out by GUILD: a meadow full of grazers mustn't stop the lake's fish or
+  // the hunters breeding (under one global cap they could only breed while rarer than RARE, and
+  // drifted out one by one even with their food at full stock)
+  if (!sp || sp.alive >= RARE) {
+    const g = guildOf(c);
+    let n = 0;
+    for (const o of w.creatures) if (o.alive && guildOf(o) === g) n++;
+    if (n >= SOFT_POP * GUILD_SHARE[g]) return false;
+  }
   let crowd = 0;
   for (const o of near) if (o !== c && o.species === c.species && Math.hypot(o.x - c.x, o.z - c.z) < 9) crowd++;
   return crowd < 7;
@@ -853,9 +936,11 @@ function findFood(w: World, c: Creature, near: Creature[], sight: number, hunger
     for (const o of near) {
       if (o === c || !preysOn(c, o)) continue;
       if (!t.flies && o.alt > AIRBORNE * 3) continue; // out of reach in the air
+      if (hidden(w, o)) continue; // gone to ground
       const d = Math.hypot(o.x - c.x, o.z - c.z);
-      // the young, the weak, the asleep are easier
-      const ease = (o.action === 'sleep' ? 8 : 0) + (1 - o.health / o.traits.maxHealth) * 10 + (o.age < o.traits.maturity ? 6 : 0);
+      // the young, the weak, the asleep are easier — and anything it can outrun
+      const outrun = (t.sprint - o.traits.sprint * (0.75 + 0.25 * growthOf(o))) / t.sprint;
+      const ease = (o.action === 'sleep' ? 8 : 0) + (1 - o.health / o.traits.maxHealth) * 10 + (o.age < o.traits.maturity ? 6 : 0) + 8 * Math.max(-1, Math.min(1, outrun));
       consider((t.diet === 'carnivore' ? 22 : 8) - d * 0.6 + ease, 'hunt', o.id, o.x, o.z);
     }
   }
@@ -922,6 +1007,7 @@ function findFood(w: World, c: Creature, near: Creature[], sight: number, hunger
   }
   if (!pick) return false;
   const chosen = pick as { action: Action; target: number; x: number; z: number };
+  if (chosen.action !== c.action || chosen.target !== c.target) c.chaseT = 0;
   c.action = chosen.action;
   c.target = chosen.target;
   c.tx = chosen.x;
@@ -958,6 +1044,21 @@ function act(w: World, c: Creature, dt: number): void {
       const d = Math.hypot(dx, dz) || 1;
       goal = { x: c.x + (dx / d) * 10, z: c.z + (dz / d) * 10 };
       pace = t.sprint / t.speed;
+      // small prey dive for cover: the nearest bush that isn't past the hunter — and once in the
+      // thicket it crouches there (no hunter can follow it in; see hidden())
+      if (t.mass < COVER_MASS && t.habitat !== 'water' && c.alt <= AIRBORNE) {
+        const b = nearestBush(w, c.x, c.z, 9);
+        if (b) {
+          const bx = b.x - c.x, bz = b.z - c.z;
+          const bd = Math.hypot(bx, bz) || 1;
+          if ((bx * -dx + bz * -dz) / (bd * d) < 0.5) {
+            if (bd < b.size * 0.8 + 0.3) {
+              goal = null; // crouched in the thicket
+              pace = 0;
+            } else goal = b;
+          }
+        }
+      }
       if (d > t.vision * 1.2) {
         c.action = 'wander'; // escaped
         c.decideIn = 0;
@@ -1041,18 +1142,36 @@ function act(w: World, c: Creature, dt: number): void {
         if (c.action === 'hunt') done(c);
         break;
       }
+      if (hidden(w, prey)) {
+        done(c); // it went to ground in a thicket: give it up
+        c.decideIn = 2;
+        break;
+      }
       const d = Math.hypot(prey.x - c.x, prey.z - c.z);
       const reach = (t.radius * g + prey.traits.radius * growthOf(prey)) * 0.9 + 0.5;
       // lead the target a little
       goal = { x: prey.x + Math.sin(prey.heading) * prey.speed * 0.4, z: prey.z + Math.cos(prey.heading) * prey.speed * 0.4 };
-      pace = t.sprint / t.speed;
+      // STALK, then POUNCE: creep in at a crouching walk until within a short dash (or until the
+      // prey bolts), then sprint all out — and give the dash up if it hasn't connected in a few
+      // seconds, rather than run itself to death behind something faster
+      const dash = reach + 2.5 + t.sprint * 0.9;
+      const bolted = prey.action === 'flee' && prey.target === c.id;
+      if (c.chaseT > 0 || d < dash || bolted || t.flies) {
+        c.chaseT += dt;
+        pace = t.sprint / t.speed;
+      } else pace = 0.5;
       // jaws only meet at the same height: a walker can't bite a bird on the wing
       if (d < reach && Math.abs(prey.alt - c.alt) < reach + 0.6) {
         bite(w, c, prey, dt);
+        c.chaseT = Math.min(c.chaseT, 0.5); // a struggle at the throat is not a lost chase
         pace = 0.3;
       }
       if (d > t.vision * 1.3 && c.action === 'hunt') done(c); // lost it
       else if (!t.flies && prey.alt > AIRBORNE * 3 && c.action === 'hunt') done(c); // it flew off
+      else if (c.chaseT > 4.5 && c.action === 'hunt') {
+        done(c); // spent: let it go and get its breath back
+        c.decideIn = 2.5;
+      }
       break;
     }
     case 'mate': {
@@ -1153,6 +1272,7 @@ function done(c: Creature): void {
   c.target = -1;
   c.decideIn = 0;
   c.courtT = 0;
+  c.chaseT = 0;
 }
 
 function bite(w: World, a: Creature, b: Creature, dt: number): void {

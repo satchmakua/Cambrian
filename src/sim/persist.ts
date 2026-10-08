@@ -116,7 +116,7 @@ export function loadWorld(json: string): World {
   w.creatures = s.creatures.map(({ genome: gi, ...rest }) => {
     const g = genome(gi);
     // (fields added after a save was written take their defaults)
-    return { ...rest, courtT: rest.courtT ?? 0, genome: g, traits: bodyOf(g).traits };
+    return { ...rest, courtT: rest.courtT ?? 0, chaseT: rest.chaseT ?? 0, genome: g, traits: bodyOf(g).traits };
   });
   w.corpses = s.corpses.map(({ genome: gi, ...rest }) => ({ ...rest, genome: genome(gi) }));
   w.events = s.events.map((e) => ({ ...e }));
