@@ -458,11 +458,17 @@ function pullLegAzimuth(az: number, coh: number): number {
   return lerp(a, canon, coh);
 }
 
+/** Trunk pitch per link below which a one-pair body counts as reared upright (birds lean ≥ −0.22). */
+const UPRIGHT_PITCH = -0.26;
+
 function normalizeLegs(g: Genome, coh: number): void {
   const legs = g.body.appendages.filter((p) => p.kind === 'leg');
   const pairs = legs.length;
   if (pairs === 0) return;
-  const slots = legSlots(pairs);
+  // a REARED biped (the trunk pitched up off its hips: an ape, a kangaroo, a humanoid) stands on
+  // its pelvis — the trunk's bottom end — not at a horizontal walker's balance point mid-body (a
+  // bird's or a raptor's), where the legs sprouted from its belly
+  const slots = pairs === 1 && g.body.curve[0] < UPRIGHT_PITCH ? [0.06] : legSlots(pairs);
   legs.sort((x, y) => x.attachT - y.attachT); // front-to-back; assign slots in order
   legs.forEach((leg, i) => {
     leg.pair = true; // legs are always mirrored

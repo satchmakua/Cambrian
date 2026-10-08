@@ -69,6 +69,9 @@ interface Morpho {
   muzzle?: Rg; // a mammal skull: a round cranium + a narrower, dropped muzzle (muzzle girth ×cranium, ≥ 0.6)
   muzzleDrop?: Rg; // how far the muzzle hangs below the brow (pitch, rad) — default [0.3, 0.42]
   earSize?: Rg; // ear size ×the skull's (a bear's small round ears vs a fennec's) — default [1, 1]
+  armLen?: Rg; // grasping-arm segment length ×girth — default [0.5, 0.72] (an ape's arms are long)
+  armThick?: Rg; // grasping-arm root radius ×girth — default [0.18, 0.28]
+  armTaper?: Rg; // default [0.7, 0.85]
   horns?: number;
   spines?: number;
   frill?: number;
@@ -119,11 +122,11 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'arachnid', cluster: 'familiar', weight: 0.9, girth: [0.36, 0.52], repeat: [1, 2], height: [0.8, 1.05], legPairs: [4], posture: 'sprawling', legLen: [0.72, 1.35], legAz: [3.6, 4.0], legTerm: ['claw'], eyeStyle: [0.2, 0.4], eyeCount: [4, 6], mouthStyle: [0.38, 0.49], covering: ['fur', 'chitin'], pattern: ['mottle', 'bands'], hue: [0.02, 0.09], sat: [0.3, 0.6] },
   // upright grasping ape/monkey: long limbs, deep chest, flat forward-eyed face, expressive head
   // upright ape: a biped (long legs) with forward-reaching grasping arms, a tall domed-skulled flat face
-  { id: 'primate', cluster: 'familiar', weight: 1.0, girth: [0.42, 0.56], repeat: [2, 2], height: [1.1, 1.35], elong: [0.95, 1.15], neck: [0.46, 0.56], headSize: [0.72, 0.86], muzzle: [0.62, 0.7], muzzleDrop: [0.38, 0.5], legPairs: [1], posture: 'upright', legLen: [0.8, 1.1], legThick: [0.28, 0.4], legTerm: ['foot'], arms: 1, tail: 0.4, tailSegs: [3, 5], tailLen: [0.5, 0.8], tailThick: [0.14, 0.22], tailCurl: [-0.3, -0.1], ears: 0.7, earStyle: [0.7, 1], head: 1.0, headShape: ['domed'], headDome: [1.1, 1.4], snout: [0, 0.12], eyeStyle: [0, 0.15], mouthStyle: [0.07, 0.12], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.04, 0.1], sat: [0.3, 0.6] },
+  { id: 'primate', cluster: 'familiar', weight: 1.0, girth: [0.3, 0.37], repeat: [3, 3], height: [1.0, 1.12], taper: [1.0, 1.08], elong: [1.25, 1.4], rear: [-0.46, -0.34], neck: [0.46, 0.56], headSize: [0.72, 0.86], muzzle: [0.62, 0.7], muzzleDrop: [0.38, 0.5], legPairs: [1], posture: 'upright', legLen: [1.05, 1.4], legThick: [0.34, 0.44], legTerm: ['foot'], arms: 1, armLen: [0.8, 1.05], armThick: [0.32, 0.42], armTaper: [0.82, 0.92], tail: 0.4, tailSegs: [3, 5], tailLen: [0.5, 0.8], tailThick: [0.14, 0.22], tailCurl: [-0.3, -0.1], ears: 0.7, earStyle: [0.7, 1], head: 1.0, headShape: ['domed'], headDome: [1.1, 1.4], snout: [0, 0.12], eyeStyle: [0, 0.15], mouthStyle: [0.07, 0.12], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.04, 0.1], sat: [0.3, 0.6] },
   // biped: an upright two-legged walker (theropod / kangaroo / humanoid). Long strong striding legs,
   // grasping arms, a heavy balancing tail, a proper head. Wide covering/mouth range so it spans a
   // furred kangaroo, a scaled raptor-thing, a feathered strider — a whole basin of two-legged forms.
-  { id: 'biped', cluster: 'familiar', weight: 1.0, girth: [0.36, 0.48], repeat: [2, 2], height: [1.15, 1.5], elong: [0.8, 1.05], rear: [-0.5, -0.3], neck: [0.46, 0.56], legPairs: [1], posture: 'upright', legLen: [1.0, 1.5], legThick: [0.3, 0.46], legTerm: ['foot', 'claw'], arms: 1, tail: 0.75, tailTerm: ['none', 'fin', 'club'], head: 1.0, headShape: ['domed', 'round', 'wedge'], snout: [0, 0.45], ears: 0.4, earStyle: [0, 1], eyeStyle: [0, 0.4], mouthStyle: [0, 0.24], covering: ['fur', 'skin', 'scales', 'feathers'], pattern: ['plain', 'mottle', 'stripes', 'bands'], hue: [0, 1], sat: [0.35, 0.75] },
+  { id: 'biped', cluster: 'familiar', weight: 1.0, girth: [0.3, 0.4], repeat: [2, 2], height: [1.15, 1.5], elong: [0.8, 1.05], rear: [-0.5, -0.3], neck: [0.46, 0.56], legPairs: [1], posture: 'upright', legLen: [1.25, 1.7], legThick: [0.34, 0.48], legTerm: ['foot', 'claw'], arms: 1, tail: 0.75, tailTerm: ['none', 'none', 'club'], tailThick: [0.26, 0.36], head: 1.0, headShape: ['domed', 'round', 'wedge'], snout: [0, 0.45], ears: 0.4, earStyle: [0, 1], eyeStyle: [0, 0.4], mouthStyle: [0, 0.24], covering: ['fur', 'skin', 'scales', 'feathers'], pattern: ['plain', 'mottle', 'stripes', 'bands'], hue: [0, 1], sat: [0.35, 0.75] },
   // weasel/otter: long tube body on short legs, small head, a long tail
   { id: 'mustelid', cluster: 'familiar', weight: 0.5, girth: [0.3, 0.42], repeat: [6, 9], height: [0.8, 1.0], elong: [1.0, 1.2], headSize: [0.72, 0.85], muzzle: [0.6, 0.68], muzzleDrop: [0.2, 0.3], legPairs: [2], posture: 'plantigrade', legLen: [0.28, 0.52], legThick: [0.3, 0.42], snout: [0.4, 0.6], tail: 0.9, ears: 0.7, earStyle: [0.7, 1], whiskers: 0.7, head: 0.7, eyeStyle: [0, 0.2], mouthStyle: [0.07, 0.12], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.04, 0.1], sat: [0.4, 0.7] },
   // turtle/tortoise: a deep domed body, short stumpy sprawled legs, a small beaked head, plated net skin
@@ -212,7 +215,7 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
   // growth-time normalization agree (legs land where the attractor wants them).
   const lp = pick(rng, m.legPairs ?? ([2] as const));
   const legTerm = pick(rng, m.legTerm ?? (['foot'] as const));
-  const slots = legSlots(lp);
+  const slots = lp === 1 && m.rear && m.rear[1] < -0.26 ? [0.06] : legSlots(lp);
   for (let i = 0; i < lp; i++) {
     // a little slot jitter for individuality; the bauplan pass pulls it back toward the exact slot by
     // `coherence` (familiar ⇒ snapped, uncanny/wild ⇒ a touch looser — "coherent weird", M24)
@@ -220,7 +223,7 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
     apps.push(leg(rng, t, girth, { term: legTerm, lenMul: m.legLen, thickMul: m.legThick, azimuth: m.legAz, posture: m.posture }));
   }
   // a forward-reaching grasping arm pair (primate) near the shoulders
-  if (chance(rng, m.arms ?? 0)) apps.push(graspArm(rng, range(rng, 0.62, 0.78), girth));
+  if (chance(rng, m.arms ?? 0)) apps.push(graspArm(rng, range(rng, 0.62, 0.78), girth, m));
   // wings, fins
   // wings root at the SHOULDERS — the front of the trunk (t → 1 is toward the head)
   if (chance(rng, m.wings ?? 0)) apps.push(wing(rng, range(rng, 0.68, 0.86), girth));
@@ -493,15 +496,15 @@ function leg(rng: Rng, attachT: number, girth: number, o: LegOpts = {}): Appenda
 }
 
 // A forward-reaching grasping arm (primate): a jointed limb angled down-and-forward, clawed/grasping tip.
-function graspArm(rng: Rng, attachT: number, girth: number): AppendageGene {
+function graspArm(rng: Rng, attachT: number, girth: number, m?: Morpho): AppendageGene {
   return part('arm', 'hand', true, range(rng, 0, 0.3), {
     attachT,
     attachAzimuth: range(rng, 3.5, 3.95), // out to the side and down
     attachElevation: range(rng, 0.25, 0.55), // reaching forward
     segments: randint(rng, 3, 4),
-    length: clamp(girth * range(rng, 0.5, 0.72), A.length),
-    thickness: clamp(girth * range(rng, 0.18, 0.28), A.thickness),
-    taper: range(rng, 0.7, 0.85),
+    length: clamp(girth * rg(rng, m?.armLen, [0.5, 0.72]), A.length),
+    thickness: clamp(girth * rg(rng, m?.armThick, [0.18, 0.28]), A.thickness),
+    taper: rg(rng, m?.armTaper, [0.7, 0.85]),
     curl: [range(rng, 0.35, 0.55), 0], // an elbow bend
   });
 }
