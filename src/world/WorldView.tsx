@@ -521,9 +521,11 @@ function CensusIcon({ speciesId, hue }: { speciesId: number; hue: number }) {
 
 /** Speaks the caption when the story changes (the narrator drops repeats and never talks over itself). */
 function Narration({ subject, doing, id }: { subject: string; doing: string; id: number }) {
+  // (re-run when the voice is switched on, so it reads the caption already showing)
+  const narration = useWorldUi((s) => s.narration);
   useEffect(() => {
     NARRATOR.say(sentence(subject, doing, id + doing.length));
-  }, [subject, doing, id]);
+  }, [subject, doing, id, narration]);
   return null;
 }
 

@@ -111,7 +111,9 @@ export function heightAt(t: Terrain, x: number, z: number): number {
     const valley = 1 - smooth(w * 1.5, w * 7, r.d);
     if (h > 0.9) h -= (h - 0.9) * 0.85 * valley;
     const channel = 1 - smooth(w * 0.55, w * 1.35, r.d);
-    h += (-1.05 - h) * channel;
+    // (the channel only ever lowers the ground: where the course starts inside the lake it would
+    // otherwise RAISE the deep bed into a ridge with a cliff at its mouth)
+    if (h > -1.05) h += (-1.05 - h) * channel;
   }
   return h;
 }

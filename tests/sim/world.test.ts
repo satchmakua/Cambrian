@@ -3,6 +3,7 @@ import {
   createWorld, release, stepWorld, worldHash, bodyOf, liveCount, preysOn, STEP, DAY_LENGTH, MAX_POP, AIRBORNE, climate, seasonOf, YEAR_DAYS, COURT_TIME,
 } from '../../src/sim/world';
 import { traitsOf } from '../../src/sim/traits';
+import { saveWorld, loadWorld } from '../../src/sim/persist';
 import { heightAt, makeTerrain, biomeAt, WORLD_SIZE, WATER_LEVEL } from '../../src/sim/terrain';
 import { genomeOfMorphotype } from '../../src/engine/random';
 import { grow } from '../../src/engine/grow';
@@ -339,5 +340,120 @@ describe('nests and eggs', () => {
     run(w, 20);
     expect(w.eggs.length).toBeLessThan(before);
     void a;
+  });
+});
+
+describe('bookkeeping that holds (review fixes)', () => {
+  const starter = (seed: number) => {
+    const w = createWorld(seed);
+    const kinds: [string, number][] = [['rodent', 8], ['ungulate', 6], ['insectoid', 6], ['bird', 6], ['fish', 7], ['canid', 3], ['felid', 2]];
+    kinds.forEach(([kind, n], i) => release(w, genomeOfMorphotype((seed * 97 + i * 13) >>> 0, kind), n, undefined, kind));
+    return w;
+  };
+  const checkBooks = (w: ReturnType<typeof createWorld>) => {
+    for (const sp of w.species) {
+      const n = w.creatures.filter((c) => c.alive && c.species === sp.id).length;
+      expect(sp.alive, `${sp.name} alive count`).toBe(n);
+      // extinct exactly when it has no one left (never "alive" with no members, never dead with some)
+      expect(sp.extinctAt === null, `${sp.name} extinct flag (alive ${n})`).toBe(n > 0);
+    }
+  };
+
+  it('through a year, a species is extinct exactly when it has no living members', () => {
+    const w = starter(5);
+    for (let d = 0; d < YEAR_DAYS; d++) {
+      run(w, DAY_LENGTH);
+      checkBooks(w);
+    }
+  }, 60000);
+
+  it('an egg-laying species keeps to its share of the valley while its clutches wait to hatch', () => {
+    const w = createWorld(3);
+    const flock = release(w, g('bird'), 36);
+    for (const c of flock) {
+      c.age = c.traits.maturity + 10;
+      c.energy = c.traits.maxEnergy;
+      c.fatigue = 0;
+      c.breedCooldown = 0;
+    }
+    const sp = flock[0].species;
+    let peak = 0;
+    for (let i = 0; i < 200 / STEP; i++) {
+      stepWorld(w);
+      peak = Math.max(peak, w.creatures.filter((c) => c.species === sp).length + w.eggs.filter((e) => e.species === sp).length);
+    }
+    expect(peak).toBeLessThanOrEqual(45); // the species' share is 0.3 × 135 = 40.5 (was 129 + 77 eggs)
+  });
+
+  it('immigrants that find no room leave their stock extinct (not in limbo)', () => {
+    const w = createWorld(1);
+    const kinds = ['insectoid', 'fish', 'canid', 'ursid', 'primate', 'mustelid', 'bird', 'lizard'];
+    const founders = kinds.map((k, i) => release(w, genomeOfMorphotype(40 + i, k), 1, undefined, k)[0]);
+    for (const c of founders) {
+      c.alive = false;
+      const sp = w.species.find((s) => s.id === c.species)!;
+      sp.alive--;
+      sp.extinctAt = 0;
+    }
+    w.creatures = w.creatures.filter((c) => c.alive);
+    // fill the valley to 157 (room for only 8 newcomers between them all)
+    const filler = g('rodent');
+    while (liveCount(w) < MAX_POP - 8) release(w, filler, Math.min(20, MAX_POP - 8 - liveCount(w)));
+    for (const c of w.creatures) {
+      c.energy = c.traits.maxEnergy;
+      c.breedCooldown = 1e6; // nobody breeds into the gap
+    }
+    w.time = DAY_LENGTH * 2 - STEP / 2; // just before the dawn of day 2
+    stepWorld(w);
+    checkBooks(w);
+  });
+
+  it('a clutch that outlives its parents carries the line on', () => {
+    const w = createWorld(3);
+    const pair = release(w, g('bird'), 2);
+    pair[1].x = pair[0].x + 2.5;
+    pair[1].z = pair[0].z;
+    for (const c of pair) {
+      c.age = c.traits.maturity + 10;
+      c.energy = c.traits.maxEnergy;
+      c.fatigue = 0;
+      c.breedCooldown = 0;
+    }
+    for (let i = 0; i < 60 / STEP && w.eggs.length === 0; i++) stepWorld(w);
+    expect(w.eggs.length).toBeGreaterThan(0);
+    const spId = pair[0].species;
+    // the parents die
+    for (const c of pair) c.health = -1;
+    stepWorld(w);
+    const sp = w.species.find((s) => s.id === spId)!;
+    expect(sp.extinctAt).not.toBeNull();
+    run(w, 120);
+    checkBooks(w);
+    expect(sp.alive).toBeGreaterThan(0);
+  });
+
+  it('releasing the same creature after a save/load joins its species instead of founding a twin', () => {
+    const w = starter(2);
+    const G = genomeOfMorphotype(77, 'mustelid');
+    release(w, G, 3, undefined, 'mustelid');
+    const n = w.species.length;
+    const b = loadWorld(saveWorld(w));
+    release(b, G, 2);
+    expect(b.species.length).toBe(n);
+  });
+
+  it('the river never raises the lake bed where its course begins', () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const t = makeTerrain(seed);
+      const ux = Math.sin(t.riverA), uz = Math.cos(t.riverA);
+      for (let k = 0.6; k < 0.95; k += 0.01) {
+        const x = t.lakeX + ux * t.lakeR * k, z = t.lakeZ + uz * t.lakeR * k;
+        // the bed 8 bu to either side of the channel, out of its reach
+        const side = (heightAt(t, x + uz * 8, z - ux * 8) + heightAt(t, x - uz * 8, z + ux * 8)) / 2;
+        // where that bed lies deeper than the river, the channel must not stand up out of it (the old
+        // blend lifted it ~2 bu to the river's depth; the bed's own hills vary well under 0.9)
+        if (side < -1.3) expect(heightAt(t, x, z), `seed ${seed} k ${k.toFixed(2)}`).toBeLessThan(side + 0.9);
+      }
+    }
   });
 });

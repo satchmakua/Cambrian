@@ -17,6 +17,10 @@ import { encodeGenome } from '../engine/share';
 import { CreatureMesh } from './CreatureMesh';
 import { StudioEnvironment } from './StudioEnvironment';
 import { framingOf } from './Studio';
+import { LidContext } from './eyelids';
+
+/** eyes open, no blink: a still must not catch the lids half shut */
+const AWAKE = { shut: 0, blink: false };
 
 const W = 176;
 const H = 132;
@@ -50,7 +54,9 @@ function Scene({ phenotype, onReady }: { phenotype: Phenotype; onReady: (draw: (
       <hemisphereLight args={['#cfe0ff', '#2a2620', 0.55]} />
       <directionalLight position={[f.size, f.size * 1.6, f.size]} intensity={1.15} />
       <group position={[-c[0], -c[1], -c[2]]}>
-        <CreatureMesh phenotype={phenotype} skinMode="hybrid" quality="low" fur />
+        <LidContext.Provider value={AWAKE}>
+          <CreatureMesh phenotype={phenotype} skinMode="hybrid" quality="low" fur />
+        </LidContext.Provider>
       </group>
     </>
   );

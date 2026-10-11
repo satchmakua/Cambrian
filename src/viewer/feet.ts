@@ -63,6 +63,50 @@ export function bareLegsOf(p: Phenotype): BareLegs | null {
   return { y: foot + span * 0.55, band: span * 0.06, color: shankColor(p.genomeRef.seed) };
 }
 
+/**
+ * How much each vertex of a body surface belongs to a LEG (0..1), from its rest-pose body position:
+ * 1 where the nearest part of the skeleton is a leg segment, 0 where it is anything else (the trunk,
+ * a tail, a neck), soft across a few hundredths of a body unit. The bare-shank zone is gated on it —
+ * by height alone, a low-slung bird's belly and tail were painted as scaly leg.
+ */
+export function legWeights(p: Phenotype, bodyPos: ArrayLike<number>, count: number): Float32Array {
+  const isLeg = (i: number) => p.nodes[i].part?.kind === 'leg' && p.nodes[i].kind !== 'spine';
+  type Seg = { a: readonly number[]; b: readonly number[]; ra: number; rb: number };
+  const legs: Seg[] = [];
+  const other: Seg[] = [];
+  for (const [ia, ib] of p.edges) {
+    const A = p.nodes[ia], B = p.nodes[ib];
+    // a segment is leg only when both ends are (the hip's attachment to the trunk is trunk)
+    (isLeg(ia) && isLeg(ib) ? legs : other).push({ a: A.pos, b: B.pos, ra: A.radius, rb: B.radius });
+  }
+  // the body's own shaped nodes (a broad slab of a trunk reaches past its capsules)
+  for (const n of p.nodes) {
+    if (n.kind !== 'spine') continue;
+    const r = n.radius * (n.scale ? (n.scale[0] + n.scale[1] + n.scale[2]) / 3 : 1);
+    other.push({ a: n.pos, b: n.pos, ra: r, rb: r });
+  }
+  const out = new Float32Array(count);
+  if (legs.length === 0) return out;
+  const dist = (s: Seg, x: number, y: number, z: number) => {
+    const ex = s.b[0] - s.a[0], ey = s.b[1] - s.a[1], ez = s.b[2] - s.a[2];
+    const L2 = ex * ex + ey * ey + ez * ez;
+    let t = L2 > 1e-12 ? ((x - s.a[0]) * ex + (y - s.a[1]) * ey + (z - s.a[2]) * ez) / L2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const cx = s.a[0] + ex * t - x, cy = s.a[1] + ey * t - y, cz = s.a[2] + ez * t - z;
+    return Math.sqrt(cx * cx + cy * cy + cz * cz) - (s.ra + (s.rb - s.ra) * t);
+  };
+  const band = 0.05;
+  for (let v = 0; v < count; v++) {
+    const x = bodyPos[v * 3], y = bodyPos[v * 3 + 1], z = bodyPos[v * 3 + 2];
+    let dl = Infinity, doth = Infinity;
+    for (const s of legs) dl = Math.min(dl, dist(s, x, y, z));
+    for (const s of other) doth = Math.min(doth, dist(s, x, y, z));
+    const u = Math.min(1, Math.max(0, ((doth - dl) / band + 1) / 2));
+    out[v] = u * u * (3 - 2 * u);
+  }
+  return out;
+}
+
 /** Length of the leg's last link (foot node → its parent), for proportioning the toes. */
 export function lastLinkOf(p: Phenotype, idx: number): number {
   for (const [a, b] of p.edges) {

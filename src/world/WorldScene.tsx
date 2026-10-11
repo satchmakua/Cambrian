@@ -153,6 +153,12 @@ function DayNight() {
 function SoundDriver() {
   const camera = useThree((s) => s.camera);
   const fwd = useMemo(() => new THREE.Vector3(), []);
+  // suspend the ambience (wind and rain beds) when the World is left — it played on in the breeder —
+  // and resume it on return if the sound is still switched on
+  useEffect(() => {
+    if (useWorldUi.getState().sound) SOUND.start();
+    return () => SOUND.stop();
+  }, []);
   useFrame(() => {
     if (!SOUND.running) return;
     const w = getWorld();
@@ -285,7 +291,13 @@ function DevLook() {
       const s = t.lakeR * 0.6 + 34;
       x = t.lakeX + Math.sin(t.riverA) * s;
       z = t.lakeZ + Math.cos(t.riverA) * s;
-    } else [x, z] = q.split(',').map(Number);
+    } else {
+      // (look=nest before any land clutch, or a malformed look: leave the camera alone)
+      const [px, pz] = q === 'nest' ? [NaN, NaN] : q.split(',').map(Number);
+      if (!Number.isFinite(px) || !Number.isFinite(pz)) return;
+      x = px;
+      z = pz;
+    }
     const y = Math.max(0, heightAt(t, x, z));
     controls.target.set(x, y, z);
     const k = q === 'nest' ? 0.3 : 1;

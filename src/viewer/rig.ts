@@ -148,6 +148,8 @@ export interface RigInstance {
   rest: THREE.Vector3[]; // bone rest positions (local)
   phase: number;
   t: number;
+  /** the tail's wag phase (accumulated, so its frequency can ramp without the tail jumping) */
+  wag: number;
 }
 
 export function createRig(p: Phenotype): RigInstance {
@@ -169,7 +171,7 @@ export function createRig(p: Phenotype): RigInstance {
   });
   root.updateMatrixWorld(true);
   const skeleton = new THREE.Skeleton([root, ...bones]);
-  return { template, bones, root, skeleton, rest, phase: 0, t: 0 };
+  return { template, bones, root, skeleton, rest, phase: 0, t: 0, wag: 0 };
 }
 
 // --- skin weights --------------------------------------------------------------------------------
@@ -295,6 +297,8 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
   const show = (inp.display ?? 0) * awake;
   const stalk = (inp.stalk ?? 0) * awake;
   const strut = show * Math.sin(r.t * 5.2); // the display's rhythm
+  // (a frequency that changes multiplied by absolute time jumps the phase: integrate it instead)
+  r.wag = (r.wag + inp.dt * (1.3 + 4 * show)) % (Math.PI * 2);
 
   for (const b of r.bones) b.quaternion.identity();
 
@@ -381,7 +385,7 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
   for (const chain of T.tails) {
     for (let j = 0; j < chain.length; j++) {
       const amp = ((inp.swim || T.legless ? 0.28 * (0.4 + moving) : 0.08 + 0.1 * moving) * (1 - 0.7 * fly) + 0.22 * show) * (1 - 0.8 * stalk);
-      const yaw = amp * Math.sin((inp.swim ? P : r.t * (1.3 + 4 * show) + P * 0.5) - j * 0.8);
+      const yaw = amp * Math.sin((inp.swim ? P : r.wag + P * 0.5) - j * 0.8);
       // a displaying tail is raised (−pitch lifts it), each link a little more — a flag, not a droop
       setRot(r.bones[chain[j]], -0.08 * inp.sleep - 0.1 * fly - 0.32 * show, yaw * awake, 0);
     }

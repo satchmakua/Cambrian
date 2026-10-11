@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { bareLegsOf, footPlanOf, toedFootGeometry } from '../../src/viewer/feet';
+import { bareLegsOf, footPlanOf, legWeights, toedFootGeometry } from '../../src/viewer/feet';
+import { buildSmoothGeometry } from '../../src/viewer/smoothSkin';
+import { randomGenome } from '../../src/engine/random';
 
 describe('feet', () => {
   it('a feathered bird stands on bare shanks: the line sits between its feet and its hips', () => {
@@ -43,4 +45,36 @@ describe('feet', () => {
       }
     }
   });
+
+  it('only the legs go bare: a low-slung belly below the shank line keeps its plumage', () => {
+    let checked = 0;
+    for (const seed of [35, 93, 114, 126, 21]) {
+      const p = grow(randomGenome(seed));
+      const bare = bareLegsOf(p);
+      if (!bare) continue;
+      const geo = buildSmoothGeometry(p, true, [], 'low');
+      const pos = geo.getAttribute('position');
+      const w = legWeights(p, pos.array as Float32Array, pos.count);
+      const feet = p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg');
+      let belly = 0, bellyLeg = 0, shank = 0, shankLeg = 0;
+      for (let v = 0; v < pos.count; v++) {
+        const x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
+        if (y >= bare.y) continue;
+        const nearFoot = feet.some((f) => Math.hypot(x - f.pos[0], y - f.pos[1], z - f.pos[2]) < f.radius * 2.5);
+        if (nearFoot) {
+          shank++;
+          if (w[v] > 0.5) shankLeg++;
+        } else if (Math.abs(x) < 0.06) {
+          // the body's midline below the line: no leg runs down the middle of a bilateral body
+          belly++;
+          if (w[v] > 0.5) bellyLeg++;
+        }
+      }
+      if (belly > 0) expect(bellyLeg / belly, `seed ${seed} belly`).toBeLessThan(0.1);
+      if (shank > 0) expect(shankLeg / shank, `seed ${seed} feet`).toBeGreaterThan(0.8);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
 });
+

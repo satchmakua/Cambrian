@@ -56,7 +56,7 @@ const SPECIES_SHARE = 0.3;
  *  and MAX_POP is the hard ceiling) */
 const GUILD_SHARE = { water: 0.28, hunter: 0.16, grazer: 0.7 } as const;
 type Guild = keyof typeof GUILD_SHARE;
-function guildOf(c: Creature): Guild {
+function guildOf(c: { traits: Traits }): Guild {
   if (c.traits.habitat === 'water') return 'water';
   return c.traits.diet === 'carnivore' ? 'hunter' : 'grazer';
 }
@@ -448,7 +448,11 @@ function spawn(w: World, genome: Genome, species: Species, x: number, z: number,
 /** Release `count` adults of a genome into the world (a new species unless one has this founder). */
 export function release(w: World, genome: Genome, count: number, near?: { x: number; z: number }, label?: string): Creature[] {
   const { traits } = bodyOf(genome);
-  let sp = w.species.find((s) => s.founder === genome && s.extinctAt === null);
+  // a full valley takes no one in (and founds no empty species)
+  if (liveCount(w) >= MAX_POP) return [];
+  // (by content as well as identity: a loaded or fast-forwarded world holds fresh genome objects)
+  const key = encodeGenome(genome);
+  let sp = w.species.find((s) => s.extinctAt === null && (s.founder === genome || encodeGenome(s.founder) === key));
   if (!sp) sp = speciesFor(w, genome, null, label);
   const base = near ?? spawnPoint(w, traits);
   const out: Creature[] = [];
@@ -456,7 +460,7 @@ export function release(w: World, genome: Genome, count: number, near?: { x: num
     const p = spawnPoint(w, traits, base.x, base.z, 18);
     out.push(spawn(w, genome, sp, p.x, p.z, true, null));
   }
-  log(w, 'release', `${count} ${sp.name} released`, sp.id);
+  log(w, 'release', `${out.length} ${sp.name} released`, sp.id);
   return out;
 }
 
@@ -902,12 +906,16 @@ function immigrate(w: World): void {
     }
     const base = at ?? spawnPoint(w, t);
     const n = 3 + Math.floor(w.rng() * 3);
-    sp.extinctAt = null;
+    let came = 0;
     for (let i = 0; i < n && liveCount(w) < MAX_POP; i++) {
       const q = spawnPoint(w, t, base.x, base.z, 10);
       spawn(w, sp.founder, sp, q.x, q.z, true, null);
+      came++;
     }
-    log(w, 'release', `${n} ${sp.name} wandered in`, sp.id);
+    // no room for any of them: it stays extinct, and may try again at a later dawn
+    if (came === 0) continue;
+    sp.extinctAt = null;
+    log(w, 'release', `${came} ${sp.name} wandered in`, sp.id);
   }
 }
 
@@ -934,22 +942,36 @@ function hidden(w: World, c: Creature): boolean {
   return !!b && Math.hypot(b.x - c.x, b.z - c.z) < b.size * 0.8 + 0.45;
 }
 
-/** Is there room for this creature's kind to grow — under the world cap, under its species' share,
- *  and not packed in with its own kind? */
-function roomToBreed(w: World, c: Creature, near: Creature[]): boolean {
-  const live = liveCount(w);
-  if (live >= MAX_POP) return false;
+/** The population caps: under the world cap, under its species' share of the soft cap, and under its
+ *  guild's. Eggs still waiting to hatch count as the animals they will be — a clutch takes over a
+ *  minute to hatch, and while it waited every other pair of its kind laid one too, so an egg-laying
+ *  species blew straight through its share. */
+function capsAllow(w: World, c: Creature): boolean {
+  if (liveCount(w) + w.eggs.length >= MAX_POP) return false;
   const sp = speciesById(w, c.species);
-  if (sp && sp.alive >= SOFT_POP * SPECIES_SHARE) return false;
+  const g = guildOf(c);
+  let spEggs = 0, guildEggs = 0;
+  for (const e of w.eggs) {
+    if (e.species === c.species) spEggs++;
+    if (guildOf(bodyOf(e.genome)) === g) guildEggs++;
+  }
+  const mine = (sp ? sp.alive : 0) + spEggs;
+  if (sp && mine >= SOFT_POP * SPECIES_SHARE) return false;
   // the soft cap is shared out by GUILD: a meadow full of grazers mustn't stop the lake's fish or
   // the hunters breeding (under one global cap they could only breed while rarer than RARE, and
   // drifted out one by one even with their food at full stock)
-  if (!sp || sp.alive >= RARE) {
-    const g = guildOf(c);
-    let n = 0;
+  if (!sp || mine >= RARE) {
+    let n = guildEggs;
     for (const o of w.creatures) if (o.alive && guildOf(o) === g) n++;
     if (n >= SOFT_POP * GUILD_SHARE[g]) return false;
   }
+  return true;
+}
+
+/** Is there room for this creature's kind to grow — within the caps, and not packed in with its
+ *  own kind? */
+function roomToBreed(w: World, c: Creature, near: Creature[]): boolean {
+  if (!capsAllow(w, c)) return false;
   let crowd = 0;
   for (const o of near) if (o !== c && o.species === c.species && Math.hypot(o.x - c.x, o.z - c.z) < 9) crowd++;
   return crowd < 7;
@@ -1385,6 +1407,9 @@ function breed(w: World, a: Creature, m: Creature | null): void {
   const t = a.traits;
   const cost = t.maxEnergy * 0.34;
   if (a.energy < cost * 1.4) return;
+  // the caps again: a courtship begun under them can end over them (the dance takes a while, and
+  // its partner skips the check) — the pair simply part
+  if (!capsAllow(w, a)) return;
   a.energy -= cost;
   a.breedCooldown = t.lifespan * 0.07;
   if (m) {
@@ -1402,18 +1427,15 @@ function breed(w: World, a: Creature, m: Creature | null): void {
     let species = sp;
     // either parent's line can carry on; a mutation sometimes rides along
     if (m && w.rng() < 0.5) genome = m.genome;
+    const egg = !!m && t.oviparous;
     if (w.rng() < MUTATION_CHANCE) {
       genome = mutate(genome, mix32(w.seed, w.stepCount, a.id, i), i, WORLD_MUTATION);
       w.tally.mutations++;
-      const d = morphDistance(describeMorph(bodyOf(genome).phenotype), sp.descriptor);
-      if (d > SPECIATION_DIST) {
-        species = speciesFor(w, genome, sp.id);
-        w.tally.speciations++;
-        log(w, 'speciation', `${species.name} branched off ${sp.name}`, species.id);
-      }
+      // (an egg's new species, if it is one, is founded when it hatches — see hatch())
+      if (!egg) species = speciate(w, genome, sp);
     }
     const ct = bodyOf(genome).traits;
-    if (m && t.oviparous) {
+    if (egg) {
       // an egg in the clutch: a ring of them around the mother's spot, hatching in a third of a day
       const ang = (i / Math.max(1, n)) * Math.PI * 2 + a.wanderSeed;
       const r = 0.35 + 0.12 * n;
@@ -1453,6 +1475,17 @@ function breed(w: World, a: Creature, m: Creature | null): void {
   }
 }
 
+/** The species a (possibly mutated) offspring belongs to: its parent's, unless it has drifted far
+ *  enough in morphospace from that species' founder to found a new one. */
+function speciate(w: World, genome: Genome, sp: Species): Species {
+  const d = morphDistance(describeMorph(bodyOf(genome).phenotype), sp.descriptor);
+  if (d <= SPECIATION_DIST) return sp;
+  const child = speciesFor(w, genome, sp.id);
+  w.tally.speciations++;
+  log(w, 'speciation', `${child.name} branched off ${sp.name}`, child.id);
+  return child;
+}
+
 /** Eggs whose time has come hatch into juveniles (if the valley has room for them). */
 function hatch(w: World): void {
   let hatched = 0;
@@ -1462,8 +1495,13 @@ function hatch(w: World): void {
       keep.push(e);
       continue;
     }
-    const sp = speciesById(w, e.species);
-    if (!sp || liveCount(w) >= MAX_POP) continue; // no room: the egg fails
+    const parentSp = speciesById(w, e.species);
+    if (!parentSp || liveCount(w) >= MAX_POP) continue; // no room: the egg fails
+    // a mutant hatchling far enough from its kind founds a new species — decided now, so a species
+    // is never founded inside an egg that a raider then eats
+    const sp = e.genome === parentSp.founder ? parentSp : speciate(w, e.genome, parentSp);
+    // the clutch outlived its parents: the line carries on
+    if (sp.extinctAt !== null) sp.extinctAt = null;
     const mum = w.creatures.find((c) => c.id === e.mother && c.alive) ?? null;
     const ct = bodyOf(e.genome).traits;
     let x = e.x, z = e.z;

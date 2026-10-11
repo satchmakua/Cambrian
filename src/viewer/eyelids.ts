@@ -8,6 +8,8 @@ import { createContext } from 'react';
 export interface LidControl {
   /** 0 wide awake … 1 shut (asleep) */
   shut: number;
+  /** false: no blinking (stills — a portrait must not catch the lids mid-blink) */
+  blink?: boolean;
 }
 
 export const LidContext = createContext<LidControl | null>(null);

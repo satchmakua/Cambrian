@@ -160,9 +160,9 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
-        '#include <common>\nattribute vec3 aBodyPos;\nattribute float aFlesh;\nattribute float aAO;\nvarying vec3 vBodyPos;\nvarying vec3 vWNrm;\nvarying float vFlesh;\nvarying float vAO;',
+        '#include <common>\nattribute vec3 aBodyPos;\nattribute float aFlesh;\nattribute float aAO;\nattribute float aLeg;\nvarying vec3 vBodyPos;\nvarying vec3 vWNrm;\nvarying float vFlesh;\nvarying float vAO;\nvarying float vLeg;',
       )
-      .replace('#include <project_vertex>', '  vBodyPos = aBodyPos;\n  vFlesh = aFlesh;\n  vAO = aAO;\n#include <project_vertex>')
+      .replace('#include <project_vertex>', '  vBodyPos = aBodyPos;\n  vFlesh = aFlesh;\n  vAO = aAO;\n  vLeg = aLeg;\n#include <project_vertex>')
       // a fur shell rides out along the (skinned) normal
       // …and the outer shells lean back along the body and down, so the slices stack into combed
       // hairs rather than standing straight up like the pile of a towel
@@ -194,10 +194,16 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
           // low-frequency tonal break-up so the surface never reads as flat plastic
           skin *= 0.92 + 0.16 * fbmA(bp * 2.2, 2.2);
           // bare legs: the plumage ends in a soft cuff and the shank below is keratin scutes
-          float bare = 1.0 - smoothstep(uBareY - uBareBand, uBareY + uBareBand, vBodyPos.y);
+          // (only on the legs themselves — vLeg — not a low belly or tail under the same height)
+          float bare = vLeg * (1.0 - smoothstep(uBareY - uBareBand, uBareY + uBareBand, vBodyPos.y));
           if (bare > 0.0) {
             float hb = gHb;
+            // the scutes are sampled 2.6x finer: their anti-aliasing must see the footprint in that
+            // scaled coordinate (and gFw is restored — the fur shells and debug views read it after)
+            float fw0 = gFw;
+            gFw *= 2.6;
             float hs = surfaceHeight(bp * 2.6, 1);
+            gFw = fw0;
             gH = mix(gH, hs, bare);
             gHb = mix(hb, gHb * 0.6, bare);
             skin = mix(skin, uBareCol * (0.72 + 0.36 * hs), bare);
@@ -299,6 +305,7 @@ varying vec3 vBodyPos;
 varying vec3 vWNrm;
 varying float vFlesh;
 varying float vAO;
+varying float vLeg;
 uniform vec3 uBack; uniform vec3 uBelly; uniform vec3 uPattern; uniform vec3 uPattern2; uniform vec3 uRim;
 uniform vec3 uBlood;
 uniform int uPType; uniform int uCover;

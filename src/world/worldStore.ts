@@ -306,12 +306,12 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
     WORLD = createWorld(seed >>> 0);
     populate(WORLD, founder);
     bumpVersion();
-    set({ selected: null, follow: false, snapshot: snapshotOf(WORLD, null) });
+    set({ selected: null, follow: false, chronicle: null, snapshot: snapshotOf(WORLD, null) });
   },
   open: (json) => {
     WORLD = loadWorld(json);
     bumpVersion();
-    set({ selected: null, follow: false, snapshot: snapshotOf(WORLD, null) });
+    set({ selected: null, follow: false, chronicle: null, snapshot: snapshotOf(WORLD, null) });
   },
   ff: null,
   chronicle: null,

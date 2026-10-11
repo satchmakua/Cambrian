@@ -23,7 +23,7 @@ import { Mouth } from './mouths';
 import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
-import { bareLegsOf, footPlanOf, lastLinkOf, toedFootGeometry, type FootPlan } from './feet';
+import { bareLegsOf, footPlanOf, lastLinkOf, legWeights, toedFootGeometry, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
 import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finKindOf } from './wings';
@@ -101,7 +101,17 @@ function buildSkin(phenotype: Phenotype, full: boolean, carves: readonly Carve[]
   const g = buildSmoothGeometry(phenotype, full, carves, quality);
   // smooth mesh is untransformed, so its local position *is* the body-space coord (M17)
   g.setAttribute('aBodyPos', (g.getAttribute('position') as THREE.BufferAttribute).clone());
+  bakeLegs(g, phenotype);
   return g;
+}
+
+/** The bare-shank gate (aLeg) for a body geometry with baked aBodyPos — only for a creature with bare
+ *  shanks; a geometry without it reads 0 (not leg) in the shader. */
+function bakeLegs(g: THREE.BufferGeometry, phenotype: Phenotype): void {
+  if (!bareLegsOf(phenotype)) return;
+  const bp = g.getAttribute('aBodyPos') as THREE.BufferAttribute | undefined;
+  if (!bp) return;
+  g.setAttribute('aLeg', new THREE.BufferAttribute(legWeights(phenotype, bp.array, bp.count), 1));
 }
 
 /** Build (and cache) a creature's smooth surface ahead of mounting it — the World schedules these
@@ -305,8 +315,9 @@ export function CreatureMesh({
     if (parts.length === 0) return null;
     const merged = mergeGeometries(parts, false);
     parts.forEach((g) => g.dispose());
+    if (merged) bakeLegs(merged, phenotype);
     return merged;
-  }, [trajectory, skinMode, data, sphereGeos, capsuleGeos, baseCaps]);
+  }, [trajectory, skinMode, data, sphereGeos, capsuleGeos, baseCaps, phenotype]);
   useEffect(() => () => kitGeo?.dispose(), [kitGeo]);
   useEffect(
     () => () => {
@@ -680,7 +691,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   const phase = useMemo(() => ((seed >>> 0) % 997) / 997, [seed]);
   useFrame((st) => {
     if (!lidded || !upper.current || !lower.current) return;
-    const close = Math.max(lids ? lids.shut : 0, blinkAt(st.clock.elapsedTime, phase));
+    const close = Math.max(lids ? lids.shut : 0, lids?.blink === false ? 0 : blinkAt(st.clock.elapsedTime, phase));
     // open: the upper margin rides ~35° above the eye's equator, the lower ~42° below; shut: they meet
     // a little below centre
     upper.current.rotation.x = LID_OPEN.upper + close * 0.78;
@@ -909,7 +920,10 @@ function ToedFoot({ f, plan, skin, phenotype }: { f: MeshFeature; plan: FootPlan
   const link = useMemo(() => lastLinkOf(phenotype, f.idx), [phenotype, f.idx]);
   const geo = useMemo(() => {
     const g = toedFootGeometry(plan, r, link);
-    return { toes: bakeSkin(g.toes, origin), claws: g.claws };
+    const toes = bakeSkin(g.toes, origin);
+    // the toes are all leg (a bird's are bare keratin to the claw)
+    toes.setAttribute('aLeg', new THREE.BufferAttribute(new Float32Array(toes.getAttribute('position').count).fill(1), 1));
+    return { toes, claws: g.claws };
   }, [plan, r, link, origin]);
   useEffect(() => () => {
     geo.toes.dispose();
