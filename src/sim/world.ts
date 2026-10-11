@@ -452,7 +452,12 @@ export function release(w: World, genome: Genome, count: number, near?: { x: num
   if (liveCount(w) >= MAX_POP) return [];
   // (by content as well as identity: a loaded or fast-forwarded world holds fresh genome objects)
   const key = encodeGenome(genome);
-  let sp = w.species.find((s) => s.extinctAt === null && (s.founder === genome || encodeGenome(s.founder) === key));
+  const same = (s: Species) => s.founder === genome || encodeGenome(s.founder) === key;
+  let sp =
+    w.species.find((s) => s.extinctAt === null && same(s)) ??
+    // a founding stock that died out here comes back under its own name (a twin founded beside it
+    // was later joined by the original, wandering back in)
+    w.species.find((s) => s.parent === null && same(s));
   if (!sp) sp = speciesFor(w, genome, null, label);
   const base = near ?? spawnPoint(w, traits);
   const out: Creature[] = [];
@@ -460,6 +465,7 @@ export function release(w: World, genome: Genome, count: number, near?: { x: num
     const p = spawnPoint(w, traits, base.x, base.z, 18);
     out.push(spawn(w, genome, sp, p.x, p.z, true, null));
   }
+  if (out.length > 0) sp.extinctAt = null;
   log(w, 'release', `${out.length} ${sp.name} released`, sp.id);
   return out;
 }
@@ -946,15 +952,29 @@ function hidden(w: World, c: Creature): boolean {
  *  guild's. Eggs still waiting to hatch count as the animals they will be — a clutch takes over a
  *  minute to hatch, and while it waited every other pair of its kind laid one too, so an egg-laying
  *  species blew straight through its share. */
-function capsAllow(w: World, c: Creature): boolean {
-  if (liveCount(w) + w.eggs.length >= MAX_POP) return false;
+function capsAllow(w: World, c: Creature, reserve = false): boolean {
   const sp = speciesById(w, c.species);
   const g = guildOf(c);
-  let spEggs = 0, guildEggs = 0;
+  let spEggs = 0, guildEggs = 0, all = w.eggs.length;
   for (const e of w.eggs) {
     if (e.species === c.species) spEggs++;
     if (guildOf(bodyOf(e.genome)) === g) guildEggs++;
   }
+  // deciding whether to START a courtship: pairs already courting have their coming litter spoken
+  // for — or every pair rushes the one place a death opened and all but the first part with nothing
+  // (about three empty displays for every mating)
+  if (reserve) {
+    for (const o of w.creatures) {
+      if (o === c || !o.alive || o.action !== 'mate' || o.breedCooldown > 0) continue;
+      const m = w.creatures.find((x) => x.id === o.target && x.alive);
+      if (m && m.action === 'mate' && m.target === o.id && m.id < o.id) continue; // a dancing pair counts once
+      const n = o.traits.litter + (o.traits.oviparous ? 1 : 0);
+      all += n;
+      if (o.species === c.species) spEggs += n;
+      if (guildOf(o) === g) guildEggs += n;
+    }
+  }
+  if (liveCount(w) + all >= MAX_POP) return false;
   const mine = (sp ? sp.alive : 0) + spEggs;
   if (sp && mine >= SOFT_POP * SPECIES_SHARE) return false;
   // the soft cap is shared out by GUILD: a meadow full of grazers mustn't stop the lake's fish or
@@ -971,7 +991,7 @@ function capsAllow(w: World, c: Creature): boolean {
 /** Is there room for this creature's kind to grow — within the caps, and not packed in with its
  *  own kind? */
 function roomToBreed(w: World, c: Creature, near: Creature[]): boolean {
-  if (!capsAllow(w, c)) return false;
+  if (!capsAllow(w, c, true)) return false;
   let crowd = 0;
   for (const o of near) if (o !== c && o.species === c.species && Math.hypot(o.x - c.x, o.z - c.z) < 9) crowd++;
   return crowd < 7;

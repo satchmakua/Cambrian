@@ -456,4 +456,39 @@ describe('bookkeeping that holds (review fixes)', () => {
       }
     }
   });
+
+  it('a creature re-released after its stock died out comes back under its own name (no twin)', () => {
+    const w = starter(2);
+    const G = genomeOfMorphotype(77, 'mustelid');
+    const band = release(w, G, 3, undefined, 'mustelid');
+    for (const c of band) c.health = -1;
+    run(w, 1);
+    const sp = w.species.find((s) => s.id === band[0].species)!;
+    expect(sp.extinctAt).not.toBeNull();
+    release(w, G, 3);
+    run(w, DAY_LENGTH * 4);
+    const same = w.species.filter((s) => s.founder === G || JSON.stringify(s.founder) === JSON.stringify(G));
+    expect(same.length).toBe(1);
+    checkBooks(w);
+  });
+
+  it('a courtship display mostly ends in a mating (pairs do not all rush the one place a death opens)', () => {
+    const w = starter(1);
+    const dancing = new Map<number, number>(); // id -> breedCooldown when its display completed
+    let mated = 0, parted = 0;
+    for (let i = 0; i < (DAY_LENGTH * 6) / STEP; i++) {
+      stepWorld(w);
+      for (const c of w.creatures) {
+        if (c.action === 'mate' && c.courtT >= COURT_TIME) dancing.set(c.id, c.breedCooldown);
+        else if (dancing.has(c.id) && c.action !== 'mate') {
+          if (c.breedCooldown > 0) mated++;
+          else if (c.action !== 'flee') parted++;
+          dancing.delete(c.id);
+        }
+      }
+    }
+    expect(mated).toBeGreaterThan(20);
+    expect(parted / mated).toBeLessThan(1); // was ~3 empty displays per mating
+  }, 60000);
 });
+

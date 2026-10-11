@@ -279,9 +279,10 @@ export function CreatureMesh({
       }
       const p = n.pos;
       bakeBodyPos(g, m.makeTranslation(p[0], p[1], p[2]));
+      bakeLegs(g, phenotype);
       return g;
     });
-  }, [data]);
+  }, [data, phenotype]);
   const capsuleGeos = useMemo(() => {
     const m = new THREE.Matrix4();
     const p = new THREE.Vector3();
@@ -290,13 +291,15 @@ export function CreatureMesh({
     return data.edges.map((e, k) => {
       const g = new THREE.CapsuleGeometry(e.radius, baseCaps[k].len, 6, 14);
       bakeBodyPos(g, m.compose(p.fromArray(baseCaps[k].pos), qq.fromArray(baseCaps[k].quat), one));
+      bakeLegs(g, phenotype);
       return g;
     });
-  }, [data, baseCaps]);
+  }, [data, baseCaps, phenotype]);
   // A static kit (no recorded gait to play) is ONE merged mesh — the capsule kit is ~20–60 parts, and
   // as separate meshes it cost a draw call each (the World's fallback while smooth skins build).
   const kitGeo = useMemo(() => {
-    if (trajectory) return null; // a playing gait re-poses the individual parts every frame
+    // a playing gait re-poses the individual parts every frame; a smooth skin replaces the kit
+    if (trajectory || showSmooth) return null;
     const parts: THREE.BufferGeometry[] = [];
     data.bodySpheres.forEach((i, k) => {
       const g = sphereGeos[k].clone();
@@ -315,9 +318,9 @@ export function CreatureMesh({
     if (parts.length === 0) return null;
     const merged = mergeGeometries(parts, false);
     parts.forEach((g) => g.dispose());
-    if (merged) bakeLegs(merged, phenotype);
+    // (aLeg rides along from the parts)
     return merged;
-  }, [trajectory, skinMode, data, sphereGeos, capsuleGeos, baseCaps, phenotype]);
+  }, [trajectory, showSmooth, data, sphereGeos, capsuleGeos, baseCaps]);
   useEffect(() => () => kitGeo?.dispose(), [kitGeo]);
   useEffect(
     () => () => {
@@ -606,7 +609,7 @@ function Feature({
     case 'whisker':
       return <Whisker f={f} color={footColor} />;
     case 'paw':
-      return <Paw f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} />;
+      return <Paw f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} leg={f.kind === 'leg'} />;
     case 'hoof':
       return <Hoof f={f} color={footColor} />;
     case 'hand':
@@ -846,9 +849,14 @@ function pawGeometry(r: number, origin: readonly number[]): { fur: THREE.BufferG
   return { fur, claws: clawGeo };
 }
 
-function Paw({ f, color, skin, origin }: { f: MeshFeature; color: number; skin?: THREE.Material; origin: readonly number[] }) {
+function Paw({ f, color, skin, origin, leg = false }: { f: MeshFeature; color: number; skin?: THREE.Material; origin: readonly number[]; leg?: boolean }) {
   const r = Math.max(f.radius, 0.06);
-  const geo = useMemo(() => pawGeometry(r, origin), [r, origin]);
+  const geo = useMemo(() => {
+    const g = pawGeometry(r, origin);
+    // a paw ending a leg is all leg: below a bare-shank line it wears the shank's keratin, like toes
+    if (leg) g.fur.setAttribute('aLeg', new THREE.BufferAttribute(new Float32Array(g.fur.getAttribute('position').count).fill(1), 1));
+    return g;
+  }, [r, origin, leg]);
   useEffect(() => () => {
     geo.fur.dispose();
     geo.claws.dispose();
