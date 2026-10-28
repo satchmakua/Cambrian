@@ -342,7 +342,7 @@ function MainView({
 }) {
   const track = useRef<HTMLDivElement>(null);
   const d = framing.size * 1.9;
-  // dev/headless: ?studiocam=side|front|top|face|headside|feet for a canonical main-view angle
+  // dev/headless: ?studiocam=side|front|top|face|headside|feet|eye for a canonical main-view angle
   const cam = import.meta.env.DEV && typeof location !== 'undefined' ? new URLSearchParams(location.search).get('studiocam') : null;
   const f = framing.face ?? { pt: [0, 0, framing.ext[2] / 2] as [number, number, number], r: framing.size * 0.25 };
   const fd = Math.max(f.r * 3.2, framing.size * 0.4);
@@ -353,18 +353,31 @@ function MainView({
     ? [foot.pos[0] - framing.center[0], foot.pos[1] - framing.center[1], foot.pos[2] - framing.center[2]]
     : [0, framing.groundY, 0];
   const footD = framing.size * 0.38;
-  const target: [number, number, number] = cam === 'face' || cam === 'headside' ? f.pt : cam === 'feet' ? fp : [0, 0, 0];
+  // eye: a macro of the first eye, looking down its aim (off its parent node) and a little forward
+  const ei = phenotype.nodes.findIndex((n) => n.terminal === 'eye');
+  const ep: [number, number, number] = [0, 0, 0];
+  const eyeCam: [number, number, number] = [0, 0, 0];
+  if (ei >= 0) {
+    const e = phenotype.nodes[ei];
+    const par = phenotype.nodes[phenotype.edges.find(([, b]) => b === ei)?.[0] ?? ei];
+    for (let k = 0; k < 3; k++) ep[k] = e.pos[k] - framing.center[k];
+    const a = [e.pos[0] - par.pos[0], e.pos[1] - par.pos[1], e.pos[2] - par.pos[2] + 0.35 * Math.hypot(e.pos[0] - par.pos[0], e.pos[1] - par.pos[1])];
+    const l = Math.hypot(a[0], a[1], a[2]) || 1;
+    for (let k = 0; k < 3; k++) eyeCam[k] = ep[k] + (a[k] / l) * e.radius * 9;
+  }
+  const target: [number, number, number] = cam === 'face' || cam === 'headside' ? f.pt : cam === 'feet' ? fp : cam === 'eye' ? ep : [0, 0, 0];
   const camPos: [number, number, number] =
     cam === 'side' ? [d * 0.95, d * 0.12, 0.01] : cam === 'front' ? [0.01, d * 0.15, d * 0.95] : cam === 'top' ? [0.01, d, 0.02]
       : cam === 'feet' ? [fp[0] + footD * 0.75 * Math.sign(fp[0] || 1), fp[1] + footD * 0.35, fp[2] + footD * 0.65]
       : cam === 'face' ? [f.pt[0] + fd * 0.42, f.pt[1] + fd * 0.22, f.pt[2] + fd * 0.88]
       : cam === 'headside' ? [f.pt[0] + fd, f.pt[1] + fd * 0.05, f.pt[2]]
+      : cam === 'eye' ? eyeCam
       : [d * 0.62, d * 0.38, d * 0.7];
   return (
     <div className="studio-main" ref={track}>
       <View className="studio-main-view" track={track as MutableRefObject<HTMLElement>}>
         <PerspectiveCamera makeDefault position={camPos} fov={38} near={Math.max(0.02, framing.size * 0.01)} far={framing.size * 40} />
-        <OrbitControls makeDefault target={target} enablePan={false} minDistance={framing.size * 0.4} maxDistance={framing.size * 7} />
+        <OrbitControls makeDefault target={target} enablePan={false} minDistance={cam === 'eye' ? 0.01 : framing.size * 0.4} maxDistance={framing.size * 7} />
         <SpecimenContent phenotype={phenotype} framing={framing} skinMode={skinMode} overlays={overlays} motion={motion} />
       </View>
     </div>

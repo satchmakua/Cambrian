@@ -86,7 +86,7 @@ export type SkinSurface = 'kit' | 'smooth' | 'hybrid';
 const PRIM_CACHE = new WeakMap<Phenotype, Map<SkinSurface, FieldPrims>>();
 
 /** Field prims tuned to the rendered surface (the same blend k smoothSkin uses, per mode). */
-function surfacePrims(p: Phenotype, surface: SkinSurface): FieldPrims {
+export function surfacePrims(p: Phenotype, surface: SkinSurface): FieldPrims {
   let per = PRIM_CACHE.get(p);
   if (!per) {
     per = new Map();

@@ -85,6 +85,8 @@ export interface FurShell {
   len: number;
   /** strands per body unit */
   density: number;
+  /** eyes to keep the pile out of — body-space centre + radius, flat (x, y, z, r, …; up to 6) */
+  eyes?: readonly number[];
 }
 
 export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, bare: BareLegs | null = null, shell: FurShell | null = null): THREE.MeshPhysicalMaterial {
@@ -147,6 +149,8 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
     shader.uniforms.uShellH = { value: shell ? shell.h : -1 };
     shader.uniforms.uShellLen = { value: shell ? shell.len : 0 };
     shader.uniforms.uShellDen = { value: shell ? shell.density : 1 };
+    // (unused slots keep r = 0, which clears nothing)
+    shader.uniforms.uEyes = { value: Array.from({ length: 6 }, (_, i) => new THREE.Vector4(...(shell?.eyes?.slice(i * 4, i * 4 + 4) ?? []).concat([0, 0, 0, 0]).slice(0, 4))) };
 
     // Pattern + relief sample `aBodyPos` — a per-vertex *body-space* coordinate (the vertex's
     // rest-pose position, baked into the geometry by CreatureMesh). Because it's fixed to the mesh,
@@ -230,6 +234,14 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
             vec3 cell = floor(q);
             vec3 jit = hash33(cell) - 0.5;
             float sLen = 0.45 + 0.55 * hash13(cell + 17.0);
+            // round an eye the pile shortens to a fine fringe and then stops: strands rooted in the
+            // face otherwise stand out over the sunken eyeball and comb straight across the iris
+            float eyeClear = 0.0;
+            for (int i = 0; i < 6; i++) {
+              vec4 e = uEyes[i];
+              if (e.w > 0.0) eyeClear = max(eyeClear, 1.0 - smoothstep(e.w * 1.05, e.w * 1.9, length(vBodyPos - e.xyz)));
+            }
+            sLen *= 1.0 - 0.92 * eyeClear;
             float u = uShellH / sLen;
             float dc = length(fract(q) - 0.5 - jit * 0.5);
             float far = smoothstep(0.28, 1.15, gFw * uShellDen);
@@ -313,7 +325,7 @@ uniform float uPScale; uniform float uContrast; uniform float uSheen; uniform fl
 uniform vec3 uOff;
 uniform int uDebug;
 uniform float uBareY; uniform float uBareBand; uniform vec3 uBareCol;
-uniform float uShellH; uniform float uShellDen;
+uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6];
 
 // Per-fragment globals, primed at the top of the colour stage and reused by the roughness + normal
 // stages (so the expensive relief is evaluated once per pixel, not three times).

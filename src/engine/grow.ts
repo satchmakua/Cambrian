@@ -517,12 +517,14 @@ function frontSegment(g: Genome): SegmentGene {
 function ensureBilateralFace(g: Genome): void {
   const head = frontSegment(g);
   const girth = (head.size[0] + head.size[1]) / 2;
-  ensureFace(head.appendages, girth, girth * Math.pow(head.taper, Math.max(0, head.repeat - 1)));
+  ensureFace(head.appendages, girth, girth * Math.pow(head.taper, Math.max(0, head.repeat - 1)), head.repeat > 1 && !!g.body.child);
 }
 
 /** Guarantee a prominent eye-set + a mouth (M24/M19): synthesize them if mutation deleted them,
  *  and floor the sizes so they always read. The mouth is kept on the face front. */
-function ensureFace(apps: AppendageGene[], girth: number, frontR = girth): void {
+// a paired eye's azimuth stays at least this far (rad) off the vertical midline
+const EYE_AZ_MAX = 1.1;
+function ensureFace(apps: AppendageGene[], girth: number, frontR = girth, linkedHead = false): void {
   const eyes = apps.filter((p) => p.terminal === 'eye');
   if (eyes.length === 0) apps.push(faceEye(girth));
   else
@@ -535,8 +537,18 @@ function ensureFace(apps: AppendageGene[], girth: number, frontR = girth): void 
       // small-headed creatures (girth < 0.28) and silently defeats the floor it was paired with,
       // leaving eyes smaller than M19 promises. Prominence outranks proportion when they collide.
       e.thickness = clamp(Math.max(0.075, Math.min(Math.max(e.thickness, girth * 0.17), girth * 0.26)), AP.thickness);
-      // and keep them off the snout tip, so the muzzle front belongs to the mouth
-      e.attachElevation = clamp(Math.min(e.attachElevation, 0.75), AP.attachElevation);
+      // and keep them off the snout tip, so the muzzle front belongs to the mouth — an eye on the
+      // CRANIUM of a multi-link head (the muzzle runs on ahead, lower and narrower) may look forward,
+      // a cat's or an ape's gaze; one on a plain head's front stays at 0.75 (~47° to the side)
+      const cranium = linkedHead && e.attachT < 0.35;
+      e.attachElevation = clamp(Math.min(e.attachElevation, cranium ? 1.15 : 0.75), AP.attachElevation);
+      // a PAIR aimed near straight up (or down) lands both eyes on the midline as one merged ball —
+      // fold the azimuth off it so the mirrored eyes always clear each other
+      if (e.pair && Math.abs(Math.cos(e.attachAzimuth)) < Math.cos(EYE_AZ_MAX)) {
+        const up = Math.sin(e.attachAzimuth) >= 0;
+        const right = Math.cos(e.attachAzimuth) >= 0;
+        e.attachAzimuth = up ? (right ? EYE_AZ_MAX : Math.PI - EYE_AZ_MAX) : right ? 2 * Math.PI - EYE_AZ_MAX : Math.PI + EYE_AZ_MAX;
+      }
     }
 
   const mouths = apps.filter((p) => p.terminal === 'mouth');

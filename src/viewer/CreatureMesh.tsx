@@ -29,6 +29,7 @@ import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smo
 import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finKindOf } from './wings';
 import { ensureSkinWeights, type RigInstance } from './rig';
 import { buildFieldPrims, fieldAt } from './bodyField';
+import { eyeClearings, eyeSeat } from './eyeSeat';
 import { getGeometry, retainGeometry, releaseGeometry } from './geometryCache';
 import { mouthCarves } from './mouthLine';
 import { sampleTrajectory, type Trajectory } from '../physics/fitness';
@@ -163,8 +164,9 @@ export function CreatureMesh({
     const size = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
     const len = Math.min(0.08, Math.max(0.022, size * 0.0095));
     const bare = bareLegsOf(phenotype);
-    return Array.from({ length: FUR_SHELLS }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / FUR_SHELLS, len, density: 3.2 / len }));
-  }, [fur, cov, skinMode, phenotype, pal, seed]);
+    const eyes = eyeClearings(phenotype, data.features);
+    return Array.from({ length: FUR_SHELLS }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / FUR_SHELLS, len, density: 3.2 / len, eyes }));
+  }, [fur, cov, skinMode, phenotype, pal, seed, data]);
   useEffect(() => () => furMats.forEach((m) => m.dispose()), [furMats]);
 
   // physics playback (post-roadmap): when a recorded gait is present, capsules re-pose from it
@@ -626,7 +628,46 @@ function Feature({
 const UPPER_LID = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2);
 const LOWER_LID = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
 
-const LID_OPEN = { upper: -0.62, lower: 0.72 } as const;
+// open: the upper margin ~31° above the eye's equator, the lower ~36° below — an almond aperture
+// (wider read as a startled stare); shut: they meet a little below centre
+const LID_OPEN = { upper: -0.54, lower: 0.62 } as const;
+const LID_SHUT = { upper: 0.16, lower: 0.1 } as const;
+
+// Iris and pupil: true spherical CAPS on the eyeball (a polar angle of the ball's own sphere), so
+// they curve with it like a cornea — a flat squashed disc parked in front read as a painted coin.
+// The iris darkens toward its rim, the limbal ring every real eye has. `squeezeX` narrows a cap
+// across the eye while keeping it ON the sphere (a reptile's slit pupil).
+const CAP_GEO = new Map<string, THREE.SphereGeometry>();
+function capGeometry(theta: number, limbal: boolean, squeezeX = 1): THREE.SphereGeometry {
+  const key = `${theta}:${limbal}:${squeezeX}`;
+  let g = CAP_GEO.get(key);
+  if (!g) {
+    g = new THREE.SphereGeometry(1, limbal ? 48 : 28, 10, 0, Math.PI * 2, 0, theta);
+    g.rotateX(Math.PI / 2); // pole on +Z, the eye's aim
+    const pos = g.getAttribute('position');
+    const col = new Float32Array(pos.count * 3);
+    for (let i = 0; i < pos.count; i++) {
+      if (squeezeX !== 1) {
+        const x = pos.getX(i) * squeezeX, y = pos.getY(i), z = pos.getZ(i);
+        const n = Math.hypot(x, y, z);
+        pos.setXYZ(i, x / n, y / n, z / n);
+      }
+      const a = Math.acos(Math.min(1, Math.max(-1, pos.getZ(i)))) / theta; // 0 centre … 1 rim
+      const t = limbal ? Math.min(1, Math.max(0, (a - 0.62) / 0.38)) : 0;
+      let k = 1 - 0.62 * t * t * (3 - 2 * t);
+      if (limbal) {
+        // fine radial fibres (a hashed brightness per spoke) and a paler collarette ring round the pupil
+        const spoke = Math.round(((Math.atan2(pos.getY(i), pos.getX(i)) + Math.PI) / (Math.PI * 2)) * 48) % 48;
+        k *= 0.84 + 0.22 * unitHash(spoke, 0x1e15) + 0.16 * Math.exp(-(((a - 0.5) / 0.1) ** 2));
+      }
+      col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(pos.array as Float32Array), 3)); // unit sphere: normal = position
+    CAP_GEO.set(key, g);
+  }
+  return g;
+}
 const REPTILE_IRIS = [0xb08a2e, 0xa8661f, 0x7d8a33, 0x9a4f24, 0x8f8a6e, 0xc2a046];
 
 /** One eye's lids in the body's own covering: the shared hemispheres scaled to the eye, with the
@@ -674,16 +715,19 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   // eye stare
   const lidded = v === 'round' || v === 'beady' || v === 'slit';
   const slitIris = useMemo(() => REPTILE_IRIS[Math.floor(unitHash(seed, 0x511) * REPTILE_IRIS.length)], [seed]);
-  const sink = lidded && onFace ? r * 0.36 : 0;
+  const seat = useMemo(() => (lidded && onFace && phenotype ? eyeSeat(phenotype, f.idx, f.quat, r) : { quat: f.quat, sink: 0, centre: null }), [lidded, onFace, phenotype, f.idx, f.quat, r]);
+  const sink = seat.sink;
+  // the ball takes the iris's own hue, deep — a brown ball behind a green or blue iris read as a bruise
+  const ballColor = useMemo(() => new THREE.Color(iris).multiplyScalar(0.16).lerp(new THREE.Color(0x1c120e), 0.5).getHex(), [iris]);
   const lidColor = useMemo(() => new THREE.Color(lid).multiplyScalar(0.82).getHex(), [lid]);
   const origin = phenotype?.nodes[f.idx].pos;
   const lidGeo = useMemo(() => {
     if (!lidded || !skin || !origin) return null;
     return {
-      upper: lidGeometry(UPPER_LID, r * 0.97, LID_OPEN.upper, sink, f.quat, origin),
-      lower: lidGeometry(LOWER_LID, r * 0.96, LID_OPEN.lower, sink, f.quat, origin),
+      upper: lidGeometry(UPPER_LID, r * 0.97, LID_OPEN.upper, sink, seat.quat, origin),
+      lower: lidGeometry(LOWER_LID, r * 0.96, LID_OPEN.lower, sink, seat.quat, origin),
     };
-  }, [lidded, skin, origin, r, sink, f.quat]);
+  }, [lidded, skin, origin, r, sink, seat.quat]);
   useEffect(() => () => {
     lidGeo?.upper.dispose();
     lidGeo?.lower.dispose();
@@ -697,11 +741,11 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
     const close = Math.max(lids ? lids.shut : 0, lids?.blink === false ? 0 : blinkAt(st.clock.elapsedTime, phase));
     // open: the upper margin rides ~35° above the eye's equator, the lower ~42° below; shut: they meet
     // a little below centre
-    upper.current.rotation.x = LID_OPEN.upper + close * 0.78;
-    lower.current.rotation.x = LID_OPEN.lower - close * 0.62;
+    upper.current.rotation.x = LID_OPEN.upper + close * (LID_SHUT.upper - LID_OPEN.upper);
+    lower.current.rotation.x = LID_OPEN.lower + close * (LID_SHUT.lower - LID_OPEN.lower);
   });
   return (
-    <group quaternion={f.quat}>
+    <group quaternion={seat.quat as [number, number, number, number]}>
       <group position={[0, 0, -sink]}>
       {lidded && lidGeo && skin ? (
         <>
@@ -739,21 +783,17 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
         // a wet animal eye set deep under a heavy brow — dark, glassy, watching. No cream sclera,
         // no fat white sticker; the low-roughness ball catches the environment like real moisture.
         <>
-          {/* the eyeball — bloodshot dark amber (round) or a glossy black bead (beady), set deep */}
+          {/* the eyeball — the iris's hue, deep (round) or a glossy black bead (beady), set deep */}
           <mesh position={[0, 0, -r * 0.04]}>
             <sphereGeometry args={[r * 0.9, 22, 18]} />
-            <meshStandardMaterial color={v === 'round' ? 0x3c1f16 : 0x070709} roughness={0.12} metalness={0.0} />
+            <meshStandardMaterial color={v === 'round' ? ballColor : 0x070709} roughness={0.12} metalness={0.0} />
           </mesh>
-          {/* Iris + pupil are shallow CAPS lying flush on the eyeball, not balls stacked in front of
-              it — full spheres at +z bulged past the ball's pole and read as googly cartoon eyes.
-              Each is squashed in z and parked so its face just clears the 0.86r front pole. */}
-          <mesh position={[0, 0, r * 0.70]} scale={[1, 1, 0.3]}>
-            <sphereGeometry args={[r * 0.62, 20, 14]} />
-            <meshStandardMaterial color={iris} roughness={0.16} metalness={0.1} />
+          {/* iris + pupil: caps of the ball's own sphere (see capGeometry), a hair proud of it */}
+          <mesh position={[0, 0, -r * 0.04]} scale={r * 0.9 * 1.012} geometry={capGeometry(v === 'round' ? 0.7 : 0.56, true)}>
+            <meshStandardMaterial color={iris} vertexColors roughness={0.16} metalness={0.1} polygonOffset polygonOffsetFactor={-1} />
           </mesh>
-          <mesh position={[0, 0, r * 0.8]} scale={[1, 1, 0.3]}>
-            <sphereGeometry args={[r * (v === 'round' ? 0.32 : 0.42), 16, 12]} />
-            <meshStandardMaterial color={0x030304} roughness={0.05} />
+          <mesh position={[0, 0, -r * 0.04]} scale={r * 0.9 * 1.024} geometry={capGeometry(v === 'round' ? 0.3 : 0.5, false)}>
+            <meshStandardMaterial color={0x030304} roughness={0.05} polygonOffset polygonOffsetFactor={-2} />
           </mesh>
           {/* a small, sharp catchlight — a wet glint, not a cartoon sticker */}
           <mesh position={[r * 0.17, r * 0.2, r * 0.88]}>
@@ -769,9 +809,8 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
             <sphereGeometry args={[r * 0.9, 18, 14]} />
             <meshStandardMaterial color={slitIris} roughness={0.28} metalness={0.22} />
           </mesh>
-          <mesh position={[0, 0, r * 0.66]} scale={[0.14, 1.0, 0.4]}>
-            <sphereGeometry args={[r * 0.82, 10, 14]} />
-            <meshStandardMaterial color={0x040406} roughness={0.06} />
+          <mesh position={[0, 0, -r * 0.02]} scale={r * 0.9 * 1.014} geometry={capGeometry(0.66, false, 0.16)}>
+            <meshStandardMaterial color={0x040406} roughness={0.06} polygonOffset polygonOffsetFactor={-2} />
           </mesh>
           <mesh position={[r * 0.12, r * 0.24, r * 0.78]}>
             <sphereGeometry args={[r * 0.045, 8, 8]} />
