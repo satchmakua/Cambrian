@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mulberry32, mix32, range } from '../../src/engine/rng';
+import { mulberry32, mix32, range, unitHash, mulberry32State } from '../../src/engine/rng';
 
 describe('mulberry32', () => {
   it('is deterministic for a given seed', () => {
@@ -45,5 +45,31 @@ describe('mix32', () => {
     const h = mix32(0xdeadbeef, 42, 7);
     expect(h).toBe(h >>> 0);
     expect(Number.isInteger(h)).toBe(true);
+  });
+});
+
+describe('unitHash', () => {
+  it('spreads consecutive seeds evenly over [0, 1) (it is read directly as a fraction)', () => {
+    for (const salt of [0x1e5, 0xb111, 7]) {
+      const bins = new Array(10).fill(0);
+      for (let seed = 1; seed <= 4000; seed++) {
+        const u = unitHash(seed, salt);
+        expect(u).toBeGreaterThanOrEqual(0);
+        expect(u).toBeLessThan(1);
+        bins[Math.floor(u * 10)]++;
+      }
+      for (const b of bins) expect(b).toBeGreaterThan(320); // ≈ 400 each
+    }
+  });
+});
+
+describe('mulberry32State', () => {
+  it('is mulberry32, with a state that can be read and restored mid-stream', () => {
+    const a = mulberry32(99), b = mulberry32State(99);
+    for (let i = 0; i < 50; i++) expect(b()).toBe(a());
+    const saved = b.state.a;
+    const next = [b(), b(), b()];
+    b.state.a = saved;
+    expect([b(), b(), b()]).toEqual(next);
   });
 });

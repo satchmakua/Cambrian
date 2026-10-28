@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -44,6 +44,143 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic; **+ gait playback** |
 
 ---
+
+## Part 3f — Portraits, a river, faces and fur (M50–M52) · 2026-10-08
+
+- **Portraits** are an offscreen R3F root (`createRoot` on a detached canvas, `frameloop: 'never'`,
+  one `advance()` per portrait, read back with `toDataURL`) — one extra WebGL context in total.
+- **A beak on a cat.** Retuning felid/canid mouth styles to [0.2, 0.28] crossed the beak band (fanged
+  is [0.125, 0.25) — the Morpho comment's band values were stale), so a third of cats and dogs grew
+  bills, and the ecology tuning that day ran with them as omnivores. Fixed, audited every morph's
+  range against the real bands, pinned with a test, and the 6-seed × 2-year survival re-run.
+- **The pale band under every chin** was the upper-lip fold (built to hide a reptile's tooth roots)
+  drawn in the coat below the lip line; found by hiding the jaw's sub-meshes one at a time.
+- **Recolonisation** rolled each dawn on the shared RNG stream; one test world drew ten > 0.5 in a
+  row. It now rolls on its own hash of (seed, day, species).
+- **Fur**: the same creature material with a shell uniform (one program for all); the strand mask
+  samples the rest-pose body position, so every shell slices the same cells and hairs stay rooted;
+  a backward-and-down lean turns the towel-pile dots into combed hair.
+
+## Part 3e — Courtship, weather, fast-forward, a lasting balance (M46–M49) · 2026-10-08
+
+- **Why the ecology work.** With fast-forward, a three-year run of the default valley ended with three
+  species: fish and insects drifted out with their food at 100% (a global soft cap let a species with
+  ≥10 members breed only while the world was under 135 — the grazers kept it over), every hunter
+  starved mid-chase as a young adult (ungulates outran canids; hunters sprinted the whole chase), and
+  rodents lost to generalists. Diagnosed by instrumenting deaths by cause and per-kind populations
+  each season (scratch tests, not committed). Fixes in M49; the regression test is a one-year
+  diversity check.
+- **Overshoot on the way.** Stalking alone let predators wipe out rodents and insects (canids → 58):
+  notice distances were raised (0.32 → 0.42 for a stalker) and the pounce shortened (6 → 4.5 s).
+  "Canids" with a maw-style mouth were omnivores competing with every grazer — they now get fanged
+  mouths; mutations across the fanged/maw boundary still make omnivores (emergent, kept).
+- **Weather** is a function, not state: nothing to save, identical on replay. The rain was first
+  invisible (0.16 mean alpha, light grey on a light scene); snow was white on white — both re-tuned.
+- **The worker** reuses persistence: `saveWorld` → worker `loadWorld` + `runFor` → `saveWorld` →
+  `adoptWorld` into the live object (keeps the landscape). `bodyOf` caches by content too, so the
+  adopted world's fresh genome objects find their built skins.
+
+## Part 3d — Saved worlds and anatomy pass III (M44–M45) · 2026-10-08
+
+- **Saved worlds.** The world RNG is now `mulberry32State` (its 32-bit state readable), so a save
+  can resume the stream exactly. The test compares the *whole serialisation* of the original and
+  the reloaded world after both run on 150 s — and fails if the RNG state isn't restored (checked).
+  Autosave goes to `localStorage` every minute and on page hide; dev pages with query parameters
+  never resume (the screenshot harness stays reproducible). A world is ~0.3–0.6 MB.
+- **A bad hash.** `mix32` (bare FNV over words) was read directly as a fraction for iris and bill
+  colours; for consecutive seeds its high bits barely move, so irises came only from the
+  pale-yellow…violet end of the palette. `unitHash` adds the murmur3 finaliser. (Engine seeds still
+  use `mix32` — mulberry32 scrambles them.)
+- **Seasons look.** Keyed at the season middles, the first day of spring was still half winter: the
+  world opened under snow with half-bare trees while the clock said Spring. Snow/leaf-fall/autumn
+  colour now run inside their seasons.
+- **Anatomy.** 10% of felids (any `head < 1` necked plan) grew no head — the face sat on the trunk;
+  necked/muzzled and reptile plans now always grow one. A quarter of frogs and lizards drew a splay
+  wide enough to take the *arthropod* leg arch (knees above the back); the arch is now chitin-only.
+  Bare shanks are a shader zone (`uBareY`) below a feathered body's shank line, so toes and shanks
+  share the keratin without new geometry. Eye lids are per-eye geometries in the body material with
+  body-space coordinates baked at the open pose.
+- New Morpho dials reuse the draw they replace (`tailAz`, `armAz`/`armEl`/`armT`, `earAz`) or cost
+  none (`hindLeg`/`foreLeg` constants), so other morphotypes' genomes don't shift.
+
+## Part 3c — Behaviour, landscape, tree of life (M39–M41) · 2026-10-08
+
+- **Behaviour.** Alarm propagation is limited to close kin (≤ 9 bu) and threats within 0.8 vision —
+  over 8 seeds × 20 min it costs ~10% of kills and predators persist in all eight. Juveniles wander
+  around a living parent. `bitAt` drives the actor's lunge; `attackedAt` its flinch. Mood sprites
+  are four shared canvas textures (one SpriteMaterial each).
+- **Eyelids**: hemispheres just outside the eyeball rotated about the eye's X axis — the earlier
+  attempt's "crescent" problem was orientation, not the idea. `LidContext` carries sleep.
+- **All jawed mouths rest shut** (REST_PARTED 0.05) and no longer carve; carve tests use a lamprey.
+- **Flora**: 17k instanced tufts; three flips normals on back faces of double-sided materials,
+  which blacked out half the blades — patched out of `normal_fragment_begin` for grass.
+- **Water**: a 160² half-float height texture of the ground drives depth colour, alpha and foam.
+- **Radial** bodies now array parts about +Y. **Slimes** stay two links (three tapering links read
+  as "headed" in the M26 descriptor). **Stalk eyes** mesh their last link into the eyeball.
+- Process note: twice a commit was chained after piped test output (`vitest | grep && git commit`)
+  and went in with a failing test. Tests now run to a file and the exit code is checked first.
+
+## Part 3b — Mammals, faces and flight (M36–M38) · 2026-10-08
+
+The Studio's side/face cameras made the remaining crudeness obvious: every mammal was a frog in a
+fur suit — a skull-wide lip loop wrapped round a ball head sitting straight on the shoulders, thighs
+ballooning out of the flanks as lobes, a fish fin on the tail, legs pulled in to the middle of a
+sausage body. Fixed at the anatomy level rather than with decals:
+
+- **Skeleton.** A neck segment (per-link lift; the chain's last segment levels itself — *head
+  carriage*); the fusiform bulge is a torso's only (necks and muzzles taper straight); quadruped legs
+  at the trunk's ends (0.1 / 0.92); column-leg hips seated inside the torso below the midline;
+  reared bipeds root their legs at the pelvis (`UPRIGHT_PITCH`).
+- **Skull.** `muzzleHead`: cranium + a narrower dropped muzzle (a third link for long snouts). Eyes,
+  ears and horns ride the cranium; the mouth's size floor is capped by the snout link carrying it.
+- **Muzzled mouths** (`MouthSpec.muzzled` = fur + jawed): the upper lip is fixed low on the muzzle
+  and only the mandible drops; no carve; rests shut (`REST_SHUT`) without a jaw control; teeth
+  reduced to what a closed mammal mouth shows; the jaw and lip fold wear the body's *own* covering
+  material (body-space coords baked onto the feature mesh), plus a wet nose pad. The same trick
+  dresses paws (sole + toes + claws) and ears (built in the body frame, facing forward).
+- **Feather/scale relief** had a hard step under the derivative bump (`fract(row)`, `floor(z)`):
+  1-px streaks at every row. Feathers are now domed vanes on anisotropic cells.
+- **Flight** (sim + view): `flies`/`flySpeed` traits, `alt`/`fly` state, `planFlight` (what is
+  flown, landing rules, never over water), altitude-aware bites; balanced against a no-flight
+  baseline (six seeds, 15 min: 145 vs 153 birds alive). Bugs found on the way: long-trip wander
+  targets fell outside the world (the flier slid along the edge forever) — now clamped; a 0.6 s
+  re-pick kept fliers circling — flights now finish, with hysteresis on intent, not altitude.
+
+## Part 3 — See them, then set them loose (M27–M35) · 2026-10-08
+
+A long autonomous session with two aims: give creatures an honest way to be **looked at**, and a
+**world** to live in. Everything is judged from real renders now — a headless Chromium harness
+(`scripts/shoot.mjs`) plus the Studio's plates and Bestiary made each defect visible before fixing it.
+
+**Seeing them.** The canvas blanked whenever the CDN HDR fetch failed (a throw that Suspense doesn't
+catch) — replaced by a procedural studio environment PMREM'd once per renderer. The covering read as
+TV static; the root cause was the bump (a 0..1 relief fed in as a height in body units → slopes ~30,
+saturated normals), not the colour. Physical relief heights + band-limited procedural noise +
+`MeshPhysicalMaterial` lobes fixed it. Bodies were bead chains with flat facets: the field is now
+round cones (exact SDF), the mesh welded with gradient normals and SDF AO, sampled as a narrow band.
+The **Studio** (plates, x-ray skeleton, inspector, Bestiary, motion preview) shares one WebGL context.
+
+**Anatomy found by looking.** Carapace = a scaled sphere that swelled into an egg → a shell polygonized
+from the trunk field. Arachnids were balls → every leg pair re-thickened the same node ×1.22. Legs
+collapsed onto 1–2 nodes → interpolated attach + arched arthropod legs. Wings were kites drawn from
+the tip node → shoulder-built folded feathered wings (shrink-wrapped to the flank) and membrane wings.
+
+**The World.** `src/sim/` (seeded, headless, Math.random-banned): terrain, traits read off anatomy, and
+creatures choosing flee/sleep/eat/breed/wander; breeding mutates; drift past a morphospace threshold
+speciates. Balancing was done with 20-day headless runs, and the findings were not where expected:
+grazers chasing "the best cell" starved while standing in algae (→ graze in place); meals were
+interrupted by the re-deliberation that started them (→ hysteresis); and minority species died not of
+hunger but because the grazers filled the population cap within a day so nobody else could ever breed
+(→ a soft cap with a rescue band for rare species, condition-gated breeding, ectotherms at half the
+burn). Runs now show predator-prey cycles, persistent hunters and, in some worlds, stable fish.
+
+**Motion.** A bone per node, the smooth skin skinned by round-cone distance, features portaled into
+bones; one gait phase rule gives trot / tripod / alternation. Idle wobble stays removed — motion comes
+only from what a creature is doing. World perf: ~5–7k → ~520 draw calls (LOD, merged kit, budgeted builds).
+
+**Verified:** typecheck clean; the full suite green (190+ tests: new anatomy, wings, rig, shell,
+smooth-skin, material, and ecosystem tests); every visual change checked in headless renders.
+_Known limits:_ the World is heavy for software GL (fine on a GPU); mouths still rest open; no flight.
 
 ## M26 — Morphospace descriptor dims (headedness + sheen) · 2026-07-18
 

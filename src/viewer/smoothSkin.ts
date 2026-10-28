@@ -20,20 +20,57 @@
  */
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
-import { buildFieldPrims, fieldAtCarved, carveDist, type Carve } from './bodyField';
+import { buildFieldPrims, fieldAt, fieldAtCarved, carveDist, type Carve, type FieldPrims } from './bodyField';
+import { polygonize, gridCells } from './polygonize';
 
-// keep grid_samples × primitives under this, so the (one-time, off-render-loop) build is quick
-const BUDGET = 1e6;
+// Grid resolution, in cells along the creature's longest padded extent. The grid is sampled as a
+// NARROW BAND (exact field only near the skin — see polygonize) so resolution costs surface area.
+export const SKIN_RES = { high: 84, low: 44 } as const;
+export type SkinQuality = keyof typeof SKIN_RES;
 
-export function buildSmoothGeometry(p: Phenotype, full = false, carves: readonly Carve[] = []): THREE.BufferGeometry {
+function meanRadius(prims: FieldPrims): number {
+  let meanR = 0;
+  for (let i = 0; i < prims.nc; i++) meanR += prims.pr[i];
+  return meanR / Math.max(prims.nc, 1);
+}
+
+/** Floor every cone radius at ~0.6 of a grid cell, so a thin limb (a leg, a tail tip) is always at
+ *  least one cell thick and can't be missed/fragmented by the marching tets (M24). */
+function floorRadii(prims: FieldPrims, cell: number): void {
+  const rFloor = 0.6 * cell;
+  for (let m = 0; m < prims.nc; m++) {
+    if (prims.pr[m] < rFloor) prims.pr[m] = rFloor;
+    if (prims.ra[m] < rFloor) prims.ra[m] = rFloor;
+    if (prims.rb[m] < rFloor) prims.rb[m] = rFloor;
+  }
+}
+
+function toGeometry(
+  poly: ReturnType<typeof polygonize>,
+  flesh?: Float32Array,
+): THREE.BufferGeometry {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(poly.positions, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(poly.normals, 3));
+  geo.setIndex(new THREE.BufferAttribute(poly.indices, 1));
+  const n = poly.positions.length / 3;
+  // aFlesh — mouth-cavity weight (the covering shader's wet gum-flesh); zeros when there is none
+  geo.setAttribute('aFlesh', new THREE.BufferAttribute(flesh ?? new Float32Array(n), 1));
+  geo.setAttribute('aAO', new THREE.BufferAttribute(poly.ao, 1));
+  return geo;
+}
+
+export function buildSmoothGeometry(
+  p: Phenotype,
+  full = false,
+  carves: readonly Carve[] = [],
+  quality: SkinQuality = 'high',
+): THREE.BufferGeometry {
   // the shared body field as flat typed arrays — `full` (hybrid) meshes every part for full
   // definition; otherwise just the locomotor body (see bodyField for the filters + fallbacks).
   const prims = buildFieldPrims(p, full ? 'hybrid' : 'body');
   const np = prims.nc + prims.ne;
-
-  let meanR = 0;
-  for (let i = 0; i < prims.nc; i++) meanR += prims.pr[i];
-  meanR = meanR / Math.max(prims.nc, 1);
+  const meanR = meanRadius(prims);
   prims.k = (full ? 0.34 : 0.5) * meanR; // hybrid blends tighter → keeps more part definition
 
   // grid bounds: the body bounds padded so the inflated surface stays inside — including any
@@ -41,95 +78,28 @@ export function buildSmoothGeometry(p: Phenotype, full = false, carves: readonly
   const pad = meanR * 1.5 + prims.k + prims.excess + 0.05;
   const min = [p.bounds.min[0] - pad, p.bounds.min[1] - pad, p.bounds.min[2] - pad];
   const max = [p.bounds.max[0] + pad, p.bounds.max[1] + pad, p.bounds.max[2] + pad];
-  const ext = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
-
-  // adaptive, roughly-cubic cells, total samples bounded by the budget
-  const vol = Math.max(ext[0] * ext[1] * ext[2], 1e-6);
-  const cs = Math.cbrt((vol * np) / BUDGET) || ext[0] / 32;
-  const nx = clampi(Math.ceil(ext[0] / cs), 8, 64);
-  const ny = clampi(Math.ceil(ext[1] / cs), 8, 64);
-  const nz = clampi(Math.ceil(ext[2] / cs), 8, 64);
-  const dx = ext[0] / nx;
-  const dy = ext[1] / ny;
-  const dz = ext[2] / nz;
-
-  // M24: floor every capsule radius at ~0.6 of a grid cell, so a thin limb (a leg, a tail tip) is
-  // always at least one cell thick and can't be missed/fragmented by the marching tets (the gaps).
-  // (Ellipsoid nodes ride fat body nodes and never bind — their thin axis is backed by a capsule.)
-  const rFloor = 0.6 * Math.max(dx, dy, dz);
-  for (let m = 0; m < prims.nc; m++) if (prims.pr[m] < rFloor) prims.pr[m] = rFloor;
+  // a very many-part creature steps the resolution down a touch so its per-sample cost stays bounded
+  const res = SKIN_RES[quality] * (np > 160 ? 0.8 : 1);
+  const g = gridCells(min, max, res);
+  const cell = Math.max(g.dx, g.dy, g.dz);
+  floorRadii(prims, cell);
 
   // a carve rim thinner than a grid cell aliases into stair-steps — soften it to the cell size
-  const cell = Math.max(dx, dy, dz);
   const carved: Carve[] =
     carves.length === 0 ? [] : carves.map((c) => (c.blend >= cell * 0.8 ? c : { ...c, blend: cell * 0.8 }));
 
-  // sample the field once at every grid corner: (nx+1)(ny+1)(nz+1) values.
-  const sx = nx + 1;
-  const sy = ny + 1;
-  const sz = nz + 1;
-  const field = new Float32Array(sx * sy * sz);
-  const idx = (i: number, j: number, l: number) => (l * sy + j) * sx + i;
-  for (let l = 0; l < sz; l++) {
-    const z = min[2] + l * dz;
-    for (let j = 0; j < sy; j++) {
-      const y = min[1] + j * dy;
-      for (let i = 0; i < sx; i++) {
-        field[idx(i, j, l)] = fieldAtCarved(prims, carved, min[0] + i * dx, y, z);
-      }
-    }
-  }
+  const poly = polygonize((x, y, z) => fieldAtCarved(prims, carved, x, y, z), min, max, {
+    res,
+    aoScale: meanR * 0.2,
+  });
 
-  const positions: number[] = [];
-  const px = (i: number) => min[0] + i * dx;
-  const py = (j: number) => min[1] + j * dy;
-  const pz = (l: number) => min[2] + l * dz;
-
-  // cube-corner offsets v0..v7 and the 6-tet decomposition sharing the v0–v6 diagonal
-  const CORN: [number, number, number][] = [
-    [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
-    [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1],
-  ];
-  const TETS: [number, number, number, number][] = [
-    [0, 1, 2, 6], [0, 2, 3, 6], [0, 3, 7, 6], [0, 7, 4, 6], [0, 4, 5, 6], [0, 5, 1, 6],
-  ];
-  const cvx = new Float64Array(8);
-  const cvy = new Float64Array(8);
-  const cvz = new Float64Array(8);
-  const cval = new Float64Array(8);
-
-  for (let l = 0; l < nz; l++) {
-    for (let j = 0; j < ny; j++) {
-      for (let i = 0; i < nx; i++) {
-        for (let c = 0; c < 8; c++) {
-          const o = CORN[c];
-          cvx[c] = px(i + o[0]);
-          cvy[c] = py(j + o[1]);
-          cvz[c] = pz(l + o[2]);
-          cval[c] = field[idx(i + o[0], j + o[1], l + o[2])];
-        }
-        // outward gradient of the cell (field rises away from the body), to orient winding
-        const gx = cval[1] + cval[2] + cval[5] + cval[6] - (cval[0] + cval[3] + cval[4] + cval[7]);
-        const gy = cval[2] + cval[3] + cval[6] + cval[7] - (cval[0] + cval[1] + cval[4] + cval[5]);
-        const gz = cval[4] + cval[5] + cval[6] + cval[7] - (cval[0] + cval[1] + cval[2] + cval[3]);
-        for (const t of TETS) {
-          marchTet(t, cvx, cvy, cvz, cval, gx, gy, gz, positions);
-        }
-      }
-    }
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-
-  // aFlesh — 1 deep inside a carved cavity, fading to 0 `band` outside its wall. The covering
-  // shader shades it as dark wet mouth-flesh. Always present (zeros without carves), so the
-  // extended material never references a missing attribute.
-  const nVerts = positions.length / 3;
+  // aFlesh — 1 deep inside a carved cavity, fading to 0 `band` outside its wall
+  const nVerts = poly.positions.length / 3;
   const flesh = new Float32Array(nVerts);
   if (carved.length > 0) {
+    const pos = poly.positions;
     for (let v = 0; v < nVerts; v++) {
-      const x = positions[v * 3], y = positions[v * 3 + 1], z = positions[v * 3 + 2];
+      const x = pos[v * 3], y = pos[v * 3 + 1], z = pos[v * 3 + 2];
       let w = 0;
       for (const c of carved) {
         const cd = carveDist(c, x, y, z);
@@ -139,89 +109,81 @@ export function buildSmoothGeometry(p: Phenotype, full = false, carves: readonly
       flesh[v] = w < 0 ? 0 : w > 1 ? 1 : w;
     }
   }
-  geo.setAttribute('aFlesh', new THREE.BufferAttribute(flesh, 1));
-  geo.computeVertexNormals();
-  return geo;
+  return toGeometry(poly, flesh);
 }
 
-// --- a tet's contribution: 0/1/2 triangles, oriented outward by the cell gradient -----------
+// =============================================================================
+// Carapace shell
+// =============================================================================
 
-function marchTet(
-  tet: [number, number, number, number],
-  vx: Float64Array, vy: Float64Array, vz: Float64Array, val: Float64Array,
-  gx: number, gy: number, gz: number,
-  out: number[],
-): void {
-  const [A, B, C, D] = tet;
-  const vA = val[A], vB = val[B], vC = val[C], vD = val[D];
-  let ti = 0;
-  if (vA < 0) ti |= 1;
-  if (vB < 0) ti |= 2;
-  if (vC < 0) ti |= 4;
-  if (vD < 0) ti |= 8;
-  if (ti === 0 || ti === 0x0f) return;
-
-  // interpolate the zero-crossing on edge (corner m → corner n)
-  const ip = (m: number, n: number): [number, number, number] => {
-    const a = m === A ? vA : m === B ? vB : m === C ? vC : vD;
-    const b = n === A ? vA : n === B ? vB : n === C ? vC : vD;
-    const t = Math.abs(a - b) < 1e-9 ? 0.5 : a / (a - b);
-    return [vx[m] + t * (vx[n] - vx[m]), vy[m] + t * (vy[n] - vy[m]), vz[m] + t * (vz[n] - vz[m])];
+/**
+ * A carapace that CONFORMS to the body: the trunk's own field inflated by a shell thickness (more on
+ * top — a domed back) and cut off below the flank by a skirt plane that flares out at the rim. The
+ * old carapace was a scaled sphere hung on one node — on a wide crab or a deep turtle it swelled into
+ * a giant egg that swallowed the creature. Derived from the trunk, the shell is always the animal's
+ * own outline, a little bigger: the head, legs and tail emerge from under its rim.
+ *
+ * Returns null when the creature has no carapace part (or no trunk to cover).
+ */
+export function buildShellGeometry(p: Phenotype, quality: SkinQuality = 'high'): THREE.BufferGeometry | null {
+  const shellNode = p.nodes.find((n) => n.terminal === 'carapace');
+  if (!shellNode) return null;
+  const trunk = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0);
+  if (trunk.length === 0) return null;
+  // a field of the trunk alone: its spine chain (round cones) + shaped nodes
+  const trunkSet = new Set(trunk);
+  const sub: Phenotype = {
+    ...p,
+    nodes: p.nodes,
+    edges: p.edges.filter(([a, b]) => trunkSet.has(p.nodes[a]) && trunkSet.has(p.nodes[b])),
   };
-  const tri = (P: number[][]) => emit(P[0], P[1], P[2], gx, gy, gz, out);
-
-  switch (ti) {
-    case 0x01: case 0x0e: // A alone
-      tri([ip(A, B), ip(A, C), ip(A, D)]);
-      break;
-    case 0x02: case 0x0d: // B alone
-      tri([ip(B, A), ip(B, C), ip(B, D)]);
-      break;
-    case 0x04: case 0x0b: // C alone
-      tri([ip(C, A), ip(C, B), ip(C, D)]);
-      break;
-    case 0x08: case 0x07: // D alone
-      tri([ip(D, A), ip(D, B), ip(D, C)]);
-      break;
-    case 0x03: case 0x0c: { // A,B together → quad across the other edges
-      const p1 = ip(A, C), p2 = ip(A, D), p3 = ip(B, D), p4 = ip(B, C);
-      tri([p1, p2, p3]);
-      tri([p1, p3, p4]);
-      break;
-    }
-    case 0x05: case 0x0a: { // A,C together
-      const p1 = ip(A, B), p2 = ip(A, D), p3 = ip(C, D), p4 = ip(C, B);
-      tri([p1, p2, p3]);
-      tri([p1, p3, p4]);
-      break;
-    }
-    case 0x06: case 0x09: { // B,C together
-      const p1 = ip(B, A), p2 = ip(B, D), p3 = ip(C, D), p4 = ip(C, A);
-      tri([p1, p2, p3]);
-      tri([p1, p3, p4]);
-      break;
-    }
+  const prims = buildFieldPrims(sub, 'body');
+  if (sub.edges.length === 0) {
+    // a one-node trunk: build the field from that node alone
+    const n = trunk[0];
+    prims.nc = 1;
+    prims.ax[0] = prims.bx[0] = n.pos[0];
+    prims.ay[0] = prims.by[0] = n.pos[1];
+    prims.az[0] = prims.bz[0] = n.pos[2];
+    prims.ra[0] = prims.rb[0] = prims.pr[0] = n.radius;
+    prims.cx[0] = n.pos[0]; prims.cy[0] = n.pos[1]; prims.cz[0] = n.pos[2]; prims.hl[0] = 0;
+    prims.ne = 0;
   }
-}
-
-// push a triangle, flipping winding so its face points the way the field rises (outward)
-function emit(
-  a: number[], b: number[], c: number[],
-  gx: number, gy: number, gz: number,
-  out: number[],
-): void {
-  const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
-  const wx = c[0] - a[0], wy = c[1] - a[1], wz = c[2] - a[2];
-  const nx = uy * wz - uz * wy;
-  const ny = uz * wx - ux * wz;
-  const nz = ux * wy - uy * wx;
-  if (nx * gx + ny * gy + nz * gz >= 0) {
-    out.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
-  } else {
-    out.push(a[0], a[1], a[2], c[0], c[1], c[2], b[0], b[1], b[2]); // flip
+  let rMax = 0, ySum = 0;
+  let zMin = Infinity, zMax = -Infinity;
+  for (const n of trunk) {
+    rMax = Math.max(rMax, n.radius);
+    ySum += n.pos[1];
+    zMin = Math.min(zMin, n.pos[2] - n.radius);
+    zMax = Math.max(zMax, n.pos[2] + n.radius);
   }
-}
+  const yMid = ySum / trunk.length;
+  prims.k = 0.4 * rMax;
+  // the shell's size gene: the carapace part's thickness (relative to the trunk) sets how proud it sits
+  const prominence = Math.min(1.6, Math.max(0.6, shellNode.radius / Math.max(rMax, 1e-3)));
+  const t0 = rMax * 0.1 * prominence; // flank thickness
+  const dome = rMax * 0.22 * prominence; // extra on top — the domed back
+  const yCut = yMid - rMax * 0.28; // the skirt: covers the back and upper flanks, not the belly
+  const flare = rMax * 0.18; // the rim lips outward over the legs
 
-function clampi(v: number, lo: number, hi: number): number {
-  return v < lo ? lo : v > hi ? hi : v;
+  const field = (x: number, y: number, z: number): number => {
+    const up = Math.min(1, Math.max(0, (y - yCut) / (rMax * 1.4)));
+    // inflate: thicker toward the crown; flare at the rim (just above the cut)
+    const rim = Math.max(0, 1 - (y - yCut) / (rMax * 0.35));
+    const t = t0 + dome * up * up + flare * rim;
+    const body = fieldAt(prims, x, y, z) - t;
+    const cut = yCut - y; // > 0 below the skirt → outside
+    return body > cut ? body : cut;
+  };
+  const pad = rMax * 0.9 + 0.1;
+  let xMin = Infinity, xMax = -Infinity, yMax = -Infinity;
+  for (const n of trunk) {
+    xMin = Math.min(xMin, n.pos[0] - n.radius * (n.scale?.[0] ?? 1));
+    xMax = Math.max(xMax, n.pos[0] + n.radius * (n.scale?.[0] ?? 1));
+    yMax = Math.max(yMax, n.pos[1] + n.radius * (n.scale?.[1] ?? 1));
+  }
+  const min = [xMin - pad, yCut - rMax * 0.1, zMin - pad];
+  const max = [xMax + pad, yMax + pad, zMax + pad];
+  const poly = polygonize(field, min, max, { res: SKIN_RES[quality] * 0.75, aoScale: rMax * 0.15 });
+  return toGeometry(poly);
 }

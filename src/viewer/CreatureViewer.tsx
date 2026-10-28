@@ -7,9 +7,10 @@
  * the creature group by −centre so its centre sits at the origin, point OrbitControls' target at the
  * origin, and frame the camera by the creature's size — so it never lists off-screen as it rotates.
  */
-import { Suspense, useEffect, useMemo, useState } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
-import { OrbitControls, Environment, ContactShadows } from '@react-three/drei';
+import { useEffect, useMemo, useState } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { OrbitControls, ContactShadows } from '@react-three/drei';
+import { StudioEnvironment } from './StudioEnvironment';
 
 // Dev/headless: a URL `view` param picks a canonical camera angle for reproducible face shots.
 // The creature faces +Z, so 'front' looks back along +Z at the head; 'side' from +X. `head=1`
@@ -40,7 +41,7 @@ function Framer({ size, focus }: { size: number; focus: Focus | null }) {
     const [tx, ty, tz] = head ? focus.pt : [0, 0, 0];
     // head distance must clear the whole body (a small face on a fluffy body would otherwise clip
     // the camera inside the fur), so floor it at a fraction of the body size
-    const d = head ? Math.max(focus.r * 4.0, size * 0.85) : size * 2.1;
+    const d = head ? Math.max(focus.r * 4.0, size * 0.85) : size * 1.65;
     if (view === 'front') camera.position.set(tx + d * 0.2, ty + d * 0.3, tz + d * 0.95);
     else if (view === 'side') camera.position.set(tx + d * 1.0, ty + d * 0.28, tz + d * 0.16);
     else camera.position.set(tx + d * 0.52, ty + d * 0.42, tz + d * 0.78);
@@ -58,6 +59,8 @@ import type { Phenotype } from '../engine/grow';
 import type { Trajectory } from '../physics/fitness';
 import type { SkinMode } from '../ui/store';
 import { CreatureMesh } from './CreatureMesh';
+import { createRig, poseRig } from './rig';
+import { traitsOf } from '../sim/traits';
 
 export function CreatureViewer({
   phenotype,
@@ -125,7 +128,7 @@ export function CreatureViewer({
     return { pt, r };
   }, [phenotype, center]);
 
-  const dist = size * 2.1;
+  const dist = size * 1.65;
 
   return (
     <Canvas
@@ -147,17 +150,11 @@ export function CreatureViewer({
         shadow-bias={-0.0004}
       />
       <directionalLight position={[-size * 1.0, size * 0.6, -size * 0.8]} intensity={0.35} color="#a7c0ff" />
-      {/* The preset HDR is fetched from a CDN and SUSPENDS. Without its own boundary that suspense
-          propagates and blanks the whole canvas whenever the fetch is slow, cold-cached, or offline
-          (it silently broke headless captures). Isolated, the creature renders immediately and the
-          environment lighting pops in when — or if — it arrives. */}
-      <Suspense fallback={null}>
-        <Environment preset="city" />
-      </Suspense>
+      <StudioEnvironment />
 
       {/* centre the creature at the origin so the auto-rotate orbits its middle, not its tail */}
       <group position={[-center[0], -center[1], -center[2]]}>
-        <CreatureMesh phenotype={phenotype} skinMode={skinMode} trajectory={trajectory} />
+        <IdleCreature phenotype={phenotype} skinMode={skinMode} trajectory={trajectory} alive={!frozen && !trajectory && skinMode !== 'capsules'} />
       </group>
       <ContactShadows position={[0, groundY, 0]} scale={size * 2.4} blur={2.2} opacity={0.5} far={size} resolution={512} />
 
@@ -173,4 +170,21 @@ export function CreatureViewer({
       <Framer size={size} focus={faceFocus} />
     </Canvas>
   );
+}
+
+/** The hero creature, alive at rest: on a smooth skin it is rigged and idles — breathes, shifts its
+ *  weight, glances about, swishes its tail, blinks (the eyes blink on their own). Frozen headless
+ *  captures and the capsule kit stay static. */
+function IdleCreature({ phenotype, skinMode, trajectory, alive }: { phenotype: Phenotype; skinMode: SkinMode; trajectory: Trajectory | null; alive: boolean }) {
+  const rig = useMemo(() => (alive ? createRig(phenotype) : null), [phenotype, alive]);
+  const swim = useMemo(() => {
+    const t = traitsOf(phenotype);
+    return t.habitat === 'water' || t.locomotion === 'swim';
+  }, [phenotype]);
+  useFrame((_, dt) => {
+    if (!rig) return;
+    // a swimmer idles with a slow fin-and-tail scull; a walker stands
+    poseRig(rig, { dt: Math.min(dt, 0.05), speed: swim ? 0.25 : 0, cruise: 1, sleep: 0, eat: 0, swim, turn: 0, idle: 1 });
+  });
+  return <CreatureMesh phenotype={phenotype} skinMode={skinMode} trajectory={trajectory} rig={rig} carved={!rig} fur />;
 }

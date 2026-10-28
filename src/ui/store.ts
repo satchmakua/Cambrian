@@ -5,7 +5,7 @@
  */
 import { create } from 'zustand';
 import { mix32 } from '../engine/rng';
-import { defaultGenome, type Genome } from '../engine/genome';
+import type { Genome } from '../engine/genome';
 import { grow } from '../engine/grow';
 import { randomGenome, genomeOfMorphotype, type SymmetryMode } from '../engine/random';
 import { breederLitter } from '../engine/selection';
@@ -17,10 +17,26 @@ import type { Trajectory } from '../physics/fitness';
 
 const LITTER = 9;
 const STORAGE_KEY = 'cambrian.session.v2c'; // bumped for the M12 covering genes
-const SKIN_KEY = 'cambrian.skinMode.v1'; // a render preference, persisted on its own
+const SKIN_KEY = 'cambrian.skinMode.v2'; // a render preference, persisted on its own (v2: hybrid default)
 
 /** capsules (the kit) · smooth (organic SDF, body only) · hybrid (organic SDF over every part). */
 export type SkinMode = 'capsules' | 'smooth' | 'hybrid';
+
+/** The top-level screen: breed (the Biomorphs loop) · studio (inspect one specimen) · world (ecosystem). */
+export type AppView = 'breed' | 'studio' | 'world';
+
+function initialView(): AppView {
+  try {
+    if (typeof location !== 'undefined') {
+      const q = new URLSearchParams(location.search);
+      if (q.get('studio') === '1' || q.get('bestiary') === '1') return 'studio';
+      if (q.get('world') === '1') return 'world';
+    }
+  } catch {
+    /* ignore */
+  }
+  return 'breed';
+}
 
 function loadSkinMode(): SkinMode {
   try {
@@ -29,7 +45,8 @@ function loadSkinMode(): SkinMode {
   } catch {
     /* ignore */
   }
-  return 'capsules';
+  // the welded smooth surface over every part — the capsule kit is the fallback, not the face
+  return 'hybrid';
 }
 
 interface Session {
@@ -43,6 +60,10 @@ interface Session {
 }
 
 interface AppState extends Session {
+  view: AppView;
+  setView: (view: AppView) => void;
+  /** Root a fresh lineage at this exact genome (the Bestiary's "adopt", the World's "take home"). */
+  adopt: (genome: Genome) => void;
   pressure: Pressure; // directed-evolution target (M4)
   skinMode: SkinMode; // capsules / smooth / hybrid (M15 + the hybrid)
   setSkinMode: (mode: SkinMode) => void;
@@ -139,7 +160,9 @@ function loadInitial(): Session {
   } catch {
     /* fall through to a fresh session */
   }
-  return rootedAt(defaultGenome(), 'auto', {});
+  // a first visit starts on a creature from the library chosen to read well (a russet fox-dog); the
+  // hand-built demo genome (`defaultGenome`) stays the engine's fixture
+  return rootedAt(genomeOfMorphotype(3, 'canid'), 'auto', {});
 }
 
 export const useStore = create<AppState>((set, get) => {
@@ -150,6 +173,9 @@ export const useStore = create<AppState>((set, get) => {
   const CLEAR_GAIT = { playback: null, playbackOn: false } as const; // for the set-callback actions
   return {
     ...loadInitial(),
+    view: initialView(),
+    setView: (view) => set({ view }),
+    adopt: (genome) => commit(rootedAt(structuredClone(genome), get().symmetryMode, get().menagerie)),
     pressure: ZERO_PRESSURE,
     skinMode: loadSkinMode(),
     morphoFilter: null,

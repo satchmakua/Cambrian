@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './ui/App';
 import { useStore, type SkinMode } from './ui/store';
 import type { SymmetryMode } from './engine/random';
+import { decodeGenome } from './engine/share';
 import './index.css';
 
 // Dev/headless only: let a screenshot harness request an exact creature + view via URL params,
@@ -14,6 +15,15 @@ if (import.meta.env.DEV) {
     const morph = q.get('morph');
     const sym = (q.get('sym') as SymmetryMode) || 'auto';
     useStore.getState().devLoad(seed, morph, sym);
+  }
+  // ?g=CAM2:… — open an exact (e.g. evolved) creature from its share string
+  const shared = q.get('g');
+  if (shared) {
+    try {
+      useStore.getState().adopt(decodeGenome(shared));
+    } catch (e) {
+      console.warn('bad ?g= creature string', e);
+    }
   }
   const skin = q.get('skin');
   if (skin === 'smooth' || skin === 'hybrid' || skin === 'capsules') {

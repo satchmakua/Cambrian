@@ -9,6 +9,7 @@
  * three's `GLTFExporter` over it → a binary GLB (browser only — the exporter uses `FileReader`).
  */
 import * as THREE from 'three';
+import { coatDark, coatMain } from './palette';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import type { Phenotype } from '../engine/grow';
 import type { Palette, Covering } from '../engine/genome';
@@ -36,10 +37,10 @@ export function buildExportGroup(phenotype: Phenotype, smooth: boolean): THREE.G
   const group = new THREE.Group();
   group.name = 'cambrian-creature';
 
-  const base = new THREE.Color().setHSL(pal.hueA, pal.sat, pal.light);
+  const base = coatMain(pal);
   const preset = ROUGH[cov.type];
   const bodyMat = new THREE.MeshStandardMaterial({ color: base, roughness: preset.rough, metalness: preset.metal });
-  const footColor = new THREE.Color().setHSL(pal.hueA, pal.sat, Math.max(0.12, pal.light * 0.45));
+  const footColor = coatDark(pal);
   const finColor = base.clone();
   const featMat = new THREE.MeshStandardMaterial({ color: footColor, roughness: 0.6 });
   const finMat = new THREE.MeshStandardMaterial({ color: finColor, roughness: 0.55, side: THREE.DoubleSide });

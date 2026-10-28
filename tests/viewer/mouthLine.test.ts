@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { grow, type Phenotype } from '../../src/engine/grow';
-import { randomGenome } from '../../src/engine/random';
+import { genomeOfMorphotype, randomGenome } from '../../src/engine/random';
 import { defaultGenome } from '../../src/engine/genome';
 import { buildFieldPrims, fieldAt, fieldAtCarved } from '../../src/viewer/bodyField';
 import { buildMouthLine, mouthCarves, mouthSpecs, type MouthSpec } from '../../src/viewer/mouthLine';
@@ -11,6 +11,17 @@ const ON_SURFACE = 5e-3;
 
 function firstMouth(p: Phenotype): MouthSpec | undefined {
   return mouthSpecs(p)[0];
+}
+
+/** the default creature wearing a lamprey funnel: a carving mouth (jawed mouths rest shut, uncarved) */
+function funnelGenome() {
+  const g = defaultGenome();
+  let seg: typeof g.body | undefined = g.body;
+  while (seg) {
+    for (const a of seg.appendages) if (a.terminal === 'mouth') a.style = 0.68;
+    seg = seg.child;
+  }
+  return g;
 }
 
 describe('mouth line (mouth overhaul)', () => {
@@ -78,7 +89,7 @@ describe('mouth line (mouth overhaul)', () => {
   });
 
   it('mouth carves remove matter exactly where the maw is', () => {
-    const p = grow(defaultGenome());
+    const p = grow(funnelGenome());
     const carves = mouthCarves(p);
     expect(carves.length).toBeGreaterThan(0);
     const f = buildFieldPrims(p, 'body');
@@ -97,7 +108,7 @@ describe('mouth line (mouth overhaul)', () => {
 
   it('the carved smooth skin marks wet mouth-flesh vertices (aFlesh) at the maw', async () => {
     const { buildSmoothGeometry } = await import('../../src/viewer/smoothSkin');
-    const p = grow(defaultGenome());
+    const p = grow(funnelGenome());
     const carves = mouthCarves(p);
     expect(carves.length).toBeGreaterThan(0);
     const geo = buildSmoothGeometry(p, true, carves);
@@ -132,7 +143,7 @@ describe('mouth line (mouth overhaul)', () => {
 
   it('carves spare the eyes — every eye keeps solid flesh behind its bulb', () => {
     let carvedBodies = 0;
-    for (let s = 0; s < 40; s++) {
+    for (let s = 0; s < 160; s++) {
       const p = grow(randomGenome(s));
       const carves = mouthCarves(p);
       if (carves.length === 0) continue;
@@ -161,12 +172,34 @@ describe('mouth line (mouth overhaul)', () => {
     expect(carvedBodies).toBeGreaterThan(10);
   });
 
+  it('a mammal (furred, jawed) mouth is muzzled: uncarved, a nose on the skin, opening downward only', () => {
+    let checked = 0;
+    for (const id of ['felid', 'canid', 'ursid', 'ungulate', 'rodent']) {
+      for (let s = 0; s < 4; s++) {
+        const p = grow(genomeOfMorphotype(s * 13 + 2, id));
+        const spec = mouthSpecs(p)[0];
+        if (!spec || !['herbivore', 'maw', 'fanged'].includes(spec.variant)) continue;
+        expect(spec.muzzled).toBe(true);
+        expect(mouthCarves(p)).toHaveLength(0);
+        const line = buildMouthLine(p, spec);
+        const f = buildFieldPrims(p, 'body');
+        expect(line.nose).not.toBeNull();
+        expect(Math.abs(fieldAt(f, ...line.nose!.p))).toBeLessThan(ON_SURFACE);
+        // the nose sits above the upper lip; the lower lip hangs below it (the mandible drops)
+        const mid = (line.upper.length - 1) / 2;
+        const up = (v: readonly number[]) => v[0] * spec.up[0] + v[1] * spec.up[1] + v[2] * spec.up[2];
+        expect(up(line.nose!.p)).toBeGreaterThan(up(line.upper[mid].p));
+        expect(up(line.upper[mid].p)).toBeGreaterThan(up(line.lower[mid].p));
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(10);
+  });
+
   it('every wedge/funnel mouth across random genomes yields exactly one finite carve', () => {
     for (let s = 0; s < 40; s++) {
       const p = grow(randomGenome(s));
-      const carvers = mouthSpecs(p).filter((m) =>
-        ['herbivore', 'maw', 'fanged', 'baleen', 'sucker', 'lamprey'].includes(m.variant),
-      );
+      const carvers = mouthSpecs(p).filter((m) => ['baleen', 'sucker', 'lamprey'].includes(m.variant));
       const carves = mouthCarves(p);
       expect(carves.length).toBe(carvers.length);
       for (const c of carves) {

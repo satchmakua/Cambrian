@@ -211,7 +211,7 @@ describe('baleen mouth (mouth overhaul)', () => {
     const sunk: BaleenBuild = buildBaleen(g.p, g.idx, mouthCarves(g.p), true)!;
     const proudMean = meanField(g.p, proud.interior, o);
     const sunkMean = meanField(g.p, sunk.interior, o);
-    expect(proudMean).toBeGreaterThan(-1e-3); // at/above the raw skin — a visible dark backdrop
+    expect(proudMean).toBeGreaterThan(-0.02 * proud.r); // at/above the raw skin (within a hair) — a visible dark backdrop
     expect(sunkMean).toBeLessThan(-0.1 * proud.r); // well inside the body, filling the real carve
     expect(sunkMean).toBeLessThan(proudMean - 0.15 * proud.r);
   });

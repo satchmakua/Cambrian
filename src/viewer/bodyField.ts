@@ -24,13 +24,39 @@ export interface FieldPrims {
   bx: Float64Array;
   by: Float64Array;
   bz: Float64Array;
-  pr: Float64Array;
+  pr: Float64Array; // mean radius (legacy consumers: mean-girth measures, the grid floor)
+  /** per-end radii: each edge is a ROUND CONE a(ra) → b(rb), so a chain of tapering nodes reads as one
+   *  smooth tapered limb/trunk instead of a string of beads joined by constant-radius tubes */
+  ra: Float64Array;
+  rb: Float64Array;
+  /** per-cone bounding sphere: centre (cx,cy,cz) and half-length hl (radius = hl + max(ra, rb)) —
+   *  lets fieldAt skip any primitive that provably cannot change the smooth union at a point */
+  cx: Float64Array;
+  cy: Float64Array;
+  cz: Float64Array;
+  hl: Float64Array;
+  /** ELLIPTICAL cones (spine chains with an anisotropic cross-section): a flag, the segment's local
+   *  frame (the start node's orientation — +Z along the chain), and the cross-section x/y scale at each
+   *  end, interpolated along the segment. A tall fish or a broad croc is then one smooth elliptical
+   *  tube, instead of round cones studded with a bulging ellipsoid at every node (the caterpillar). */
+  an: Uint8Array;
+  aq: Float64Array; // 4·nc
+  sx0: Float64Array;
+  sy0: Float64Array;
+  sx1: Float64Array;
+  sy1: Float64Array;
   nc: number;
   /** ellipsoid nodes (per-node anisotropy): centers ec (3·ne), orientations eq (4·ne), semi-axes er (3·ne) */
   ec: Float64Array;
   eq: Float64Array;
   er: Float64Array;
   ne: number;
+  /** CHAINS: each cone's chain id (the trunk, the neck, the head, each limb, the tail), and the cone
+   *  order fieldAt walks (chain by chain). Cones of one chain meet at shared nodes of equal radius and
+   *  need almost no blend; a full smooth-min there swelled every joint by up to k/4 and sagged the
+   *  span between — a roll at each spine node, the caterpillar trunk. Chains blend into each other. */
+  ch: Int32Array;
+  ord: Int32Array;
   /** smooth-union blend radius; 0 → hard union (matches the capsule-kit surface) */
   k: number;
   /** how far an ellipsoid can overshoot its node's scalar radius (grid padding must cover this) */
@@ -55,8 +81,13 @@ export function isBodyNode(n: BodyNode): boolean {
 }
 // The HYBRID mode meshes *everything* (full part definition) except the eyes/mouth, which always draw
 // as solids — best of both: an organic surface like smooth, but nothing drops out like capsules keep.
+// parts whose features draw themselves completely — meshing their 1-node stub into the skin only
+// raised a lump under the feature (a fish's fins and gills studded its flanks with bumps)
+const FEATURE_ONLY_KINDS = new Set(['wing', 'fin', 'gill', 'frill', 'crest', 'whisker']);
 export function isHybridNode(n: BodyNode): boolean {
-  return n.terminal !== 'eye' && n.terminal !== 'mouth';
+  // the carapace stub is drawn as a conforming shell of its own (smoothSkin.buildShellGeometry)
+  // wings are drawn whole from the shoulder (wings.ts); fins from their root (buildFin)
+  return n.terminal !== 'eye' && n.terminal !== 'mouth' && n.terminal !== 'carapace' && !FEATURE_ONLY_KINDS.has(n.part?.kind ?? '');
 }
 
 /**
@@ -66,21 +97,51 @@ export function isHybridNode(n: BodyNode): boolean {
  */
 export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'): FieldPrims {
   const include = mode === 'hybrid' ? isHybridNode : isBodyNode;
-  let bodyEdges = p.edges.filter(([a, b]) => include(p.nodes[a]) && include(p.nodes[b]));
+  // an eyestalk's last link runs INTO the eyeball (which draws itself): mesh it as a thin cone ending
+  // at the eye, or the eye hangs in the air above a stump
+  const stalkTip = (a: BodyNode, b: BodyNode) => mode === 'hybrid' && b.terminal === 'eye' && a.kind === 'limb' && a.part?.kind === 'eyestalk';
+  let bodyEdges = p.edges.filter(([a, b]) => include(p.nodes[a]) && (include(p.nodes[b]) || stalkTip(p.nodes[a], p.nodes[b])));
   if (bodyEdges.length === 0) bodyEdges = p.edges;
   const edges = bodyEdges.length > 0 ? bodyEdges : null;
   const nc = edges ? edges.length : p.nodes.length;
   const ax = new Float64Array(nc), ay = new Float64Array(nc), az = new Float64Array(nc);
   const bx = new Float64Array(nc), by = new Float64Array(nc), bz = new Float64Array(nc);
   const pr = new Float64Array(nc);
+  const ra = new Float64Array(nc);
+  const rb = new Float64Array(nc);
   const included = new Set<BodyNode>();
+  const an = new Uint8Array(nc);
+  const aq = new Float64Array(nc * 4);
+  const sx0 = new Float64Array(nc).fill(1), sy0 = new Float64Array(nc).fill(1);
+  const sx1 = new Float64Array(nc).fill(1), sy1 = new Float64Array(nc).fill(1);
+  // spine-chain degree (spine neighbours among the meshed edges): an interior spine node's shape is
+  // carried by its elliptical cones, so only chain ENDS keep a node ellipsoid (rump, snout tip)
+  const spineDeg = new Map<BodyNode, number>();
+  if (edges) {
+    for (const [ia, ib] of edges) {
+      const a = p.nodes[ia], b = p.nodes[ib];
+      if (a.kind === 'spine' && b.kind === 'spine') {
+        spineDeg.set(a, (spineDeg.get(a) ?? 0) + 1);
+        spineDeg.set(b, (spineDeg.get(b) ?? 0) + 1);
+      }
+    }
+  }
   if (edges) {
     for (let i = 0; i < edges.length; i++) {
       const a = p.nodes[edges[i][0]];
       const b = p.nodes[edges[i][1]];
+      if (a.kind === 'spine' && b.kind === 'spine' && (a.scale || b.scale)) {
+        an[i] = 1;
+        aq[i * 4] = a.quat[0]; aq[i * 4 + 1] = a.quat[1]; aq[i * 4 + 2] = a.quat[2]; aq[i * 4 + 3] = a.quat[3];
+        sx0[i] = a.scale?.[0] ?? 1; sy0[i] = a.scale?.[1] ?? 1;
+        sx1[i] = b.scale?.[0] ?? 1; sy1[i] = b.scale?.[1] ?? 1;
+      }
       ax[i] = a.pos[0]; ay[i] = a.pos[1]; az[i] = a.pos[2];
       bx[i] = b.pos[0]; by[i] = b.pos[1]; bz[i] = b.pos[2];
-      pr[i] = (a.radius + b.radius) * 0.5;
+      const rB = stalkTip(a, b) ? Math.min(a.radius * 0.8, b.radius * 0.45) : b.radius;
+      pr[i] = (a.radius + rB) * 0.5;
+      ra[i] = a.radius;
+      rb[i] = rB;
       included.add(a);
       included.add(b);
     }
@@ -88,14 +149,22 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     for (let i = 0; i < p.nodes.length; i++) {
       const n = p.nodes[i];
       ax[i] = bx[i] = n.pos[0]; ay[i] = by[i] = n.pos[1]; az[i] = bz[i] = n.pos[2];
-      pr[i] = n.radius;
+      pr[i] = ra[i] = rb[i] = n.radius;
       included.add(n);
     }
   }
 
-  // anisotropic nodes carry their shape as an ellipsoid primitive (capsules only know one radius)
+  // anisotropic nodes carry their shape as an ellipsoid primitive — except interior spine nodes, whose
+  // cross-section the elliptical cones on both sides already carry (see `an`)
   const shaped: BodyNode[] = [];
-  for (const n of included) if (n.scale) shaped.push(n);
+  // A z-stretched interior node (a long croc/mustelid segment) keeps its ellipsoid: those overlap down
+  // the chain and blur the haunch bumps into one long smooth back.
+  for (const n of included) {
+    if (!n.scale) continue;
+    const interior = n.kind === 'spine' && (spineDeg.get(n) ?? 0) >= 2;
+    if (interior && n.scale[2] <= 1.15) continue;
+    shaped.push(n);
+  }
   const ne = shaped.length;
   const ec = new Float64Array(ne * 3);
   const eq = new Float64Array(ne * 4);
@@ -109,7 +178,42 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     er[i * 3] = n.radius * s[0]; er[i * 3 + 1] = n.radius * s[1]; er[i * 3 + 2] = n.radius * s[2];
     excess = Math.max(excess, n.radius * (Math.max(s[0], s[1], s[2]) - 1));
   }
-  return { ax, ay, az, bx, by, bz, pr, nc, ec, eq, er, ne, k: 0, excess };
+  const cx = new Float64Array(nc), cy = new Float64Array(nc), cz = new Float64Array(nc), hl = new Float64Array(nc);
+  for (let i = 0; i < nc; i++) {
+    cx[i] = (ax[i] + bx[i]) / 2;
+    cy[i] = (ay[i] + by[i]) / 2;
+    cz[i] = (az[i] + bz[i]) / 2;
+    hl[i] = Math.hypot(bx[i] - ax[i], by[i] - ay[i], bz[i] - az[i]) / 2;
+  }
+  for (let i = 0; i < nc; i++) if (an[i]) excess = Math.max(excess, Math.max(ra[i], rb[i]) * (Math.max(sx0[i], sy0[i], sx1[i], sy1[i]) - 1));
+  // chains: a cone belongs to the chain of its far node — a spine node's segment (trunk, neck, head),
+  // a limb node's part root (the first node of that leg / tail / horn). The fallback (one prim per
+  // node) keeps every prim its own chain: the old all-smooth union.
+  const ch = new Int32Array(nc);
+  if (edges) {
+    const parentOf = new Int32Array(p.nodes.length).fill(-1);
+    for (const [a, b] of p.edges) parentOf[b] = a;
+    const rootOf = (i: number): number => {
+      let cur = i;
+      for (;;) {
+        const n = p.nodes[cur];
+        const par = parentOf[cur];
+        if (par < 0 || n.kind === 'spine') return cur;
+        const pn = p.nodes[par];
+        if (pn.kind === 'spine' || pn.part?.kind !== n.part?.kind) return cur;
+        cur = par;
+      }
+    };
+    for (let i = 0; i < nc; i++) {
+      const b = edges[i][1];
+      const nb = p.nodes[b];
+      ch[i] = nb.kind === 'spine' ? -1 - (nb.segment ?? 0) : rootOf(b);
+    }
+  } else {
+    for (let i = 0; i < nc; i++) ch[i] = i;
+  }
+  const ord = Int32Array.from({ length: nc }, (_, i) => i).sort((a, b) => ch[a] - ch[b] || a - b);
+  return { ax, ay, az, bx, by, bz, pr, ra, rb, cx, cy, cz, hl, an, aq, sx0, sy0, sx1, sy1, nc, ch, ord, ec, eq, er, ne, k: 0, excess };
 }
 
 // rotate v by the CONJUGATE of q (world → the prim's local frame), inlined, no allocation of q'
@@ -202,20 +306,117 @@ function smin(a: number, b: number, k: number): number {
   return a * (1 - h) + b * h - k * h * (1 - h);
 }
 
+/**
+ * Exact signed distance to a round cone — the convex hull of sphere(a, r1) and sphere(b, r2)
+ * (Quilez). This is what makes a tapering chain read as ONE smooth limb: consecutive cones share the
+ * joint sphere, so radius varies continuously along the skeleton instead of stepping per edge.
+ */
+export function roundConeDist(
+  px: number, py: number, pz: number,
+  ax: number, ay: number, az: number,
+  bx: number, by: number, bz: number,
+  r1: number, r2: number,
+): number {
+  const bax = bx - ax, bay = by - ay, baz = bz - az;
+  const l2 = bax * bax + bay * bay + baz * baz;
+  const pax = px - ax, pay = py - ay, paz = pz - az;
+  const rr = r1 - r2;
+  const a2 = l2 - rr * rr;
+  // degenerate: a zero-length edge, or one end-sphere swallows the other → the bigger sphere
+  if (l2 < 1e-12 || a2 <= 1e-12) {
+    const da = Math.sqrt(pax * pax + pay * pay + paz * paz) - r1;
+    const qx = px - bx, qy = py - by, qz = pz - bz;
+    const db = Math.sqrt(qx * qx + qy * qy + qz * qz) - r2;
+    return da < db ? da : db;
+  }
+  const il2 = 1 / l2;
+  const y = pax * bax + pay * bay + paz * baz;
+  const z = y - l2;
+  const wx = pax * l2 - bax * y, wy = pay * l2 - bay * y, wz = paz * l2 - baz * y;
+  const x2 = wx * wx + wy * wy + wz * wz;
+  const y2 = y * y * l2;
+  const z2 = z * z * l2;
+  const k = Math.sign(rr) * rr * rr * x2;
+  if (Math.sign(z) * a2 * z2 > k) return Math.sqrt(x2 + z2) * il2 - r2;
+  if (Math.sign(y) * a2 * y2 < k) return Math.sqrt(x2 + y2) * il2 - r1;
+  return (Math.sqrt(x2 * a2 * il2) + y * rr) * il2 - r1;
+}
+
+const ELL_P: Vec3 = [0, 0, 0];
+const ELL_B: Vec3 = [0, 0, 0];
+/**
+ * Distance to an ELLIPTICAL round cone: in the segment's local frame (+Z along the chain), squash the
+ * cross-section by the scale interpolated at the point's position along the segment, measure the exact
+ * round-cone distance there, and scale back by the smaller cross-section axis (conservative — the
+ * union and the polygonizer only need a field that never overestimates).
+ */
+function ellipticConeDist(f: FieldPrims, m: number, x: number, y: number, z: number): number {
+  const qx = f.aq[m * 4], qy = f.aq[m * 4 + 1], qz = f.aq[m * 4 + 2], qw = f.aq[m * 4 + 3];
+  rotConj(qx, qy, qz, qw, x - f.ax[m], y - f.ay[m], z - f.az[m], ELL_P);
+  rotConj(qx, qy, qz, qw, f.bx[m] - f.ax[m], f.by[m] - f.ay[m], f.bz[m] - f.az[m], ELL_B);
+  const l2 = ELL_B[0] * ELL_B[0] + ELL_B[1] * ELL_B[1] + ELL_B[2] * ELL_B[2];
+  let t = l2 > 1e-12 ? (ELL_P[0] * ELL_B[0] + ELL_P[1] * ELL_B[1] + ELL_P[2] * ELL_B[2]) / l2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const sx = f.sx0[m] + (f.sx1[m] - f.sx0[m]) * t;
+  const sy = f.sy0[m] + (f.sy1[m] - f.sy0[m]) * t;
+  const d = roundConeDist(
+    ELL_P[0] / sx, ELL_P[1] / sy, ELL_P[2],
+    0, 0, 0,
+    ELL_B[0] / sx, ELL_B[1] / sy, ELL_B[2],
+    f.ra[m], f.rb[m],
+  );
+  // the squash is Lipschitz with constant 1/min(sx, sy, 1): scaling back by that bound never overestimates
+  return d * Math.min(sx, sy, 1);
+}
+
+/** the blend between cones of one chain, as a fraction of their own (see FieldPrims.ch) */
+const CHAIN_BLEND = 0.15;
+
 /** The body field: < 0 inside the creature, 0 on the skin, > 0 outside. */
 export function fieldAt(f: FieldPrims, x: number, y: number, z: number): number {
-  let d = Infinity;
-  for (let m = 0; m < f.nc; m++) {
-    const pax = x - f.ax[m], pay = y - f.ay[m], paz = z - f.az[m];
-    const bxx = f.bx[m] - f.ax[m], byy = f.by[m] - f.ay[m], bzz = f.bz[m] - f.az[m];
-    const dot = bxx * bxx + byy * byy + bzz * bzz;
-    let h = dot > 1e-9 ? (pax * bxx + pay * byy + paz * bzz) / dot : 0;
-    h = h < 0 ? 0 : h > 1 ? 1 : h;
-    const ex = pax - bxx * h, ey = pay - byy * h, ez = paz - bzz * h;
-    const val = Math.sqrt(ex * ex + ey * ey + ez * ez) - f.pr[m];
-    d = d === Infinity ? val : smin(val, d, f.k);
+  let d = Infinity; // the smooth union of the finished chains
+  let cd = Infinity; // the current chain's union
+  let ck = 0; // …and its blend radius into the rest
+  let cur = 0x7fffffff;
+  const k = f.k;
+  for (let o = 0; o < f.nc; o++) {
+    const m = f.ord[o];
+    if (f.ch[m] !== cur) {
+      if (cd !== Infinity) d = d === Infinity ? cd : smin(cd, d, ck);
+      cur = f.ch[m];
+      cd = Infinity;
+      ck = 0;
+    }
+    // per-primitive blend: a thin limb blends over at most ~its own radius, so slender legs keep their
+    // definition instead of webbing into each other, while fat trunk sections still fuse softly
+    const rMaxM = f.ra[m] > f.rb[m] ? f.ra[m] : f.rb[m];
+    const km = k < rMaxM * 1.1 ? k : rMaxM * 1.1;
+    if (km > ck) ck = km;
+    // within a chain, only a whisper of blend (it still fillets the inside of a bent knee)
+    const kc = km * CHAIN_BLEND;
+    const sMax = f.an[m] ? Math.max(f.sx0[m], f.sy0[m], f.sx1[m], f.sy1[m], 1) : 1;
+    // Exact culling: val is at least the distance to the cone's bounding sphere. A cone that far can't
+    // move its chain's union (smin(val, cd, kc) = cd once val ≥ cd + kc), or — past d + k + kc — can't
+    // move the finished union even through the chain's blend (at most k; 2·kc covers the chain's own).
+    const near = cd + kc < d + k + 2 * kc ? cd + kc : d + k + 2 * kc;
+    if (near !== Infinity) {
+      const ox = x - f.cx[m], oy = y - f.cy[m], oz = z - f.cz[m];
+      const lim = near + f.hl[m] + rMaxM * sMax;
+      if (lim > 0 && ox * ox + oy * oy + oz * oz > lim * lim) continue;
+    }
+    const val = f.an[m]
+      ? ellipticConeDist(f, m, x, y, z)
+      : roundConeDist(x, y, z, f.ax[m], f.ay[m], f.az[m], f.bx[m], f.by[m], f.bz[m], f.ra[m], f.rb[m]);
+    cd = cd === Infinity ? val : smin(val, cd, kc);
   }
+  if (cd !== Infinity) d = d === Infinity ? cd : smin(cd, d, ck);
   for (let m = 0; m < f.ne; m++) {
+    if (d !== Infinity) {
+      const ox = x - f.ec[m * 3], oy = y - f.ec[m * 3 + 1], oz = z - f.ec[m * 3 + 2];
+      const R = Math.max(f.er[m * 3], f.er[m * 3 + 1], f.er[m * 3 + 2]);
+      const lim = d + k + R;
+      if (lim > 0 && ox * ox + oy * oy + oz * oz > lim * lim) continue;
+    }
     // scaled-space ellipsoid distance (underestimates on long axes — safe for a union)
     rotConj(f.eq[m * 4], f.eq[m * 4 + 1], f.eq[m * 4 + 2], f.eq[m * 4 + 3], x - f.ec[m * 3], y - f.ec[m * 3 + 1], z - f.ec[m * 3 + 2], SCRATCH);
     const rx = f.er[m * 3], ry = f.er[m * 3 + 1], rz = f.er[m * 3 + 2];

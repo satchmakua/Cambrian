@@ -371,5 +371,176 @@ deterministic; growth stays bounded & meshable; the 4000-genome fuzz test stays 
 
 ---
 
+## Phase 6 — See them, then set them loose (Part 3)
+
+Two directions at once: an honest way to **look** at creatures (they were judged from a turntable
+in software screenshots), and a **world** to drop them into — so the bodies you breed have to eat,
+sleep, hunt, breed and die, and keep evolving there. Same rules of the road; `src/sim/` is held to
+the engine's determinism discipline (seeded RNG only, headless-tested, `Math.random` banned).
+
+- [x] **M27 — Offline rendering + headless capture.** The CDN HDR environment threw on any failed
+  fetch and blanked the canvas; replaced by a procedural studio environment (PMREM'd once per
+  renderer, shared by every viewport). `scripts/shoot.mjs` renders URL-param views headlessly.
+  **Test:** with no network, the app renders; `node scripts/shoot.mjs out "seed=3&bare=1&spin=0"` writes a PNG.
+
+- [x] **M28 — Skin that reads.** The covering looked like TV static: the bump fed a 0..1 relief in as
+  a height in body units (slopes ~30 → saturated normals). Physical relief heights, every procedural
+  term band-limited against the pixel footprint, `MeshPhysicalMaterial` (fur/feather sheen, slime/
+  chitin clearcoat, iridescence by the sheen gene), baked crease AO; `?dbg=N` shows one shading term.
+  **Test:** fur, scales, plates and slime read as distinct clean materials at any zoom.
+
+- [x] **M29 — Smooth skin v2.** Round-cone field (tapering chains are one smooth limb, not beads),
+  welded indexed mesh with gradient normals (no facets), SDF ambient occlusion, a narrow-band grid +
+  exact primitive culling (3× the triangles at similar cost), per-primitive blend; hybrid is default.
+  **Test:** bodies are single organic forms with soft creases; smoothSkin tests assert welded, outward,
+  unit-normal surfaces.
+
+- [x] **M30 — The Specimen Studio.** A main stage + lateral/anterior/dorsal orthographic plates with
+  scale bars + a face close-up, all in one WebGL context (drei `View`); an x-ray skeleton overlay; an
+  inspector (nearest kinds, measurements, 10-D descriptor, parts, covering); a **Bestiary** of every
+  morphotype; a **motion preview** (walk / run / eat / sleep). Dev: `?studio=1 ?bestiary=1 ?bones=1
+  ?motion= ?gaitphase= ?studiocam=`.
+  **Test:** Breed → Studio shows the creature from every angle; the Bestiary adopts a specimen.
+
+- [x] **M31 — Anatomy pass.** Carapaces are shells polygonized from the trunk's own field (not an egg);
+  haunches no longer compound into a ball on short trunks; legs attach interpolated along the chain;
+  hexapods+ grow slender **arched** arthropod legs; feet always reach the ground; wings are built from
+  the shoulder — **folded feathered wings** shrink-wrapped to the flank and **membrane wings** with
+  fingers and scalloped billowing skin — and birds get tail fans.
+  **Test:** spiders read as spiders, turtles wear shells, birds fold their wings (anatomy/wings tests).
+
+- [x] **M32 — The ecosystem engine.** `src/sim/`: a seeded terrain (lake, meadows, woods, rock),
+  traits read off the anatomy (diet from the mouth, speed from leg reach, senses from eyes, weapons and
+  armour, habitat, endo/ectotherm from the covering, allometric metabolism/lifespan), and a world of
+  creatures with energy/fatigue/health/age choosing to flee, sleep, eat (graze/fruit/algae/scavenge/
+  hunt), breed or wander. Breeding mutates with the breeder's operators; drift past a morphospace
+  threshold founds a new species. Balanced over 20-day headless runs (predator-prey cycles, a rescue
+  band so rare species can always breed).
+  **Test:** `tests/sim/world.test.ts` — determinism, grazing, hunting, births/mutations/deaths,
+  starvation, habitat constraints.
+
+- [x] **M33 — The World view.** The ecosystem in 3D: biome terrain whose meadows yellow where grazed,
+  a lake, fruit bushes showing their fruit, woods; a day/night sky; time-warp 1–48×; a census with a
+  population chart, a creature card (needs, traits, follow-cam, take-home-to-breeder), a field
+  journal of births/kills/speciation/extinction; release your creature or a stranger.
+  **Test:** Breed → World: creatures graze, hunt, sleep at night, breed and die; the census moves.
+
+- [x] **M34 — Living motion.** A bone per skeleton node, the smooth skin skinned to it (round-cone
+  distance weights), features riding their bones; a procedural gait (trot / tripod / alternation from
+  one phase rule, arched sweeps, slither and swim waves, tails, head bob, eat, sleep).
+  **Test:** in the World and the Studio motion preview, legs step in phase and the skin deforms
+  without tearing (rig tests).
+
+- [x] **M35 — World performance.** Per-actor LOD (full / lite / silhouette), merged capsule kit,
+  budgeted skin builds, hitbox picking: ~5–7k → ~520 draw calls at 150 creatures.
+
+- [x] **M36 — Mouths that close.** Jaws hinge on the lip bisector and articulate in the World
+  (shut at rest, chewing, agape on the hunt); a mammal's mouth rests shut everywhere.
+
+- [x] **M37 — Mammals.** Necks between trunk and head (rising per link, the head held level),
+  narrower skulls, a **cranium + muzzle** skull (two or three links: eyes and ears on the cranium,
+  nose, whiskers and mouth on the muzzle), **muzzled mouths** (a thin lip line on the muzzle, only
+  the mandible drops, canines/incisors only, the jaw wearing the coat, a wet nose pad), plain tails
+  sized per kind (bear stub, horse switch, cat sweep), legs rooted inside the torso under the
+  shoulders and hips, coat-covered paws with toes, forward-facing ears with an inner ear, upright
+  apes and bipeds standing on their hips. Dev: `?studiocam=face|headside`.
+  **Test:** cats, dogs, bears, deer and mice read as themselves in the Studio side and face views
+  (mouthLine muzzled test, anatomy stance test).
+
+- [x] **M38 — Flight.** Winged walkers take off, cruise, bank, stoop and land: an altitude in the
+  sim (trips, escapes and approaches are flown; feeding and sleeping wait for touchdown; nothing
+  lands on the lake; walkers can't reach a bird on the wing), spread feathered wings that beat
+  about the shoulder, legs tucked in flight, a Studio `fly` preview.
+  **Test:** in the World (`?world=1&warm=60&follow=aloft`) birds fly between meals and land to eat;
+  `tests/sim/world.test.ts › flight`.
+
+- [x] **M39 — Behaviour you can see.** Herd alarms (kin bolt together), the young keep to a parent,
+  bites are lunges and the bitten flinch, mood bubbles (Zz / heart / ! / claws) with a `moods`
+  toggle; eyelids that blink and close in sleep; jawed mouths of every kind rest shut.
+  **Test:** in the World, a herd scatters together from a hunter, a courting pair shows hearts.
+
+- [x] **M40 — A living landscape.** Grass tufts that sway and show grazing (cropped straw stubble,
+  regrowth), wildflowers, lobed broadleaves and conifers, a depth-shaded rippling lake with a
+  lapping foam line, world-space ground detail (turf patches, soil, rock strata).
+
+- [x] **M41 — The tree of life.** A panel drawing every species ever as branches through time
+  (founding, splits, extinctions), click to follow a living member. Plus: radial bodies arrayed
+  about the vertical (sea stars lie flat, octopuses squat), slug-like slimes with eyestalks that
+  reach their eyes, low-domed turtles.
+
+- [x] **M42 — Seasons.** A twelve-day year: a spring flush of grass, summer fruit, an autumn of
+  turning leaves, a lean, cold winter with snow on open ground and bare broadleaves. The ecology
+  follows smooth climate curves; the look (`yearLook`) keeps snow and leaf-fall inside their own
+  seasons, so the first morning of spring is green.
+  **Test:** `tests/sim/world.test.ts › seasons`, `tests/sim/seasonLook.test.ts`.
+
+- [x] **M43 — The documentary.** An auto-director that cuts between the most interesting things
+  happening (hunts, births, flights), with narrated captions; synthesized ambience and spatial
+  creature calls (Web Audio, no assets).
+
+- [x] **M44 — Save & resume a world.** `saveWorld`/`loadWorld` (src/sim/persist.ts): the static
+  world rebuilds from its seed, every dynamic piece — fields, creatures, carcasses, species, log,
+  history and the RNG's own state — is restored, genomes stored once each as share strings with
+  identity kept. A loaded world continues **bit-for-bit** as the original would. The World bar
+  saves to a file and opens one; the world is also kept in the browser and resumed next visit.
+  **Test:** `tests/sim/persist.test.ts` (save → load → both run on → identical serialisations).
+
+- [x] **M45 — Anatomy pass III.** Toed feet (a bird's three-forward-one-back on bare scaly shanks
+  coloured like its bill; a lizard's clawed fan; a frog's pad-tipped toes); eyes sunk into the
+  skull with coat-covered lids; reptile and frog mouths that shut as a seam (only a croc's small
+  teeth show); frogs that crouch on springing haunches (no more spider-arched vertebrates);
+  primates whose arms hang from the shoulders with ears on the sides of the head and tails from
+  the back; songbird-sized heads; every necked body plan grows a head; coat markings kin to the
+  coat; and a proper hash for per-creature variety (every iris used to come out blue or red).
+  Dev: `?studiocam=feet`, `?bseed=N`.
+  **Test:** `tests/viewer/feet.test.ts`, `jawed.test.ts › seam`, `random.test.ts › marking
+  colours`, `rng.test.ts › unitHash`.
+
+- [x] **M46 — Courtship & young.** A pair circle each other for a display (head high and bobbing,
+  tail raised, a bird's wings half-open and shivering) before they mate; an idle partner joins the
+  dance. A juvenile bolts with its fleeing parent, even from sleep. Dev: `?follow=courting`.
+  **Test:** `world.test.ts › courtship & young`.
+
+- [x] **M47 — Weather.** Half-day spells, wet or dry by a hash of (seed, spell) with seasonal odds;
+  a wet spell clouds over, rains (snows, in the cold) and clears. GPU rain streaks and snowflakes
+  ride the camera; the sun dims, the sky greys, the fog closes in, soaked ground darkens and shines;
+  a rain hiss joins the soundscape; showers bring the grass on. A pure function of seed and time.
+  Dev: `?wx=rain|snow`. **Test:** `tests/sim/weather.test.ts`.
+
+- [x] **M48 — Fast-forward.** Skip a day, a season or a year: the world runs in a Web Worker (shipped
+  over as a save, folded back with `adoptWorld`), then a chronicle says what happened — births,
+  deaths by cause, species that arose and died out. **Test:** `tests/sim/fastForward.test.ts`
+  (worker round-trip ≡ running in place, bit for bit).
+
+- [x] **M49 — A balance that lasts.** Guild caps (water / hunters / grazers), stalk-and-pounce
+  hunting (prey notice a crouching stalker late; a failed dash is given up), cover (small prey dive
+  into bushes), recolonisation (a lost founding stock may wander back in), lineages that keep their
+  heads under segment mutations. Over 4 seeds × 2 years every kind survives in most runs (before:
+  three species left). **Test:** `world.test.ts › a living balance`, `mutate.test.ts › head`.
+
+- [x] **M50 — Evolution you can read.** Species portraits (an offscreen R3F root renders any genome,
+  cached by share string) on the census rows, the creature card and the fast-forward chronicle; the
+  card sets a species' founder beside the animal you're watching and says what changed, in words
+  (`howItDiffers`), and where the species branched from. **Test:** `tests/sim/lineage.test.ts`.
+
+- [x] **M51 — A river and a voice.** Every valley drains its lake through a meandering stream (a
+  valley lowered toward meadow height, a channel cut in its floor); the documentary's captions can
+  be read aloud by the browser's speech synthesis. Dev: `?look=river`.
+
+- [x] **M52 — Faces and fur.** Readable mammal eyes, muzzles that narrow to the nose, a lip line that
+  ends under the eye, no lip fold hanging under the chin, no beaked cats (a mouth-band audit and
+  test); leopard rosettes break into arcs; new sessions start on a russet fox-dog, framed closer;
+  **shell fur** — twelve combed, tapering strand layers over a pelt in the close-up views (hero,
+  Studio, portraits, the World's selected animal), skinned on the rig, fading out where a strand
+  would be sub-pixel.
+
+### Next up (unchecked — pick from here)
+
+- [ ] **Richer world.** Drought years, burrows and nests, a second lake.
+- [ ] **Feet that grip the ground.** Foot planting / IK so strides don't slide.
+- [ ] **A lineage film.** A wild species' body changes over the generations, as a strip of portraits.
+
+---
+
 **North star:** in ten clicks you can visibly steer a blob toward a shark — and share the
 result as a short string that regrows it exactly on someone else's machine.

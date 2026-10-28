@@ -25,7 +25,14 @@ describe('smooth skin (M15)', () => {
     const pos = geo.getAttribute('position');
     const nrm = geo.getAttribute('normal');
     expect(pos.count).toBeGreaterThan(60); // a real mesh, not a stray triangle
-    expect(pos.count % 3).toBe(0); // whole triangles
+    const index = geo.getIndex();
+    expect(index).not.toBeNull(); // welded: an indexed mesh, not a triangle soup
+    expect(index!.count % 3).toBe(0); // whole triangles
+    let maxI = 0;
+    for (let i = 0; i < index!.count; i++) maxI = Math.max(maxI, index!.getX(i));
+    expect(maxI).toBeLessThan(pos.count);
+    // vertices are shared between triangles (a welded surface averages ~6 triangles per vertex)
+    expect(index!.count / 3).toBeGreaterThan(pos.count * 1.5);
     expect(scan(pos.array as ArrayLike<number>).finite).toBe(true);
     expect(scan(nrm.array as ArrayLike<number>).finite).toBe(true);
   });
@@ -99,4 +106,117 @@ describe('smooth skin (M15)', () => {
       expect(scan(pos.array as ArrayLike<number>).finite).toBe(true);
     }
   });
+
+  it('shades smoothly: unit normals pointing out of the body, and baked AO in [0,1]', async () => {
+    const { buildFieldPrims, fieldAt } = await import('../../src/viewer/bodyField');
+    for (let s = 0; s < 8; s++) {
+      const p = grow(randomGenome(100 + s));
+      const geo = buildSmoothGeometry(p);
+      const pos = geo.getAttribute('position');
+      const nrm = geo.getAttribute('normal');
+      const ao = geo.getAttribute('aAO');
+      expect(ao.count).toBe(pos.count);
+      const f = buildFieldPrims(p, 'body');
+      let outward = 0;
+      for (let v = 0; v < pos.count; v++) {
+        const len = Math.hypot(nrm.getX(v), nrm.getY(v), nrm.getZ(v));
+        expect(Math.abs(len - 1)).toBeLessThan(1e-3);
+        const a = ao.getX(v);
+        expect(a).toBeGreaterThanOrEqual(0);
+        expect(a).toBeLessThanOrEqual(1);
+        // stepping along the normal moves AWAY from the body (the field rises)
+        const e = 0.05;
+        const out = fieldAt(f, pos.getX(v) + nrm.getX(v) * e, pos.getY(v) + nrm.getY(v) * e, pos.getZ(v) + nrm.getZ(v) * e);
+        const inn = fieldAt(f, pos.getX(v) - nrm.getX(v) * e, pos.getY(v) - nrm.getY(v) * e, pos.getZ(v) - nrm.getZ(v) * e);
+        if (out > inn) outward++;
+      }
+      expect(outward / pos.count).toBeGreaterThan(0.97);
+    }
+  });
+
+  it('round cones taper continuously: the exact distance matches both end spheres and the flank', async () => {
+    const { roundConeDist } = await import('../../src/viewer/bodyField');
+    // cone from (0,0,0) r=1 to (0,0,4) r=0.5
+    expect(roundConeDist(0, 0, -1, 0, 0, 0, 0, 0, 4, 1, 0.5)).toBeCloseTo(0, 6); // back cap
+    expect(roundConeDist(0, 0, 4.5, 0, 0, 0, 0, 0, 4, 1, 0.5)).toBeCloseTo(0, 6); // front cap
+    // the flank radius shrinks along the axis (between the caps, ~linear for a shallow cone)
+    const flank = (z: number) => {
+      // find the surface radius at height z by bisection on x
+      let lo = 0, hi = 3;
+      for (let i = 0; i < 60; i++) {
+        const m = (lo + hi) / 2;
+        if (roundConeDist(m, 0, z, 0, 0, 0, 0, 0, 4, 1, 0.5) < 0) lo = m;
+        else hi = m;
+      }
+      return lo;
+    };
+    expect(flank(1)).toBeGreaterThan(flank(2));
+    expect(flank(2)).toBeGreaterThan(flank(3));
+    // a swallowed end-sphere degenerates to the bigger sphere, never NaN
+    expect(roundConeDist(0, 0, 0, 0, 0, 0, 0, 0, 0.1, 1, 0.2)).toBeCloseTo(-1, 6);
+  });
+
+  it('a carapace is a shell CONFORMING to the trunk — not a giant egg', async () => {
+    const { buildShellGeometry } = await import('../../src/viewer/smoothSkin');
+    for (const id of ['chelonian', 'crab']) {
+      for (let s = 0; s < 6; s++) {
+        const p = grow(genomeOfMorphotype(s * 11 + 2, id));
+        const shell = buildShellGeometry(p, 'low');
+        if (!p.nodes.some((n) => n.terminal === 'carapace')) {
+          expect(shell).toBeNull();
+          continue;
+        }
+        expect(shell).not.toBeNull();
+        const pos = shell!.getAttribute('position');
+        expect(pos.count).toBeGreaterThan(50);
+        const { finite, min, max } = scan(pos.array as ArrayLike<number>);
+        expect(finite).toBe(true);
+        // hugging the trunk: never wider than the trunk plus a modest margin
+        const trunk = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 0);
+        const rMax = Math.max(...trunk.map((n) => n.radius));
+        const tx0 = Math.min(...trunk.map((n) => n.pos[0] - n.radius * (n.scale?.[0] ?? 1)));
+        const tx1 = Math.max(...trunk.map((n) => n.pos[0] + n.radius * (n.scale?.[0] ?? 1)));
+        expect(min[0]).toBeGreaterThan(tx0 - rMax * 0.9);
+        expect(max[0]).toBeLessThan(tx1 + rMax * 0.9);
+        // and it is a BACK shell: nothing hangs below the trunk's mid-height skirt
+        const yMid = trunk.reduce((t, n) => t + n.pos[1], 0) / trunk.length;
+        expect(min[1]).toBeGreaterThan(yMid - rMax * 0.45);
+      }
+    }
+  });
+
+  it('an anisotropic trunk is one smooth elliptical tube — no per-node bulges (the caterpillar)', async () => {
+    const { buildFieldPrims, fieldAt } = await import('../../src/viewer/bodyField');
+    for (const id of ['fish', 'felid', 'crocodilian']) {
+      const p = grow(genomeOfMorphotype(4, id));
+      const f = buildFieldPrims(p, 'body');
+      f.k = 0;
+      const trunk = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 0);
+      if (trunk.length < 3 || !trunk.some((n) => n.scale)) continue;
+      // sample the top-of-back height along the trunk: it must vary smoothly (no bead-per-node ripple)
+      const zs = trunk.map((n) => n.pos[2]).sort((a, b) => a - b);
+      const top = (z: number) => {
+        let lo = 0, hi = 4;
+        for (let i = 0; i < 40; i++) {
+          const m = (lo + hi) / 2;
+          if (fieldAt(f, 0, m, z) < 0) lo = m;
+          else hi = m;
+        }
+        return lo;
+      };
+      const ys: number[] = [];
+      for (let i = 0; i <= 40; i++) ys.push(top(zs[0] + ((zs[zs.length - 1] - zs[0]) * i) / 40));
+      // beads show as one bump per node along the back; a smooth trunk has at most a bump per haunch
+      // (shoulder / hip) plus the fusiform middle
+      const girth = Math.max(...trunk.map((n) => n.radius));
+      let bumps = 0;
+      for (let i = 1; i < ys.length - 1; i++) {
+        if (ys[i] > ys[i - 1] + girth * 0.004 && ys[i] >= ys[i + 1] + girth * 0.004) bumps++;
+      }
+      const legPairs = p.genomeRef.body.appendages.filter((a) => a.kind === 'leg').length;
+      expect(bumps).toBeLessThanOrEqual(legPairs + 1);
+      expect(bumps).toBeLessThan(trunk.length); // and never one per node
+    }
+  });
 });
+

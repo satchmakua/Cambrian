@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mutate } from '../../src/engine/mutate';
 import { breederOffspring } from '../../src/engine/selection';
-import { randomGenome } from '../../src/engine/random';
+import { randomGenome, genomeOfMorphotype } from '../../src/engine/random';
 import { grow } from '../../src/engine/grow';
 import { expectValidPhenotype, expectGenomeWithinBounds } from './invariants';
 
@@ -58,4 +58,22 @@ describe('breederOffspring', () => {
     expect(litter).toHaveLength(9);
     for (const g of litter) expectValidPhenotype(grow(g));
   });
+
+  it('a lineage never loses its head: segments are added behind it and dropped from between', () => {
+    const rates = { point: 0.1, pointSigma: 0.05, structural: 1, duplication: 0.2, macro: 0 };
+    const headed = (g: ReturnType<typeof randomGenome>) => {
+      let s = g.body;
+      while (s.child) s = s.child;
+      return s !== g.body && s.appendages.some((a) => a.terminal === 'mouth');
+    };
+    for (const kind of ['felid', 'ungulate', 'rodent', 'bird']) {
+      let g = genomeOfMorphotype(3, kind);
+      expect(headed(g)).toBe(true);
+      for (let gen = 0; gen < 60; gen++) {
+        g = mutate(g, 1000 + gen, gen, rates);
+        expect(headed(g)).toBe(true);
+      }
+    }
+  });
 });
+

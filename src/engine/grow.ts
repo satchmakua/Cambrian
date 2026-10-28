@@ -30,6 +30,7 @@ export interface BodyNode {
   kind: 'spine' | 'limb' | 'terminal';
   terminal?: Terminal;
   part?: { kind: PartKind; style: number }; // which genome part grew this node (for render variants)
+  segment?: number; // spine nodes: which body section (0 = the trunk, 1 = the next child, …)
 }
 
 export interface Phenotype {
@@ -59,12 +60,14 @@ export function grow(genome: Genome): Phenotype {
     return nodes.length - 1;
   }
   const atCap = () => nodes.length >= NODE_MAX;
+  let legPairsHere = 0; // leg pairs on the segment currently growing (hexapods+ get arthropod legs)
 
   growSegment(dev.body, [0, 0, 0], [0, 0, 0, 1], 0, -1);
 
   if (nodes.length === 0) addNode([0, 0, 0], [0, 0, 0, 1], R_MIN, 'spine'); // never empty
 
-  levelFeet(); // drop every foot to a common ground level (the creature stands), then refresh bounds
+  const groundY = levelFeet(); // drop every foot to a common ground level (the creature stands)
+  if (groundY !== null) groundTails(groundY); // …and no tail reaches below it
   recomputeBounds();
 
   return { nodes, edges, bounds: { min, max }, genomeRef: genome };
@@ -100,13 +103,38 @@ export function grow(genome: Genome): Phenotype {
     let pos = startPos;
     let quat = startQuat;
     let prev = parentIdx;
+    // Head carriage: the last segment of the chain (the head) is held near level whatever the neck
+    // does — a raised neck lifts the head, it doesn't aim the face at the sky. In bilateral mode the
+    // chain only ever pitches (yaw is dropped), so the frame is a pure X rotation and its pitch
+    // can be taken back directly (most of it — a trace of the neck's rise keeps the brow alert).
+    if (depth > 0 && !seg.child && dev.symmetry === 'bilateral') {
+      const f = qRotate([0, 0, 1], quat);
+      quat = qMul(quat, qFromAxisAngle([1, 0, 0], -0.9 * Math.atan2(-f[1], f[2])));
+    }
+
+    // the fusiform swell is a TORSO's: a head (the chain's last segment) or a bare connector (a neck
+    // carries no limbs) tapers straight, or a long muzzle and an ostrich's neck bulge like sausages
+    const bulge = depth > 0 && (!seg.child || seg.appendages.length === 0) ? 0 : BODY_BULGE;
+    const profileAt = (i: number) => 1 + bulge * Math.sin(Math.PI * (seg.repeat > 1 ? i / (seg.repeat - 1) : 0.5));
+    // A taper above 1 grows the chain toward its front (a chest deeper than the hips, a fish deepest
+    // behind its head) — it moves the bulk forward, it doesn't add any: the peak link is held to the
+    // size an untapered chain's would be, or every front-heavy body ballooned
+    let norm = 1;
+    if (seg.taper > 1) {
+      let flat = 0;
+      let grown = 0;
+      for (let i = 0; i < seg.repeat; i++) {
+        flat = Math.max(flat, profileAt(i));
+        grown = Math.max(grown, Math.pow(seg.taper, i) * profileAt(i));
+      }
+      norm = flat / grown;
+    }
 
     for (let i = 0; i < seg.repeat; i++) {
       if (atCap()) break;
-      const u = seg.repeat > 1 ? i / (seg.repeat - 1) : 0.5;
-      const profile = 1 + BODY_BULGE * Math.sin(Math.PI * u);
-      const radius = girth * Math.pow(seg.taper, i) * profile;
+      const radius = girth * Math.pow(seg.taper, i) * profileAt(i) * norm;
       const idx = addNode(pos, quat, radius, 'spine');
+      nodes[idx].segment = depth;
       if (segScale) nodes[idx].scale = segScale;
       if (prev >= 0) edges.push([prev, idx]);
       spine.push(idx);
@@ -122,15 +150,24 @@ export function grow(genome: Genome): Phenotype {
       pos = [pos[0] + fwd[0] * step, pos[1] + fwd[1] * step, pos[2] + fwd[2] * step];
     }
 
+    const haunched = new Set<number>();
+    legPairsHere = seg.appendages.filter((a) => a.kind === 'leg').length;
     for (const app of seg.appendages) {
       if (atCap()) break;
       const ai = clampInt(Math.round(app.attachT * (spine.length - 1)), 0, spine.length - 1);
-      // shoulder / haunch: legs thicken the spine node they attach to, giving the
-      // body muscular structure instead of a uniform tube.
-      if (app.kind === 'leg') {
-        nodes[spine[ai]].radius = Math.min(nodes[spine[ai]].radius * 1.22, nodes[spine[ai]].radius + 0.35);
+      // shoulder / haunch: legs thicken the spine node they attach to, giving the body muscular
+      // structure instead of a uniform tube. Once per node: on a short trunk several leg pairs share
+      // a node, and compounding ×1.22 per pair swelled a spider's 1–2 node body into a giant ball.
+      if (app.kind === 'leg' && !haunched.has(spine[ai])) {
+        haunched.add(spine[ai]);
+        // (a gentle swell — at ×1.22 the shoulders and hips humped the back into a two-bump sway)
+        nodes[spine[ai]].radius = Math.min(nodes[spine[ai]].radius * 1.12, nodes[spine[ai]].radius + 0.2);
       }
-      growAppendage(app, spine[ai]);
+      // Legs ride the CHAIN, not the nearest node: the slot is interpolated between neighbouring spine
+      // nodes (and extrapolated past a 1-node trunk's ends), so a hexapod's or a spider's legs spread
+      // fore-aft along the body instead of collapsing onto the same one or two nodes.
+      if (app.kind === 'leg' && dev.symmetry !== 'radial') growAppendage(app, spine[ai], chainBase(spine, app.attachT));
+      else growAppendage(app, spine[ai]);
     }
 
     if (seg.child && depth + 1 < DEPTH_MAX && !atCap()) {
@@ -138,8 +175,29 @@ export function grow(genome: Genome): Phenotype {
     }
   }
 
-  function growAppendage(app: AppendageGene, attachIdx: number): void {
-    const base = nodes[attachIdx];
+  /** A virtual attach node at fraction `t` along a spine chain (position/radius interpolated). */
+  function chainBase(spine: number[], t: number): BodyNode {
+    if (spine.length === 1) {
+      // a one-node trunk: spread along its own length (fore-aft by the slot), on the node's surface
+      const n = nodes[spine[0]];
+      const fwd = qRotate([0, 0, 1], n.quat);
+      const reach = surfaceExtent(n, fwd) * 0.85 * (t - 0.5) * 2;
+      return { ...n, pos: [n.pos[0] + fwd[0] * reach, n.pos[1] + fwd[1] * reach, n.pos[2] + fwd[2] * reach] };
+    }
+    const f = clamp(t, [0, 1]) * (spine.length - 1);
+    const i0 = Math.min(Math.floor(f), spine.length - 2);
+    const u = f - i0;
+    const a = nodes[spine[i0]];
+    const b = nodes[spine[i0 + 1]];
+    return {
+      ...(u < 0.5 ? a : b),
+      pos: [a.pos[0] + (b.pos[0] - a.pos[0]) * u, a.pos[1] + (b.pos[1] - a.pos[1]) * u, a.pos[2] + (b.pos[2] - a.pos[2]) * u],
+      radius: a.radius + (b.radius - a.radius) * u,
+    };
+  }
+
+  function growAppendage(app: AppendageGene, attachIdx: number, virtualBase?: BodyNode): void {
+    const base = virtualBase ?? nodes[attachIdx];
     const az = app.attachAzimuth + (rng() - 0.5) * 0.12; // seed perturbs the aim a touch
     const ce = Math.cos(app.attachElevation);
     const se = Math.sin(app.attachElevation);
@@ -148,7 +206,12 @@ export function grow(genome: Genome): Phenotype {
     const aim = (a: number): Vec3 => norm([ce * Math.cos(a), ce * Math.sin(a), se]);
 
     if (dev.symmetry === 'radial') {
-      for (let k = 0; k < dev.radialCount; k++) growLimb(app, base, aim(az + (k * Math.PI * 2) / dev.radialCount));
+      // a radial body is arrayed about the VERTICAL: arms fan out over the ground and elevation tilts
+      // them up toward the crown (+) or down onto the ground (−) — a starfish lies flat, an octopus
+      // sits on its arms, the crown of eyes and the maw look up. (Arrayed about the forward axis, every
+      // radial creature stood on its rim like a wheel.)
+      const up = (a: number): Vec3 => norm([ce * Math.cos(a), se, ce * Math.sin(a)]);
+      for (let k = 0; k < dev.radialCount; k++) growLimb(app, base, up(az + (k * Math.PI * 2) / dev.radialCount), attachIdx);
       return;
     }
     // bilateral / none: grow one limb…
@@ -161,7 +224,7 @@ export function grow(genome: Genome): Phenotype {
     }
     const nStart = nodes.length;
     const eStart = edges.length;
-    growLimb(app, base, d);
+    growLimb(app, base, d, attachIdx);
     // …then a paired part is the *exact* reflection of that limb across X=0 (quaternions can't
     // mirror, so growing the other side from a flipped aim drifts — reflect the grown nodes instead).
     if (app.pair && dev.symmetry === 'bilateral') mirrorAcrossX(nStart, eStart, attachIdx);
@@ -191,13 +254,22 @@ export function grow(genome: Genome): Phenotype {
   }
 
   /** Drop every foot to the lowest foot's Y so the creature stands level (the hip stays put, the lower
-   *  leg stretches to reach). Left/right feet share a Y by mirror, so exact symmetry is preserved. */
-  function levelFeet(): void {
-    if (dev.symmetry === 'radial') return;
+   *  leg stretches to reach). Left/right feet share a Y by mirror, so exact symmetry is preserved.
+   *  Returns the ground height they stand on (null when nothing stands). */
+  function levelFeet(): number | null {
+    if (dev.symmetry === 'radial') return null;
     const feet: number[] = [];
     for (let i = 0; i < nodes.length; i++) if (nodes[i].kind === 'terminal' && nodes[i].part?.kind === 'leg') feet.push(i);
-    if (feet.length < 2) return;
-    const groundY = Math.min(...feet.map((i) => nodes[i].pos[1]));
+    if (feet.length < 2) return null;
+    // the ground is the lowest foot — or just under the belly, if every foot ends above it: a creature
+    // stands ON its feet. (Arched arthropod legs and stubby limbs used to end beside the belly, so the
+    // body lay on the floor with its legs dangling in the air.)
+    let belly = Infinity;
+    for (const n of nodes) {
+      if (n.kind !== 'spine') continue;
+      belly = Math.min(belly, n.pos[1] - n.radius * (n.scale?.[1] ?? 1));
+    }
+    const groundY = Math.min(...feet.map((i) => nodes[i].pos[1]), belly - 0.04);
     const parentOf = new Int32Array(nodes.length).fill(-1);
     for (const [a, b] of edges) parentOf[b] = a;
     for (const footIdx of feet) {
@@ -212,8 +284,50 @@ export function grow(genome: Genome): Phenotype {
       const k = chain.length - 1;
       if (k < 1) continue;
       const dy = groundY - nodes[footIdx].pos[1];
-      if (dy > -1e-3) continue;
-      for (let i = 1; i <= k; i++) nodes[chain[i]].pos[1] += dy * (i / k); // hip fixed, foot → ground
+      if (dy > -1e-9) continue;
+      // hip fixed, foot → ground. An ARCHED leg (knee above the hip — an arthropod's) keeps its knee
+      // and stretches only the shin, so planting the foot never flattens the arch; a column leg
+      // spreads the stretch evenly down its length.
+      const arched = k >= 2 && nodes[chain[1]].pos[1] > nodes[chain[0]].pos[1];
+      for (let i = 1; i <= k; i++) {
+        const w = arched ? (i - 1) / (k - 1) : i / k;
+        nodes[chain[i]].pos[1] += dy * w;
+      }
+    }
+    return groundY;
+  }
+
+  /**
+   * A tail rests ON the ground, never through it. A hanging tail's tip used to end below the feet,
+   * and since every view puts the floor at the lowest point, the creature then stood on its tail
+   * tip with its feet in the air. Walk each tail from its root: a link that would dip under the
+   * floor is lifted to lie along it, and everything after it rides up with it, so a heavy reptile's
+   * tail drags on the floor and a light one trails level.
+   */
+  function groundTails(groundY: number): void {
+    const parentOf = new Int32Array(nodes.length).fill(-1);
+    for (const [a, b] of edges) parentOf[b] = a;
+    const kids: number[][] = nodes.map(() => []);
+    for (const [a, b] of edges) kids[a].push(b);
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      const p = parentOf[i];
+      // a tail ROOT: the first tail node off a non-tail parent
+      if (n.part?.kind !== 'tail' || p < 0 || nodes[p].part?.kind === 'tail') continue;
+      let lift = 0;
+      let cur = i;
+      while (true) {
+        const c = nodes[cur];
+        c.pos[1] += lift;
+        const floor = groundY + c.radius * 0.85;
+        if (c.pos[1] < floor) {
+          lift += floor - c.pos[1];
+          c.pos[1] = floor;
+        }
+        const next = kids[cur].find((k) => nodes[k].part?.kind === 'tail');
+        if (next === undefined) break;
+        cur = next;
+      }
     }
   }
 
@@ -228,9 +342,11 @@ export function grow(genome: Genome): Phenotype {
     }
   }
 
-  function growLimb(app: AppendageGene, base: BodyNode, dir0: Vec3): void {
+  function growLimb(app: AppendageGene, base: BodyNode, dir0: Vec3, parentIdx: number): void {
     let dir = dir0;
     let startPos: Vec3;
+    let arch: Vec3[] | null = null; // an explicit leg polyline (segment directions): arthropod or sprawler
+    let sprawl = false; // the polyline is a vertebrate sprawler's (thick, normal-length segments)
     if (app.kind === 'leg' && dev.symmetry !== 'radial') {
       // Legs attach at the shoulder/hip — the body's *side*, a touch above the belly — not the
       // underbelly midline, then descend. This widens the stance and puts the limb's top where it
@@ -243,8 +359,60 @@ export function grow(genome: Genome): Phenotype {
       // measure the flank on the true surface — a wide flat body (croc/lizard) is broader than its
       // scalar radius, and attaching at the radius would bury the leg's top inside the torso.
       const flank = surfaceExtent(base, [sideX, 0, 0]);
-      startPos = [base.pos[0] + sideX * flank * (0.92 + splay * 0.35), base.pos[1] + base.radius * 0.2, base.pos[2]];
+      // A column leg's hip sits INSIDE the torso, below its midline: the thigh's top is buried in the
+      // body and the limb emerges from the underside of the flank, a mammal's silhouette. (Seated on
+      // the flank surface above the midline, every thick thigh ballooned out of the side as a lobe —
+      // shoulders and haunches read as balls stuck to a tube.) A sprawler's wider splay still carries
+      // its hip out to the side.
+      startPos = [base.pos[0] + sideX * flank * Math.min(0.98, 0.5 + splay * 0.7), base.pos[1] - base.radius * 0.18, base.pos[2]];
       dir = norm([sideX * splay, -1, 0]);
+      // a BIPED (bird, ape, theropod) stands on one pair under its centre of mass: hips set in from
+      // the flank and the legs dropped straight, the feet under the body ~0.4 of a body-width apart.
+      // With a quadruped's splay they planted an A-frame half again wider than the body.
+      if (legPairsHere === 1 && splay < 0.5) {
+        startPos = [base.pos[0] + sideX * flank * 0.5, base.pos[1] - base.radius * 0.18, base.pos[2]];
+        dir = [0, -1, 0];
+      }
+      // ARTHROPOD legs (a hexapod or more, or an extreme sprawl): not a mammal's column folding fore-aft
+      // at the knee but an ARCH in the leg's own vertical plane — the femur rises up-and-out, the knee
+      // peaks above the body, the shin drops to a foot planted far out to the side. Each pair also
+      // fans fore-aft by its slot (front legs reach forward, hind legs back), so 8 legs radiate like a
+      // spider's instead of hanging in a row of identical columns.
+      // (an extreme splay alone only arches a CHITINOUS body's legs: a frog or a lizard that drew a wide
+      // stance is still a vertebrate sprawler, not a spider standing on its knuckles)
+      if (legPairsHere >= 3 || (splay > 0.72 && dev.covering.type === 'chitin')) {
+        const zf = (app.attachT - 0.5) * 1.4;
+        const n = app.segments - 1; // segment advances (n nodes span n-1 lengths)
+        arch = [];
+        if (n <= 1) arch.push(norm([sideX * 0.7, -0.7, zf]));
+        else
+          for (let k = 0; k < n; k++) {
+            if (k === 0) arch.push(norm([sideX, 0.55, zf]));
+            else if (k === n - 1) arch.push(norm([sideX * 0.22, -1, zf * 0.35]));
+            else arch.push(norm([sideX * 0.6, -0.45, zf * 0.8]));
+          }
+        dir = arch[0];
+        startPos = [base.pos[0] + sideX * flank * 0.9, base.pos[1] + base.radius * 0.05, base.pos[2]];
+      } else if (splay > 0.5) {
+        // a SPRAWLER (lizard, croc, newt): the upper leg juts out sideways at hip height, the elbow /
+        // knee sits out beside the body and the shin drops to a foot planted wide — the push-up stance,
+        // not a mammal's column tucked under the belly. Same polyline machinery as the arthropod arch
+        // (the knee rides a hair above the hip, so planting the foot stretches only the shin), but a
+        // vertebrate's thickness and segment lengths.
+        const zf = (app.attachT - 0.5) * 0.9;
+        const n = app.segments - 1;
+        arch = [];
+        if (n <= 1) arch.push(norm([sideX * 0.8, -0.6, zf * 0.3]));
+        else
+          for (let k = 0; k < n; k++) {
+            if (k === 0) arch.push(norm([sideX, 0.06, zf * 0.4]));
+            else if (k === n - 1) arch.push(norm([sideX * 0.12, -1, zf * 0.5]));
+            else arch.push(norm([sideX * 0.3, -1, zf * 0.25]));
+          }
+        sprawl = true;
+        dir = arch[0];
+        startPos = [base.pos[0] + sideX * flank * 0.82, base.pos[1] - base.radius * 0.12, base.pos[2]];
+      }
       dir0 = dir;
     } else {
       // Seat a face organ (eye/mouth/ear) proud of the body by a fraction of ITS OWN radius, so it
@@ -263,9 +431,15 @@ export function grow(genome: Genome): Phenotype {
     // orient +Z → aim direction, then roll about that axis (orients flat parts)
     let quat = qMul(qFromAxisAngle(dir0, app.roll), qFromTo([0, 0, 1], dir0));
     let pos: Vec3 = startPos;
-    let prev = nodes.indexOf(base);
+    let prev = parentIdx;
 
-    let pitch = app.curl[0];
+    // A column leg's joints, in a limb frame where a POSITIVE pitch swings the next link BACK (−Z):
+    // a hind leg (and a bird's, an ape's) runs hip → knee forward → hock back → foot forward. A
+    // quadruped's FORELEG folds the other way: the upper arm slopes back to an elbow behind the
+    // shoulder, the forearm drops near-vertical, the pastern angles forward to the paw. (The signs
+    // were inverted: every hind knee pointed backward like a bird's heel, under every quadruped.)
+    const fore = app.kind === 'leg' && !arch && legPairsHere === 2 && app.attachT > 0.5 && dev.symmetry !== 'radial';
+    let pitch = app.kind !== 'leg' ? app.curl[0] : fore ? 0.18 + 0.5 * Math.abs(app.curl[0]) : -app.curl[0];
     for (let j = 0; j < app.segments; j++) {
       if (atCap()) break;
       const last = j === app.segments - 1;
@@ -274,27 +448,41 @@ export function grow(genome: Genome): Phenotype {
       // paw/hoof terminator, which spreads wider than its node) — so legs read as powerful, not vestigial.
       if (app.kind === 'leg') {
         const t = app.segments > 1 ? j / (app.segments - 1) : 0;
-        r *= 1.32 - 0.62 * t; // ~1.32× at the hip → ~0.7× at the ankle
+        // arthropod legs are slender jointed rods (a spider's leg is a fraction of its body's girth);
+        // vertebrate legs are a muscular haunch that falls away fast to a slim shin: ~1.5× at the hip,
+        // ~1.05× by the knee, ~0.7× at the ankle (a straight taper read as a noodle)
+        r *= arch && !sprawl ? 0.62 - 0.22 * t : 0.7 + 0.8 * (1 - t) * (1 - t);
       }
       // the eye is the emotional anchor — floor the grown bulb so even a tapered/stalked eye on a
       // small head always reads (M19/M24), regardless of how the gene tapered down its tip.
       if (last && app.terminal === 'eye') r = Math.max(r, EYE_R_MIN);
+      if (arch) quat = qFromTo([0, 0, 1], arch[Math.min(j, arch.length - 1)]);
       const idx = addNode(pos, quat, r, last ? 'terminal' : 'limb', last ? app.terminal : undefined);
       nodes[idx].part = { kind: app.kind, style: app.style };
       edges.push([prev, idx]);
       prev = idx;
+      if (arch) {
+        const d = arch[Math.min(j, arch.length - 1)];
+        const L = app.length * (sprawl ? 1.0 : 1.2); // an arthropod's long spindly segments
+        pos = [pos[0] + d[0] * L, pos[1] + d[1] * L, pos[2] + d[2] * L];
+        continue;
+      }
 
       quat = qMul(quat, qFromEuler(pitch, app.curl[1]));
       dir = qRotate([0, 0, 1], quat);
       pos = [pos[0] + dir[0] * app.length, pos[1] + dir[1] * app.length, pos[2] + dir[2] * app.length];
-      // a real jointed leg: thigh → (knee folds the shin sharply back under the body) → (ankle swings
-      // the foot forward) — a clear Z stance, not one gentle curved sweep. Other limbs keep their curl.
+      // a real jointed leg: thigh forward → (knee folds the shin sharply back under the body) → (hock
+      // swings the foot forward) — a clear Z stance, not one gentle curved sweep; a foreleg's mirror
+      // fold (see `fore`). Other limbs keep their curl.
       if (app.kind === 'leg') {
         // knee — a clear backward fold, but softened: at ×3.0 the leg folded so far back under the
         // body that added segment length turned into more fold instead of more standing height,
         // which is why creatures read as stubby however long their legs got.
-        if (j === 0) pitch = -Math.abs(app.curl[0]) * 2.15 - 0.2;
-        else if (j === 1) pitch = Math.abs(app.curl[0]) * 2.0 + 0.2; // ankle — swing the foot forward
+        if (fore) {
+          if (j === 0) pitch = -(0.3 + 0.5 * Math.abs(app.curl[0])); // elbow — the forearm comes back to vertical
+          else if (j === 1) pitch = -0.32; // wrist — the pastern angles forward to the paw
+        } else if (j === 0) pitch = Math.abs(app.curl[0]) * 2.15 + 0.2; // knee — the shin folds back
+        else if (j === 1) pitch = -(Math.abs(app.curl[0]) * 2.0 + 0.2); // hock — swing the foot forward
       }
     }
   }
@@ -312,7 +500,9 @@ export function grow(genome: Genome): Phenotype {
 export const LEG_SLOTS: readonly (readonly number[])[] = [
   [],
   [0.55],
-  [0.2, 0.8],
+  // a quadruped stands with its legs under the hips and shoulders — the trunk's ends — not pulled
+  // in toward the middle (at 0.2/0.8 the body overhung its short wheelbase like a sausage on stilts)
+  [0.1, 0.92],
   [0.18, 0.5, 0.82],
   [0.12, 0.37, 0.63, 0.88],
   [0.1, 0.3, 0.5, 0.7, 0.9],
@@ -363,11 +553,17 @@ function pullLegAzimuth(az: number, coh: number): number {
   return lerp(a, canon, coh);
 }
 
+/** Trunk pitch per link below which a one-pair body counts as reared upright (birds lean ≥ −0.22). */
+const UPRIGHT_PITCH = -0.26;
+
 function normalizeLegs(g: Genome, coh: number): void {
   const legs = g.body.appendages.filter((p) => p.kind === 'leg');
   const pairs = legs.length;
   if (pairs === 0) return;
-  const slots = legSlots(pairs);
+  // a REARED biped (the trunk pitched up off its hips: an ape, a kangaroo, a humanoid) stands on
+  // its pelvis — the trunk's bottom end — not at a horizontal walker's balance point mid-body (a
+  // bird's or a raptor's), where the legs sprouted from its belly
+  const slots = pairs === 1 && g.body.curve[0] < UPRIGHT_PITCH ? [0.06] : legSlots(pairs);
   legs.sort((x, y) => x.attachT - y.attachT); // front-to-back; assign slots in order
   legs.forEach((leg, i) => {
     leg.pair = true; // legs are always mirrored
@@ -387,12 +583,15 @@ function frontSegment(g: Genome): SegmentGene {
 
 function ensureBilateralFace(g: Genome): void {
   const head = frontSegment(g);
-  ensureFace(head.appendages, (head.size[0] + head.size[1]) / 2);
+  const girth = (head.size[0] + head.size[1]) / 2;
+  ensureFace(head.appendages, girth, girth * Math.pow(head.taper, Math.max(0, head.repeat - 1)), head.repeat > 1 && !!g.body.child);
 }
 
 /** Guarantee a prominent eye-set + a mouth (M24/M19): synthesize them if mutation deleted them,
  *  and floor the sizes so they always read. The mouth is kept on the face front. */
-function ensureFace(apps: AppendageGene[], girth: number): void {
+// a paired eye's azimuth stays at least this far (rad) off the vertical midline
+const EYE_AZ_MAX = 1.1;
+function ensureFace(apps: AppendageGene[], girth: number, frontR = girth, linkedHead = false): void {
   const eyes = apps.filter((p) => p.terminal === 'eye');
   if (eyes.length === 0) apps.push(faceEye(girth));
   else
@@ -405,15 +604,27 @@ function ensureFace(apps: AppendageGene[], girth: number): void {
       // small-headed creatures (girth < 0.28) and silently defeats the floor it was paired with,
       // leaving eyes smaller than M19 promises. Prominence outranks proportion when they collide.
       e.thickness = clamp(Math.max(0.075, Math.min(Math.max(e.thickness, girth * 0.17), girth * 0.26)), AP.thickness);
-      // and keep them off the snout tip, so the muzzle front belongs to the mouth
-      e.attachElevation = clamp(Math.min(e.attachElevation, 0.75), AP.attachElevation);
+      // and keep them off the snout tip, so the muzzle front belongs to the mouth — an eye on the
+      // CRANIUM of a multi-link head (the muzzle runs on ahead, lower and narrower) may look forward,
+      // a cat's or an ape's gaze; one on a plain head's front stays at 0.75 (~47° to the side)
+      const cranium = linkedHead && e.attachT < 0.35;
+      e.attachElevation = clamp(Math.min(e.attachElevation, cranium ? 1.15 : 0.75), AP.attachElevation);
+      // a PAIR aimed near straight up (or down) lands both eyes on the midline as one merged ball —
+      // fold the azimuth off it so the mirrored eyes always clear each other
+      if (e.pair && Math.abs(Math.cos(e.attachAzimuth)) < Math.cos(EYE_AZ_MAX)) {
+        const up = Math.sin(e.attachAzimuth) >= 0;
+        const right = Math.cos(e.attachAzimuth) >= 0;
+        e.attachAzimuth = up ? (right ? EYE_AZ_MAX : Math.PI - EYE_AZ_MAX) : right ? 2 * Math.PI - EYE_AZ_MAX : Math.PI + EYE_AZ_MAX;
+      }
     }
 
   const mouths = apps.filter((p) => p.terminal === 'mouth');
   if (mouths.length === 0) apps.push(faceMouth(girth));
   else
     for (const m of mouths) {
-      m.thickness = clamp(Math.max(m.thickness, 0.26, girth * 0.46), AP.thickness); // a big, clearly-read mouth
+      // a big, clearly-read mouth — but never wider than the snout link that carries it (a mammal's
+      // muzzle is far narrower than its cranium; a skull-sized floor wrapped a frog's grin around it)
+      m.thickness = clamp(Math.max(m.thickness, Math.min(Math.max(0.26, girth * 0.46), frontR * 0.85)), AP.thickness);
       // Keep the maw on the FACE, not under the chin. `aim` is [cos(e)cos(a), cos(e)sin(a), sin(e)]
       // with the maw's azimuth ≈ 3π/2, so elevation IS the fore/aft tilt, and it sets where the
       // organ SEATS as well as where it points. At 0.4 the mouth aims ~66° at the ground; even at

@@ -137,3 +137,30 @@ export function coherence(p: Phenotype): Coherence {
   const sigma = 0.32;
   return { nearest, score: Math.exp(-(best * best) / (2 * sigma * sigma)) };
 }
+
+/** Human labels for the descriptor dimensions, in `describe()` order (for inspectors/plots). */
+export const DESCRIPTOR_LABELS: readonly string[] = [
+  'elongation',
+  'limbs',
+  'finniness',
+  'bulk',
+  'eyes',
+  'winged',
+  'tailed',
+  'radial',
+  'headedness',
+  'sheen',
+];
+
+/** The `k` nearest morphotype attractors, closest first, with the same score `coherence` reports. */
+export function nearestKinds(p: Phenotype, k = 3): { id: string; dist: number; score: number }[] {
+  const d = describe(p);
+  const sigma = 0.32;
+  return centroids()
+    .map((c) => {
+      const dist = distance(d, c.v);
+      return { id: c.id, dist, score: Math.exp(-(dist * dist) / (2 * sigma * sigma)) };
+    })
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, k);
+}

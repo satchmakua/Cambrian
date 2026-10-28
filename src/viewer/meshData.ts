@@ -52,6 +52,7 @@ export function buildMeshData(p: Phenotype): MeshData {
     // what buried the eyes/mouth. The organ's parent surface holds it; its own mesh renders on top.
     const tb = p.nodes[b].terminal;
     if (tb && SURFACE_ORGANS.has(tb)) continue;
+    if (p.nodes[b].part?.kind === 'wing') continue; // wings render whole from the shoulder (wings.ts)
     edges.push({ a, b, radius: ((p.nodes[a].radius + p.nodes[b].radius) / 2) * 0.9 });
   }
 
@@ -60,7 +61,7 @@ export function buildMeshData(p: Phenotype): MeshData {
   p.nodes.forEach((n, i) => {
     if (n.terminal && n.terminal !== 'none') {
       features.push({ type: n.terminal, idx: i, radius: n.radius, quat: n.quat, kind: n.part?.kind, style: n.part?.style ?? 0.5 });
-    } else {
+    } else if (n.part?.kind !== 'wing') {
       bodySpheres.push(i);
     }
   });

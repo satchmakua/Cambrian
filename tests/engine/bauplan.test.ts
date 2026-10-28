@@ -59,7 +59,7 @@ describe('bauplan: structural attractor basins (M24)', () => {
       const t = developBauplan(g).body.appendages.filter((a) => a.kind === 'leg').map((a) => a.attachT);
       return Math.max(...t) - Math.min(...t);
     };
-    expect(spread(legged(2, 1))).toBeGreaterThan(0.4); // pulled apart to [0.2, 0.8]
+    expect(spread(legged(2, 1))).toBeGreaterThan(0.4); // pulled apart to [0.1, 0.92]
     expect(spread(legged(2, 0))).toBeLessThan(0.05); // left clustered at the gene (0.5, 0.5)
   });
 

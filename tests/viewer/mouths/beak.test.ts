@@ -3,7 +3,7 @@ import { grow, type Phenotype } from '../../../src/engine/grow';
 import { defaultGenome } from '../../../src/engine/genome';
 import type { Vec3 } from '../../../src/engine/genome';
 import { randomGenome } from '../../../src/engine/random';
-import { buildFieldPrims, fieldAt } from '../../../src/viewer/bodyField';
+import { buildFieldPrims, fieldAt, qRotateV } from '../../../src/viewer/bodyField';
 import { buildBeak, type BeakBuild } from '../../../src/viewer/mouths/beak';
 
 // On-surface tolerance for the socket ring + seat (ray-trace is 1e-4; Newton fallback looser).
@@ -126,24 +126,28 @@ describe('beak mouth (mouth overhaul)', () => {
     }
   });
 
-  it('the upper mandible stays under 1.5r forward with an accelerating 0.25r–0.45r hook', () => {
+  it('the bill runs out mostly ahead of the face (not down at the ground), under 1.7r, with an accelerating 0.25r–0.45r hook', () => {
     let checked = 0;
     for (const p of [grow(defaultGenome()), grow(randomGenome(2)), grow(randomGenome(7))]) {
       const built = beakOn(p);
       if (!built) continue;
-      const { r, seat, spec } = built;
+      const { r, seat, dir, up } = built;
       const pos = built.upper.getAttribute('position');
       for (let i = 0; i < pos.count; i++) {
         const v: Vec3 = [pos.getX(i) - seat.p[0], pos.getY(i) - seat.p[1], pos.getZ(i) - seat.p[2]];
-        expect(dot3(v, spec.aim)).toBeLessThan(1.5 * r);
+        expect(dot3(v, dir)).toBeLessThan(1.7 * r);
       }
+      // the bill's axis leans toward the head's forward, away from the mouth's downward aim
+      const fwd = qRotateV(built.spec.anchor.quat, [0, 0, 1]);
+      expect(dot3(dir, fwd)).toBeGreaterThanOrEqual(dot3(built.spec.aim, fwd) - 1e-6);
+      expect(dot3(dir, fwd)).toBeGreaterThan(0.7);
       // the tip protrudes visibly, and the hook lands in the specified band
       const tip = built.upperPath[built.upperPath.length - 1];
-      expect(dot3(sub3(tip, seat.p), spec.aim)).toBeGreaterThan(0.5 * r);
+      expect(dot3(sub3(tip, seat.p), dir)).toBeGreaterThan(0.5 * r);
       expect(built.hook).toBeGreaterThanOrEqual(0.25 * r - 1e-9);
       expect(built.hook).toBeLessThanOrEqual(0.45 * r + 1e-9);
       // acceleration: half-way along the spine the drop is still well under half the full hook
-      const dropAt = (k: number): number => -dot3(sub3(built.upperPath[k], built.upperPath[0]), spec.up);
+      const dropAt = (k: number): number => -dot3(sub3(built.upperPath[k], built.upperPath[0]), up);
       expect(dropAt(8)).toBeCloseTo(built.hook, 6);
       expect(dropAt(4)).toBeGreaterThan(0.05 * built.hook);
       expect(dropAt(4)).toBeLessThan(0.35 * built.hook);
@@ -152,7 +156,7 @@ describe('beak mouth (mouth overhaul)', () => {
     expect(checked).toBeGreaterThan(1);
   });
 
-  it('the lower mandible is a 0.75-scale counter-piece hanging open below the upper', () => {
+  it('the lower mandible is a 0.75-scale counter-piece resting just open below the upper', () => {
     const p = grow(defaultGenome());
     const built = beakOn(p);
     expect(built).not.toBeNull();
@@ -160,11 +164,12 @@ describe('beak mouth (mouth overhaul)', () => {
     expect(built.upperPath.length).toBe(9);
     expect(built.lowerPath.length).toBe(9);
     expect(built.lowerLen).toBeCloseTo(0.75 * built.upperLen, 9);
-    const up = built.spec.up;
-    // roots below the upper's, spine pitched down off the aim by the gape — the beak hangs open
+    const up = built.up;
+    // roots below the upper's, spine pitched a hair down off the bill axis — closed, but two parts
     expect(dot3(sub3(built.lowerPath[0], built.upperPath[0]), up)).toBeLessThan(0);
     const dirL = norm3(sub3(built.lowerPath[8], built.lowerPath[0]));
     expect(dot3(dirL, up)).toBeLessThan(-0.01);
+    expect(dot3(dirL, up)).toBeGreaterThan(-0.2);
     // structure: a closed 20-sample collar ring, two capped 9×10 lofts, no teeth anywhere
     expect(built.ring.length).toBe(20);
     expect(built.collar.getAttribute('position').count).toBe(20 * 8);

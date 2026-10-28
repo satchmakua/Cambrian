@@ -202,16 +202,32 @@ function reaim(g: Genome, rng: Rng): void {
   a.attachElevation = range(rng, GENE_BOUNDS.appendage.attachElevation[0], GENE_BOUNDS.appendage.attachElevation[1]);
 }
 
+// A new body section grows in BEHIND the head (a longer neck, an extra trunk section) — appended past
+// the head it put a fresh faceless segment in front of the face. A body with no head grows one on.
 function addChild(g: Genome, rng: Rng): void {
   const chain = segments(g);
   if (chain.length >= DEPTH_MAX) return;
-  chain[chain.length - 1].child = freshSegment(rng);
+  const fresh = freshSegment(rng);
+  const last = chain[chain.length - 1];
+  if (chain.length >= 2 && last.appendages.some(isFace)) {
+    fresh.child = last;
+    chain[chain.length - 2].child = fresh;
+  } else last.child = fresh;
 }
 
-function removeChild(g: Genome, _rng: Rng): void {
+// Lose a body section — but never the head: drop a faceless link from between trunk and head (a
+// neck link, a trunk section) and close the gap. (Dropping the last segment beheaded the lineage:
+// its face fell back onto the trunk and it became a blob.)
+function removeChild(g: Genome, rng: Rng): void {
   const chain = segments(g);
-  if (chain.length < 2) return;
-  chain[chain.length - 2].child = undefined;
+  const removable: number[] = [];
+  for (let k = 1; k < chain.length; k++) {
+    const isHead = k === chain.length - 1 && chain[k].appendages.some(isFace);
+    if (!isHead && !chain[k].appendages.some(isFace)) removable.push(k);
+  }
+  if (removable.length === 0) return;
+  const k = removable[Math.floor(rng() * removable.length)];
+  chain[k - 1].child = chain[k].child;
 }
 
 function flipSymmetry(g: Genome, rng: Rng): void {
