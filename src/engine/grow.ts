@@ -112,14 +112,27 @@ export function grow(genome: Genome): Phenotype {
       quat = qMul(quat, qFromAxisAngle([1, 0, 0], -0.9 * Math.atan2(-f[1], f[2])));
     }
 
+    // the fusiform swell is a TORSO's: a head (the chain's last segment) or a bare connector (a neck
+    // carries no limbs) tapers straight, or a long muzzle and an ostrich's neck bulge like sausages
+    const bulge = depth > 0 && (!seg.child || seg.appendages.length === 0) ? 0 : BODY_BULGE;
+    const profileAt = (i: number) => 1 + bulge * Math.sin(Math.PI * (seg.repeat > 1 ? i / (seg.repeat - 1) : 0.5));
+    // A taper above 1 grows the chain toward its front (a chest deeper than the hips, a fish deepest
+    // behind its head) — it moves the bulk forward, it doesn't add any: the peak link is held to the
+    // size an untapered chain's would be, or every front-heavy body ballooned
+    let norm = 1;
+    if (seg.taper > 1) {
+      let flat = 0;
+      let grown = 0;
+      for (let i = 0; i < seg.repeat; i++) {
+        flat = Math.max(flat, profileAt(i));
+        grown = Math.max(grown, Math.pow(seg.taper, i) * profileAt(i));
+      }
+      norm = flat / grown;
+    }
+
     for (let i = 0; i < seg.repeat; i++) {
       if (atCap()) break;
-      const u = seg.repeat > 1 ? i / (seg.repeat - 1) : 0.5;
-      // the fusiform swell is a TORSO's: a head (the chain's last segment) or a bare connector (a neck
-      // carries no limbs) tapers straight, or a long muzzle and an ostrich's neck bulge like sausages
-      const bulge = depth > 0 && (!seg.child || seg.appendages.length === 0) ? 0 : BODY_BULGE;
-      const profile = 1 + bulge * Math.sin(Math.PI * u);
-      const radius = girth * Math.pow(seg.taper, i) * profile;
+      const radius = girth * Math.pow(seg.taper, i) * profileAt(i) * norm;
       const idx = addNode(pos, quat, radius, 'spine');
       nodes[idx].segment = depth;
       if (segScale) nodes[idx].scale = segScale;
@@ -241,8 +254,8 @@ export function grow(genome: Genome): Phenotype {
   }
 
   /** Drop every foot to the lowest foot's Y so the creature stands level (the hip stays put, the lower
-   *  leg stretches to reach). Left/right feet share a Y by mirror, so exact symmetry is preserved. */
-  /** Plant the feet; returns the ground height they stand on (null when nothing stands). */
+   *  leg stretches to reach). Left/right feet share a Y by mirror, so exact symmetry is preserved.
+   *  Returns the ground height they stand on (null when nothing stands). */
   function levelFeet(): number | null {
     if (dev.symmetry === 'radial') return null;
     const feet: number[] = [];
@@ -413,7 +426,13 @@ export function grow(genome: Genome): Phenotype {
     let pos: Vec3 = startPos;
     let prev = parentIdx;
 
-    let pitch = app.curl[0];
+    // A column leg's joints, in a limb frame where a POSITIVE pitch swings the next link BACK (−Z):
+    // a hind leg (and a bird's, an ape's) runs hip → knee forward → hock back → foot forward. A
+    // quadruped's FORELEG folds the other way: the upper arm slopes back to an elbow behind the
+    // shoulder, the forearm drops near-vertical, the pastern angles forward to the paw. (The signs
+    // were inverted: every hind knee pointed backward like a bird's heel, under every quadruped.)
+    const fore = app.kind === 'leg' && !arch && legPairsHere === 2 && app.attachT > 0.5 && dev.symmetry !== 'radial';
+    let pitch = app.kind !== 'leg' ? app.curl[0] : fore ? 0.18 + 0.5 * Math.abs(app.curl[0]) : -app.curl[0];
     for (let j = 0; j < app.segments; j++) {
       if (atCap()) break;
       const last = j === app.segments - 1;
@@ -445,14 +464,18 @@ export function grow(genome: Genome): Phenotype {
       quat = qMul(quat, qFromEuler(pitch, app.curl[1]));
       dir = qRotate([0, 0, 1], quat);
       pos = [pos[0] + dir[0] * app.length, pos[1] + dir[1] * app.length, pos[2] + dir[2] * app.length];
-      // a real jointed leg: thigh → (knee folds the shin sharply back under the body) → (ankle swings
-      // the foot forward) — a clear Z stance, not one gentle curved sweep. Other limbs keep their curl.
+      // a real jointed leg: thigh forward → (knee folds the shin sharply back under the body) → (hock
+      // swings the foot forward) — a clear Z stance, not one gentle curved sweep; a foreleg's mirror
+      // fold (see `fore`). Other limbs keep their curl.
       if (app.kind === 'leg') {
         // knee — a clear backward fold, but softened: at ×3.0 the leg folded so far back under the
         // body that added segment length turned into more fold instead of more standing height,
         // which is why creatures read as stubby however long their legs got.
-        if (j === 0) pitch = -Math.abs(app.curl[0]) * 2.15 - 0.2;
-        else if (j === 1) pitch = Math.abs(app.curl[0]) * 2.0 + 0.2; // ankle — swing the foot forward
+        if (fore) {
+          if (j === 0) pitch = -(0.3 + 0.5 * Math.abs(app.curl[0])); // elbow — the forearm comes back to vertical
+          else if (j === 1) pitch = -0.32; // wrist — the pastern angles forward to the paw
+        } else if (j === 0) pitch = Math.abs(app.curl[0]) * 2.15 + 0.2; // knee — the shin folds back
+        else if (j === 1) pitch = -(Math.abs(app.curl[0]) * 2.0 + 0.2); // hock — swing the foot forward
       }
     }
   }

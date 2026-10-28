@@ -307,8 +307,10 @@ describe('nests and eggs', () => {
     expect(clutch).toBeGreaterThanOrEqual(2);
     expect(w.tally.births).toBe(0); // eggs, not young — yet
     const mother = w.eggs[0].mother;
+    const first = new Set(w.eggs.map((e) => e.id));
     run(w, 110);
-    expect(w.eggs.filter((e) => e.mother === mother).length).toBe(0);
+    // (the pair may well have laid again since — it's THIS clutch that must have hatched)
+    expect(w.eggs.filter((e) => first.has(e.id)).length).toBe(0);
     const young = w.creatures.filter((c) => c.parent === mother && c.age < 60);
     expect(young.length).toBeGreaterThan(0);
   });
