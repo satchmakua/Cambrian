@@ -18,6 +18,7 @@
 import { useContext, useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { coatMain } from '../palette';
 import type { Phenotype } from '../../engine/grow';
 import type { Vec3 } from '../../engine/genome';
 import type { Carve } from '../bodyField';
@@ -360,7 +361,7 @@ export function JawedMouth({
     [phenotype, f.idx, carves, recessed, variant, surface],
   );
   const pal = phenotype.genomeRef.palette;
-  const coat = useMemo(() => new THREE.Color().setHSL(pal.hueA, pal.sat * 0.85, pal.light * 0.92).getHex(), [pal]);
+  const coat = useMemo(() => coatMain(pal).getHex(), [pal]);
   // a wet nose: mostly near-black, sometimes the dusky pink of a cat's or a pig's
   const noseColor = useMemo(
     () => (hash01(phenotype.genomeRef.seed, 0x4e05) < 0.62 ? 0x1c1416 : new THREE.Color().setHSL(0.98, 0.32, 0.42).getHex()),

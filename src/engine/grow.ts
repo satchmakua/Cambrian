@@ -66,7 +66,8 @@ export function grow(genome: Genome): Phenotype {
 
   if (nodes.length === 0) addNode([0, 0, 0], [0, 0, 0, 1], R_MIN, 'spine'); // never empty
 
-  levelFeet(); // drop every foot to a common ground level (the creature stands), then refresh bounds
+  const groundY = levelFeet(); // drop every foot to a common ground level (the creature stands)
+  if (groundY !== null) groundTails(groundY); // …and no tail reaches below it
   recomputeBounds();
 
   return { nodes, edges, bounds: { min, max }, genomeRef: genome };
@@ -241,11 +242,12 @@ export function grow(genome: Genome): Phenotype {
 
   /** Drop every foot to the lowest foot's Y so the creature stands level (the hip stays put, the lower
    *  leg stretches to reach). Left/right feet share a Y by mirror, so exact symmetry is preserved. */
-  function levelFeet(): void {
-    if (dev.symmetry === 'radial') return;
+  /** Plant the feet; returns the ground height they stand on (null when nothing stands). */
+  function levelFeet(): number | null {
+    if (dev.symmetry === 'radial') return null;
     const feet: number[] = [];
     for (let i = 0; i < nodes.length; i++) if (nodes[i].kind === 'terminal' && nodes[i].part?.kind === 'leg') feet.push(i);
-    if (feet.length < 2) return;
+    if (feet.length < 2) return null;
     // the ground is the lowest foot — or just under the belly, if every foot ends above it: a creature
     // stands ON its feet. (Arched arthropod legs and stubby limbs used to end beside the belly, so the
     // body lay on the floor with its legs dangling in the air.)
@@ -277,6 +279,41 @@ export function grow(genome: Genome): Phenotype {
       for (let i = 1; i <= k; i++) {
         const w = arched ? (i - 1) / (k - 1) : i / k;
         nodes[chain[i]].pos[1] += dy * w;
+      }
+    }
+    return groundY;
+  }
+
+  /**
+   * A tail rests ON the ground, never through it. A hanging tail's tip used to end below the feet,
+   * and since every view puts the floor at the lowest point, the creature then stood on its tail
+   * tip with its feet in the air. Walk each tail from its root: a link that would dip under the
+   * floor is lifted to lie along it, and everything after it rides up with it, so a heavy reptile's
+   * tail drags on the floor and a light one trails level.
+   */
+  function groundTails(groundY: number): void {
+    const parentOf = new Int32Array(nodes.length).fill(-1);
+    for (const [a, b] of edges) parentOf[b] = a;
+    const kids: number[][] = nodes.map(() => []);
+    for (const [a, b] of edges) kids[a].push(b);
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      const p = parentOf[i];
+      // a tail ROOT: the first tail node off a non-tail parent
+      if (n.part?.kind !== 'tail' || p < 0 || nodes[p].part?.kind === 'tail') continue;
+      let lift = 0;
+      let cur = i;
+      while (true) {
+        const c = nodes[cur];
+        c.pos[1] += lift;
+        const floor = groundY + c.radius * 0.85;
+        if (c.pos[1] < floor) {
+          lift += floor - c.pos[1];
+          c.pos[1] = floor;
+        }
+        const next = kids[cur].find((k) => nodes[k].part?.kind === 'tail');
+        if (next === undefined) break;
+        cur = next;
       }
     }
   }

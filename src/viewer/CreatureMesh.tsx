@@ -30,6 +30,7 @@ import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildT
 import { ensureSkinWeights, type RigInstance } from './rig';
 import { buildFieldPrims, fieldAt } from './bodyField';
 import { eyeClearings, eyeSeat } from './eyeSeat';
+import { coatDark, coatFin, coatMain, coatPattern } from './palette';
 import { getGeometry, retainGeometry, releaseGeometry } from './geometryCache';
 import { mouthCarves } from './mouthLine';
 import { sampleTrajectory, type Trajectory } from '../physics/fitness';
@@ -228,10 +229,10 @@ export function CreatureMesh({
   const playing = !!trajectory; // the recorded physics gait is the only motion left
 
   const footColor = useMemo(
-    () => new THREE.Color().setHSL(pal.hueA, pal.sat, Math.max(0.12, pal.light * 0.45)).getHex(),
+    () => coatDark(pal).getHex(),
     [pal],
   );
-  const finColor = useMemo(() => new THREE.Color().setHSL(pal.hueA, pal.sat, pal.light).getHex(), [pal]);
+  const finColor = useMemo(() => coatFin(pal).getHex(), [pal]);
   // Iris color — deterministic per creature (from its seed), drawn from a curated eye palette rather
   // than tied to the body hue (which gave every animal an eye a shade off its own coat). Warm animal
   // colors dominate; striking blues/reds/violets appear as a minority, so eye colour is a real point
@@ -1117,8 +1118,8 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
     const trunkLen = Number.isFinite(z1 - z0) ? z1 - z0 : 1;
     const gene = Math.max(f.radius, 0.06) / Math.max(girth, 0.1); // ~0.4–0.6 typical
     const pal = g.palette;
-    const plumage = new THREE.Color().setHSL(pal.hueA, pal.sat * 0.8, pal.light * 0.88);
-    const accent = new THREE.Color().setHSL(pal.hueB, Math.min(1, pal.sat * 1.1), 0.42);
+    const plumage = coatMain(pal);
+    const accent = coatPattern(pal);
     const foldS = (trunkLen * 1.05 + girth * 0.9) * (0.85 + gene * 0.3);
     const w = feathered
       ? buildFeatheredWing(side, foldS, plumage, accent)
@@ -1226,8 +1227,8 @@ function TailFan({ phenotype }: { phenotype: Phenotype }) {
     }
     const len = Number.isFinite(z1 - z0) ? z1 - z0 : 1;
     const pal = g.palette;
-    const plumage = new THREE.Color().setHSL(pal.hueA, pal.sat * 0.8, pal.light * 0.88);
-    const accent = new THREE.Color().setHSL(pal.hueB, Math.min(1, pal.sat * 1.1), 0.42);
+    const plumage = coatMain(pal);
+    const accent = coatPattern(pal);
     return buildTailFan(Math.max(len * 0.55, girth * 1.6), plumage, accent, 0.2 + (g.seed % 5) * 0.06);
   }, [phenotype, g]);
   useEffect(() => () => geo.dispose(), [geo]);

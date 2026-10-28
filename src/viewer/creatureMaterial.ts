@@ -16,6 +16,7 @@
  * shader compiles once.
  */
 import * as THREE from 'three';
+import { coatAccent, coatBelly, coatMain, coatPattern } from './palette';
 import type { Palette, Covering, CoveringType, PatternType } from '../engine/genome';
 
 const COVERING_INDEX: Record<CoveringType, number> = {
@@ -92,13 +93,15 @@ export interface FurShell {
 export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, bare: BareLegs | null = null, shell: FurShell | null = null): THREE.MeshPhysicalMaterial {
   // A moodier base than the raw palette: real integument is rarely a bright, saturated toy. We
   // desaturate and darken a touch so creatures read as living tissue, not painted plastic.
-  const main = new THREE.Color().setHSL(pal.hueA, pal.sat * 0.8, pal.light * 0.88);
-  const back = main.clone().multiplyScalar(0.55); // dorsal — deeper, for countershading
-  // ventral — lighter, but a muted greyed tone, never the cartoon white belly
-  const belly = main.clone().lerp(new THREE.Color(0xc4bcab), 0.38);
-  const pattern = new THREE.Color().setHSL(pal.hueB, Math.min(1, pal.sat * 1.1), pal.light * 0.44);
-  // a deeper, slightly hue-shifted accent — outlines rosettes/ocelli and adds depth inside markings
-  const accent = new THREE.Color().setHSL((pal.hueB + 0.08) % 1, Math.min(1, pal.sat * 1.2), pal.light * 0.3);
+  // (see palette.ts: the palette is sRGB HSL — read as linear, every coat came out a pale pastel)
+  const main = coatMain(pal);
+  const back = main.clone().multiplyScalar(0.62); // dorsal — deeper, for countershading
+  // ventral — the coat's own hue, lighter and a little greyer (a fixed grey lerped in linear space
+  // outweighed a brown coat ~4:1 and gave every species the same greige belly)
+  const belly = coatBelly(pal);
+  const pattern = coatPattern(pal);
+  // a deeper accent toward umber — outlines rosettes/ocelli and adds depth inside markings
+  const accent = coatAccent(pal);
   // a cool, dim skylight edge — a thin backlit rim of living skin, NOT a warm glossy halo
   const rim = new THREE.Color(0x74839c);
   // warm blood-tinted translucency where the body is lit from behind / at thin edges (cheap SSS)
@@ -120,7 +123,8 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
     metalness: preset.metal,
     sheen: preset.velvet,
     sheenRoughness: preset.velvetRough,
-    sheenColor: main.clone().lerp(new THREE.Color(0xffffff), 0.35),
+    // a velvet lobe in the coat's own tint: lerped toward white it frosted every pelt at the edges
+    sheenColor: main.clone().multiplyScalar(0.6),
     clearcoat: THREE.MathUtils.clamp(preset.coat * (0.45 + 0.75 * cov.sheen), 0, 1),
     clearcoatRoughness: preset.coatRough,
     iridescence: THREE.MathUtils.clamp(preset.irid * Math.max(0, cov.sheen - 0.25) * 1.4, 0, 1),
@@ -129,6 +133,7 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
   });
 
   mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uMain = { value: main };
     shader.uniforms.uBack = { value: back };
     shader.uniforms.uBelly = { value: belly };
     shader.uniforms.uPattern = { value: pattern };
@@ -190,7 +195,10 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
           gH = surfaceHeight(bp, uCover);
           gM = muscle(bp);
           float up = clamp(vWNrm.y * 0.5 + 0.5, 0.0, 1.0);
-          vec3 skin = mix(uBelly, uBack, smoothstep(0.22, 0.8, up));
+          // countershading kept to the underside and the spine: the flanks carry the coat's true
+          // colour (a flank used to be 58% belly — fixed grey — and 42% darkened back, never the coat)
+          vec3 skin = mix(uMain, uBelly, 1.0 - smoothstep(0.1, 0.4, up));
+          skin = mix(skin, uBack, smoothstep(0.64, 0.96, up));
           float pat = patternField(bp, uPType, uPScale);
           skin = mix(skin, uPattern, clamp(pat * uContrast, 0.0, 1.0));
           // a deeper accent in the cores of strong markings (rosette rings, ocelli) → richness
@@ -318,7 +326,7 @@ varying vec3 vWNrm;
 varying float vFlesh;
 varying float vAO;
 varying float vLeg;
-uniform vec3 uBack; uniform vec3 uBelly; uniform vec3 uPattern; uniform vec3 uPattern2; uniform vec3 uRim;
+uniform vec3 uMain; uniform vec3 uBack; uniform vec3 uBelly; uniform vec3 uPattern; uniform vec3 uPattern2; uniform vec3 uRim;
 uniform vec3 uBlood;
 uniform int uPType; uniform int uCover;
 uniform float uPScale; uniform float uContrast; uniform float uSheen; uniform float uBump;

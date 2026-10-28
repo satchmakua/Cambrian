@@ -59,7 +59,7 @@ describe('creature material shader injection', () => {
 
   it('declares every uniform the injected code references', () => {
     const s = compileShaderStrings();
-    for (const u of ['uBack', 'uBelly', 'uPattern', 'uPattern2', 'uRim', 'uPType', 'uCover', 'uPScale', 'uContrast', 'uSheen', 'uBump', 'uOff']) {
+    for (const u of ['uMain', 'uBack', 'uBelly', 'uPattern', 'uPattern2', 'uRim', 'uPType', 'uCover', 'uPScale', 'uContrast', 'uSheen', 'uBump', 'uOff']) {
       expect(s.uniforms[u]).toBeDefined();
       expect(s.fragmentShader).toContain(u);
     }
@@ -83,5 +83,30 @@ describe('creature material shader injection', () => {
     const iH = s.fragmentShader.indexOf('gH = surfaceHeight(bp, uCover);');
     expect(iFw).toBeGreaterThan(0);
     expect(iH).toBeGreaterThan(iFw);
+  });
+
+  it('wears the palette as sRGB: a coat is its own colour, with a belly of its own hue', () => {
+    // read as LINEAR HSL a mid lightness rendered as a pale pastel, and the belly was lerped toward
+    // a fixed grey that outweighed a brown coat ~4:1 — every pelt came out the same chalky greige
+    const hsl = { h: 0, s: 0, l: 0 };
+    const hueGap = (a: number, b: number) => Math.min(Math.abs(a - b), 1 - Math.abs(a - b));
+    for (const pal of [
+      { hueA: 0.08, hueB: 0.07, sat: 0.55, light: 0.5 }, // a lion's tawny
+      { hueA: 0.3, hueB: 0.12, sat: 0.6, light: 0.42 }, // a lizard's green
+      { hueA: 0.6, hueB: 0.62, sat: 0.4, light: 0.35 }, // a slate-blue fish
+    ]) {
+      const g = defaultGenome();
+      const mat = makeCreatureMaterial(pal, { ...g.covering, type: 'fur' }, g.seed);
+      const shader = { uniforms: {} as Record<string, { value: THREE.Color }>, vertexShader: THREE.ShaderLib.physical.vertexShader, fragmentShader: THREE.ShaderLib.physical.fragmentShader };
+      (mat.onBeforeCompile as (s: typeof shader) => void)(shader);
+      mat.dispose();
+      const main = shader.uniforms.uMain.value.getHSL({ ...hsl }, THREE.SRGBColorSpace);
+      const belly = shader.uniforms.uBelly.value.getHSL({ ...hsl }, THREE.SRGBColorSpace);
+      expect(main.l).toBeCloseTo(0.18 + pal.light * 0.72, 2);
+      expect(hueGap(main.h, pal.hueA)).toBeLessThan(0.005);
+      expect(hueGap(belly.h, pal.hueA)).toBeLessThan(0.015);
+      expect(belly.l).toBeGreaterThan(main.l);
+      expect(belly.s).toBeGreaterThan(main.s * 0.5);
+    }
   });
 });
