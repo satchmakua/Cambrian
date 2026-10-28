@@ -366,6 +366,13 @@ export function grow(genome: Genome): Phenotype {
       // its hip out to the side.
       startPos = [base.pos[0] + sideX * flank * Math.min(0.98, 0.5 + splay * 0.7), base.pos[1] - base.radius * 0.18, base.pos[2]];
       dir = norm([sideX * splay, -1, 0]);
+      // a BIPED (bird, ape, theropod) stands on one pair under its centre of mass: hips set in from
+      // the flank and the legs dropped straight, the feet under the body ~0.4 of a body-width apart.
+      // With a quadruped's splay they planted an A-frame half again wider than the body.
+      if (legPairsHere === 1 && splay < 0.5) {
+        startPos = [base.pos[0] + sideX * flank * 0.5, base.pos[1] - base.radius * 0.18, base.pos[2]];
+        dir = [0, -1, 0];
+      }
       // ARTHROPOD legs (a hexapod or more, or an extreme sprawl): not a mammal's column folding fore-aft
       // at the knee but an ARCH in the leg's own vertical plane — the femur rises up-and-out, the knee
       // peaks above the body, the shin drops to a foot planted far out to the side. Each pair also

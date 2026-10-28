@@ -51,6 +51,12 @@ export interface FieldPrims {
   eq: Float64Array;
   er: Float64Array;
   ne: number;
+  /** CHAINS: each cone's chain id (the trunk, the neck, the head, each limb, the tail), and the cone
+   *  order fieldAt walks (chain by chain). Cones of one chain meet at shared nodes of equal radius and
+   *  need almost no blend; a full smooth-min there swelled every joint by up to k/4 and sagged the
+   *  span between — a roll at each spine node, the caterpillar trunk. Chains blend into each other. */
+  ch: Int32Array;
+  ord: Int32Array;
   /** smooth-union blend radius; 0 → hard union (matches the capsule-kit surface) */
   k: number;
   /** how far an ellipsoid can overshoot its node's scalar radius (grid padding must cover this) */
@@ -180,7 +186,34 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     hl[i] = Math.hypot(bx[i] - ax[i], by[i] - ay[i], bz[i] - az[i]) / 2;
   }
   for (let i = 0; i < nc; i++) if (an[i]) excess = Math.max(excess, Math.max(ra[i], rb[i]) * (Math.max(sx0[i], sy0[i], sx1[i], sy1[i]) - 1));
-  return { ax, ay, az, bx, by, bz, pr, ra, rb, cx, cy, cz, hl, an, aq, sx0, sy0, sx1, sy1, nc, ec, eq, er, ne, k: 0, excess };
+  // chains: a cone belongs to the chain of its far node — a spine node's segment (trunk, neck, head),
+  // a limb node's part root (the first node of that leg / tail / horn). The fallback (one prim per
+  // node) keeps every prim its own chain: the old all-smooth union.
+  const ch = new Int32Array(nc);
+  if (edges) {
+    const parentOf = new Int32Array(p.nodes.length).fill(-1);
+    for (const [a, b] of p.edges) parentOf[b] = a;
+    const rootOf = (i: number): number => {
+      let cur = i;
+      for (;;) {
+        const n = p.nodes[cur];
+        const par = parentOf[cur];
+        if (par < 0 || n.kind === 'spine') return cur;
+        const pn = p.nodes[par];
+        if (pn.kind === 'spine' || pn.part?.kind !== n.part?.kind) return cur;
+        cur = par;
+      }
+    };
+    for (let i = 0; i < nc; i++) {
+      const b = edges[i][1];
+      const nb = p.nodes[b];
+      ch[i] = nb.kind === 'spine' ? -1 - (nb.segment ?? 0) : rootOf(b);
+    }
+  } else {
+    for (let i = 0; i < nc; i++) ch[i] = i;
+  }
+  const ord = Int32Array.from({ length: nc }, (_, i) => i).sort((a, b) => ch[a] - ch[b] || a - b);
+  return { ax, ay, az, bx, by, bz, pr, ra, rb, cx, cy, cz, hl, an, aq, sx0, sy0, sx1, sy1, nc, ch, ord, ec, eq, er, ne, k: 0, excess };
 }
 
 // rotate v by the CONJUGATE of q (world → the prim's local frame), inlined, no allocation of q'
@@ -336,28 +369,47 @@ function ellipticConeDist(f: FieldPrims, m: number, x: number, y: number, z: num
   return d * Math.min(sx, sy, 1);
 }
 
+/** the blend between cones of one chain, as a fraction of their own (see FieldPrims.ch) */
+const CHAIN_BLEND = 0.15;
+
 /** The body field: < 0 inside the creature, 0 on the skin, > 0 outside. */
 export function fieldAt(f: FieldPrims, x: number, y: number, z: number): number {
-  let d = Infinity;
+  let d = Infinity; // the smooth union of the finished chains
+  let cd = Infinity; // the current chain's union
+  let ck = 0; // …and its blend radius into the rest
+  let cur = 0x7fffffff;
   const k = f.k;
-  for (let m = 0; m < f.nc; m++) {
-    // Exact culling: smin(val, d, k) returns d unchanged whenever val ≥ d + k, and val is at least
-    // the distance to the cone's bounding sphere — so a cone whose sphere is that far away is skipped.
+  for (let o = 0; o < f.nc; o++) {
+    const m = f.ord[o];
+    if (f.ch[m] !== cur) {
+      if (cd !== Infinity) d = d === Infinity ? cd : smin(cd, d, ck);
+      cur = f.ch[m];
+      cd = Infinity;
+      ck = 0;
+    }
     // per-primitive blend: a thin limb blends over at most ~its own radius, so slender legs keep their
     // definition instead of webbing into each other, while fat trunk sections still fuse softly
     const rMaxM = f.ra[m] > f.rb[m] ? f.ra[m] : f.rb[m];
     const km = k < rMaxM * 1.1 ? k : rMaxM * 1.1;
+    if (km > ck) ck = km;
+    // within a chain, only a whisper of blend (it still fillets the inside of a bent knee)
+    const kc = km * CHAIN_BLEND;
     const sMax = f.an[m] ? Math.max(f.sx0[m], f.sy0[m], f.sx1[m], f.sy1[m], 1) : 1;
-    if (d !== Infinity) {
+    // Exact culling: val is at least the distance to the cone's bounding sphere. A cone that far can't
+    // move its chain's union (smin(val, cd, kc) = cd once val ≥ cd + kc), or — past d + k + kc — can't
+    // move the finished union even through the chain's blend (at most k; 2·kc covers the chain's own).
+    const near = cd + kc < d + k + 2 * kc ? cd + kc : d + k + 2 * kc;
+    if (near !== Infinity) {
       const ox = x - f.cx[m], oy = y - f.cy[m], oz = z - f.cz[m];
-      const lim = d + km + f.hl[m] + rMaxM * sMax;
+      const lim = near + f.hl[m] + rMaxM * sMax;
       if (lim > 0 && ox * ox + oy * oy + oz * oz > lim * lim) continue;
     }
     const val = f.an[m]
       ? ellipticConeDist(f, m, x, y, z)
       : roundConeDist(x, y, z, f.ax[m], f.ay[m], f.az[m], f.bx[m], f.by[m], f.bz[m], f.ra[m], f.rb[m]);
-    d = d === Infinity ? val : smin(val, d, km);
+    cd = cd === Infinity ? val : smin(val, cd, kc);
   }
+  if (cd !== Infinity) d = d === Infinity ? cd : smin(cd, d, ck);
   for (let m = 0; m < f.ne; m++) {
     if (d !== Infinity) {
       const ox = x - f.ec[m * 3], oy = y - f.ec[m * 3 + 1], oz = z - f.ec[m * 3 + 2];
