@@ -126,8 +126,9 @@ describe('jawed mouth build (mouth overhaul)', () => {
   });
 
 
-  it('a reptile or a frog shuts its mouth as a seam: no projecting grin, a croc shows only small teeth', () => {
-    for (const [kind, variant] of [['lizard', 'maw'], ['crocodilian', 'fanged'], ['anuran', 'maw']] as const) {
+  it('a reptile, a frog or a fish shuts its mouth as a seam: no projecting grin, a croc or a shark shows only small teeth', () => {
+    // (a fish's and a shark's projecting grin of cream teeth over a sausage lip read as a Muppet)
+    for (const [kind, variant] of [['lizard', 'maw'], ['crocodilian', 'fanged'], ['anuran', 'maw'], ['fish', 'maw'], ['shark', 'fanged']] as const) {
       const p = grow(genomeOfMorphotype(5, kind));
       const idx = mouthIdx(p);
       const sealed = buildJawed(p, idx, [], false, variant)!;
@@ -141,8 +142,5 @@ describe('jawed mouth build (mouth overhaul)', () => {
         for (const t of sealed.upperTeeth) expect(t.len).toBeLessThan(grin * sealed.r);
       }
     }
-    // a shark keeps its grin
-    const shark = grow(genomeOfMorphotype(5, 'shark'));
-    expect(buildJawed(shark, mouthIdx(shark), [], false, 'fanged')!.sealed).toBe(false);
   });
 });

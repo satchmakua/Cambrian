@@ -44,5 +44,7 @@ describe('eyes', () => {
   it('hunters and apes look forward; grazers and gnawers look out to the sides', () => {
     for (const id of ['felid', 'primate']) expect(meanGaze(id), id).toBeGreaterThan(0.82);
     for (const id of ['ungulate', 'rodent']) expect(meanGaze(id), id).toBeLessThan(0.62);
+    // a fish looks out of its sides (it used to stare ~43° forward over its snout, like an ape)
+    for (const id of ['fish', 'shark']) expect(meanGaze(id), id).toBeLessThan(0.45);
   });
 });

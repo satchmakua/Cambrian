@@ -29,7 +29,7 @@ import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smo
 import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finKindOf } from './wings';
 import { ensureSkinWeights, type RigInstance } from './rig';
 import { buildFieldPrims, fieldAt } from './bodyField';
-import { eyeClearings, eyeSeat } from './eyeSeat';
+import { eyeClearings, eyeSeat, isSwimmer } from './eyeSeat';
 import { coatDark, coatFin, coatMain, coatPattern } from './palette';
 import { getGeometry, retainGeometry, releaseGeometry } from './geometryCache';
 import { mouthCarves } from './mouthLine';
@@ -670,6 +670,7 @@ function capGeometry(theta: number, limbal: boolean, squeezeX = 1): THREE.Sphere
   return g;
 }
 const REPTILE_IRIS = [0xb08a2e, 0xa8661f, 0x7d8a33, 0x9a4f24, 0x8f8a6e, 0xc2a046];
+const FISH_IRIS = [0xc9cdd2, 0xb9bfc4, 0xd2b062, 0xbf9a4a, 0xa9b49c];
 
 /** One eye's lids in the body's own covering: the shared hemispheres scaled to the eye, with the
  *  covering shader's body-space coordinates baked at the open pose (so the coat runs onto the lids
@@ -714,9 +715,14 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   const socketDark = useMemo(() => new THREE.Color(socket).multiplyScalar(0.5).getHex(), [socket]);
   // vertebrate eyes have lids that blink — and shut in sleep; an insect's facets and a glowing alien
   // eye stare
-  const lidded = v === 'round' || v === 'beady' || v === 'slit';
+  const vertebrate = v === 'round' || v === 'beady' || v === 'slit';
+  // …except a fish's: no lids at all — a flat, lidless, metallic-ringed eye lying flush with the head
+  // (lidded and staring forward over a grin, every fish read as a Muppet)
+  const fishEye = useMemo(() => vertebrate && onFace && !!phenotype && isSwimmer(phenotype), [vertebrate, onFace, phenotype]);
+  const lidded = vertebrate && !fishEye;
   const slitIris = useMemo(() => REPTILE_IRIS[Math.floor(unitHash(seed, 0x511) * REPTILE_IRIS.length)], [seed]);
-  const seat = useMemo(() => (lidded && onFace && phenotype ? eyeSeat(phenotype, f.idx, f.quat, r) : { quat: f.quat, sink: 0, centre: null }), [lidded, onFace, phenotype, f.idx, f.quat, r]);
+  const fishIris = useMemo(() => FISH_IRIS[Math.floor(unitHash(seed, 0xf15) * FISH_IRIS.length)], [seed]);
+  const seat = useMemo(() => (vertebrate && onFace && phenotype ? eyeSeat(phenotype, f.idx, f.quat, r) : { quat: f.quat, sink: 0, centre: null }), [vertebrate, onFace, phenotype, f.idx, f.quat, r]);
   const sink = seat.sink;
   // the ball takes the iris's own hue, deep — a brown ball behind a green or blue iris read as a bruise
   const ballColor = useMemo(() => new THREE.Color(iris).multiplyScalar(0.16).lerp(new THREE.Color(0x1c120e), 0.5).getHex(), [iris]);
@@ -774,13 +780,28 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
           than the 0.9r ball or the torus drives straight through the sclera as a hard ridge. It also
           sits back along −Z so it rings the eye's equator like an orbit rather than a hoop in front. */}
       {/* (a lidded eye needs no ring: its coat-covered lids set it into the face) */}
-      {!lidded && (
+      {!vertebrate && (
         <mesh position={[0, 0, -r * 0.18]}>
           <torusGeometry args={[r * 1.2, r * 0.26, 12, 28]} />
           <meshStandardMaterial color={socketDark} roughness={0.85} metalness={0.0} />
         </mesh>
       )}
-      {v === 'round' || v === 'beady' ? (
+      {fishEye ? (
+        // a fish's eye: a flattened dark ball flush in the head, a broad metallic iris ring (silver,
+        // brass or gold) round a big round pupil — no lids, no white
+        <group scale={[1, 1, 0.72]}>
+          <mesh position={[0, 0, -r * 0.04]}>
+            <sphereGeometry args={[r * 0.9, 22, 18]} />
+            <meshStandardMaterial color={0x0b0c0e} roughness={0.1} />
+          </mesh>
+          <mesh position={[0, 0, -r * 0.04]} scale={r * 0.9 * 1.012} geometry={capGeometry(0.82, true)}>
+            <meshStandardMaterial color={fishIris} vertexColors roughness={0.28} metalness={0.6} polygonOffset polygonOffsetFactor={-1} />
+          </mesh>
+          <mesh position={[0, 0, -r * 0.04]} scale={r * 0.9 * 1.024} geometry={capGeometry(0.46, false)}>
+            <meshStandardMaterial color={0x020203} roughness={0.04} polygonOffset polygonOffsetFactor={-2} />
+          </mesh>
+        </group>
+      ) : v === 'round' || v === 'beady' ? (
         // a wet animal eye set deep under a heavy brow — dark, glassy, watching. No cream sclera,
         // no fat white sticker; the low-roughness ball catches the environment like real moisture.
         <>

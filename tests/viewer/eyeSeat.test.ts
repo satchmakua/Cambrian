@@ -3,7 +3,7 @@ import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype, randomGenome } from '../../src/engine/random';
 import { fieldAt, projectToSurface, qRotateV } from '../../src/viewer/bodyField';
 import { buildMeshData } from '../../src/viewer/meshData';
-import { eyeClearings, eyeSeat, isFaceEye, MAX_EYE_CLEAR, SEAT_DEPTH, SEAT_MAX_TILT } from '../../src/viewer/eyeSeat';
+import { eyeClearings, eyeSeat, isFaceEye, isSwimmer, MAX_EYE_CLEAR, SEAT_DEPTH, SEAT_MAX_TILT } from '../../src/viewer/eyeSeat';
 import { surfacePrims } from '../../src/viewer/mouthLine';
 import type { Phenotype } from '../../src/engine/grow';
 
@@ -61,5 +61,10 @@ describe('eye seats', () => {
       expect(c.length).toBe(Math.min(eyes, MAX_EYE_CLEAR) * 4);
       for (const v of c) expect(Number.isFinite(v)).toBe(true);
     }
+  });
+
+  it('a fish or a shark wears lidless eyes; anything that walks keeps its lids', () => {
+    for (const id of ['fish', 'shark']) for (let seed = 1; seed <= 6; seed++) expect(isSwimmer(grow(genomeOfMorphotype(seed, id))), id).toBe(true);
+    for (const id of ['felid', 'lizard', 'anuran', 'bird', 'crocodilian']) for (let seed = 1; seed <= 6; seed++) expect(isSwimmer(grow(genomeOfMorphotype(seed, id))), id).toBe(false);
   });
 });

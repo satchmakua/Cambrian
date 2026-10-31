@@ -60,6 +60,16 @@ export function eyeSeat(p: Phenotype, idx: number, quat0: readonly number[], r: 
   return seat;
 }
 
+/** A swimmer: fins and no legs (a fish, a shark) — its eyes are lidless and lie flush with the head. */
+export function isSwimmer(p: Phenotype): boolean {
+  let fins = false;
+  for (const n of p.nodes) {
+    if (n.part?.kind === 'leg') return false;
+    if (n.part?.kind === 'fin') fins = true;
+  }
+  return fins;
+}
+
 /** A vertebrate eye set in the face (lidded, on a spine node — not up a stalk). */
 export function isFaceEye(p: Phenotype, f: MeshFeature): boolean {
   const v = eyeVariant(f.style);

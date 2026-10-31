@@ -118,7 +118,8 @@ export const MUZZLED_TEETH: Record<JawedVariant, { upper: ToothProfile | null; l
 // A REPTILE's or an amphibian's mouth (a sealed spec — scaled, plated or bare skin, on a body with
 // no fins) is shut too: the snout IS the head, so the jaw barely projects, the lip is a thin dark
 // seam, and the teeth are a crocodile's small interlocking rows along that seam — or none at all,
-// for the lizard and the frog. (The full projecting grin is kept for the fish and the sharks.)
+// for the lizard and the frog. A fish's and a shark's shut the same way: their old projecting grin of
+// cream teeth over a sausage lip read as a Muppet.
 const SEALED_ROW = { jitterLen: 0.14, jitterRock: 0.08, sink: 0.42 };
 export const SEALED_TEETH: Record<JawedVariant, { upper: ToothProfile | null; lower: ToothProfile | null }> = {
   fanged: {
@@ -130,10 +131,10 @@ export const SEALED_TEETH: Record<JawedVariant, { upper: ToothProfile | null; lo
   underbite: { upper: null, lower: { ...SEALED_ROW, count: 2, len: () => 0.42, width: 0.26, curl: -0.2, margin: 0.5, salt: 5 } },
 };
 
-/** A jawed mouth that shuts as a seam: no fur, and no fins on the body (a lizard, a croc, a frog, a
- *  snake — not a fish or a shark). */
-export function sealedMouth(phenotype: Phenotype, muzzled: boolean): boolean {
-  return !muzzled && !phenotype.nodes.some((n) => n.part?.kind === 'fin');
+/** A jawed mouth that shuts as a seam: any that isn't a furred muzzle (a lizard, a croc, a frog, a
+ *  snake, a fish, a shark). */
+export function sealedMouth(_phenotype: Phenotype, muzzled: boolean): boolean {
+  return !muzzled;
 }
 
 /** a smooth bump of width ~0.16 centered at u = c — one emphasized canine position */
@@ -190,23 +191,16 @@ export function buildJawed(
         muzzleR: base.muzzleR * 0.5,
         jawR: base.jawR * 0.7,
       }
-    : sealed
-      ? {
-          // a reptile's or a frog's: the jaw IS the snout — a dark seam along it, its small teeth
-          ...base,
-          ...SEALED_TEETH[variant],
-          project: base.project * 0.18,
-          lipR: (u) => base.lipR(u) * 0.32,
-          lowerLipR: (u) => base.lowerLipR(u) * 0.3,
-          muzzleR: base.muzzleR * 0.55,
-          jawR: base.jawR * 0.7,
-        }
-      : {
-          // a fish's or a shark's mouth: no fleshy lips — a thin hard rim along the jaw line
-          ...base,
-          lipR: (u) => base.lipR(u) * 0.55,
-          lowerLipR: (u) => base.lowerLipR(u) * 0.55,
-        };
+    : {
+        // a reptile's, a frog's or a fish's: the jaw IS the snout — a dark seam along it, its small teeth
+        ...base,
+        ...SEALED_TEETH[variant],
+        project: base.project * 0.18,
+        lipR: (u) => base.lipR(u) * 0.32,
+        lowerLipR: (u) => base.lowerLipR(u) * 0.3,
+        muzzleR: base.muzzleR * 0.55,
+        jawR: base.jawR * 0.7,
+      };
   const r = spec.r;
   const seed = phenotype.genomeRef.seed;
   const line = buildMouthLine(phenotype, spec, carves, 17, surface);
