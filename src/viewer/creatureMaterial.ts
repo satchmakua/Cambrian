@@ -238,10 +238,15 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
           // Where a strand would be smaller than a pixel the shells fade out and the base coat
           // carries the look (no shimmer at a distance).
           if (uShellH >= 0.0) {
-            vec3 q = vBodyPos * uShellDen + uOff;
+            // TUFTS: the strands of a ~3-strand patch draw together toward their tips, so the pile parts
+            // into locks instead of standing as an even stipple (salt-and-pepper sandpaper up close)
+            vec3 q0 = vBodyPos * uShellDen + uOff;
+            vec3 cid = floor(q0 / 3.2);
+            vec3 cc = (cid + 0.5 + (hash33(cid + 41.0) - 0.5) * 0.6) * 3.2;
+            vec3 q = q0 + (cc - q0) * 0.5 * uShellH * uShellH;
             vec3 cell = floor(q);
             vec3 jit = hash33(cell) - 0.5;
-            float sLen = 0.45 + 0.55 * hash13(cell + 17.0);
+            float sLen = (0.45 + 0.55 * hash13(cell + 17.0)) * (0.72 + 0.5 * hash13(cid + 3.0));
             // round an eye the pile shortens to a fine fringe and then stops: strands rooted in the
             // face otherwise stand out over the sunken eyeball and comb straight across the iris
             float eyeClear = 0.0;
@@ -254,8 +259,8 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
             float dc = length(fract(q) - 0.5 - jit * 0.5);
             float far = smoothstep(0.28, 1.15, gFw * uShellDen);
             if (u > 1.0 || dc > 0.62 * (1.0 - u) || far > hash13(cell + 5.0) || vFlesh > 0.05 || bare > 0.3) discard;
-            // depth in the pile: shadowed at the root, catching light at the tips
-            diffuseColor.rgb *= mix(0.62, 1.12, uShellH);
+            // depth in the pile: shadowed at the root, catching light at the tips; each lock its own shade
+            diffuseColor.rgb *= mix(0.62, 1.12, uShellH) * (0.93 + 0.14 * hash13(cid + 9.0));
           }
           if (uDebug == 1) diffuseColor.rgb = vec3(pat);
           if (uDebug == 2) diffuseColor.rgb = vec3(gH);
@@ -508,11 +513,14 @@ float surfaceHeight(vec3 p, int cover) {
     gHb = h * 0.016;
     return h;
   }
-  if (cover == 2) {                                             // fur — clumped pile + directional streaks
+  if (cover == 2) {                                             // fur — clumped pile, locks, streaks
     float clumps = fbmA(vec3(p.x * 5.0, p.y * 5.0, p.z * 2.4), 5.0);
+    // locks of hair laid back along the body: the grain that still reads once the strands are
+    // smaller than a pixel (the shells fade out there and the coat carries the look)
+    float locks = fbmA(vec3(p.x * 10.0, p.y * 10.0, p.z * 2.2), 10.0);
     float streak = fbmA(vec3(p.x * 22.0, p.y * 22.0, p.z * 5.0), 22.0);
-    gHb = clumps * 0.02 + streak * 0.005;
-    return clumps * 0.55 + streak * 0.45;
+    gHb = clumps * 0.018 + locks * 0.007 + streak * 0.004;
+    return clumps * 0.4 + locks * 0.32 + streak * 0.28;
   }
   if (cover == 3) {                                             // feathers — imbricated, laid back
     // Each cell is a feather laid head-to-tail (cells stretched along the body). Its ROOT end (+z,
