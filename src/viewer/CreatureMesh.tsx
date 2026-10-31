@@ -1157,11 +1157,15 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
     // spine): anchor it on the trunk node nearest the shoulder, out at its side and a little above
     // the midline, slightly forward — rather than at the dorsal attach point the gene aimed for.
     let anchor: readonly number[] = shoulder;
-    if (feathered && trunk.length) {
+    if (trunk.length) {
       let near = trunk[0];
       for (const n of trunk) if (Math.abs(n.pos[2] - shoulder[2]) < Math.abs(near.pos[2] - shoulder[2])) near = n;
       const rx = near.radius * (near.scale?.[0] ?? 1);
-      anchor = [near.pos[0] + side * rx * 0.86, near.pos[1] + near.radius * 0.28, near.pos[2] + near.radius * 0.35];
+      // (a membrane wing's arm roots at the upper corner of the shoulder, its humerus buried in the
+      // body — from the dorsal attach point it stuck out of the spine like a broom handle)
+      anchor = feathered
+        ? [near.pos[0] + side * rx * 0.86, near.pos[1] + near.radius * 0.28, near.pos[2] + near.radius * 0.35]
+        : [near.pos[0] + side * rx * 0.55, near.pos[1] + near.radius * 0.5, near.pos[2] + near.radius * 0.2];
     }
     const off: [number, number, number] = [anchor[0] - tip[0], anchor[1] - tip[1], anchor[2] - tip[2]];
     if (feathered) {
@@ -1200,7 +1204,9 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
       spreadRef.current.scale.setScalar(0.55 + 0.45 * THREE.MathUtils.smoothstep(sp, 0.35, 1));
     }
   });
-  const bone = useMemo(() => new THREE.Color(color).multiplyScalar(0.45).getHex(), [color]);
+  // the arm and finger bones wear the wing's own skin, a shade deeper (a flat dark cylinder read as a
+  // stick laid on the membrane)
+  const bone = useMemo(() => new THREE.Color(color).multiplyScalar(0.7).getHex(), [color]);
   const skin = useMemo(() => new THREE.Color(color).multiplyScalar(0.85).getHex(), [color]);
   return (
     <group position={build.off}>
@@ -1222,10 +1228,21 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
             <meshPhysicalMaterial color={skin} roughness={0.62} sheen={0.3} sheenRoughness={0.5} side={THREE.DoubleSide} transparent opacity={0.93} />
           </mesh>
           {!lite && build.bones.map((b, i) => (
-            <mesh key={i} position={b.pos} quaternion={b.quat} castShadow>
-              <cylinderGeometry args={[b.r1, b.r0, b.len, 8]} />
-              <meshStandardMaterial color={bone} roughness={0.5} />
-            </mesh>
+            <group key={i} position={b.pos} quaternion={b.quat}>
+              <mesh castShadow>
+                <cylinderGeometry args={[b.r1, b.r0, b.len, 10]} />
+                <meshStandardMaterial color={bone} roughness={0.55} />
+              </mesh>
+              {/* rounded joints: knuckles at both ends, not flat-cut tube ends */}
+              <mesh position={[0, -b.len / 2, 0]}>
+                <sphereGeometry args={[b.r0, 10, 8]} />
+                <meshStandardMaterial color={bone} roughness={0.55} />
+              </mesh>
+              <mesh position={[0, b.len / 2, 0]}>
+                <sphereGeometry args={[b.r1, 8, 6]} />
+                <meshStandardMaterial color={bone} roughness={0.55} />
+              </mesh>
+            </group>
           ))}
           {!lite && build.w.wrist && (
             <mesh position={[build.w.wrist.x, build.w.wrist.y + build.bones[0].r1 * 0.6, build.w.wrist.z]} rotation={[-0.4, 0, 0]} castShadow>

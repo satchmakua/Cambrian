@@ -113,5 +113,19 @@ describe('body plans', () => {
       }
     }
   });
+
+  it("a dragon's head is a long reptilian skull — a cranium with a jaw running out ahead of it", () => {
+    // (a short round cranium under two horns read as a cat's face)
+    for (const id of ['dragon', 'wyvern']) {
+      for (let seed = 1; seed <= 8; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const last = Math.max(...p.nodes.filter((n) => n.kind === 'spine').map((n) => n.segment ?? 0));
+        const head = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === last);
+        expect(head.length, `${id} #${seed}`).toBeGreaterThanOrEqual(3);
+        const zs = head.map((n) => n.pos[2]);
+        expect(Math.max(...zs) - Math.min(...zs), `${id} #${seed}`).toBeGreaterThan(1.3 * head[0].radius);
+      }
+    }
+  });
 });
 

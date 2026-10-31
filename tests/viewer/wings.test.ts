@@ -23,8 +23,15 @@ describe('wings (shoulder-built, body frame)', () => {
       else expect(b.max.x).toBeLessThan(0.05);
       expect(Math.max(Math.abs(b.min.x), Math.abs(b.max.x))).toBeGreaterThan(1.0);
       expect(b.min.z).toBeLessThan(-0.5); // the trailing panels reach back along the flank
-      expect(w.bones.length).toBe(5); // arm + four fingers
+      expect(w.bones.length).toBe(6); // humerus + forearm + four fingers
       expect(w.wrist).not.toBeNull();
+      // the arm folds at an elbow that sits BEHIND the straight shoulder→wrist line (the leading
+      // edge's M), and the fingers don't all spring from one point like umbrella ribs
+      const [hum, fore] = w.bones;
+      expect(hum.b.distanceTo(fore.a)).toBeLessThan(1e-9);
+      expect(hum.b.z).toBeLessThan(fore.b.z * (hum.b.x / fore.b.x));
+      const roots = new Set(w.bones.slice(2).map((b) => b.a.toArray().map((v) => v.toFixed(4)).join(',')));
+      expect(roots.size).toBe(4);
     }
   });
 

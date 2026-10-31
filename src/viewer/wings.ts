@@ -55,23 +55,28 @@ export function buildMembraneWing(side: number, S: number, raise = 0.6): WingBui
   const c = c0.sub(u.clone().multiplyScalar(c0.dot(u))).normalize(); // orthogonal to the span
   const n = new THREE.Vector3().crossVectors(u, c).normalize(); // membrane normal (for billow)
 
+  // A real arm: the humerus runs out and BACK to an elbow, the forearm forward and out again to the
+  // wrist — the leading edge's M, where one straight bone from shoulder to wrist was a broom handle.
   const P0 = v3(0, 0, 0);
-  const W = u.clone().multiplyScalar(0.4 * S); // wrist
-  // finger fan: angle from the span axis toward the chord axis, and finger length
-  const fingers: [number, number][] = [
-    [0.12, 0.66],
-    [0.48, 0.64],
-    [0.86, 0.56],
-    [1.25, 0.46],
+  const E = u.clone().multiplyScalar(0.27 * S).add(c.clone().multiplyScalar(0.09 * S)); // elbow
+  const W = E.clone().add(u.clone().multiplyScalar(0.34 * S)).add(c.clone().multiplyScalar(-0.1 * S)); // wrist
+  // the fingers root at staggered points along the hand (metacarpals), fanning from the wrist rather
+  // than all springing from one point like umbrella ribs: angle from the span toward the chord, length
+  const fingers: [number, number, number][] = [
+    [0.1, 0.54, 0.0],
+    [0.5, 0.5, 0.025],
+    [0.92, 0.44, 0.05],
+    [1.32, 0.36, 0.075],
   ];
-  const tips = fingers.map(([th, L]) =>
-    W.clone().add(u.clone().multiplyScalar(Math.cos(th) * L * S)).add(c.clone().multiplyScalar(Math.sin(th) * L * S)),
+  const roots = fingers.map(([, , back]) => W.clone().add(c.clone().multiplyScalar(back * S)));
+  const tips = fingers.map(([th, L], i) =>
+    roots[i].clone().add(u.clone().multiplyScalar(Math.cos(th) * L * S)).add(c.clone().multiplyScalar(Math.sin(th) * L * S)),
   );
   // the hind panel attaches back along the flank, a little below the shoulder
   const B = c.clone().multiplyScalar(0.5 * S).add(v3(0, -0.06 * S, 0));
   B.x = s * Math.max(s * B.x, 0.03 * S); // the hind panel meets ITS OWN flank, never across the midline
-  // a little leading-edge skin (propatagium) from the shoulder out to the first finger's base
-  const L0 = u.clone().multiplyScalar(0.18 * S).add(c.clone().multiplyScalar(-0.05 * S));
+  // a little leading-edge skin (propatagium) from the shoulder out to the elbow
+  const L0 = u.clone().multiplyScalar(0.14 * S).add(c.clone().multiplyScalar(-0.05 * S));
 
   const pos: number[] = [];
   const idx: number[] = [];
@@ -101,12 +106,13 @@ export function buildMembraneWing(side: number, S: number, raise = 0.6): WingBui
       }
     }
   };
-  panel(P0, L0, W, 0.0);
-  panel(W, tips[0], tips[1], 0.12);
-  panel(W, tips[1], tips[2], 0.14);
-  panel(W, tips[2], tips[3], 0.14);
-  panel(W, tips[3], B, 0.2);
-  panel(P0, W, B, 0.0); // the inner panel from the arm back to the flank
+  panel(P0, L0, E, 0.0); // the leading-edge skin
+  panel(roots[0], tips[0], tips[1], 0.12);
+  panel(roots[1], tips[1], tips[2], 0.14);
+  panel(roots[2], tips[2], tips[3], 0.14);
+  panel(roots[3], tips[3], B, 0.2);
+  panel(E, W, B, 0.0); // between the forearm and the flank
+  panel(P0, E, B, 0.0); // the inner panel from the upper arm back to the flank
 
   const surface = new THREE.BufferGeometry();
   surface.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -114,8 +120,9 @@ export function buildMembraneWing(side: number, S: number, raise = 0.6): WingBui
   surface.computeVertexNormals();
 
   const bones: WingBone[] = [
-    { a: P0, b: W, r0: 0.05 * S, r1: 0.035 * S },
-    ...tips.map((t, i) => ({ a: W, b: t, r0: 0.024 * S * (1 - i * 0.12), r1: 0.006 * S })),
+    { a: P0, b: E, r0: 0.042 * S, r1: 0.032 * S }, // humerus
+    { a: E, b: W, r0: 0.03 * S, r1: 0.022 * S }, // forearm
+    ...tips.map((t, i) => ({ a: roots[i], b: t, r0: 0.02 * S * (1 - i * 0.12), r1: 0.005 * S })),
   ];
   return { surface, bones, wrist: W };
 }
