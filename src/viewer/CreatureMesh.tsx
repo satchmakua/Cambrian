@@ -1164,7 +1164,7 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
       let meanR = 0;
       for (let i = 0; i < prims.nc; i++) meanR += prims.pr[i];
       prims.k = 0.34 * (meanR / Math.max(prims.nc, 1));
-      conformToSurface(w.surface, (x, y, z) => fieldAt(prims, x, y, z), anchor, girth * 0.04);
+      conformToSurface(w.surface, (x, y, z) => fieldAt(prims, x, y, z), anchor, girth * 0.04, w.lift);
     }
     const bones = w.bones.map((b) => {
       const d = b.b.clone().sub(b.a);

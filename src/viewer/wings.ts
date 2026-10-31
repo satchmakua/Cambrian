@@ -4,10 +4,10 @@
  * The old wing was one flat triangle fan drawn outward from the wing's TIP node: a kite. Real wings
  * are built from the shoulder and come in two very different constructions:
  *
- *   - FEATHERED (birds, feathered chimeras): at rest the wing is FOLDED along the flank — a leaf of
- *     layered feathers: rows of short rounded coverts over the shoulder, a row of secondaries along
- *     the lower edge (with a contrasting speculum band), and long primaries stacked at the tip,
- *     reaching back past the hip. Merged into one vertex-coloured mesh.
+ *   - FEATHERED (birds, feathered chimeras): at rest the wing is FOLDED along the flank — one domed
+ *     leaf painted in feather tiers: shingled coverts over the shoulder, secondaries along the lower
+ *     edge (with a contrasting speculum band), and dark primaries stacked to the tip, reaching back
+ *     past the hip. Spread, the same tiers open into an aerofoil with fingered primary tips.
  *   - MEMBRANE (dragons, wyverns, bats): spread and raised — a stout arm bone to the wrist, four
  *     finger bones fanning from it, and skin panels stretched between the fingers whose trailing
  *     edges sag in scallops between the tips and billow slightly out of plane, plus the hind panel
@@ -34,6 +34,9 @@ export interface WingBuild {
   bones: WingBone[];
   /** wrist position (thumb claw) for membrane wings */
   wrist: THREE.Vector3 | null;
+  /** feathered sheets: each vertex's built height off the sheet's base plane (its dome / camber) —
+   *  conformToSurface keeps it, so a wrapped wing stays domed instead of pressed flat */
+  lift?: Float32Array;
 }
 
 const v3 = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -150,9 +153,102 @@ function featherInto(
   }
 }
 
+// --- plumage as one continuous surface --------------------------------------------------------
+//
+// A wing used to be ~30 loose feather cards. Folded and wrapped onto the flank they collapsed onto one
+// shell and z-fought into a clump at the hip; spread, they read as a pale paper comb. A real wing reads
+// as ONE shaped surface whose feather TIERS are visible as bands with scalloped edges: shingled coverts
+// over the leading edge, the secondaries (a speculum band near their tips) along the trailing edge,
+// dark primaries at the hand ending in separated tips. So each wing is a single lofted sheet on a
+// (along, across) grid, painted in tiers by vertex colour, with its outline cut to those tiers.
+
+/** Smooth 0→1 between e0 and e1. */
+function sstep(e0: number, e1: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
+}
+
+/** A scallop wave: 0 at each feather's tip centre, 1 in the notch between neighbours. */
+function scallop(x: number, n: number): number {
+  return 1 - Math.abs(Math.sin(Math.PI * x * n));
+}
+
+interface Tiers {
+  base: THREE.Color; // coverts
+  mid: THREE.Color; // secondaries
+  spec: THREE.Color; // the speculum band
+  dark: THREE.Color; // primaries
+}
+function tiersOf(base: THREE.Color, accent: THREE.Color): Tiers {
+  return {
+    base: base.clone(),
+    mid: base.clone().multiplyScalar(0.66),
+    spec: base.clone().lerp(accent, 0.7).multiplyScalar(0.85),
+    dark: base.clone().multiplyScalar(0.28),
+  };
+}
+
+/**
+ * The plumage colour at a point of the sheet. `a` runs shoulder (0) → tip (1); `b` runs leading edge
+ * (0) → trailing edge (1); `hand` is where the primaries take over along `a`.
+ */
+function plumageAt(t: Tiers, a: number, b: number, hand: number, nCov: number, nSec: number, nPrim: number, out: THREE.Color): void {
+  // coverts: shingled over the leading edge, their lower boundary a row of rounded feather tips
+  const covEdge = 0.4 + 0.07 * (1 - scallop(a, nCov));
+  // (the coverts are the arm's: at the hand the primaries show nearly their whole length)
+  const handW = sstep(hand - 0.05, hand + 0.05, a);
+  const inCov = (1 - sstep(covEdge - 0.02, covEdge + 0.02, b)) * (1 - 0.8 * handW);
+  // the secondaries below them, with the speculum band toward their tips
+  const specBand = sstep(0.62, 0.7, b) * (1 - sstep(0.86, 0.94, b));
+  out.copy(t.mid).lerp(t.spec, specBand * 0.85);
+  out.lerp(t.base, inCov);
+  // the hand: dark primaries take over toward the tip
+  out.lerp(t.dark, handW * (1 - inCov));
+  // shadow lines: just under each overlapping edge (the covert tips; between secondaries and between
+  // primaries, running along their shafts)
+  let shade = 1 - 0.32 * Math.exp(-(((b - covEdge - 0.035) / 0.03) ** 2));
+  shade *= 1 - 0.22 * (1 - handW) * (1 - inCov) * scallop(a, nSec) ** 6;
+  shade *= 1 - 0.28 * handW * scallop(b, nPrim * 0.5) ** 8;
+  // a soft sheen down the middle of the sheet, darker at the trailing tips
+  shade *= 0.94 + 0.12 * Math.sin(Math.PI * Math.min(1, b * 1.1));
+  out.multiplyScalar(shade);
+}
+
+function sheet(nA: number, nB: number, at: (a: number, b: number, p: THREE.Vector3) => number, paint: (a: number, b: number, c: THREE.Color) => void): { geo: THREE.BufferGeometry; lift: Float32Array } {
+  const pos: number[] = [];
+  const col: number[] = [];
+  const idx: number[] = [];
+  const lift = new Float32Array((nA + 1) * (nB + 1));
+  const p = new THREE.Vector3();
+  const c = new THREE.Color();
+  for (let i = 0; i <= nA; i++) {
+    for (let j = 0; j <= nB; j++) {
+      const a = i / nA, b = j / nB;
+      lift[i * (nB + 1) + j] = at(a, b, p);
+      pos.push(p.x, p.y, p.z);
+      paint(a, b, c);
+      col.push(c.r, c.g, c.b);
+    }
+  }
+  for (let i = 0; i < nA; i++) {
+    for (let j = 0; j < nB; j++) {
+      const q = i * (nB + 1) + j;
+      idx.push(q, q + nB + 1, q + 1, q + 1, q + nB + 1, q + nB + 2);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  return { geo, lift };
+}
+
 /**
  * A folded feathered wing on side `side` (±1), length `S` (shoulder → primary tips), relative to the
- * shoulder at the origin. `base` is the plumage colour; `accent` tints the speculum band.
+ * shoulder at the origin. `base` is the plumage colour; `accent` tints the speculum band. The sheet
+ * is a teardrop leaf, domed a little away from the body (thickest at the shoulder); its trailing edge
+ * is scalloped by the secondaries' tips and stepped where the primaries stack to the point.
  */
 export function buildFeatheredWing(side: number, S: number, base: THREE.Color, accent: THREE.Color): WingBuild {
   const s = side >= 0 ? 1 : -1;
@@ -166,56 +262,36 @@ export function buildFeatheredWing(side: number, S: number, base: THREE.Color, a
   down.sub(back.clone().multiplyScalar(down.dot(back)));
   down.normalize();
 
-  const pos: number[] = [];
-  const col: number[] = [];
-  const idx: number[] = [];
-  const at = (alongT: number, downT: number) =>
-    back.clone().multiplyScalar(alongT * S).add(down.clone().multiplyScalar(downT * S));
-
-  const dark = base.clone().multiplyScalar(0.5);
-  const mid = base.clone().multiplyScalar(0.78);
-  const spec = base.clone().lerp(accent, 0.65).multiplyScalar(0.9);
-
-  // primaries — long, stacked at the tip, fanning very slightly so their tips separate
-  const NP = 7;
-  for (let i = 0; i < NP; i++) {
-    const t = i / (NP - 1);
-    const dir = back.clone().add(down.clone().multiplyScalar(0.08 + 0.1 * t)).normalize();
-    featherInto(pos, col, idx, at(0.42 + 0.03 * t, 0.06 + 0.07 * t), dir, down, normal,
-      S * (0.62 - 0.14 * t), S * 0.13, dark.clone().multiplyScalar(0.92 + 0.16 * t), 0.004 * S * (NP - i));
-  }
-  // secondaries — along the lower edge, pointing back-and-down, the speculum band near their tips
-  const NS = 8;
-  for (let i = 0; i < NS; i++) {
-    const t = i / (NS - 1);
-    const dir = back.clone().multiplyScalar(0.75).add(down.clone().multiplyScalar(0.62)).normalize();
-    featherInto(pos, col, idx, at(0.05 + 0.4 * t, 0.06), dir, back, normal,
-      S * 0.3, S * 0.11, (i % 2 === 0 ? spec : mid).clone(), 0.03 * S + 0.002 * S * i);
-  }
-  // coverts — two rows of short rounded feathers shingled over the shoulder and wing root
-  for (let row = 0; row < 2; row++) {
-    const NC = 6 - row;
-    for (let i = 0; i < NC; i++) {
-      const t = i / Math.max(NC - 1, 1);
-      const dir = back.clone().multiplyScalar(0.8).add(down.clone().multiplyScalar(0.5)).normalize();
-      featherInto(pos, col, idx, at(0.02 + 0.38 * t, -0.04 + row * 0.07), dir, back, normal,
-        S * (0.17 - row * 0.03), S * 0.12, base.clone().multiplyScalar(1.0 - row * 0.08), 0.05 * S + row * 0.008 * S);
-    }
-  }
-  const surface = new THREE.BufferGeometry();
-  surface.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  surface.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  surface.setIndex(idx);
-  surface.computeVertexNormals();
-  return { surface, bones: [], wrist: null };
+  const L = S * 1.05;
+  const H = S * 0.3;
+  const HAND = 0.5;
+  const t = tiersOf(base, accent);
+  const { geo, lift } = sheet(
+    72, 20,
+    (a, b, p) => {
+      // the leaf's depth: a rounded shoulder, deepest a third of the way back, tapering to the tip
+      const depth = a < 0.32 ? 0.62 + 0.38 * Math.sin((Math.PI / 2) * (a / 0.32)) : Math.pow(1 - (a - 0.32) / 0.68, 0.8);
+      // the trailing edge: secondaries' rounded tips, then the primaries' stepped tips
+      const notch = a < HAND ? 0.07 * scallop(a, 9) : 0.16 * scallop((a - HAND) / (1 - HAND), 3.5) * sstep(HAND, HAND + 0.1, a);
+      const top = -0.04 * S + 0.05 * S * a;
+      const h = H * depth * (1 - notch * b * b);
+      // domed away from the flank; the stacked coverts make the shoulder end thickest
+      const dome = 0.045 * S * Math.sin(Math.PI * b) * (1 - 0.6 * a);
+      p.copy(back).multiplyScalar(a * L).addScaledVector(down, top + b * h).addScaledVector(normal, dome);
+      return dome;
+    },
+    (a, b, c) => plumageAt(t, a, b, HAND, 7, 9, 7, c),
+  );
+  return { surface: geo, bones: [], wrist: null, lift };
 }
 
 /**
  * A SPREAD feathered wing — the flight posture — on side `side` (±1), span `S` (shoulder → wingtip),
  * relative to the shoulder at the origin, in the body frame. The wing plane is near-horizontal and
- * swept a little back: coverts shingled along the leading edge, secondaries hanging back from the
- * arm as the trailing edge (the speculum band among them), and primaries fanning from the wrist out
- * to a fingered tip. The flap is a rotation of the whole build about the body axis at the shoulder.
+ * swept a little back: coverts shingled along the leading edge, the secondaries' scalloped trailing
+ * edge along the arm (the speculum band among them), and dark primaries at the hand opening into
+ * separated finger tips. Cambered a little, like a real aerofoil. The flap is a rotation of the
+ * whole build about the body axis at the shoulder.
  */
 export function buildSpreadFeatheredWing(side: number, S: number, base: THREE.Color, accent: THREE.Color): WingBuild {
   const s = side >= 0 ? 1 : -1;
@@ -224,49 +300,26 @@ export function buildSpreadFeatheredWing(side: number, S: number, base: THREE.Co
   const c = c0.sub(u.clone().multiplyScalar(c0.dot(u))).normalize(); // chord: back, ⟂ span
   const n = new THREE.Vector3().crossVectors(u, c).multiplyScalar(s).normalize(); // up, either side
 
-  const pos: number[] = [];
-  const col: number[] = [];
-  const idx: number[] = [];
-  const at = (spanT: number, chordT = 0) => u.clone().multiplyScalar(spanT * S).add(c.clone().multiplyScalar(chordT * S));
-  const dark = base.clone().multiplyScalar(0.5);
-  const mid = base.clone().multiplyScalar(0.78);
-  const spec = base.clone().lerp(accent, 0.65).multiplyScalar(0.9);
-
-  // primaries: from the wrist, fanning from back-and-out (innermost) to straight out (the tip)
-  const NP = 8;
-  for (let i = 0; i < NP; i++) {
-    const k = i / (NP - 1);
-    const dir = u.clone().multiplyScalar(0.3 + 0.7 * k).add(c.clone().multiplyScalar((1 - k) * 0.95)).normalize();
-    const across = new THREE.Vector3().crossVectors(n, dir).normalize();
-    featherInto(pos, col, idx, at(0.46 + 0.1 * k, 0.02), dir, across, n,
-      S * (0.4 + 0.14 * k), S * 0.1, dark.clone().multiplyScalar(0.9 + 0.2 * k), -0.002 * S * i);
-  }
-  // secondaries: hanging back from the arm — the trailing edge
-  const NS = 9;
-  for (let i = 0; i < NS; i++) {
-    const k = i / (NS - 1);
-    const dir = c.clone().add(u.clone().multiplyScalar(0.12 + 0.2 * k)).normalize();
-    const across = new THREE.Vector3().crossVectors(n, dir).normalize();
-    featherInto(pos, col, idx, at(0.04 + 0.46 * k, 0.04), dir, across, n,
-      S * (0.3 + 0.06 * k), S * 0.1, (i % 2 === 0 ? spec : mid).clone(), 0.004 * S);
-  }
-  // coverts: two shingled rows over the leading edge and the feather roots
-  for (let row = 0; row < 2; row++) {
-    const NC = 9 - row * 2;
-    for (let i = 0; i < NC; i++) {
-      const k = i / (NC - 1);
-      const dir = c.clone().multiplyScalar(0.9).add(u.clone().multiplyScalar(0.3)).normalize();
-      const across = new THREE.Vector3().crossVectors(n, dir).normalize();
-      featherInto(pos, col, idx, at(0.02 + (0.6 - row * 0.1) * k, -0.03 + row * 0.07), dir, across, n,
-        S * (0.15 - row * 0.03) * (1 - 0.35 * k), S * 0.1, base.clone().multiplyScalar(1.0 - row * 0.08), 0.012 * S + row * 0.006 * S);
-    }
-  }
-  const surface = new THREE.BufferGeometry();
-  surface.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  surface.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  surface.setIndex(idx);
-  surface.computeVertexNormals();
-  return { surface, bones: [], wrist: null };
+  const HAND = 0.52;
+  const FINGERS = 5;
+  const t = tiersOf(base, accent);
+  const { geo, lift } = sheet(
+    80, 18,
+    (a, b, p) => {
+      // planform: a broad arm, then the hand narrowing to a rounded tip
+      const chord = a < HAND ? 0.36 - 0.04 * a : 0.34 * Math.pow(Math.max(0, 1 - (a - HAND) / (1 - HAND)), 0.55) + 0.05 * (1 - a);
+      // the trailing edge: the secondaries' scallops, then deep notches between the primary fingers
+      const f = (a - 0.62) / 0.38;
+      const notch = a < HAND ? 0.06 * scallop(a / HAND, 9) : a > 0.62 ? 0.5 * Math.pow(scallop(f, FINGERS * 0.5), 2.2) * sstep(0.62, 0.7, a) : 0;
+      const sweep = -0.05 * Math.sin(Math.PI * a); // the leading edge bows forward
+      const cb = chord * (1 - notch * sstep(0.35, 1, b));
+      const camber = 0.035 * S * Math.sin(Math.PI * b) * (1 - 0.5 * a);
+      p.copy(u).multiplyScalar(a * S).addScaledVector(c, (sweep + b * cb) * S).addScaledVector(n, camber);
+      return camber;
+    },
+    (a, b, col) => plumageAt(t, a, b, HAND, 10, 9, FINGERS * 2, col),
+  );
+  return { surface: geo, bones: [], wrist: null, lift };
 }
 
 /**
@@ -312,21 +365,24 @@ export function conformToSurface(
   field: (x: number, y: number, z: number) => number,
   origin: readonly number[],
   margin: number,
+  lift?: ArrayLike<number>,
 ): void {
   const pos = geo.getAttribute('position') as THREE.BufferAttribute;
   const h = 1e-3;
   for (let i = 0; i < pos.count; i++) {
     let x = pos.getX(i) + origin[0], y = pos.getY(i) + origin[1], z = pos.getZ(i) + origin[2];
+    // a vertex built `lift` off its sheet's plane rides that much higher than the margin
+    const m = margin + (lift ? lift[i] : 0);
     for (let it = 0; it < 4; it++) {
       const d = field(x, y, z);
-      if (d >= margin) break;
+      if (d >= m) break;
       let gx = field(x + h, y, z) - field(x - h, y, z);
       let gy = field(x, y + h, z) - field(x, y - h, z);
       let gz = field(x, y, z + h) - field(x, y, z - h);
       const gl = Math.hypot(gx, gy, gz);
       if (gl < 1e-12) break;
       gx /= gl; gy /= gl; gz /= gl;
-      const step = Math.min(margin - d, 0.5);
+      const step = Math.min(m - d, 0.5);
       x += gx * step; y += gy * step; z += gz * step;
     }
     pos.setXYZ(i, x - origin[0], y - origin[1], z - origin[2]);

@@ -106,3 +106,44 @@ describe('spread feathered wing (flight posture)', () => {
     }
   });
 });
+
+describe('plumage sheets (one continuous surface, painted in feather tiers)', () => {
+  const base = new THREE.Color(0.55, 0.45, 0.3), accent = new THREE.Color(0.1, 0.3, 0.7);
+  const lum = (g: THREE.BufferGeometry, pick: (x: number, z: number) => boolean) => {
+    const pos = g.getAttribute('position'), col = g.getAttribute('color');
+    let sum = 0, n = 0;
+    for (let i = 0; i < pos.count; i++) {
+      if (!pick(pos.getX(i), pos.getZ(i))) continue;
+      sum += 0.3 * col.getX(i) + 0.59 * col.getY(i) + 0.11 * col.getZ(i);
+      n++;
+    }
+    return sum / Math.max(n, 1);
+  };
+
+  it('the hand (primaries) is painted darker than the shoulder (coverts), folded or spread', () => {
+    // (the old wing was ~30 loose cards that z-fought into a clump; tiers must read by colour alone)
+    const folded = buildFeatheredWing(1, 2, base, accent).surface;
+    expect(lum(folded, (_x, z) => z < -1.5)).toBeLessThan(0.6 * lum(folded, (_x, z) => z > -0.4));
+    const spread = buildSpreadFeatheredWing(1, 2, base, accent).surface;
+    expect(lum(spread, (x) => x > 1.5)).toBeLessThan(0.6 * lum(spread, (x) => x < 0.6));
+  });
+
+  it('is a single welded sheet (no stacked cards), and conforming keeps its dome', () => {
+    const w = buildFeatheredWing(1, 2, base, accent);
+    const pos = w.surface.getAttribute('position');
+    // every triangle shares its vertices with neighbours: an indexed grid, one connected sheet
+    expect(w.surface.getIndex()!.count / 3).toBeGreaterThan(pos.count * 1.5);
+    expect(w.lift!.length).toBe(pos.count);
+    // wrapped onto a body it doesn't flatten: the lift (dome) rides above the margin
+    const sphere = (x: number, y: number, z: number) => Math.hypot(x, y, z + 0.8) - 0.9;
+    conformToSurface(w.surface, sphere, [0.5, 0, 0], 0.02, w.lift);
+    let domed = 0;
+    for (let i = 0; i < pos.count; i++) {
+      const d = sphere(pos.getX(i) + 0.5, pos.getY(i), pos.getZ(i));
+      expect(d).toBeGreaterThan(0.015);
+      if (w.lift![i] > 0.05 && d > 0.02 + w.lift![i] * 0.9) domed++;
+    }
+    expect(domed).toBeGreaterThan(0);
+  });
+});
+
