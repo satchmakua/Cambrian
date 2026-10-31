@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry, M53–M56). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -44,6 +44,36 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic; **+ gait playback** |
 
 ---
+
+## Part 3g — Nests, reviews and two visual audits (M53–M56) · 2026-10-31
+
+- **How the audits ran.** Three critics (mammals; reptiles and fish; birds and fliers) screenshotted
+  every morph from the Studio's canonical angles and ranked the crudest things they saw, each with a
+  measured cause and a proposed fix — 24 findings. Each fix was checked against before/after
+  screenshots and pinned by a test that fails on the old code. The Studio grew a `?studiocam=eye`
+  macro for the eye work.
+- **The single biggest win was a sign.** Every column leg's pitch was inverted: hind knees pointed
+  back like a bird's heel and forelegs folded the same way, so a dog walked on four hind legs. Found
+  by printing a felid's leg chain; fixed with the foreleg's own elbow-back fold.
+- **Bleached pelts were a colour space.** `THREE.Color.setHSL` defaults to the LINEAR working space;
+  the palette is sRGB HSL (as the UI swatches always read it). Every coat rendered a pastel of itself
+  and every belly was lerped (in linear) toward a fixed grey that outweighed it ~4:1.
+- **Eyes measured, not guessed.** A fixed 0.36r sink left eye centres anywhere from 1.1r under the
+  skin to right on it; the seat now marches each eye to 0.42r under the real hybrid field after
+  turning it within ~29° of the face normal (an oblique aim left a crescent of bare eyeball). The fur
+  shells then had to clear a ring round each seated eye.
+- **Proportions, not just priors.** A front-heavy taper is normalised to the peak an untapered chain
+  would have — the first attempt ballooned every cat into a blob. Legs below the belly were 2–42% of
+  the trunk's depth; now 55–100%.
+- **Wings.** ~30 feather cards wrapped onto the flank collapsed onto one iso-shell and z-fought; one
+  lofted sheet painted in tiers (with a per-vertex lift so the wrap keeps its dome) replaced them.
+  The tier colours looked missing in the first shots only because the Studio crops a spread wing's
+  hand — checked by logging the vertex colours from inside the page.
+- **Plumage relief** first went from domed Voronoi cells (turtle scutes) to imbricated cells with a
+  step at each tip — which the derivative bump drew as a dotted line; every cell border now falls
+  to one floor, so the relief is continuous.
+- **A latent bound bug**: `compileRadial` never clamped its taper; a wild draw handed a radial body a
+  bird's new front-heavy taper (1.16 > 1.15). Clamped like the bilateral trunk.
 
 ## Part 3f — Portraits, a river, faces and fur (M50–M52) · 2026-10-08
 
