@@ -300,7 +300,9 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
           <JawContext.Provider value={jaw}>
             <FlightContext.Provider value={flight}>
               <LidContext.Provider value={lids}>
-                <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" rig={rig} detail={detail} carved={false} fur={selected && detail === 'full'} />
+                {/* the creature you're watching up close gets the fine skin: at the herd's low resolution
+                    a bird's thin shanks broke into jagged shards a cell or two across */}
+                <CreatureMesh phenotype={phenotype} skinMode={mode} quality={selected && detail === 'full' ? 'high' : 'low'} rig={rig} detail={detail} carved={false} fur={selected && detail === 'full'} />
               </LidContext.Provider>
             </FlightContext.Provider>
           </JawContext.Provider>
