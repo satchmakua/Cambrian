@@ -425,6 +425,23 @@ vec2 voronoi(vec3 p) {
   return vec2(sqrt(f1), sqrt(f2));
 }
 
+// the nearest 3-D cell to p: xyz = p − its jittered centre (cell units), w = F1; f2 = F2
+vec4 cellNear(vec3 p, out float f2) {
+  vec3 b = floor(p); vec3 f = fract(p);
+  float f1 = 8.0; f2 = 8.0;
+  vec3 best = vec3(0.0);
+  for (int k = -1; k <= 1; k++)
+  for (int j = -1; j <= 1; j++)
+  for (int i = -1; i <= 1; i++) {
+    vec3 g = vec3(float(i), float(j), float(k));
+    vec3 r = g + hash33(b + g) - f;
+    float d = dot(r, r);
+    if (d < f1) { f2 = f1; f1 = d; best = r; } else if (d < f2) { f2 = d; }
+  }
+  f2 = sqrt(f2);
+  return vec4(-best, sqrt(f1));
+}
+
 // --- color pattern field p(x) in [0,1] (MORPHOLOGY §7.1) — domain-warped for organic flow --------
 // Every edge is widened by the pattern's own pixel footprint \`c\` (cells per pixel) so markings stay
 // crisp up close and blur gracefully — rather than shimmer — when the creature is small on screen.
@@ -497,18 +514,27 @@ float surfaceHeight(vec3 p, int cover) {
     gHb = clumps * 0.02 + streak * 0.005;
     return clumps * 0.55 + streak * 0.45;
   }
-  if (cover == 3) {                                             // feathers — overlapping vanes
-    // elongated cells (stretched head-to-tail) each domed like a laid feather, seams between them,
-    // plus a fine barb grain along the body. (Straight constant-z rows read as planks, and their
-    // sawtooth step sat under the derivative bump as a 1-px streak at every row.)
-    vec3 q = vec3(p.x * 7.0, p.y * 7.0, p.z * 4.2);
-    vec2 F = voronoi(q);
-    float vane = 1.0 - smoothstep(0.0, 1.05, F.x);
-    float seam = smoothstep(0.0, 0.12 + gFw * 7.0, F.y - F.x);
-    float barbs = fbmA(vec3(p.x * 34.0, p.y * 34.0, p.z * 8.0), 34.0);
-    float h = mix(0.4, vane * 0.62 * mix(0.6, 1.0, seam) + 0.18, aaW(7.0)) + (barbs - 0.5) * 0.08;
-    gHb = h * 0.014;
-    return h;
+  if (cover == 3) {                                             // feathers — imbricated, laid back
+    // Each cell is a feather laid head-to-tail (cells stretched along the body). Its ROOT end (+z,
+    // toward the head) is tucked under the feather in front and its TIP end (−z) lies over the one
+    // behind: the height ramps up from root to tip and steps down at the tip's edge, so the plumage
+    // reads as overlapping scallops shingled toward the tail. (Domed cells read as turtle scutes or
+    // cobbles; a constant-z row step sat under the bump as a 1-px streak at every row.)
+    // (small: a contour feather is a few millimetres — at 9 cells a unit a bird's head wore five
+    // polygons across, a turtle's scutes)
+    vec3 q = vec3(p.x * 19.0, p.y * 19.0, p.z * 11.0);
+    float f2;
+    vec4 c = cellNear(q, f2);                                   // xyz: point − centre; w: F1
+    float ramp = clamp(0.5 - c.z * 0.75, 0.0, 1.0);             // root (front) low → tip (back) high
+    float round_ = 1.0 - 0.3 * dot(c.xy, c.xy);                 // a vane's rounded cross-section
+    // every border falls to the same floor, so the relief is continuous across cells: the tip's edge
+    // is a soft shadowed crease, never a step (a step under the derivative bump is a 1-px dotted line)
+    float edge = smoothstep(0.0, 0.38, f2 - c.w);
+    float barbs = fbmA(vec3(p.x * 40.0, p.y * 40.0, p.z * 9.0), 40.0);
+    float lay = mix(0.5, ramp * round_ * edge, aaW(19.0));
+    gHb = lay * 0.0055 + (barbs - 0.5) * 0.001;
+    // (gH reads as a RECESS for the grime and roughness: the tucked roots are where the shadow sits)
+    return clamp(0.75 - lay * 0.5 + (barbs - 0.5) * 0.05, 0.0, 1.0);
   }
   if (cover == 4) {                                             // chitin — large smooth plates
     vec2 F = voronoi(p * 3.0);

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { grow, type Phenotype } from '../../../src/engine/grow';
 import { defaultGenome } from '../../../src/engine/genome';
 import type { Vec3 } from '../../../src/engine/genome';
-import { randomGenome } from '../../../src/engine/random';
+import { genomeOfMorphotype, randomGenome } from '../../../src/engine/random';
 import { buildFieldPrims, fieldAt, qRotateV } from '../../../src/viewer/bodyField';
 import { buildBeak, type BeakBuild } from '../../../src/viewer/mouths/beak';
 
@@ -207,4 +207,22 @@ describe('beak mouth (mouth overhaul)', () => {
     expect(dRec).toBeLessThan(-0.3 * r); // sunk into the real carve
     expect(dRec).toBeGreaterThan(-0.9 * r);
   });
+
+  it("a bird's bill runs on from its brow: rooted up the face, not hung off the chin", () => {
+    // the mouth seat sits low on the face (its aim pitches down onto the front); a bill rooted right
+    // there hung under the forehead like a thorn — every raptor read as a pigeon chick
+    for (const id of ['bird', 'raptor']) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
+        const b = buildBeak(p, idx, [], false)!;
+        const rise = dot3(sub3(b.upperPath[0], b.seat.p), b.up);
+        expect(rise, `${id} #${seed}`).toBeGreaterThan(0.35 * b.r);
+        // and it points out ahead of the face more than down at the ground
+        const fwd = qRotateV(b.spec.anchor.quat, [0, 0, 1]);
+        expect(dot3(b.dir, fwd as Vec3), `${id} #${seed}`).toBeGreaterThan(0.85);
+      }
+    }
+  });
 });
+
