@@ -3,7 +3,7 @@ import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype, randomGenome } from '../../src/engine/random';
 import { fieldAt, projectToSurface, qRotateV } from '../../src/viewer/bodyField';
 import { buildMeshData } from '../../src/viewer/meshData';
-import { eyeClearings, eyeSeat, isFaceEye, isSwimmer, MAX_EYE_CLEAR, SEAT_DEPTH, SEAT_MAX_TILT } from '../../src/viewer/eyeSeat';
+import { BULGE_DEPTH, bulgingEye, eyeClearings, eyeSeat, isFaceEye, isSwimmer, MAX_EYE_CLEAR, SEAT_DEPTH, SEAT_MAX_TILT } from '../../src/viewer/eyeSeat';
 import { surfacePrims } from '../../src/viewer/mouthLine';
 import type { Phenotype } from '../../src/engine/grow';
 
@@ -24,8 +24,15 @@ describe('eye seats', () => {
         const prims = surfacePrims(p, 'hybrid');
         for (const f of faceEyes(p)) {
           const r = Math.max(f.radius, 0.06);
-          const c = eyeSeat(p, f.idx, f.quat, r).centre!;
+          const seat = eyeSeat(p, f.idx, f.quat, r);
+          const c = seat.centre!;
           const d = fieldAt(prims, c[0], c[1], c[2]) / r;
+          if (bulgingEye(p, qRotateV(seat.quat, [0, 0, 1]))) {
+            // a frog's bulges from its crown: half the ball proud, but still seated in the skin
+            expect(d, `${id} #${seed} (bulging)`).toBeLessThan(0);
+            expect(Math.abs(d + BULGE_DEPTH), `${id} #${seed} (bulging)`).toBeLessThan(0.12);
+            continue;
+          }
           expect(d, `${id} #${seed}`).toBeLessThan(-0.15);
           expect(d, `${id} #${seed}`).toBeGreaterThan(-0.8);
           n++;
@@ -33,7 +40,7 @@ describe('eye seats', () => {
         }
       }
     }
-    expect(n).toBeGreaterThan(60);
+    expect(n).toBeGreaterThan(50);
     expect(near / n).toBeGreaterThan(0.9);
   });
 
@@ -66,5 +73,19 @@ describe('eye seats', () => {
   it('a fish or a shark wears lidless eyes; anything that walks keeps its lids', () => {
     for (const id of ['fish', 'shark']) for (let seed = 1; seed <= 6; seed++) expect(isSwimmer(grow(genomeOfMorphotype(seed, id))), id).toBe(true);
     for (const id of ['felid', 'lizard', 'anuran', 'bird', 'crocodilian']) for (let seed = 1; seed <= 6; seed++) expect(isSwimmer(grow(genomeOfMorphotype(seed, id))), id).toBe(false);
+  });
+
+  it("a frog's eyes bulge from the top of its head", () => {
+    let bulging = 0;
+    for (let seed = 1; seed <= 6; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'anuran'));
+      for (const f of faceEyes(p)) if (bulgingEye(p, qRotateV(eyeSeat(p, f.idx, f.quat, Math.max(f.radius, 0.06)).quat, [0, 0, 1]))) bulging++;
+    }
+    expect(bulging).toBeGreaterThanOrEqual(10);
+    // nothing furred or feathered bulges
+    for (const id of ['felid', 'bird', 'primate']) {
+      const p = grow(genomeOfMorphotype(1, id));
+      for (const f of faceEyes(p)) expect(bulgingEye(p, qRotateV(eyeSeat(p, f.idx, f.quat, Math.max(f.radius, 0.06)).quat, [0, 0, 1])), id).toBe(false);
+    }
   });
 });

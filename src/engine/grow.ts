@@ -61,6 +61,7 @@ export function grow(genome: Genome): Phenotype {
   }
   const atCap = () => nodes.length >= NODE_MAX;
   let legPairsHere = 0; // leg pairs on the segment currently growing (hexapods+ get arthropod legs)
+  let legGenesHere: AppendageGene[] = []; // …and their genes (a jumper's hind legs outreach its fore)
 
   growSegment(dev.body, [0, 0, 0], [0, 0, 0, 1], 0, -1);
 
@@ -151,7 +152,8 @@ export function grow(genome: Genome): Phenotype {
     }
 
     const haunched = new Set<number>();
-    legPairsHere = seg.appendages.filter((a) => a.kind === 'leg').length;
+    legGenesHere = seg.appendages.filter((a) => a.kind === 'leg');
+    legPairsHere = legGenesHere.length;
     for (const app of seg.appendages) {
       if (atCap()) break;
       const ai = clampInt(Math.round(app.attachT * (spine.length - 1)), 0, spine.length - 1);
@@ -402,7 +404,18 @@ export function grow(genome: Genome): Phenotype {
         const zf = (app.attachT - 0.5) * 0.9;
         const n = app.segments - 1;
         arch = [];
-        if (n <= 1) arch.push(norm([sideX * 0.8, -0.6, zf * 0.3]));
+        // a JUMPER (a frog): hind legs far longer than the fore fold up in a tight Z beside the body —
+        // the thigh juts forward and out, the shin folds back along the flank, and the long foot lies
+        // flat on the ground pointing forward, the spring loaded. (Planted as a sprawler's posts, a
+        // frog stood on stilts at the back.)
+        // (judged per link: the two pairs can differ in their link count)
+        const fore = legGenesHere.reduce((m, a) => (a.attachT > m.attachT ? a : m), app);
+        const jumper = legPairsHere === 2 && app.attachT < 0.5 && app.length > 1.4 * fore.length;
+        if (jumper && n >= 2) {
+          arch.push(norm([sideX, -0.12, 0.62]));
+          arch.push(norm([sideX * 0.3, -0.3, -1]));
+          for (let k = 2; k < n; k++) arch.push(norm([sideX * 0.15, -0.16, 1]));
+        } else if (n <= 1) arch.push(norm([sideX * 0.8, -0.6, zf * 0.3]));
         else
           for (let k = 0; k < n; k++) {
             if (k === 0) arch.push(norm([sideX, 0.06, zf * 0.4]));

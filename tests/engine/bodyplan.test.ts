@@ -94,4 +94,24 @@ describe('body plans', () => {
       }
     }
   });
+
+  it('a frog: a broad flat head as wide as its shoulders, and hind legs folded in a Z beside the body', () => {
+    // (a pear-shaped sack under a narrow conical head, on hind legs planted like stilts)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'anuran'));
+      const halfW = (ns: Phenotype['nodes']) => Math.max(...ns.map((n) => n.radius * (n.scale?.[0] ?? 1)));
+      const halfH = (ns: Phenotype['nodes']) => Math.max(...ns.map((n) => n.radius * (n.scale?.[1] ?? 1)));
+      const head = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) > 0);
+      expect(head.length, `#${seed}`).toBeGreaterThan(0);
+      expect(halfW(head), `#${seed}`).toBeGreaterThan(0.8 * halfW(trunkOf(p)));
+      expect(halfH(head), `#${seed}`).toBeLessThan(halfW(head)); // flat, not domed
+      const hind = legChains(p).filter((l) => l.attachT < 0.5);
+      expect(hind.length, `#${seed}`).toBeGreaterThan(0);
+      for (const { nodes: [hip, knee, ankle] } of hind) {
+        expect(knee.pos[2], `#${seed} knee forward`).toBeGreaterThan(hip.pos[2]);
+        expect(ankle.pos[2], `#${seed} shin folds back`).toBeLessThan(knee.pos[2]);
+      }
+    }
+  });
 });
+
