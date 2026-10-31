@@ -544,10 +544,14 @@ float surfaceHeight(vec3 p, int cover) {
     // (gH reads as a RECESS for the grime and roughness: the tucked roots are where the shadow sits)
     return clamp(0.75 - lay * 0.5 + (barbs - 0.5) * 0.05, 0.0, 1.0);
   }
-  if (cover == 4) {                                             // chitin — large smooth plates
-    vec2 F = voronoi(p * 3.0);
-    float h = mix(0.8, smoothstep(0.0, 0.09 + gFw * 3.0, F.y - F.x), aaW(3.0));   // grooves at the seams
-    gHb = h * 0.012;
+  if (cover == 4) {                                             // chitin — a smooth lacquered cuticle
+    // Hard and glossy: a faint undulation and fine punctures, no seam network. (Voronoi grooves drew a
+    // tortoiseshell over every beetle and spider; an arthropod's plates are its body SEGMENTS, which
+    // the geometry already carries.)
+    float swell = fbmA(p * 2.2, 2.2);
+    float pits = fbmA(p * 26.0, 26.0);
+    float h = 0.62 + (swell - 0.5) * 0.25 - smoothstep(0.62, 0.8, pits) * 0.18 * aaW(26.0);
+    gHb = swell * 0.006 - smoothstep(0.62, 0.8, pits) * 0.0012 * aaW(26.0);
     return h;
   }
   if (cover == 5) {                                             // slime — faint wet ripple
