@@ -502,16 +502,20 @@ float patternField(vec3 p0, int type, float scale) {
 // Each relief also fades to its mean as its cells shrink toward the pixel footprint (aaW), so the
 // bump is a crisp scale/plate/feather read up close and a clean surface at a distance.
 float surfaceHeight(vec3 p, int cover) {
-  if (cover == 1) {                                             // scales — row-offset lenses
-    // (no row bricking: a floor(z) shift is a hard seam under the derivative bump — a 1-px streak
-    // at every row — and the 3-D cells are irregular enough on their own)
-    vec3 q = p * 8.0;
-    vec2 F = voronoi(q);
-    float lens = 1.0 - smoothstep(0.0, 0.9, F.x);               // each scale domes from its centre
-    float seam = smoothstep(0.0, 0.08 + gFw * 8.0, F.y - F.x);  // and dips at the seams
-    float h = mix(0.45, lens * 0.75 * seam + 0.1, aaW(8.0));
-    gHb = h * 0.016;
-    return h;
+  if (cover == 1) {                                             // scales — imbricated, laid back
+    // Like the plumage: each cell a scale whose free edge points back (−z) and overlaps the next, the
+    // height ramping up from its tucked root to that edge — small, so a fish or a lizard wears a
+    // fine shingle, not a tortoiseshell of dome-and-groove polygons. Every border falls to one floor:
+    // no step for the derivative bump to draw as a dotted line. (No row bricking: a floor(z) shift is
+    // a hard seam under the bump — a 1-px streak at every row.)
+    vec3 q = vec3(p.x * 15.0, p.y * 15.0, p.z * 11.0);
+    float f2;
+    vec4 c = cellNear(q, f2);
+    float ramp = clamp(0.5 - c.z * 0.8, 0.0, 1.0);
+    float edge = smoothstep(0.0, 0.22, f2 - c.w);
+    float lay = mix(0.45, ramp * (1.0 - 0.25 * dot(c.xy, c.xy)) * edge, aaW(15.0));
+    gHb = lay * 0.007;
+    return clamp(0.78 - lay * 0.55, 0.0, 1.0);
   }
   if (cover == 2) {                                             // fur — clumped pile, locks, streaks
     float clumps = fbmA(vec3(p.x * 5.0, p.y * 5.0, p.z * 2.4), 5.0);
