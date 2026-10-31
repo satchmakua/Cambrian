@@ -224,5 +224,18 @@ describe('beak mouth (mouth overhaul)', () => {
       }
     }
   });
+
+  it("a turtle wears a short horny beak under a shell of its own, its soft parts leathery", () => {
+    // (a bird's bill on a turtle hung off its chin like a thorn; plates everywhere left no shell edge)
+    for (let seed = 1; seed <= 6; seed++) {
+      const g = genomeOfMorphotype(seed, 'chelonian');
+      expect(['scales', 'skin'], `#${seed}`).toContain(g.covering.type);
+      const p = grow(g);
+      const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const b = buildBeak(p, idx, [], false)!;
+      expect(b.upperLen, `#${seed}`).toBeLessThan(0.65 * b.r);
+      expect(b.hook, `#${seed}`).toBeLessThan(0.2 * b.r);
+    }
+  });
 });
 

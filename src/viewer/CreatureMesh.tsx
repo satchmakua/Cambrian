@@ -210,11 +210,17 @@ export function CreatureMesh({
     retainGeometry(phenotype, shellKey);
     return () => releaseGeometry(phenotype, shellKey);
   }, [shellGeo, phenotype, shellKey]);
-  // the shell wears hard scutes: plates (turtle) or the body's own chitin (crab), a darker tone of
-  // the body hue with a bold reticulate seam pattern
+  // the shell wears hard scutes: plates (turtle) or the body's own chitin (crab), with a bold
+  // reticulate seam pattern. A turtle's is a darker, browner horn than the leathery skin that comes
+  // out from under it — in the body's own tone the dome had no edge and the scutes ran on over the
+  // head and legs.
   const shellMat = useMemo(() => {
     if (!hasShell) return null;
-    const shellPal = { ...pal, light: pal.light * 0.82, sat: pal.sat * 0.9, hueB: pal.hueA };
+    const crab = cov.type === 'chitin';
+    const hueA = crab ? pal.hueA : pal.hueA + (0.09 - pal.hueA) * 0.45;
+    const shellPal = crab
+      ? { ...pal, light: pal.light * 0.82, sat: pal.sat * 0.9, hueB: pal.hueA }
+      : { ...pal, hueA, hueB: hueA - 0.02, light: pal.light * 0.66, sat: pal.sat * 0.85 };
     const shellCov = {
       ...cov,
       type: cov.type === 'chitin' ? ('chitin' as const) : ('plates' as const),

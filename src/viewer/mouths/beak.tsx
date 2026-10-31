@@ -82,13 +82,16 @@ export function buildBeak(
   const style = spec.node.part?.style ?? 0.3;
   const sPos = Math.min(1, Math.max(0, (style - 0.25) / 0.125));
   const deep = hash01(seed, idx + 61) > 0.5;
-  const upperLen = r * (1.15 + 0.4 * sPos + 0.12 * (hash01(seed, idx + 13) - 0.5));
+  // a turtle's beak is a short, blunt horny sheath over the jaws, not a bird's bill (run out to a
+  // bird's length it hung off the chin like a thorn)
+  const shelled = phenotype.nodes.some((n) => n.terminal === 'carapace');
+  const upperLen = r * (shelled ? 0.48 + 0.1 * sPos : 1.15 + 0.4 * sPos + 0.12 * (hash01(seed, idx + 13) - 0.5));
   const lowerLen = upperLen * 0.75;
-  const hook = r * Math.min(0.45, 0.25 + 0.08 * sPos + (deep ? 0.12 : 0));
+  const hook = r * (shelled ? 0.16 : Math.min(0.45, 0.25 + 0.08 * sPos + (deep ? 0.12 : 0)));
   const slim = 1 - 0.22 * sPos + 0.06 * (hash01(seed, idx + 47) - 0.5);
   // a bill is broad at the root — it spans the front of the face — and tapers to the tip (thin
   // cones from a narrow root hung below the face like a walrus's tusks)
-  const upperR0 = r * 0.72 * slim;
+  const upperR0 = r * (shelled ? 0.9 : 0.72 * slim);
 
   // The bill's axis: mostly the HEAD's forward, tipped a little toward the mouth's downward aim. Run
   // along the mouth aim itself (pitched ~40° down to seat the maw on the face front) the mandibles
@@ -212,8 +215,9 @@ export function BeakMouth({
   );
 
   const bill = useMemo(() => {
-    // a bill's colour: yellow-orange, slate-black or pale horn, per creature
-    return billColor(phenotype.genomeRef.seed);
+    // a bill's colour: yellow-orange, slate-black or pale horn, per creature — a turtle's beak is a
+    // dark horn sheath (pale, it read as a tusk)
+    return phenotype.nodes.some((n) => n.terminal === 'carapace') ? 0x2e2a22 : billColor(phenotype.genomeRef.seed);
   }, [phenotype]);
   const mats = useMemo(() => {
     // glossy keratin (nudged a touch toward the body tone); the lower mandible a shade darker
