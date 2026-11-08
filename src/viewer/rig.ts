@@ -109,6 +109,9 @@ function planarFK(p: Phenotype, parent: Int32Array, pitch: Float64Array): { y: F
   return { y, z };
 }
 
+/** the most a head turns from straight ahead to look at something (rad, over the whole neck) */
+export const LOOK_MAX = 1.1;
+
 /** the second and later neck joints' share of a feeding head's curl (the face turns down to the grass) */
 const GRAZE_CURL = 0.12;
 /** the most a feeder's chest dips (rad) — past this a body reads as kneeling, not grazing */
@@ -518,6 +521,10 @@ export interface PoseInput {
   display?: number;
   /** 0 … 1 stalking: crouched, head low and level, the tail held still */
   stalk?: number;
+  /** where it is looking, relative to straight ahead (rad): yaw (+ toward the body's +X) and pitch
+   *  (+ down) — a hunter fixes on its prey, prey on the predator, a suitor on its mate. Shared down the
+   *  neck so the head turns smoothly; clamped to what a neck can do. */
+  look?: [number, number];
 }
 
 const X = new THREE.Vector3(1, 0, 0);
@@ -644,8 +651,11 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
     // the head back to level)
     const pitch = (first ? T.graze * inp.eat + 0.35 * inp.sleep - 0.12 * fly - 0.32 * show + 0.35 * stalk : GRAZE_CURL * inp.eat - 0.08 * show - 0.25 * stalk) + bob * (1 - stalk) + 0.1 * strut;
     // the glance is shared down the neck so the head turns smoothly rather than at one joint
-    const look = (first ? -inp.turn * 0.12 : 0) + glance / Math.max(1, T.neck.length);
-    setRot(r.bones[T.neck[k]], pitch + (first ? nod : 0), look * awake, 0);
+    const nN = Math.max(1, T.neck.length);
+    const lookYaw = inp.look ? Math.max(-LOOK_MAX, Math.min(LOOK_MAX, inp.look[0])) / nN : 0;
+    const lookPitch = inp.look ? Math.max(-0.5, Math.min(0.5, inp.look[1])) / nN : 0;
+    const look = (first ? -inp.turn * 0.12 : 0) + glance / nN + lookYaw;
+    setRot(r.bones[T.neck[k]], pitch + (first ? nod : 0) + lookPitch * awake, look * awake, 0);
   }
   // legs
   for (const L of T.legs) {

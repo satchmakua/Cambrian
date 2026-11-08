@@ -225,5 +225,27 @@ describe('animation rig', () => {
     }
     for (const id of ['lizard', 'crocodilian', 'arachnid', 'crab']) expect(slipOf(id, 1, 2, 3), id).toBeLessThan(0.3);
   });
+
+  it('the head turns to look at what the creature is dealing with, as far as a neck can turn', () => {
+    const ph = p('canid');
+    const r = createRig(ph);
+    const mi = ph.nodes.findIndex((n) => n.terminal === 'mouth');
+    const at = (look?: [number, number]) => {
+      poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 0, swim: false, turn: 0, look });
+      return footWorld(r, mi);
+    };
+    const ahead = at();
+    const right = at([0.9, 0]);
+    const left = at([-0.9, 0]);
+    expect(right.x).toBeGreaterThan(ahead.x + 0.2); // toward +X
+    expect(left.x).toBeLessThan(ahead.x - 0.2);
+    expect(right.x - ahead.x).toBeCloseTo(ahead.x - left.x, 6); // symmetric
+    // down to something small and low
+    expect(at([0, 0.4]).y).toBeLessThan(ahead.y);
+    // and a target straight behind is only looked at as far as a neck goes
+    const behind = at([3, 0]);
+    const max = at([1.1, 0]);
+    expect(behind.distanceTo(max)).toBeLessThan(1e-9);
+  });
 });
 
