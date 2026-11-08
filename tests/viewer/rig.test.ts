@@ -247,5 +247,18 @@ describe('animation rig', () => {
     const max = at([1.1, 0]);
     expect(behind.distanceTo(max)).toBeLessThan(1e-9);
   });
+
+  it('a sleeper breathes: its chest rises and falls, slowly', () => {
+    const r = createRig(p('canid'));
+    const chest = r.bones[r.template.trunk[r.template.trunk.length - 1]];
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < 400; i++) {
+      poseRig(r, { dt: 1 / 60, speed: 0, cruise: 1, sleep: 1, eat: 0, swim: false, turn: 0 });
+      lo = Math.min(lo, chest.scale.y);
+      hi = Math.max(hi, chest.scale.y);
+    }
+    expect(hi - lo).toBeGreaterThan(0.04);
+    expect(hi - lo).toBeLessThan(0.08);
+  });
 });
 

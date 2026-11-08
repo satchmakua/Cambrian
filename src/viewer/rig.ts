@@ -632,9 +632,11 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
   const idle = (inp.idle ?? 0) * awake;
   const glance = idle * (0.32 * Math.sin(r.t * 0.42) + 0.16 * Math.sin(r.t * 1.07 + 1.3));
   const nod = idle * 0.07 * Math.sin(r.t * 0.61 + 0.4);
-  if (idle > 0 && nT > 0) {
+  // (asleep it breathes slower and deeper: the flank rises and falls while all else is still)
+  const sleeping = inp.sleep * (1 - fly);
+  if ((idle > 0 || sleeping > 0) && nT > 0) {
     const chest = r.bones[T.trunk[nT - 1]];
-    const breath = 1 + idle * 0.014 * Math.sin(r.t * 1.6);
+    const breath = 1 + idle * 0.014 * Math.sin(r.t * 1.6) + sleeping * 0.03 * Math.sin(r.t * 0.95);
     chest.scale.set(breath, breath, 1);
     if (nT > 1) {
       const sway = idle * 0.025 * Math.sin(r.t * 0.33);
