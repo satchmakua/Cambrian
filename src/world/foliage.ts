@@ -18,6 +18,64 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 
 export const FOLIAGE_TIME = { value: 0 };
 
+/**
+ * The line of sight kept clear through the leaves: the followed creature's centre (xyz) and how wide
+ * a hole to cut (w; 0 = none). Leaves between the camera and that point are dissolved in a soft
+ * dithered tunnel, so a creature walking behind a bush or under a crown stays in view. (The follow
+ * camera kept ending up behind foliage, the animal you were watching hidden by a wall of leaves.)
+ */
+export const FOLIAGE_CUT = { value: new THREE.Vector4(0, 0, 0, 0) };
+
+/** GLSL: true where a fragment at world position `w` lies in the see-through tunnel (needs uCut). Leaves
+ *  within uCut.w of the sightline from the camera to the followed creature, in front of it, are cut —
+ *  the tunnel widening toward the creature — with an ordered (Bayer) dither across a thin soft edge,
+ *  which reads as a clean fade where a random per-pixel dither left a speckle of stray leaf pixels. */
+export const SIGHT_CUT_GLSL = `
+uniform vec4 uCut;
+float bayer4(vec2 p) {
+  vec2 q = mod(floor(p), 4.0);
+  int i = int(q.x) + int(q.y) * 4;
+  // the 4×4 Bayer matrix, row-major, as thresholds in (0, 1)
+  float m[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+  return (m[i] + 0.5) / 16.0;
+}
+bool sightCut(vec3 w) {
+  if (uCut.w <= 0.0) return false;
+  vec3 seg = uCut.xyz - cameraPosition;
+  float len2 = max(dot(seg, seg), 1e-4);
+  float t = dot(w - cameraPosition, seg) / len2;
+  if (t <= 0.0 || t >= 0.97) return false;
+  float d = length(w - (cameraPosition + seg * t));
+  float r = uCut.w * mix(0.6, 1.0, t);
+  float keep = smoothstep(r * 0.8, r, d);
+  return keep < bayer4(gl_FragCoord.xy);
+}
+`;
+
+/** Let a plain (instanced) material be seen through along the follow camera's sightline too (tree trunks). */
+export function withSightCut(m: THREE.Material): THREE.Material {
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uCut = FOLIAGE_CUT;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vCutW;')
+      .replace(
+        '#include <worldpos_vertex>',
+        `#include <worldpos_vertex>
+        {
+          vec4 wp = vec4(transformed, 1.0);
+          #ifdef USE_INSTANCING
+            wp = instanceMatrix * wp;
+          #endif
+          vCutW = (modelMatrix * wp).xyz;
+        }`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vCutW;\n' + SIGHT_CUT_GLSL)
+      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (sightCut(vCutW)) discard;');
+  };
+  return m;
+}
+
 function hash3(x: number, y: number, z: number): number {
   let h = Math.imul(Math.floor(x) | 0, 0x27d4eb2d) ^ Math.imul(Math.floor(y) | 0, 0x165667b1) ^ Math.imul(Math.floor(z) | 0, 0x1b873593);
   h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
@@ -113,6 +171,7 @@ export function foliageMaterial(leaf = 3, sway = 1): THREE.MeshStandardMaterial 
   const m = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0 });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = FOLIAGE_TIME;
+    shader.uniforms.uCut = FOLIAGE_CUT;
     shader.uniforms.uLeaf = { value: leaf };
     shader.uniforms.uSway = { value: sway };
     shader.vertexShader = shader.vertexShader
@@ -151,6 +210,7 @@ export function foliageMaterial(leaf = 3, sway = 1): THREE.MeshStandardMaterial 
         `#include <common>
         uniform float uLeaf;
         varying vec3 vFolW;
+        ${SIGHT_CUT_GLSL}
         varying vec3 vFolL;
         vec3 fHash3(vec3 p) {
           p = vec3(dot(p, vec3(127.1, 311.7, 74.7)), dot(p, vec3(269.5, 183.3, 246.1)), dot(p, vec3(113.5, 271.9, 124.6)));
@@ -179,6 +239,11 @@ export function foliageMaterial(leaf = 3, sway = 1): THREE.MeshStandardMaterial 
           float e = fHash3(i + vec3(0, 0, 1)).x, g = fHash3(i + vec3(1, 0, 1)).x, h = fHash3(i + vec3(0, 1, 1)).x, k = fHash3(i + vec3(1, 1, 1)).x;
           return mix(mix(mix(a, b, f.x), mix(c, d, f.x), f.y), mix(mix(e, g, f.x), mix(h, k, f.x), f.y), f.z);
         }`,
+      )
+      .replace(
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>
+        if (sightCut(vFolW)) discard;`,
       )
       .replace(
         '#include <color_fragment>',

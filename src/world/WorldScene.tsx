@@ -10,13 +10,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Sky, Stars } from '@react-three/drei';
 import * as THREE from 'three';
-import { stepWorld, STEP, dayPhase, isNight, climate, type World } from '../sim/world';
+import { stepWorld, STEP, dayPhase, isNight, climate, growthOf, type World } from '../sim/world';
 import { SOUND } from './audio';
 import { heightAt } from '../sim/terrain';
 import { TerrainMesh, Water, Bushes, Decor, updateSeasonLook } from './Landscape';
 import { Grass } from './Flora';
 import { Nests } from './Nests';
 import { Ambient } from './Ambient';
+import { FOLIAGE_CUT } from './foliage';
 import { Precipitation, WEATHER_LOOK, setPrecipDaylight, updateWeatherLook } from './Weather';
 import { Director } from './Director';
 import { Actor, Carcass, useSkinScheduler } from './Actors';
@@ -175,11 +176,15 @@ function FollowCam() {
   const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3; update: () => void } | null;
   useFrame((_, dt) => {
     const { follow, selected } = useWorldUi.getState();
-    if (!follow || selected === null || !controls) return;
-    const c = getWorld().creatures.find((x) => x.id === selected);
-    if (!c) return;
+    const c = follow && selected !== null && controls ? getWorld().creatures.find((x) => x.id === selected) : undefined;
+    if (!c || !controls) {
+      FOLIAGE_CUT.value.w = 0;
+      return;
+    }
     // (a flier is followed up into the air)
     const goal = new THREE.Vector3(c.x, Math.max(heightAt(getWorld().terrain, c.x, c.z), -0.5) + c.traits.height * 0.5 + c.alt, c.z);
+    // keep a clear line of sight to it through any leaves in the way
+    FOLIAGE_CUT.value.set(goal.x, goal.y, goal.z, 0.9 + 0.6 * Math.max(c.traits.length, c.traits.height) * growthOf(c));
     const delta = goal.sub(controls.target).multiplyScalar(Math.min(1, dt * 3));
     controls.target.add(delta);
     camera.position.add(delta);
