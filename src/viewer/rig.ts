@@ -40,6 +40,8 @@ export interface LegChain {
   /** asleep: the fold of the leg's last joint (the ankle, or a two-link leg's knee) that sets its foot
    *  on the floor beside the lying body */
   sleepLast: number;
+  /** feeding: the hip, knee and ankle pitches that keep the foot planted while the chest dips */
+  graze: [number, number, number];
 }
 
 export interface RigTemplate {
@@ -59,6 +61,10 @@ export interface RigTemplate {
   /** how far the trunk's underside stands off the ground (bu): a sleeper lowers itself this far
    *  to lie on its belly */
   belly: number;
+  /** feeding: the first neck joint's pitch, and the trunk's forward dip (rad), that bring the mouth
+   *  down to the grass */
+  graze: number;
+  grazeDip: number;
 }
 
 const TEMPLATES = new WeakMap<Phenotype, RigTemplate>();
@@ -69,6 +75,142 @@ export const SLEEP_DROP = 0.95;
 // sphinx); every other leg folds up beside the belly, thigh forward and shin folded back along it
 const LIE_HIP = { fore: -1.25, hind: -0.95 };
 const LIE_KNEE = { fore: 0.25, hind: 1.55 };
+
+/**
+ * Planar forward kinematics for a pose made only of pitches about the body's X axis (every pose the
+ * rig strikes while standing still — feeding, lying down — is). Each node's bone carries `pitch[i]`;
+ * a node's position is its parent's plus the rest offset rotated by the parent's accumulated pitch,
+ * exactly as the bone hierarchy composes it. Parents always precede children (a node is grown off an
+ * existing one), so one pass in index order suffices. Returns (y, z) per node.
+ */
+function planarFK(p: Phenotype, parent: Int32Array, pitch: Float64Array): { y: Float64Array; z: Float64Array } {
+  const n = p.nodes.length;
+  const y = new Float64Array(n), z = new Float64Array(n), cum = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const par = parent[i];
+    cum[i] = (par >= 0 ? cum[par] : 0) + pitch[i];
+    if (par < 0) {
+      y[i] = p.nodes[i].pos[1];
+      z[i] = p.nodes[i].pos[2];
+      continue;
+    }
+    const a = cum[par];
+    const dy = p.nodes[i].pos[1] - p.nodes[par].pos[1], dz = p.nodes[i].pos[2] - p.nodes[par].pos[2];
+    // a positive pitch about +X carries forward (+z) points down (−y)
+    y[i] = y[par] + dy * Math.cos(a) - dz * Math.sin(a);
+    z[i] = z[par] + dy * Math.sin(a) + dz * Math.cos(a);
+  }
+  return { y, z };
+}
+
+/** the second and later neck joints' share of a feeding head's curl (the face turns down to the grass) */
+const GRAZE_CURL = 0.12;
+/** the most a feeder's chest dips (rad) — past this a body reads as kneeling, not grazing */
+const GRAZE_DIP_MAX = 0.42;
+
+/**
+ * How a feeder reaches the ground. Feeding used to pitch the first neck joint by one fixed 0.55 rad:
+ * a rodent's mouth reached the grass; a long-legged deer's hung a whole head-length above it, grazing
+ * the air. Now the template solves it: the neck bends at its root (and curls down its length), and
+ * where that is not enough the chest dips — the forelegs flex to let it, so every foot stays planted.
+ * Returns the neck root's pitch and the trunk's dip; sets each leg's feeding fold. An ape (it has
+ * arms) eats from its hands and keeps the old glance down; a legless body has no ground to reach.
+ * (The searches walk only the chains that move — the mouth's ancestry, then each leg — so a new body
+ * costs a millisecond or two, not a frame.)
+ */
+function solveGraze(p: Phenotype, parent: Int32Array, trunk: number[], neck: number[], legs: LegChain[], arms: number[][]): { neck: number; dip: number } {
+  const DEF = { neck: 0.55, dip: 0 };
+  const mouth = p.nodes.findIndex((n) => n.terminal === 'mouth');
+  if (neck.length === 0 || legs.length === 0 || trunk.length === 0 || arms.length > 0 || mouth < 0) return DEF;
+  const ground = Math.min(...legs.map((l) => p.nodes[l.nodes[l.nodes.length - 1]].pos[1] - p.nodes[l.nodes[l.nodes.length - 1]].radius));
+  const n = p.nodes.length;
+  const nT = trunk.length;
+  const trunkIdx = new Map(trunk.map((i, k) => [i, k]));
+  const neckIdx = new Map(neck.map((i, k) => [i, k]));
+  const pitchOf = (i: number, dip: number, a: number): number => {
+    const t = trunkIdx.get(i);
+    if (t !== undefined) return t >= 1 && nT > 1 ? dip / (nT - 1) : 0;
+    const k = neckIdx.get(i);
+    if (k !== undefined) return k === 0 ? a : GRAZE_CURL;
+    return 0;
+  };
+  // the mouth's ancestry, root first: the only chain its height depends on
+  const path: number[] = [];
+  for (let i = mouth; i >= 0; i = parent[i]) path.unshift(i);
+  const mouthY = (dip: number, a: number): number => {
+    let y = p.nodes[path[0]].pos[1];
+    let cum = pitchOf(path[0], dip, a);
+    for (let j = 1; j < path.length; j++) {
+      const i = path[j], par = path[j - 1];
+      const dy = p.nodes[i].pos[1] - p.nodes[par].pos[1], dz = p.nodes[i].pos[2] - p.nodes[par].pos[2];
+      y += dy * Math.cos(cum) - dz * Math.sin(cum);
+      cum += pitchOf(i, dip, a);
+    }
+    return y;
+  };
+  // the mouth at the grass (just above it: its node sits inside the lips)
+  const target = ground + p.nodes[mouth].radius * 0.5 + 0.03;
+  let best = DEF;
+  let cost = Infinity;
+  // (the miss is weighed against the shoulder height, so a mouse and a moose trade a dip alike; a
+  // low-slung head may even lift a touch)
+  const tall = Math.max(0.1, Math.max(...legs.map((l) => p.nodes[l.nodes[0]].pos[1])) - ground);
+  for (let dip = 0; dip <= (nT > 1 ? GRAZE_DIP_MAX : 0) + 1e-9; dip += 0.03) {
+    for (let a = -0.3; a <= 1.5 + 1e-9; a += 0.025) {
+      const c = Math.abs(mouthY(dip, a) - target) / tall + dip * 0.25 + Math.abs(a - 0.55) * 0.02;
+      if (c < cost) {
+        cost = c;
+        best = { neck: a, dip };
+      }
+    }
+  }
+  // each leg keeps its foot where it stood: undo the trunk's turn at its hip, then fold the leg to take
+  // up the height its hip has lost (a search over the hip and knee; the ankle keeps the foot level)
+  const base = new Float64Array(n);
+  for (let i = 0; i < n; i++) base[i] = pitchOf(i, best.dip, best.neck);
+  const fk = planarFK(p, parent, base);
+  for (const l of legs) {
+    l.graze = [0, 0, 0];
+    const hip = l.nodes[0];
+    let cumPar = 0;
+    for (let i = parent[hip]; i >= 0; i = parent[i]) cumPar += base[i];
+    if (l.arched || (Math.abs(cumPar) < 1e-6 && Math.abs(fk.y[hip] - p.nodes[hip].pos[1]) < 1e-3)) continue;
+    const foot = l.nodes[l.nodes.length - 1];
+    const rest = p.nodes[foot].pos;
+    const chain = l.nodes;
+    // the leg alone, from its (moved) hip: pitches [hip, knee, ankle], then rigid below
+    const legFK = (h: number, k: number): { y: number; z: number; sink: number } => {
+      let y = fk.y[hip], z = fk.z[hip];
+      let sink = ground - (y - p.nodes[hip].radius);
+      let cum = cumPar + (-cumPar + h);
+      for (let j = 1; j < chain.length; j++) {
+        const i = chain[j], par = chain[j - 1];
+        const dy = p.nodes[i].pos[1] - p.nodes[par].pos[1], dz = p.nodes[i].pos[2] - p.nodes[par].pos[2];
+        const ny = y + dy * Math.cos(cum) - dz * Math.sin(cum);
+        z = z + dy * Math.sin(cum) + dz * Math.cos(cum);
+        y = ny;
+        sink = Math.max(sink, ground - (y - p.nodes[i].radius));
+        cum += j === 1 ? k : j === 2 ? -(h + k) : 0;
+      }
+      return { y, z, sink };
+    };
+    let bestLeg: [number, number, number] = [-cumPar, 0, 0];
+    let legCost = Infinity;
+    for (let h = -0.9; h <= 0.9 + 1e-9; h += 0.03) {
+      for (let k = -1.4; k <= 1.4 + 1e-9; k += 0.035) {
+        const f = legFK(h, k);
+        // the foot back on its spot, and nothing of the leg below the floor
+        const c = Math.abs(f.y - rest[1]) + 0.5 * Math.abs(f.z - rest[2]) + 3 * Math.max(0, f.sink) + 0.02 * (Math.abs(h) + Math.abs(k));
+        if (c < legCost) {
+          legCost = c;
+          bestLeg = [-cumPar + h, k, -(h + k)];
+        }
+      }
+    }
+    l.graze = bestLeg;
+  }
+  return best;
+}
 
 /** the default fold of a leg's last joint when it lies down (before the floor is consulted) */
 function lieLastDefault(l: LegChain): number {
@@ -182,6 +324,7 @@ export function rigTemplate(p: Phenotype): RigTemplate {
         gallop: 0,
         length: Math.hypot(foot.pos[0] - hip.pos[0], foot.pos[1] - hip.pos[1], foot.pos[2] - hip.pos[2]),
         sleepLast: 0,
+        graze: [0, 0, 0],
       });
     } else if (r === 'tail') tails.push(chainOf(i));
     else if (r === 'arm') arms.push(chainOf(i));
@@ -222,7 +365,12 @@ export function rigTemplate(p: Phenotype): RigTemplate {
     legless: legs.length === 0,
     gallops: legs.length === 4 && zs.length === 2 && archedFrac === 0,
     belly,
+    graze: 0,
+    grazeDip: 0,
   };
+  const g = solveGraze(p, parent, trunk, neck, legs, arms);
+  tmpl.graze = g.neck;
+  tmpl.grazeDip = g.dip;
   TEMPLATES.set(p, tmpl);
   return tmpl;
 }
@@ -443,7 +591,10 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
     yaw -= inp.turn * 0.06 * awake; // lean into turns
     // galloping, the back coils as the legs gather under the body and stretches as they reach out
     const flex = k === Math.max(1, Math.floor(nT / 2)) ? 0.2 * gal * moving * Math.sin(P + 0.6) : 0;
-    setRot(r.bones[T.trunk[k]], flex * awake, yaw * awake, 0);
+    // feeding, a long-legged grazer tips its chest down toward the grass (spread over the trunk's
+    // joints, so the back curves rather than kinking at one; the legs fold to keep their feet planted)
+    const dip = (T.grazeDip * inp.eat * awake) / Math.max(1, nT - 1);
+    setRot(r.bones[T.trunk[k]], flex * awake + dip, yaw * awake, 0);
   }
   // idle: a slow look around (two incommensurate waves, so the glances never settle into a loop),
   // a breath that lifts the chest, and a lazy weight shift
@@ -467,7 +618,7 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
     // courting, the head is held high and bobs to the display's beat
     // stalking, the head drops level with the shoulders and the eyes fix ahead (the next link lifts
     // the head back to level)
-    const pitch = (first ? 0.55 * inp.eat + 0.35 * inp.sleep - 0.12 * fly - 0.32 * show + 0.35 * stalk : 0.12 * inp.eat - 0.08 * show - 0.25 * stalk) + bob * (1 - stalk) + 0.1 * strut;
+    const pitch = (first ? T.graze * inp.eat + 0.35 * inp.sleep - 0.12 * fly - 0.32 * show + 0.35 * stalk : GRAZE_CURL * inp.eat - 0.08 * show - 0.25 * stalk) + bob * (1 - stalk) + 0.1 * strut;
     // the glance is shared down the neck so the head turns smoothly rather than at one joint
     const look = (first ? -inp.turn * 0.12 : 0) + glance / Math.max(1, T.neck.length);
     setRot(r.bones[T.neck[k]], pitch + (first ? nod : 0), look * awake, 0);
@@ -502,15 +653,17 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
       // (the last joint's fold is solved against the floor: the ankle, or a two-link leg's knee)
       const kneeLie = L.nodes.length >= 4 ? (L.fore ? LIE_KNEE.fore : LIE_KNEE.hind) : L.sleepLast;
       const ankleLie = L.nodes.length >= 4 ? L.sleepLast : 0;
-      // a stalker creeps on flexed legs (hip forward, knee folded): the body rides low
-      setRot(hip, swing + hipLie * lie + 0.95 * fly - 0.28 * stalk, 0, 0);
+      // a stalker creeps on flexed legs (hip forward, knee folded): the body rides low; a feeder
+      // folds its legs (as solved) to let its chest dip with its feet planted
+      const eat = inp.eat * awake;
+      setRot(hip, swing + hipLie * lie + 0.95 * fly - 0.28 * stalk + L.graze[0] * eat, 0, 0);
       if (L.nodes.length > 1) {
         const knee = r.bones[L.nodes[1]];
-        setRot(knee, 0.6 * moving * swingPhase * awake + kneeLie * lie + 0.7 * fly + 0.5 * stalk, 0, 0);
+        setRot(knee, 0.6 * moving * swingPhase * awake + kneeLie * lie + 0.7 * fly + 0.5 * stalk + L.graze[1] * eat, 0, 0);
       }
       if (L.nodes.length > 2) {
         const ankle = r.bones[L.nodes[2]];
-        setRot(ankle, -0.35 * moving * swingPhase * awake + ankleLie * lie, 0, 0);
+        setRot(ankle, -0.35 * moving * swingPhase * awake + ankleLie * lie + L.graze[2] * eat, 0, 0);
       }
     }
   }

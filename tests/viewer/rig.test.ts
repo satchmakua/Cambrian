@@ -159,5 +159,33 @@ describe('animation rig', () => {
     poseDead(r);
     r.bones.forEach((b, i) => expect(b.quaternion.angleTo(before[i])).toBeLessThan(1e-6));
   });
+
+  it('a feeder puts its mouth to the ground with its feet planted — no grazing the air', () => {
+    // (one fixed neck pitch left a long-legged deer's mouth a head-length above the grass)
+    const misses: number[] = [];
+    for (const id of ['ungulate', 'canid', 'felid', 'rodent', 'ursid', 'bird']) {
+      for (let seed = 1; seed <= 4; seed++) {
+        const ph = p(id, seed);
+        const r = createRig(ph);
+        const T = r.template;
+        poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 1, swim: false, turn: 0 });
+        const ground = Math.min(...T.legs.map((l) => ph.nodes[l.nodes[l.nodes.length - 1]].pos[1] - ph.nodes[l.nodes[l.nodes.length - 1]].radius));
+        const tall = Math.max(...T.legs.map((l) => ph.nodes[l.nodes[0]].pos[1])) - ground;
+        const mi = ph.nodes.findIndex((n) => n.terminal === 'mouth');
+        const miss = (footWorld(r, mi).y - ground - ph.nodes[mi].radius * 0.5 - 0.03) / tall;
+        misses.push(miss);
+        expect(miss, `${id} #${seed} mouth`).toBeLessThan(0.45);
+        expect(miss, `${id} #${seed} mouth`).toBeGreaterThan(-0.3);
+        for (const l of T.legs) {
+          const f = l.nodes[l.nodes.length - 1];
+          const w = footWorld(r, f);
+          expect(Math.hypot(w.y - ph.nodes[f].pos[1], w.z - ph.nodes[f].pos[2]) / tall, `${id} #${seed} foot`).toBeLessThan(0.05);
+          for (const i of l.nodes) expect(footWorld(r, i).y - ph.nodes[i].radius - ground, `${id} #${seed} leg`).toBeGreaterThan(-0.03 * tall);
+        }
+      }
+    }
+    // most reach the grass outright
+    expect(misses.filter((m) => m < 0.15).length / misses.length).toBeGreaterThan(0.6);
+  });
 });
 
