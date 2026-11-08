@@ -15,7 +15,8 @@
  *     turn carries the face with it.
  *   - GAIT: one phase clock advanced by distance travelled (stride ∝ leg length, so feet don't skate
  *     much) and per-leg offsets from a single rule — offset = ½·((pair + side) mod 2) — which gives a
- *     biped's alternation, a quadruped's diagonal trot, and a hexapod's/spider's alternating tripods.
+ *     biped's alternation, a quadruped's diagonal trot, and a hexapod's/spider's alternating tripods;
+ *     at a run a four-legged column walker re-phases into a rotary gallop, its back flexing.
  *     Column legs swing fore-aft at the hip and lift at the knee; arched arthropod legs sweep about
  *     the vertical and lift by rolling. Trunks undulate (strongly for sprawlers, as a travelling wave
  *     for legless slitherers and swimmers), tails sway, heads bob, look down to eat, and the whole
@@ -33,7 +34,8 @@ export interface LegChain {
   pair: number; // 0 = front-most pair
   fore: boolean; // a quadruped's foreleg (its own fold: elbow behind the shoulder)
   arched: boolean; // arthropod arch (knee above hip)
-  offset: number; // gait phase offset (0..1)
+  offset: number; // gait phase offset (0..1) — the walk and the trot
+  gallop: number; // …and at a run (a quadruped's gallop: the forelegs together, then the hind)
   length: number; // hip→foot reach (bu)
   /** asleep: the fold of the leg's last joint (the ankle, or a two-link leg's knee) that sets its foot
    *  on the floor beside the lying body */
@@ -52,6 +54,8 @@ export interface RigTemplate {
   stride: number; // bu per gait cycle at the full run swing (a walk steps shorter: see gaitAmplitude)
   sprawl: number; // 0 upright mammal … 1 sprawling / arthropod (spine sway amplitude)
   legless: boolean;
+  /** four column legs: it can break into a gallop at a run */
+  gallops: boolean;
   /** how far the trunk's underside stands off the ground (bu): a sleeper lowers itself this far
    *  to lie on its belly */
   belly: number;
@@ -175,6 +179,7 @@ export function rigTemplate(p: Phenotype): RigTemplate {
         fore: false,
         arched: chain.length >= 3 && p.nodes[chain[1]].pos[1] > hip.pos[1] + 1e-3,
         offset: 0,
+        gallop: 0,
         length: Math.hypot(foot.pos[0] - hip.pos[0], foot.pos[1] - hip.pos[1], foot.pos[2] - hip.pos[2]),
         sleepLast: 0,
       });
@@ -189,6 +194,8 @@ export function rigTemplate(p: Phenotype): RigTemplate {
     l.pair = zs.indexOf(z);
     l.fore = zs.length === 2 && l.pair === 0;
     l.offset = 0.5 * ((l.pair + (l.side > 0 ? 1 : 0)) % 2);
+    // a rotary gallop: the two forelegs strike a beat apart, the hind pair half a cycle later
+    l.gallop = zs.length === 2 && legs.length === 4 ? (l.pair === 0 ? 0 : 0.5) + (l.side > 0 ? 0.09 : 0) : l.offset;
   }
   // the belly's clearance: the trunk's underside above the lowest foot
   let belly = 0;
@@ -213,6 +220,7 @@ export function rigTemplate(p: Phenotype): RigTemplate {
     stride: legs.length ? Math.max(0.6, meanLeg * 1.6) : Math.max(0.8, trunk.length * 0.5),
     sprawl: legs.length >= 6 ? 1 : archedFrac > 0.5 ? 0.9 : 0.25,
     legless: legs.length === 0,
+    gallops: legs.length === 4 && zs.length === 2 && archedFrac === 0,
     belly,
   };
   TEMPLATES.set(p, tmpl);
@@ -365,6 +373,11 @@ function setRot(b: THREE.Bone, ax: number, ay: number, az: number): void {
   if (az) b.quaternion.multiply(q2.setFromAxisAngle(Z, az));
 }
 
+function smooth01(x: number): number {
+  const t = x < 0 ? 0 : x > 1 ? 1 : x;
+  return t * t * (3 - 2 * t);
+}
+
 /** the hip swing at a full run (rad) — the template's stride is measured for it */
 const GAIT_AMP_MAX = 0.42;
 
@@ -385,6 +398,8 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
   // swung its legs like a galloping one). The step's length follows the swing, so the planted foot
   // still keeps pace with the ground instead of skating.
   const amp = gaitAmplitude(inp.speed, inp.cruise);
+  // at a run a quadruped breaks from the trot into a gallop (the legs re-phase, the back flexes)
+  const gal = T.gallops ? smooth01((inp.speed / Math.max(inp.cruise, 1e-3) - 1.05) / 0.4) * grounded : 0;
   const stride = T.stride * (Math.sin(amp) / Math.sin(GAIT_AMP_MAX));
   r.phase = (r.phase + (inp.speed * grounded * inp.dt) / stride) % 1;
   const P = r.phase * Math.PI * 2;
@@ -408,7 +423,9 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
     else if (wave) yaw = 0.24 * moving * Math.sin(P - k * 1.1) * (0.35 + 0.65 * (1 - u));
     else yaw = 0.05 * T.sprawl * moving * Math.sin(P - k * 0.8);
     yaw -= inp.turn * 0.06 * awake; // lean into turns
-    setRot(r.bones[T.trunk[k]], 0, yaw * awake, 0);
+    // galloping, the back coils as the legs gather under the body and stretches as they reach out
+    const flex = k === Math.max(1, Math.floor(nT / 2)) ? 0.2 * gal * moving * Math.sin(P + 0.6) : 0;
+    setRot(r.bones[T.trunk[k]], flex * awake, yaw * awake, 0);
   }
   // idle: a slow look around (two incommensurate waves, so the glances never settle into a loop),
   // a breath that lifts the chest, and a lazy weight shift
@@ -439,7 +456,7 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
   }
   // legs
   for (const L of T.legs) {
-    const ph = P + L.offset * Math.PI * 2;
+    const ph = P + (L.offset + (L.gallop - L.offset) * gal) * Math.PI * 2;
     const s = Math.sin(ph);
     const c = Math.cos(ph);
     const hip = r.bones[L.nodes[0]];

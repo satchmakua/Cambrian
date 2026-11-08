@@ -283,24 +283,29 @@ function DevLook() {
     let x = 0, z = 0;
     const w0 = getWorld();
     const egg = w0.eggs.find((e) => !e.water);
+    const corpse = w0.corpses.find((k) => k.meat > 0);
     if (q === 'nest' && egg) {
       x = egg.x;
       z = egg.z;
+    } else if (q === 'carcass' && corpse) {
+      x = corpse.x;
+      z = corpse.z;
     } else if (q === 'river') {
       // a point some way down the river's course
       const s = t.lakeR * 0.6 + 34;
       x = t.lakeX + Math.sin(t.riverA) * s;
       z = t.lakeZ + Math.cos(t.riverA) * s;
     } else {
-      // (look=nest before any land clutch, or a malformed look: leave the camera alone)
-      const [px, pz] = q === 'nest' ? [NaN, NaN] : q.split(',').map(Number);
+      // (look=nest before any land clutch, look=carcass before any death, or a malformed look: leave
+      // the camera alone)
+      const [px, pz] = q === 'nest' || q === 'carcass' ? [NaN, NaN] : q.split(',').map(Number);
       if (!Number.isFinite(px) || !Number.isFinite(pz)) return;
       x = px;
       z = pz;
     }
     const y = Math.max(0, heightAt(t, x, z));
     controls.target.set(x, y, z);
-    const k = q === 'nest' ? 0.3 : 1;
+    const k = q === 'nest' || q === 'carcass' ? 0.3 : 1;
     camera.position.set(x + 14 * k, y + 12 * k, z + 16 * k);
     controls.update();
   });

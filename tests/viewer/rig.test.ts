@@ -119,5 +119,32 @@ describe('animation rig', () => {
       }
     }
   });
+
+  it('at a run a quadruped gallops: forelegs together, hind legs half a cycle behind, the back flexing', () => {
+    const ph = p('canid');
+    const T = rigTemplate(ph);
+    expect(T.gallops).toBe(true);
+    const leg = (pair: number, side: number) => T.legs.find((l) => l.pair === pair && l.side === side)!;
+    const gap = (a: number, b: number) => Math.min(Math.abs(a - b), 1 - Math.abs(a - b));
+    // the trot pairs the diagonals; the gallop pairs the fore and the hind legs
+    expect(gap(leg(0, 1).gallop, leg(0, -1).gallop)).toBeLessThan(0.15);
+    expect(gap(leg(1, 1).gallop, leg(1, -1).gallop)).toBeLessThan(0.15);
+    expect(gap(leg(0, -1).gallop, leg(1, -1).gallop)).toBeCloseTo(0.5, 6);
+    // and the back only flexes at a run
+    const backAt = (speed: number) => {
+      const r = createRig(ph);
+      let most = 0;
+      for (let i = 0; i < 40; i++) {
+        poseRig(r, { dt: 0.03, speed, cruise: 4, sleep: 0, eat: 0, swim: false, turn: 0 });
+        for (const k of r.template.trunk) most = Math.max(most, Math.abs(new THREE.Euler().setFromQuaternion(r.bones[k].quaternion).x));
+      }
+      return most;
+    };
+    expect(backAt(2)).toBeLessThan(1e-6);
+    expect(backAt(7)).toBeGreaterThan(0.1);
+    // neither spiders nor birds gallop
+    expect(rigTemplate(p('arachnid')).gallops).toBe(false);
+    expect(rigTemplate(p('bird')).gallops).toBe(false);
+  });
 });
 
