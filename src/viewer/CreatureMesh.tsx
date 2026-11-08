@@ -29,7 +29,7 @@ import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smo
 import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finKindOf } from './wings';
 import { ensureSkinWeights, type RigInstance } from './rig';
 import { buildFieldPrims, fieldAt } from './bodyField';
-import { eyeClearings, eyeSeat } from './eyeSeat';
+import { eyeClearings, eyeSeat, isSwimmer } from './eyeSeat';
 import { coatDark, coatFin, coatMain, coatPattern } from './palette';
 import { getGeometry, retainGeometry, releaseGeometry } from './geometryCache';
 import { mouthCarves } from './mouthLine';
@@ -210,11 +210,17 @@ export function CreatureMesh({
     retainGeometry(phenotype, shellKey);
     return () => releaseGeometry(phenotype, shellKey);
   }, [shellGeo, phenotype, shellKey]);
-  // the shell wears hard scutes: plates (turtle) or the body's own chitin (crab), a darker tone of
-  // the body hue with a bold reticulate seam pattern
+  // the shell wears hard scutes: plates (turtle) or the body's own chitin (crab), with a bold
+  // reticulate seam pattern. A turtle's is a darker, browner horn than the leathery skin that comes
+  // out from under it — in the body's own tone the dome had no edge and the scutes ran on over the
+  // head and legs.
   const shellMat = useMemo(() => {
     if (!hasShell) return null;
-    const shellPal = { ...pal, light: pal.light * 0.82, sat: pal.sat * 0.9, hueB: pal.hueA };
+    const crab = cov.type === 'chitin';
+    const hueA = crab ? pal.hueA : pal.hueA + (0.09 - pal.hueA) * 0.45;
+    const shellPal = crab
+      ? { ...pal, light: pal.light * 0.82, sat: pal.sat * 0.9, hueB: pal.hueA }
+      : { ...pal, hueA, hueB: hueA - 0.02, light: pal.light * 0.66, sat: pal.sat * 0.85 };
     const shellCov = {
       ...cov,
       type: cov.type === 'chitin' ? ('chitin' as const) : ('plates' as const),
@@ -670,6 +676,7 @@ function capGeometry(theta: number, limbal: boolean, squeezeX = 1): THREE.Sphere
   return g;
 }
 const REPTILE_IRIS = [0xb08a2e, 0xa8661f, 0x7d8a33, 0x9a4f24, 0x8f8a6e, 0xc2a046];
+const FISH_IRIS = [0xc9cdd2, 0xb9bfc4, 0xd2b062, 0xbf9a4a, 0xa9b49c];
 
 /** One eye's lids in the body's own covering: the shared hemispheres scaled to the eye, with the
  *  covering shader's body-space coordinates baked at the open pose (so the coat runs onto the lids
@@ -714,9 +721,14 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   const socketDark = useMemo(() => new THREE.Color(socket).multiplyScalar(0.5).getHex(), [socket]);
   // vertebrate eyes have lids that blink — and shut in sleep; an insect's facets and a glowing alien
   // eye stare
-  const lidded = v === 'round' || v === 'beady' || v === 'slit';
+  const vertebrate = v === 'round' || v === 'beady' || v === 'slit';
+  // …except a fish's: no lids at all — a flat, lidless, metallic-ringed eye lying flush with the head
+  // (lidded and staring forward over a grin, every fish read as a Muppet)
+  const fishEye = useMemo(() => vertebrate && onFace && !!phenotype && isSwimmer(phenotype), [vertebrate, onFace, phenotype]);
+  const lidded = vertebrate && !fishEye;
   const slitIris = useMemo(() => REPTILE_IRIS[Math.floor(unitHash(seed, 0x511) * REPTILE_IRIS.length)], [seed]);
-  const seat = useMemo(() => (lidded && onFace && phenotype ? eyeSeat(phenotype, f.idx, f.quat, r) : { quat: f.quat, sink: 0, centre: null }), [lidded, onFace, phenotype, f.idx, f.quat, r]);
+  const fishIris = useMemo(() => FISH_IRIS[Math.floor(unitHash(seed, 0xf15) * FISH_IRIS.length)], [seed]);
+  const seat = useMemo(() => (vertebrate && onFace && phenotype ? eyeSeat(phenotype, f.idx, f.quat, r) : { quat: f.quat, sink: 0, centre: null }), [vertebrate, onFace, phenotype, f.idx, f.quat, r]);
   const sink = seat.sink;
   // the ball takes the iris's own hue, deep — a brown ball behind a green or blue iris read as a bruise
   const ballColor = useMemo(() => new THREE.Color(iris).multiplyScalar(0.16).lerp(new THREE.Color(0x1c120e), 0.5).getHex(), [iris]);
@@ -774,13 +786,28 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
           than the 0.9r ball or the torus drives straight through the sclera as a hard ridge. It also
           sits back along −Z so it rings the eye's equator like an orbit rather than a hoop in front. */}
       {/* (a lidded eye needs no ring: its coat-covered lids set it into the face) */}
-      {!lidded && (
+      {!vertebrate && (
         <mesh position={[0, 0, -r * 0.18]}>
           <torusGeometry args={[r * 1.2, r * 0.26, 12, 28]} />
           <meshStandardMaterial color={socketDark} roughness={0.85} metalness={0.0} />
         </mesh>
       )}
-      {v === 'round' || v === 'beady' ? (
+      {fishEye ? (
+        // a fish's eye: a flattened dark ball flush in the head, a broad metallic iris ring (silver,
+        // brass or gold) round a big round pupil — no lids, no white
+        <group scale={[1, 1, 0.72]}>
+          <mesh position={[0, 0, -r * 0.04]}>
+            <sphereGeometry args={[r * 0.9, 22, 18]} />
+            <meshStandardMaterial color={0x0b0c0e} roughness={0.1} />
+          </mesh>
+          <mesh position={[0, 0, -r * 0.04]} scale={r * 0.9 * 1.012} geometry={capGeometry(0.82, true)}>
+            <meshStandardMaterial color={fishIris} vertexColors roughness={0.28} metalness={0.6} polygonOffset polygonOffsetFactor={-1} />
+          </mesh>
+          <mesh position={[0, 0, -r * 0.04]} scale={r * 0.9 * 1.024} geometry={capGeometry(0.46, false)}>
+            <meshStandardMaterial color={0x020203} roughness={0.04} polygonOffset polygonOffsetFactor={-2} />
+          </mesh>
+        </group>
+      ) : v === 'round' || v === 'beady' ? (
         // a wet animal eye set deep under a heavy brow — dark, glassy, watching. No cream sclera,
         // no fat white sticker; the low-roughness ball catches the environment like real moisture.
         <>
@@ -1130,11 +1157,15 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
     // spine): anchor it on the trunk node nearest the shoulder, out at its side and a little above
     // the midline, slightly forward — rather than at the dorsal attach point the gene aimed for.
     let anchor: readonly number[] = shoulder;
-    if (feathered && trunk.length) {
+    if (trunk.length) {
       let near = trunk[0];
       for (const n of trunk) if (Math.abs(n.pos[2] - shoulder[2]) < Math.abs(near.pos[2] - shoulder[2])) near = n;
       const rx = near.radius * (near.scale?.[0] ?? 1);
-      anchor = [near.pos[0] + side * rx * 0.86, near.pos[1] + near.radius * 0.28, near.pos[2] + near.radius * 0.35];
+      // (a membrane wing's arm roots at the upper corner of the shoulder, its humerus buried in the
+      // body — from the dorsal attach point it stuck out of the spine like a broom handle)
+      anchor = feathered
+        ? [near.pos[0] + side * rx * 0.86, near.pos[1] + near.radius * 0.28, near.pos[2] + near.radius * 0.35]
+        : [near.pos[0] + side * rx * 0.55, near.pos[1] + near.radius * 0.5, near.pos[2] + near.radius * 0.2];
     }
     const off: [number, number, number] = [anchor[0] - tip[0], anchor[1] - tip[1], anchor[2] - tip[2]];
     if (feathered) {
@@ -1143,7 +1174,7 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
       let meanR = 0;
       for (let i = 0; i < prims.nc; i++) meanR += prims.pr[i];
       prims.k = 0.34 * (meanR / Math.max(prims.nc, 1));
-      conformToSurface(w.surface, (x, y, z) => fieldAt(prims, x, y, z), anchor, girth * 0.04);
+      conformToSurface(w.surface, (x, y, z) => fieldAt(prims, x, y, z), anchor, girth * 0.04, w.lift);
     }
     const bones = w.bones.map((b) => {
       const d = b.b.clone().sub(b.a);
@@ -1173,7 +1204,9 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
       spreadRef.current.scale.setScalar(0.55 + 0.45 * THREE.MathUtils.smoothstep(sp, 0.35, 1));
     }
   });
-  const bone = useMemo(() => new THREE.Color(color).multiplyScalar(0.45).getHex(), [color]);
+  // the arm and finger bones wear the wing's own skin, a shade deeper (a flat dark cylinder read as a
+  // stick laid on the membrane)
+  const bone = useMemo(() => new THREE.Color(color).multiplyScalar(0.7).getHex(), [color]);
   const skin = useMemo(() => new THREE.Color(color).multiplyScalar(0.85).getHex(), [color]);
   return (
     <group position={build.off}>
@@ -1195,10 +1228,21 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
             <meshPhysicalMaterial color={skin} roughness={0.62} sheen={0.3} sheenRoughness={0.5} side={THREE.DoubleSide} transparent opacity={0.93} />
           </mesh>
           {!lite && build.bones.map((b, i) => (
-            <mesh key={i} position={b.pos} quaternion={b.quat} castShadow>
-              <cylinderGeometry args={[b.r1, b.r0, b.len, 8]} />
-              <meshStandardMaterial color={bone} roughness={0.5} />
-            </mesh>
+            <group key={i} position={b.pos} quaternion={b.quat}>
+              <mesh castShadow>
+                <cylinderGeometry args={[b.r1, b.r0, b.len, 10]} />
+                <meshStandardMaterial color={bone} roughness={0.55} />
+              </mesh>
+              {/* rounded joints: knuckles at both ends, not flat-cut tube ends */}
+              <mesh position={[0, -b.len / 2, 0]}>
+                <sphereGeometry args={[b.r0, 10, 8]} />
+                <meshStandardMaterial color={bone} roughness={0.55} />
+              </mesh>
+              <mesh position={[0, b.len / 2, 0]}>
+                <sphereGeometry args={[b.r1, 8, 6]} />
+                <meshStandardMaterial color={bone} roughness={0.55} />
+              </mesh>
+            </group>
           ))}
           {!lite && build.w.wrist && (
             <mesh position={[build.w.wrist.x, build.w.wrist.y + build.bones[0].r1 * 0.6, build.w.wrist.z]} rotation={[-0.4, 0, 0]} castShadow>

@@ -534,6 +534,33 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   Studio, portraits, the World's selected animal), skinned on the rig, fading out where a strand
   would be sub-pixel.
 
+- [x] **M53 — Nests, eggs and ambient life.** Egg-layers lay clutches in nests that hatch a third of a
+  day later; a hungry hunter raids an unguarded nest; the narrator and the documentary director tell
+  and film it. Fireflies on warm nights, butterflies by day; leafy clumped tree crowns, conifers and
+  bushes instead of faceted gems. **Test:** `world.test.ts › nests and eggs`.
+
+- [x] **M54 — Two review passes.** A verified review of Part 3 and an adversarial check of its fixes:
+  19 bugs fixed — species bookkeeping and caps counting eggs and pending clutches, deferred
+  speciation for eggs, recolonised and re-released species, a river that never raises a lake bed,
+  the leg-only bare shanks. **Test:** `world.test.ts › bookkeeping that holds`.
+
+- [x] **M55 — Visual audit I: eyes, coats, tails, body plans.** No merged eye pairs; gaze by kind
+  (cats and apes forward, deer sideways); every lidded eye seated in the real skin with a curved,
+  fibred iris; coats read as sRGB (no more bleached greige), bellies in the coat's own hue; reptile
+  tails that rest on the ground; quadrupeds deepest at the chest, on longer legs whose knees and
+  elbows bend the right way; head-heavy fish, rope snakes, bipeds standing over their feet.
+  **Tests:** `tests/engine/eyes.test.ts`, `tails.test.ts`, `bodyplan.test.ts`,
+  `tests/viewer/eyeSeat.test.ts`, `creatureMaterial.test.ts`.
+
+- [x] **M56 — Visual audit II: faces, wings, plumage, and the odd ones out.** Fish with lidless
+  metallic eyes on the sides of the head and seam mouths; feathered wings as one continuous sheet
+  painted in feather tiers (folded and spread); bills running on from the brow; imbricated plumage
+  instead of turtle scutes; teardrop birds; frogs with broad flat heads, crown eyes and folded
+  jumping legs; turtles with a horn shell over leathery skin; dragons with long reptilian skulls and
+  elbowed membrane wings; primates with a chest and some muscle; flat nose pads with nostrils;
+  clumped fur; the followed World creature in the fine skin. **Tests:** `wings.test.ts › plumage
+  sheets`, `beak.test.ts`, `bodyplan.test.ts › frog / dragon`, `jawed.test.ts`.
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.

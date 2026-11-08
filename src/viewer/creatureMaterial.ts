@@ -238,10 +238,15 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
           // Where a strand would be smaller than a pixel the shells fade out and the base coat
           // carries the look (no shimmer at a distance).
           if (uShellH >= 0.0) {
-            vec3 q = vBodyPos * uShellDen + uOff;
+            // TUFTS: the strands of a ~3-strand patch draw together toward their tips, so the pile parts
+            // into locks instead of standing as an even stipple (salt-and-pepper sandpaper up close)
+            vec3 q0 = vBodyPos * uShellDen + uOff;
+            vec3 cid = floor(q0 / 3.2);
+            vec3 cc = (cid + 0.5 + (hash33(cid + 41.0) - 0.5) * 0.6) * 3.2;
+            vec3 q = q0 + (cc - q0) * 0.5 * uShellH * uShellH;
             vec3 cell = floor(q);
             vec3 jit = hash33(cell) - 0.5;
-            float sLen = 0.45 + 0.55 * hash13(cell + 17.0);
+            float sLen = (0.45 + 0.55 * hash13(cell + 17.0)) * (0.72 + 0.5 * hash13(cid + 3.0));
             // round an eye the pile shortens to a fine fringe and then stops: strands rooted in the
             // face otherwise stand out over the sunken eyeball and comb straight across the iris
             float eyeClear = 0.0;
@@ -254,8 +259,8 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
             float dc = length(fract(q) - 0.5 - jit * 0.5);
             float far = smoothstep(0.28, 1.15, gFw * uShellDen);
             if (u > 1.0 || dc > 0.62 * (1.0 - u) || far > hash13(cell + 5.0) || vFlesh > 0.05 || bare > 0.3) discard;
-            // depth in the pile: shadowed at the root, catching light at the tips
-            diffuseColor.rgb *= mix(0.62, 1.12, uShellH);
+            // depth in the pile: shadowed at the root, catching light at the tips; each lock its own shade
+            diffuseColor.rgb *= mix(0.62, 1.12, uShellH) * (0.93 + 0.14 * hash13(cid + 9.0));
           }
           if (uDebug == 1) diffuseColor.rgb = vec3(pat);
           if (uDebug == 2) diffuseColor.rgb = vec3(gH);
@@ -425,6 +430,23 @@ vec2 voronoi(vec3 p) {
   return vec2(sqrt(f1), sqrt(f2));
 }
 
+// the nearest 3-D cell to p: xyz = p − its jittered centre (cell units), w = F1; f2 = F2
+vec4 cellNear(vec3 p, out float f2) {
+  vec3 b = floor(p); vec3 f = fract(p);
+  float f1 = 8.0; f2 = 8.0;
+  vec3 best = vec3(0.0);
+  for (int k = -1; k <= 1; k++)
+  for (int j = -1; j <= 1; j++)
+  for (int i = -1; i <= 1; i++) {
+    vec3 g = vec3(float(i), float(j), float(k));
+    vec3 r = g + hash33(b + g) - f;
+    float d = dot(r, r);
+    if (d < f1) { f2 = f1; f1 = d; best = r; } else if (d < f2) { f2 = d; }
+  }
+  f2 = sqrt(f2);
+  return vec4(-best, sqrt(f1));
+}
+
 // --- color pattern field p(x) in [0,1] (MORPHOLOGY §7.1) — domain-warped for organic flow --------
 // Every edge is widened by the pattern's own pixel footprint \`c\` (cells per pixel) so markings stay
 // crisp up close and blur gracefully — rather than shimmer — when the creature is small on screen.
@@ -480,40 +502,60 @@ float patternField(vec3 p0, int type, float scale) {
 // Each relief also fades to its mean as its cells shrink toward the pixel footprint (aaW), so the
 // bump is a crisp scale/plate/feather read up close and a clean surface at a distance.
 float surfaceHeight(vec3 p, int cover) {
-  if (cover == 1) {                                             // scales — row-offset lenses
-    // (no row bricking: a floor(z) shift is a hard seam under the derivative bump — a 1-px streak
-    // at every row — and the 3-D cells are irregular enough on their own)
-    vec3 q = p * 8.0;
-    vec2 F = voronoi(q);
-    float lens = 1.0 - smoothstep(0.0, 0.9, F.x);               // each scale domes from its centre
-    float seam = smoothstep(0.0, 0.08 + gFw * 8.0, F.y - F.x);  // and dips at the seams
-    float h = mix(0.45, lens * 0.75 * seam + 0.1, aaW(8.0));
-    gHb = h * 0.016;
-    return h;
+  if (cover == 1) {                                             // scales — imbricated, laid back
+    // Like the plumage: each cell a scale whose free edge points back (−z) and overlaps the next, the
+    // height ramping up from its tucked root to that edge — small, so a fish or a lizard wears a
+    // fine shingle, not a tortoiseshell of dome-and-groove polygons. Every border falls to one floor:
+    // no step for the derivative bump to draw as a dotted line. (No row bricking: a floor(z) shift is
+    // a hard seam under the bump — a 1-px streak at every row.)
+    vec3 q = vec3(p.x * 15.0, p.y * 15.0, p.z * 11.0);
+    float f2;
+    vec4 c = cellNear(q, f2);
+    float ramp = clamp(0.5 - c.z * 0.8, 0.0, 1.0);
+    float edge = smoothstep(0.0, 0.22, f2 - c.w);
+    float lay = mix(0.45, ramp * (1.0 - 0.25 * dot(c.xy, c.xy)) * edge, aaW(15.0));
+    gHb = lay * 0.007;
+    return clamp(0.78 - lay * 0.55, 0.0, 1.0);
   }
-  if (cover == 2) {                                             // fur — clumped pile + directional streaks
+  if (cover == 2) {                                             // fur — clumped pile, locks, streaks
     float clumps = fbmA(vec3(p.x * 5.0, p.y * 5.0, p.z * 2.4), 5.0);
+    // locks of hair laid back along the body: the grain that still reads once the strands are
+    // smaller than a pixel (the shells fade out there and the coat carries the look)
+    float locks = fbmA(vec3(p.x * 10.0, p.y * 10.0, p.z * 2.2), 10.0);
     float streak = fbmA(vec3(p.x * 22.0, p.y * 22.0, p.z * 5.0), 22.0);
-    gHb = clumps * 0.02 + streak * 0.005;
-    return clumps * 0.55 + streak * 0.45;
+    gHb = clumps * 0.018 + locks * 0.007 + streak * 0.004;
+    return clumps * 0.4 + locks * 0.32 + streak * 0.28;
   }
-  if (cover == 3) {                                             // feathers — overlapping vanes
-    // elongated cells (stretched head-to-tail) each domed like a laid feather, seams between them,
-    // plus a fine barb grain along the body. (Straight constant-z rows read as planks, and their
-    // sawtooth step sat under the derivative bump as a 1-px streak at every row.)
-    vec3 q = vec3(p.x * 7.0, p.y * 7.0, p.z * 4.2);
-    vec2 F = voronoi(q);
-    float vane = 1.0 - smoothstep(0.0, 1.05, F.x);
-    float seam = smoothstep(0.0, 0.12 + gFw * 7.0, F.y - F.x);
-    float barbs = fbmA(vec3(p.x * 34.0, p.y * 34.0, p.z * 8.0), 34.0);
-    float h = mix(0.4, vane * 0.62 * mix(0.6, 1.0, seam) + 0.18, aaW(7.0)) + (barbs - 0.5) * 0.08;
-    gHb = h * 0.014;
-    return h;
+  if (cover == 3) {                                             // feathers — imbricated, laid back
+    // Each cell is a feather laid head-to-tail (cells stretched along the body). Its ROOT end (+z,
+    // toward the head) is tucked under the feather in front and its TIP end (−z) lies over the one
+    // behind: the height ramps up from root to tip and steps down at the tip's edge, so the plumage
+    // reads as overlapping scallops shingled toward the tail. (Domed cells read as turtle scutes or
+    // cobbles; a constant-z row step sat under the bump as a 1-px streak at every row.)
+    // (small: a contour feather is a few millimetres — at 9 cells a unit a bird's head wore five
+    // polygons across, a turtle's scutes)
+    vec3 q = vec3(p.x * 19.0, p.y * 19.0, p.z * 11.0);
+    float f2;
+    vec4 c = cellNear(q, f2);                                   // xyz: point − centre; w: F1
+    float ramp = clamp(0.5 - c.z * 0.75, 0.0, 1.0);             // root (front) low → tip (back) high
+    float round_ = 1.0 - 0.3 * dot(c.xy, c.xy);                 // a vane's rounded cross-section
+    // every border falls to the same floor, so the relief is continuous across cells: the tip's edge
+    // is a soft shadowed crease, never a step (a step under the derivative bump is a 1-px dotted line)
+    float edge = smoothstep(0.0, 0.38, f2 - c.w);
+    float barbs = fbmA(vec3(p.x * 40.0, p.y * 40.0, p.z * 9.0), 40.0);
+    float lay = mix(0.5, ramp * round_ * edge, aaW(19.0));
+    gHb = lay * 0.0055 + (barbs - 0.5) * 0.001;
+    // (gH reads as a RECESS for the grime and roughness: the tucked roots are where the shadow sits)
+    return clamp(0.75 - lay * 0.5 + (barbs - 0.5) * 0.05, 0.0, 1.0);
   }
-  if (cover == 4) {                                             // chitin — large smooth plates
-    vec2 F = voronoi(p * 3.0);
-    float h = mix(0.8, smoothstep(0.0, 0.09 + gFw * 3.0, F.y - F.x), aaW(3.0));   // grooves at the seams
-    gHb = h * 0.012;
+  if (cover == 4) {                                             // chitin — a smooth lacquered cuticle
+    // Hard and glossy: a faint undulation and fine punctures, no seam network. (Voronoi grooves drew a
+    // tortoiseshell over every beetle and spider; an arthropod's plates are its body SEGMENTS, which
+    // the geometry already carries.)
+    float swell = fbmA(p * 2.2, 2.2);
+    float pits = fbmA(p * 26.0, 26.0);
+    float h = 0.62 + (swell - 0.5) * 0.25 - smoothstep(0.62, 0.8, pits) * 0.18 * aaW(26.0);
+    gHb = swell * 0.006 - smoothstep(0.62, 0.8, pits) * 0.0012 * aaW(26.0);
     return h;
   }
   if (cover == 5) {                                             // slime — faint wet ripple

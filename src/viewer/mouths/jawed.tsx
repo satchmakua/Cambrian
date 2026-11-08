@@ -18,6 +18,7 @@
 import { useContext, useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { coatMain } from '../palette';
 import type { Phenotype } from '../../engine/grow';
 import type { Vec3 } from '../../engine/genome';
@@ -118,7 +119,8 @@ export const MUZZLED_TEETH: Record<JawedVariant, { upper: ToothProfile | null; l
 // A REPTILE's or an amphibian's mouth (a sealed spec — scaled, plated or bare skin, on a body with
 // no fins) is shut too: the snout IS the head, so the jaw barely projects, the lip is a thin dark
 // seam, and the teeth are a crocodile's small interlocking rows along that seam — or none at all,
-// for the lizard and the frog. (The full projecting grin is kept for the fish and the sharks.)
+// for the lizard and the frog. A fish's and a shark's shut the same way: their old projecting grin of
+// cream teeth over a sausage lip read as a Muppet.
 const SEALED_ROW = { jitterLen: 0.14, jitterRock: 0.08, sink: 0.42 };
 export const SEALED_TEETH: Record<JawedVariant, { upper: ToothProfile | null; lower: ToothProfile | null }> = {
   fanged: {
@@ -130,10 +132,10 @@ export const SEALED_TEETH: Record<JawedVariant, { upper: ToothProfile | null; lo
   underbite: { upper: null, lower: { ...SEALED_ROW, count: 2, len: () => 0.42, width: 0.26, curl: -0.2, margin: 0.5, salt: 5 } },
 };
 
-/** A jawed mouth that shuts as a seam: no fur, and no fins on the body (a lizard, a croc, a frog, a
- *  snake — not a fish or a shark). */
-export function sealedMouth(phenotype: Phenotype, muzzled: boolean): boolean {
-  return !muzzled && !phenotype.nodes.some((n) => n.part?.kind === 'fin');
+/** A jawed mouth that shuts as a seam: any that isn't a furred muzzle (a lizard, a croc, a frog, a
+ *  snake, a fish, a shark). */
+export function sealedMouth(_phenotype: Phenotype, muzzled: boolean): boolean {
+  return !muzzled;
 }
 
 /** a smooth bump of width ~0.16 centered at u = c — one emphasized canine position */
@@ -160,6 +162,8 @@ export interface JawedBuild {
   interior: THREE.BufferGeometry;
   /** a muzzled mouth's nose pad (node-relative), else null */
   nose: THREE.BufferGeometry | null;
+  /** …and its two nostrils, dark commas on the pad's front */
+  nostrils: THREE.BufferGeometry | null;
   muzzled: boolean;
   /** a reptile's / amphibian's seam mouth (see sealedMouth) */
   sealed: boolean;
@@ -190,23 +194,16 @@ export function buildJawed(
         muzzleR: base.muzzleR * 0.5,
         jawR: base.jawR * 0.7,
       }
-    : sealed
-      ? {
-          // a reptile's or a frog's: the jaw IS the snout — a dark seam along it, its small teeth
-          ...base,
-          ...SEALED_TEETH[variant],
-          project: base.project * 0.18,
-          lipR: (u) => base.lipR(u) * 0.32,
-          lowerLipR: (u) => base.lowerLipR(u) * 0.3,
-          muzzleR: base.muzzleR * 0.55,
-          jawR: base.jawR * 0.7,
-        }
-      : {
-          // a fish's or a shark's mouth: no fleshy lips — a thin hard rim along the jaw line
-          ...base,
-          lipR: (u) => base.lipR(u) * 0.55,
-          lowerLipR: (u) => base.lowerLipR(u) * 0.55,
-        };
+    : {
+        // a reptile's, a frog's or a fish's: the jaw IS the snout — a dark seam along it, its small teeth
+        ...base,
+        ...SEALED_TEETH[variant],
+        project: base.project * 0.18,
+        lipR: (u) => base.lipR(u) * 0.32,
+        lowerLipR: (u) => base.lowerLipR(u) * 0.3,
+        muzzleR: base.muzzleR * 0.55,
+        jawR: base.jawR * 0.7,
+      };
   const r = spec.r;
   const seed = phenotype.genomeRef.seed;
   const line = buildMouthLine(phenotype, spec, carves, 17, surface);
@@ -294,8 +291,11 @@ export function buildJawed(
   // wear the body's own covering material (pattern, countershading and relief continue across)
   for (const g of muzzled || sealed ? [muzzle, jawMass, upperFold] : [muzzle, jawMass]) bakeBodySpace(g, o);
 
-  // the nose pad: a soft, flattened wedge seated on the muzzle tip, its broad face along the skin
+  // the nose pad: a soft, flattened wedge seated on the muzzle tip, its broad face along the skin. Set
+  // INTO the muzzle and flat, with two nostrils: a full ellipsoid perched proud of the tip read as a
+  // glossy black olive stuck on the face.
   let nose: THREE.BufferGeometry | null = null;
+  let nostrils: THREE.BufferGeometry | null = null;
   if (line.nose) {
     const n = norm3(line.nose.n);
     const upHint = norm3([spec.up[0] - n[0] * dot(spec.up, n), spec.up[1] - n[1] * dot(spec.up, n), spec.up[2] - n[2] * dot(spec.up, n)], [0, 1, 0]);
@@ -309,14 +309,29 @@ export function buildJawed(
       const y = pos.getY(i);
       pos.setX(i, pos.getX(i) * (1 + 0.32 * y));
     }
-    const m = new THREE.Matrix4().makeBasis(X, Y, Z).scale(new THREE.Vector3(r * 0.36, r * 0.22, r * 0.17));
-    m.setPosition(line.nose.p[0] - o[0] + n[0] * r * 0.04, line.nose.p[1] - o[1] + n[1] * r * 0.04, line.nose.p[2] - o[2] + n[2] * r * 0.04);
+    const frame = new THREE.Matrix4().makeBasis(X, Y, Z);
+    const at = new THREE.Vector3(line.nose.p[0] - o[0], line.nose.p[1] - o[1], line.nose.p[2] - o[2]).addScaledVector(Z, -r * 0.02);
+    const m = frame.clone().scale(new THREE.Vector3(r * 0.36, r * 0.22, r * 0.11));
+    m.setPosition(at);
     g.applyMatrix4(m);
     g.computeVertexNormals();
     nose = g;
+    // the nostrils: two small dark commas low on the pad's front, slanting out and down
+    const holes: THREE.BufferGeometry[] = [];
+    for (const side of [-1, 1]) {
+      const h = new THREE.SphereGeometry(1, 10, 6);
+      const local = new THREE.Matrix4()
+        .makeTranslation(side * r * 0.13, -r * 0.035, r * 0.085)
+        .multiply(new THREE.Matrix4().makeRotationZ(side * 0.45))
+        .multiply(new THREE.Matrix4().makeScale(r * 0.07, r * 0.036, r * 0.03));
+      h.applyMatrix4(frame.clone().setPosition(at).multiply(local));
+      holes.push(h);
+    }
+    nostrils = mergeGeometries(holes) ?? null;
+    for (const h of holes) h.dispose();
   }
 
-  return { r, aim: spec.aim, upper, lower, muzzle, upperFold, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior, nose, muzzled, sealed };
+  return { r, aim: spec.aim, upper, lower, muzzle, upperFold, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior, nose, nostrils, muzzled, sealed };
 }
 
 /** The covering shader's per-vertex inputs for a node-relative feature mesh (rest body space = local + o). */
@@ -381,6 +396,7 @@ export function JawedMouth({
       // mammal's wear its coat (the chin and the lip fold are fur)
       jaw: new THREE.MeshStandardMaterial({ color: muzzled ? coat : dark, roughness: muzzled ? 0.85 : 0.62 }),
       nose: new THREE.MeshPhysicalMaterial({ color: noseColor, roughness: 0.38, clearcoat: 0.6, clearcoatRoughness: 0.35 }),
+      nostril: new THREE.MeshStandardMaterial({ color: 0x050405, roughness: 0.9 }),
       interior: new THREE.MeshStandardMaterial({ color: INTERIOR, roughness: 0.3, side: THREE.DoubleSide }),
       teeth: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42 }),
     };
@@ -398,6 +414,7 @@ export function JawedMouth({
         built.lowerLip.dispose();
         built.interior.dispose();
         built.nose?.dispose();
+        built.nostrils?.dispose();
       }
     },
     [built],
@@ -437,6 +454,7 @@ export function JawedMouth({
           hide, and draped under the lip line in the coat it hung below the chin as a pale band) */}
       {!muzzled && <mesh geometry={built.upperFold} material={shut ? coatMat : mats.lip} castShadow />}
       {built.nose && <mesh geometry={built.nose} material={mats.nose} castShadow />}
+      {built.nostrils && <mesh geometry={built.nostrils} material={mats.nostril} />}
       {built.upperTeeth.length > 0 && (
         <instancedMesh
           args={[fang, mats.teeth, built.upperTeeth.length]}

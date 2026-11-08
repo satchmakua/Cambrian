@@ -82,27 +82,33 @@ export function buildBeak(
   const style = spec.node.part?.style ?? 0.3;
   const sPos = Math.min(1, Math.max(0, (style - 0.25) / 0.125));
   const deep = hash01(seed, idx + 61) > 0.5;
-  const upperLen = r * (1.15 + 0.4 * sPos + 0.12 * (hash01(seed, idx + 13) - 0.5));
+  // a turtle's beak is a short, blunt horny sheath over the jaws, not a bird's bill (run out to a
+  // bird's length it hung off the chin like a thorn)
+  const shelled = phenotype.nodes.some((n) => n.terminal === 'carapace');
+  const upperLen = r * (shelled ? 0.48 + 0.1 * sPos : 1.15 + 0.4 * sPos + 0.12 * (hash01(seed, idx + 13) - 0.5));
   const lowerLen = upperLen * 0.75;
-  const hook = r * Math.min(0.45, 0.25 + 0.08 * sPos + (deep ? 0.12 : 0));
+  const hook = r * (shelled ? 0.16 : Math.min(0.45, 0.25 + 0.08 * sPos + (deep ? 0.12 : 0)));
   const slim = 1 - 0.22 * sPos + 0.06 * (hash01(seed, idx + 47) - 0.5);
   // a bill is broad at the root — it spans the front of the face — and tapers to the tip (thin
   // cones from a narrow root hung below the face like a walrus's tusks)
-  const upperR0 = r * 0.62 * slim;
+  const upperR0 = r * (shelled ? 0.9 : 0.72 * slim);
 
   // The bill's axis: mostly the HEAD's forward, tipped a little toward the mouth's downward aim. Run
   // along the mouth aim itself (pitched ~40° down to seat the maw on the face front) the mandibles
   // pointed at the ground.
   const fwd = qRotateV(spec.anchor.quat, [0, 0, 1]);
-  const dir = norm3([fwd[0] * 0.75 + spec.aim[0] * 0.25, fwd[1] * 0.75 + spec.aim[1] * 0.25, fwd[2] * 0.75 + spec.aim[2] * 0.25]);
+  const dir = norm3([fwd[0] * 0.86 + spec.aim[0] * 0.14, fwd[1] * 0.86 + spec.aim[1] * 0.14, fwd[2] * 0.86 + spec.aim[2] * 0.14]);
   const ud = spec.up[0] * dir[0] + spec.up[1] * dir[1] + spec.up[2] * dir[2];
   const bup = norm3([spec.up[0] - dir[0] * ud, spec.up[1] - dir[1] * ud, spec.up[2] - dir[2] * ud], [0, 1, 0]);
 
   // both mandibles root behind the skin (the wide base emerges through the face), the upper above the
-  // seat and the lower below it, so together they read as one closed cone
+  // seat and the lower below it, so together they read as one closed cone. The whole bill rides UP the
+  // face: the mouth seat sits low (its aim is pitched down onto the face front), and a bill rooted
+  // there hung under a bulging forehead like a thorn off the chin — a real culmen runs on from the brow
   const back = 0.3 * r;
-  const baseU: Vec3 = [c0.p[0] + bup[0] * 0.14 * r - dir[0] * back, c0.p[1] + bup[1] * 0.14 * r - dir[1] * back, c0.p[2] + bup[2] * 0.14 * r - dir[2] * back];
-  const baseL: Vec3 = [c0.p[0] - bup[0] * 0.2 * r - dir[0] * back * 0.9, c0.p[1] - bup[1] * 0.2 * r - dir[1] * back * 0.9, c0.p[2] - bup[2] * 0.2 * r - dir[2] * back * 0.9];
+  const lift = 0.3 * r;
+  const baseU: Vec3 = [c0.p[0] + bup[0] * (0.14 * r + lift) - dir[0] * back, c0.p[1] + bup[1] * (0.14 * r + lift) - dir[1] * back, c0.p[2] + bup[2] * (0.14 * r + lift) - dir[2] * back];
+  const baseL: Vec3 = [c0.p[0] - bup[0] * (0.2 * r - lift) - dir[0] * back * 0.9, c0.p[1] - bup[1] * (0.2 * r - lift) - dir[1] * back * 0.9, c0.p[2] - bup[2] * (0.2 * r - lift) - dir[2] * back * 0.9];
   void cu;
   void cl;
   const upperPathW = loftPath(baseU, dir, upperLen, bup, (u) => hook * Math.pow(u, 2.7));
@@ -209,8 +215,9 @@ export function BeakMouth({
   );
 
   const bill = useMemo(() => {
-    // a bill's colour: yellow-orange, slate-black or pale horn, per creature
-    return billColor(phenotype.genomeRef.seed);
+    // a bill's colour: yellow-orange, slate-black or pale horn, per creature — a turtle's beak is a
+    // dark horn sheath (pale, it read as a tusk)
+    return phenotype.nodes.some((n) => n.terminal === 'carapace') ? 0x2e2a22 : billColor(phenotype.genomeRef.seed);
   }, [phenotype]);
   const mats = useMemo(() => {
     // glossy keratin (nudged a touch toward the body tone); the lower mandible a shade darker
