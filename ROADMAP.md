@@ -601,6 +601,12 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   Limb roots now start inside a shaped body node instead of at its full radius. **Tests:**
   `bodyplan.test.ts › crab`, `smoothSkin.test.ts › crab's carapace`, `claw.test.ts`.
 
+- [x] **M62 — Apes.** A reared trunk is a torso — chest broad over a narrower waist and hips, no
+  belly swelling between them (a pear) — with the head on the shoulders (no neck), close-set eyes on
+  the brow above the muzzle, and long, near-straight arms hanging down and out so the knuckles rest
+  on the ground: a gorilla's or a baboon's silhouette instead of a seal's. Hands, like tails, rest on
+  the ground and never pass through it. **Test:** `bodyplan.test.ts › ape`.
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.

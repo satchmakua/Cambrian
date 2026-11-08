@@ -203,6 +203,29 @@ describe('body plans', () => {
     }
   });
 
+  it('an ape: a broad chest over narrow hips, its head on its shoulders, eyes forward, long arms to the ground', () => {
+    // (a pear-shaped trunk swelling at the belly, a neck, eyes on the sides of the head and arms that
+    // stopped at the hips read as a seal)
+    for (let seed = 1; seed <= 8; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'primate'));
+      const t = trunkOf(p);
+      expect(t[t.length - 1].radius, `#${seed} chest`).toBeGreaterThan(1.1 * t[0].radius);
+      for (let k = 1; k < t.length - 1; k++) expect(t[k].radius, `#${seed} no belly`).toBeLessThan(t[t.length - 1].radius);
+      const sections = new Set(p.nodes.filter((n) => n.kind === 'spine').map((n) => n.segment));
+      expect(sections.size, `#${seed} no neck`).toBe(2);
+      const ground = Math.min(...p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg').map((n) => n.pos[1]));
+      const height = p.bounds.max[1] - ground;
+      for (const h of p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'arm')) {
+        expect(h.pos[1] - h.radius, `#${seed} hand above the floor`).toBeGreaterThanOrEqual(ground - h.radius - 1e-9);
+        expect((h.pos[1] - ground) / height, `#${seed} hand low`).toBeLessThan(0.4);
+      }
+      const eyes = p.nodes.filter((n) => n.terminal === 'eye');
+      const head = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 1);
+      const headW = 2 * Math.max(...head.map((n) => n.radius * (n.scale?.[0] ?? 1)));
+      expect(Math.abs(eyes[0].pos[0] - eyes[1].pos[0]) / headW, `#${seed} eyes close-set`).toBeLessThan(0.6);
+    }
+  });
+
   it('a crab is wide and flat, its claws held out in front and four pairs of legs splayed to its sides', () => {
     // (a round domed body on three pairs of stubby legs read as a beetle)
     for (let seed = 1; seed <= 8; seed++) {

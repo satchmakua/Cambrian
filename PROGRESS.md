@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry, M60–M61). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry, M60–M62). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -45,12 +45,16 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ---
 
-## Part 3i — Arthropods of tagmata, three silhouettes, crabs (M60–M61) · 2026-11-08
+## Part 3i — Arthropods of tagmata, three silhouettes, crabs, apes (M60–M62) · 2026-11-08
 
 - **The crab's ball was two bugs, not a prior.** Flattening the crab's trunk changed nothing on
   screen: its carapace shell, for a one-node trunk, was built from a sphere of the node's scalar
   radius (ignoring its shape), and every limb's root cone started from a sphere of that radius too.
   Both now honour the node's ellipsoid; the leg-root fix also slims flat lizards' and frogs' hips.
+- **An ape's pear was the torso rule, not its genes.** Every trunk swells mid-way (the fusiform
+  bulge), which is right for a horizontal body and wrong for an upright one: an ape's belly was its
+  widest part. A reared trunk now grows as a torso (chest over hips); with that, the head set on the
+  shoulders and arms that hang straight to the ground, the primate stopped reading as a seal.
 
 - **Structure before tuning.** No prior could make one trunk with legs spaced down it into an insect
   or a spider: the body plan itself was wrong. The arthropod compiler (`compileArthropod`) builds the

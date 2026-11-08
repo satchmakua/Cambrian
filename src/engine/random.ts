@@ -85,6 +85,7 @@ interface Morpho {
   armLen?: Rg; // grasping-arm segment length ×girth — default [0.5, 0.72] (an ape's arms are long)
   armThick?: Rg; // grasping-arm root radius ×girth — default [0.18, 0.28]
   armTaper?: Rg; // default [0.7, 0.85]
+  armCurl?: Rg; // the elbow's bend (rad per joint) — default [0.35, 0.55]; an ape's long arms hang near straight
   horns?: number;
   spines?: number;
   frill?: number;
@@ -143,7 +144,7 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'arachnid', cluster: 'familiar', weight: 0.9, tagmata: 'spider', girth: [0.42, 0.56], repeat: [1, 1], height: [0.85, 1.0], elong: [1.3, 1.7], thorax: [0.6, 0.7], thoraxLong: [1.1, 1.25], legPairs: [4], posture: 'sprawling', legLen: [1.4, 1.75], legThick: [0.22, 0.3], foreLeg: [1.1, 1.0], legTerm: ['claw'], eyeStyle: [0.2, 0.4], eyeCount: [6, 8], mouthStyle: [0.38, 0.49], covering: ['fur', 'chitin'], pattern: ['mottle', 'bands'], hue: [0.02, 0.09], sat: [0.3, 0.6] },
   // upright grasping ape/monkey: long limbs, deep chest, flat forward-eyed face, expressive head
   // upright ape: a biped (long legs) with forward-reaching grasping arms, a tall domed-skulled flat face
-  { id: 'primate', cluster: 'familiar', weight: 1.0, eyeAz: [0.12, 0.25], eyeEl: [1.05, 1.15], girth: [0.27, 0.33], repeat: [3, 3], height: [0.74, 0.86], taper: [1.08, 1.15], elong: [1.25, 1.4], rear: [-0.46, -0.34], neck: [0.46, 0.56], headSize: [0.72, 0.86], muzzle: [0.62, 0.7], muzzleDrop: [0.38, 0.5], legPairs: [1], posture: 'upright', legLen: [1.05, 1.4], legThick: [0.46, 0.58], legTerm: ['foot'], arms: 1, armLen: [1.0, 1.22], armThick: [0.36, 0.44], armTaper: [0.84, 0.92], armAz: [3.32, 3.48], armEl: [-0.4, -0.24], armT: [0.84, 0.94], tail: 0.4, tailSegs: [3, 5], tailLen: [0.5, 0.8], tailThick: [0.14, 0.22], tailAz: [1.45, 1.7], tailDroop: [-1.0, -0.8], tailCurl: [-0.32, -0.18], ears: 0.7, earStyle: [0.7, 1], earAz: [0.3, 0.5], earSize: [0.62, 0.78], head: 1.0, headShape: ['domed'], headDome: [0.95, 1.12], snout: [0.22, 0.38], eyeStyle: [0, 0.15], mouthStyle: [0.07, 0.12], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.04, 0.1], sat: [0.3, 0.6] },
+  { id: 'primate', cluster: 'familiar', weight: 1.0, eyeAz: [0.5, 0.65], eyeEl: [1.08, 1.15], girth: [0.28, 0.34], repeat: [3, 3], height: [0.72, 0.8], taper: [1.12, 1.15], elong: [1.2, 1.35], rear: [-0.46, -0.34], headSize: [0.8, 0.92], muzzle: [0.66, 0.74], muzzleDrop: [0.3, 0.4], legPairs: [1], posture: 'upright', legLen: [1.05, 1.4], legThick: [0.46, 0.58], legTerm: ['foot'], arms: 1, armLen: [1.25, 1.45], armCurl: [0.12, 0.22], armThick: [0.36, 0.44], armTaper: [0.84, 0.92], armAz: [3.75, 3.95], armEl: [-0.4, -0.24], armT: [0.84, 0.94], tail: 0.4, tailSegs: [3, 5], tailLen: [0.5, 0.8], tailThick: [0.14, 0.22], tailAz: [1.45, 1.7], tailDroop: [-1.0, -0.8], tailCurl: [-0.32, -0.18], ears: 0.7, earStyle: [0.7, 1], earAz: [0.3, 0.5], earSize: [0.62, 0.78], head: 1.0, headShape: ['domed'], headDome: [0.95, 1.12], snout: [0.08, 0.18], eyeStyle: [0, 0.15], mouthStyle: [0.07, 0.12], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.04, 0.1], sat: [0.3, 0.6] },
   // biped: an upright two-legged walker (theropod / kangaroo / humanoid). Long strong striding legs,
   // grasping arms, a heavy balancing tail, a proper head. Wide covering/mouth range so it spans a
   // furred kangaroo, a scaled raptor-thing, a feathered strider — a whole basin of two-legged forms.
@@ -616,7 +617,7 @@ function graspArm(rng: Rng, attachT: number, girth: number, m?: Morpho): Appenda
     length: clamp(girth * rg(rng, m?.armLen, [0.5, 0.72]), A.length),
     thickness: clamp(girth * rg(rng, m?.armThick, [0.18, 0.28]), A.thickness),
     taper: rg(rng, m?.armTaper, [0.7, 0.85]),
-    curl: [range(rng, 0.35, 0.55), 0], // an elbow bend
+    curl: [rg(rng, m?.armCurl, [0.35, 0.55]), 0], // an elbow bend
   });
 }
 

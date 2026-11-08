@@ -119,7 +119,10 @@ export function grow(genome: Genome): Phenotype {
 
     // the fusiform swell is a TORSO's: a head (the chain's last segment) or a bare connector (a neck
     // carries no limbs) tapers straight, or a long muzzle and an ostrich's neck bulge like sausages
-    const bulge = depth > 0 && (!seg.child || seg.appendages.length === 0) ? 0 : BODY_BULGE;
+    // …and a REARED trunk (pitched up off its hips: an ape's) is a torso — chest over a narrower waist
+    // and hips — not a belly swelling mid-way between them (a fusiform upright trunk was a pear)
+    const reared = depth === 0 && seg.curve[0] < UPRIGHT_PITCH;
+    const bulge = reared || (depth > 0 && (!seg.child || seg.appendages.length === 0)) ? 0 : BODY_BULGE;
     const profileAt = (i: number) => 1 + bulge * Math.sin(Math.PI * (seg.repeat > 1 ? i / (seg.repeat - 1) : 0.5));
     // A taper above 1 grows the chain toward its front (a chest deeper than the hips, a fish deepest
     // behind its head) — it moves the bulk forward, it doesn't add any: the peak link is held to the
@@ -331,7 +334,8 @@ export function grow(genome: Genome): Phenotype {
    * and since every view puts the floor at the lowest point, the creature then stood on its tail
    * tip with its feet in the air. Walk each tail from its root: a link that would dip under the
    * floor is lifted to lie along it, and everything after it rides up with it, so a heavy reptile's
-   * tail drags on the floor and a light one trails level.
+   * tail drags on the floor and a light one trails level. An ARM likewise: an ape's long arms
+   * reach down to rest their knuckles on the ground, never through it.
    */
   function groundTails(groundY: number): void {
     const parentOf = new Int32Array(nodes.length).fill(-1);
@@ -341,8 +345,9 @@ export function grow(genome: Genome): Phenotype {
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i];
       const p = parentOf[i];
-      // a tail ROOT: the first tail node off a non-tail parent
-      if (n.part?.kind !== 'tail' || p < 0 || nodes[p].part?.kind === 'tail') continue;
+      const kind = n.part?.kind;
+      // a tail's (or an arm's) ROOT: its first node off a parent of another kind
+      if ((kind !== 'tail' && kind !== 'arm') || p < 0 || nodes[p].part?.kind === kind) continue;
       let lift = 0;
       let cur = i;
       while (true) {
@@ -353,7 +358,7 @@ export function grow(genome: Genome): Phenotype {
           lift += floor - c.pos[1];
           c.pos[1] = floor;
         }
-        const next = kids[cur].find((k) => nodes[k].part?.kind === 'tail');
+        const next = kids[cur].find((k) => nodes[k].part?.kind === kind);
         if (next === undefined) break;
         cur = next;
       }
