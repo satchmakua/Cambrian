@@ -91,5 +91,33 @@ describe('animation rig', () => {
       expect(strideNow / Math.sin(amp)).toBeCloseTo(T.stride / Math.sin(0.42), 3);
     }
   });
+
+  it('asleep, a quadruped lies on its belly with its legs folded — not standing with its feet in the air', () => {
+    for (const id of ['felid', 'canid', 'ursid', 'ungulate']) {
+      for (let seed = 1; seed <= 4; seed++) {
+        const ph = p(id, seed);
+        const r = createRig(ph);
+        const T = r.template;
+        expect(T.belly, `${id} #${seed}`).toBeGreaterThan(0);
+        poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 1, eat: 0, swim: false, turn: 0 });
+        const ground = Math.min(...T.legs.map((l) => ph.nodes[l.nodes[l.nodes.length - 1]].pos[1] - ph.nodes[l.nodes[l.nodes.length - 1]].radius));
+        const drop = T.belly * 0.95; // what the World and the Studio lower a sleeper by
+        // the belly comes down to the floor…
+        const under = Math.min(...T.trunk.map((i) => ph.nodes[i].pos[1] - ph.nodes[i].radius * (ph.nodes[i].scale?.[1] ?? 1)));
+        expect(under - drop - ground, `${id} #${seed}`).toBeLessThan(0.1 * T.belly + 0.02);
+        // …and the folded legs stay near it rather than driving deep through it
+        for (const l of T.legs) {
+          for (const i of l.nodes) {
+            const w = footWorld(r, i);
+            expect(w.y - drop - ph.nodes[i].radius - ground, `${id} #${seed}`).toBeGreaterThan(-0.35 * T.belly);
+          }
+          // a foreleg reaches forward along the ground (the sphinx); a hind leg folds up beside the belly
+          const foot = footWorld(r, l.nodes[l.nodes.length - 1]);
+          const hip = ph.nodes[l.nodes[0]].pos;
+          if (l.fore) expect(foot.z, `${id} #${seed} fore`).toBeGreaterThan(hip[2]);
+        }
+      }
+    }
+  });
 });
 

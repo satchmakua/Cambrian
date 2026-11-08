@@ -16,7 +16,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
 import { CreatureMesh, prebuildSkin, type Detail } from '../viewer/CreatureMesh';
-import { createRig, poseRig } from '../viewer/rig';
+import { createRig, poseRig, SLEEP_DROP } from '../viewer/rig';
 import { JawContext, type JawControl } from '../viewer/mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from '../viewer/flight';
 import { LidContext, type LidControl } from '../viewer/eyelids';
@@ -228,7 +228,7 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
       // a walker out of its depth floats, back above the surface, paddling
       y = Math.max(y, WATER_LEVEL - place.height * s * 0.4);
     }
-    y -= P.sleep * place.height * s * 0.28; // settle low to sleep
+    y -= P.sleep * rig.template.belly * s * SLEEP_DROP; // lie down on its belly to sleep
     y -= P.stalk * place.height * s * 0.12; // crouch to stalk
     // aloft: ride above the ground or the water, nose up into a climb, bank into turns
     if (P.alt > 0.01) y = Math.max(y, Math.max(ground, WATER_LEVEL) + place.lift * s * (1 - P.fly * 0.5)) + P.alt;

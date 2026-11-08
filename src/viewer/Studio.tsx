@@ -30,7 +30,7 @@ import { SkeletonOverlay, BONE_COLORS } from './SkeletonOverlay';
 import { StudioEnvironment } from './StudioEnvironment';
 import { mouthVariant, eyeVariant } from './partStyles';
 import type { SkinQuality } from './smoothSkin';
-import { createRig, poseRig, type RigInstance } from './rig';
+import { createRig, poseRig, SLEEP_DROP, type RigInstance } from './rig';
 import { JawContext, type JawControl } from './mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from './flight';
 import { LidContext, type LidControl } from './eyelids';
@@ -154,7 +154,8 @@ export function SpecimenContent({
       <ambientLight intensity={0.2} />
       <directionalLight position={[size * 1.2, size * 1.8, size * 1.0]} intensity={1.15} />
       <directionalLight position={[-size * 1.0, size * 0.6, -size * 0.8]} intensity={0.35} color="#a7c0ff" />
-      <group position={[-center[0], -center[1], -center[2]]}>
+      {/* asleep, the body lies down on its belly (the rig folds the legs; the trunk drops to the floor) */}
+      <group position={[-center[0], -center[1] - (rig && motion === 'sleep' ? rig.template.belly * SLEEP_DROP : 0), -center[2]]}>
         {/* the jaw is articulated only while previewing motion; still keeps the built rest gape */}
         <JawContext.Provider value={rig ? jaw : null}>
           <FlightContext.Provider value={rig ? flight : null}>

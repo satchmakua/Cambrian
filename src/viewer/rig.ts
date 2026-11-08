@@ -31,9 +31,13 @@ export interface LegChain {
   nodes: number[]; // hip → foot
   side: number; // +1 right (x > 0), −1 left
   pair: number; // 0 = front-most pair
+  fore: boolean; // a quadruped's foreleg (its own fold: elbow behind the shoulder)
   arched: boolean; // arthropod arch (knee above hip)
   offset: number; // gait phase offset (0..1)
   length: number; // hip→foot reach (bu)
+  /** asleep: the fold of the leg's last joint (the ankle, or a two-link leg's knee) that sets its foot
+   *  on the floor beside the lying body */
+  sleepLast: number;
 }
 
 export interface RigTemplate {
@@ -48,9 +52,73 @@ export interface RigTemplate {
   stride: number; // bu per gait cycle at the full run swing (a walk steps shorter: see gaitAmplitude)
   sprawl: number; // 0 upright mammal … 1 sprawling / arthropod (spine sway amplitude)
   legless: boolean;
+  /** how far the trunk's underside stands off the ground (bu): a sleeper lowers itself this far
+   *  to lie on its belly */
+  belly: number;
 }
 
 const TEMPLATES = new WeakMap<Phenotype, RigTemplate>();
+
+/** a sleeper lowers itself by this fraction of its belly's clearance */
+export const SLEEP_DROP = 0.95;
+// the lying fold at the hip and the knee: a quadruped's forelegs reach forward along the ground (the
+// sphinx); every other leg folds up beside the belly, thigh forward and shin folded back along it
+const LIE_HIP = { fore: -1.25, hind: -0.95 };
+const LIE_KNEE = { fore: 0.25, hind: 1.55 };
+
+/** the default fold of a leg's last joint when it lies down (before the floor is consulted) */
+function lieLastDefault(l: LegChain): number {
+  if (l.nodes.length >= 4) return l.fore ? -0.3 : -0.95;
+  return l.fore ? LIE_KNEE.fore : LIE_KNEE.hind;
+}
+
+/**
+ * The fold of a leg's last joint that rests a lying animal's foot on the floor. The rig's joints all
+ * pitch about the body's X axis (bones rest unrotated), so the lie pose is a planar fold in (y, z):
+ * fold the hip (and the knee, on a longer leg), then pick the last joint's angle that brings the
+ * lowest link down to the floor without driving it through (`floor` is the ground in the rest frame,
+ * raised by the drop). One fold for every leg read fine on a cat and drove a deer's long cannon
+ * bones half their length into the ground.
+ */
+function solveSleepFold(p: Phenotype, l: LegChain, floor: number, belly: number): number {
+  const def = lieLastDefault(l);
+  if (l.arched || l.nodes.length < 3 || belly <= 0) return def;
+  const pts = l.nodes.map((i) => [p.nodes[i].pos[1], p.nodes[i].pos[2]]);
+  const rad = l.nodes.map((i) => p.nodes[i].radius);
+  // positive pitch carries the foot BACK: (y, z) → (y cos − z sin, y sin + z cos) about the pivot
+  const fold = (q: number[][], pivot: number, a: number) => {
+    const [py, pz] = q[pivot];
+    const c = Math.cos(a), sn = Math.sin(a);
+    for (let k = pivot + 1; k < q.length; k++) {
+      const dy = q[k][0] - py, dz = q[k][1] - pz;
+      q[k] = [py + dy * c - dz * sn, pz + dy * sn + dz * c];
+    }
+  };
+  fold(pts, 0, l.fore ? LIE_HIP.fore : LIE_HIP.hind);
+  const last = pts.length >= 4 ? 2 : 1; // the joint being solved
+  if (last === 2) fold(pts, 1, l.fore ? LIE_KNEE.fore : LIE_KNEE.hind);
+  // the angle (within ±1.4 rad of the default) whose lowest link sits closest to the floor without
+  // sinking more than a whisker through it; failing that, the one that sinks least
+  let best = def;
+  let bestErr = Infinity;
+  let fallback = def;
+  let fallbackClear = -Infinity;
+  for (let a = def - 1.4; a <= def + 1.4; a += 0.05) {
+    const q = pts.map((v) => [v[0], v[1]]);
+    fold(q, last, a);
+    let clear = Infinity;
+    for (let k = last; k < q.length; k++) clear = Math.min(clear, q[k][0] - rad[k] - floor);
+    if (clear >= -0.04 * belly && Math.abs(clear) + 0.02 * Math.abs(a - def) < bestErr) {
+      bestErr = Math.abs(clear) + 0.02 * Math.abs(a - def);
+      best = a;
+    }
+    if (clear > fallbackClear) {
+      fallbackClear = clear;
+      fallback = a;
+    }
+  }
+  return bestErr < Infinity ? best : fallback;
+}
 
 export function rigTemplate(p: Phenotype): RigTemplate {
   const hit = TEMPLATES.get(p);
@@ -104,9 +172,11 @@ export function rigTemplate(p: Phenotype): RigTemplate {
         nodes: chain,
         side: hip.pos[0] >= 0 ? 1 : -1,
         pair: 0,
+        fore: false,
         arched: chain.length >= 3 && p.nodes[chain[1]].pos[1] > hip.pos[1] + 1e-3,
         offset: 0,
         length: Math.hypot(foot.pos[0] - hip.pos[0], foot.pos[1] - hip.pos[1], foot.pos[2] - hip.pos[2]),
+        sleepLast: 0,
       });
     } else if (r === 'tail') tails.push(chainOf(i));
     else if (r === 'arm') arms.push(chainOf(i));
@@ -117,7 +187,17 @@ export function rigTemplate(p: Phenotype): RigTemplate {
   for (const l of legs) {
     const z = Math.round(p.nodes[l.nodes[0]].pos[2] * 20) / 20;
     l.pair = zs.indexOf(z);
+    l.fore = zs.length === 2 && l.pair === 0;
     l.offset = 0.5 * ((l.pair + (l.side > 0 ? 1 : 0)) % 2);
+  }
+  // the belly's clearance: the trunk's underside above the lowest foot
+  let belly = 0;
+  if (legs.length) {
+    let under = Infinity;
+    for (const i of trunk) under = Math.min(under, p.nodes[i].pos[1] - p.nodes[i].radius * (p.nodes[i].scale?.[1] ?? 1));
+    const ground = Math.min(...legs.map((l) => p.nodes[l.nodes[l.nodes.length - 1]].pos[1] - p.nodes[l.nodes[l.nodes.length - 1]].radius));
+    belly = Number.isFinite(under) ? Math.max(0, under - ground) : 0;
+    for (const l of legs) l.sleepLast = solveSleepFold(p, l, ground + belly * SLEEP_DROP, belly);
   }
   const meanLeg = legs.length ? legs.reduce((t, l) => t + l.length, 0) / legs.length : 0;
   const archedFrac = legs.length ? legs.filter((l) => l.arched).length / legs.length : 0;
@@ -133,6 +213,7 @@ export function rigTemplate(p: Phenotype): RigTemplate {
     stride: legs.length ? Math.max(0.6, meanLeg * 1.6) : Math.max(0.8, trunk.length * 0.5),
     sprawl: legs.length >= 6 ? 1 : archedFrac > 0.5 ? 0.9 : 0.25,
     legless: legs.length === 0,
+    belly,
   };
   TEMPLATES.set(p, tmpl);
   return tmpl;
@@ -377,16 +458,24 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
       // swing fore-aft at the hip; flex the knee (shin back and up) through the swing phase. In flight
       // the legs trail back along the belly with the feet folded up under the tail.
       const swing = amp * moving * s * awake * (1 - 0.35 * stalk);
-      const tuck = inp.sleep * 0.9;
+      // ASLEEP the animal lies on its belly (the body is lowered by `belly`): a quadruped's forelegs
+      // reach forward along the ground (the sphinx), every other leg folds up tight beside the belly —
+      // thigh forward, shin folded back along it, foot tucked. (Standing with the head dropped and the
+      // feet lifted off the floor, a sleeper looked like it was about to fall over.)
+      const lie = inp.sleep;
+      const hipLie = L.fore ? LIE_HIP.fore : LIE_HIP.hind;
+      // (the last joint's fold is solved against the floor: the ankle, or a two-link leg's knee)
+      const kneeLie = L.nodes.length >= 4 ? (L.fore ? LIE_KNEE.fore : LIE_KNEE.hind) : L.sleepLast;
+      const ankleLie = L.nodes.length >= 4 ? L.sleepLast : 0;
       // a stalker creeps on flexed legs (hip forward, knee folded): the body rides low
-      setRot(hip, swing - tuck * 0.5 + 0.95 * fly - 0.28 * stalk, 0, 0);
+      setRot(hip, swing + hipLie * lie + 0.95 * fly - 0.28 * stalk, 0, 0);
       if (L.nodes.length > 1) {
         const knee = r.bones[L.nodes[1]];
-        setRot(knee, 0.6 * moving * swingPhase * awake + tuck * 1.1 + 0.7 * fly + 0.5 * stalk, 0, 0);
+        setRot(knee, 0.6 * moving * swingPhase * awake + kneeLie * lie + 0.7 * fly + 0.5 * stalk, 0, 0);
       }
       if (L.nodes.length > 2) {
         const ankle = r.bones[L.nodes[2]];
-        setRot(ankle, -0.35 * moving * swingPhase * awake - tuck * 0.5, 0, 0);
+        setRot(ankle, -0.35 * moving * swingPhase * awake + ankleLie * lie, 0, 0);
       }
     }
   }
