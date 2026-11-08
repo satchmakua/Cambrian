@@ -31,6 +31,7 @@ import { StudioEnvironment } from './StudioEnvironment';
 import { mouthVariant, eyeVariant } from './partStyles';
 import type { SkinQuality } from './smoothSkin';
 import { createRig, poseRig, SLEEP_DROP, type RigInstance } from './rig';
+import { juvenileGenome } from '../engine/juvenile';
 import { JawContext, type JawControl } from './mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from './flight';
 import { LidContext, type LidControl } from './eyelids';
@@ -478,8 +479,11 @@ function Inspector({ genome, phenotype, framing }: { genome: Genome; phenotype: 
   );
 }
 
+// dev/headless: ?juvenile=1 shows the bench creature with a youngster's proportions (the World's young)
+const DEV_JUVENILE = import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('juvenile') === '1';
+
 function Bench({ genome, skinMode, overlays, motion }: { genome: Genome; skinMode: SkinMode; overlays: Overlays; motion: Motion }) {
-  const phenotype = useMemo(() => grow(genome), [genome]);
+  const phenotype = useMemo(() => grow(DEV_JUVENILE ? juvenileGenome(genome) : genome), [genome]);
   const framing = useMemo(() => framingOf(phenotype), [phenotype]);
   return (
     <div className="bench">

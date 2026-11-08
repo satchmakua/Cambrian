@@ -305,7 +305,7 @@ function DevLook() {
     }
     const y = Math.max(0, heightAt(t, x, z));
     controls.target.set(x, y, z);
-    const k = q === 'nest' || q === 'carcass' ? 0.3 : 1;
+    const k = q === 'nest' ? 0.3 : q === 'carcass' ? 0.55 : 1;
     camera.position.set(x + 14 * k, y + 12 * k, z + 16 * k);
     controls.update();
   });

@@ -17,6 +17,7 @@ import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
 import { CreatureMesh, prebuildSkin, type Detail } from '../viewer/CreatureMesh';
 import { createRig, poseRig, SLEEP_DROP } from '../viewer/rig';
+import { juvenileGenome, JUVENILE_UNTIL } from '../engine/juvenile';
 import { JawContext, type JawControl } from '../viewer/mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from '../viewer/flight';
 import { LidContext, type LidControl } from '../viewer/eyelids';
@@ -144,7 +145,12 @@ function applyShadows(root: THREE.Object3D | null, detail: Detail): void {
 }
 
 export function Actor({ c, world, onPick, selected }: { c: Creature; world: World; onPick: (id: number) => void; selected: boolean }) {
-  const { phenotype, traits } = bodyOf(c.genome);
+  // the young wear a youngster's proportions — a big head, big eyes, short legs — until they are well
+  // on their way to grown (scaled-down adults at their mothers' heels read as miniatures, not young)
+  const youngNow = () => c.age < c.traits.maturity * JUVENILE_UNTIL;
+  const [young, setYoung] = useState(youngNow);
+  const { traits } = bodyOf(c.genome);
+  const { phenotype } = bodyOf(young ? juvenileGenome(c.genome) : c.genome);
   const place = rigOf(phenotype);
   const mode = useSkinMode(phenotype);
   const ref = useRef<THREE.Group>(null);
@@ -167,6 +173,7 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
   useFrame((_, dt) => {
     const g = ref.current;
     if (!g) return;
+    if (young && !youngNow()) setYoung(false); // grown up: the adult body takes over
     const k = Math.min(1, dt * 10);
     const P = pose.current;
     const px = P.x, pz = P.z, ph = P.h;
