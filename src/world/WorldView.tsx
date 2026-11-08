@@ -187,13 +187,16 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
       DEV_WARMED = true;
       for (let i = 0; i < warm * 20; i++) stepWorld(w);
       const f = q.get('follow');
-      // follow=aloft: the first creature on the wing; follow=courting / stalking: run on (up to ten
-      // minutes) until a pair is mid-display, or a hunter is creeping up on something
+      // follow=aloft: the first creature on the wing; follow=courting / stalking / nesting / young: run
+      // on (up to ten minutes) until a pair is mid-display, a hunter is creeping up on something, a
+      // clutch is laid, or a youngster is out with its parent
       const wanted: Record<string, (x: (typeof w.creatures)[number]) => boolean> = {
         aloft: (x) => x.alt > 1,
         courting: (x) => x.action === 'mate' && x.courtT > 1.2,
         stalking: (x) => x.action === 'hunt' && x.chaseT <= 0 && x.alt <= 0.1,
         nesting: (x) => w.eggs.some((e) => e.mother === x.id && !e.water),
+        // a youngster still in its baby proportions, on land, near a parent
+        young: (x) => x.age < x.traits.maturity * 0.4 && x.alt <= 0.1 && x.traits.habitat !== 'water' && w.creatures.some((m) => m.id === x.parent && m.alive),
       };
       const special = f ? wanted[f] : undefined;
       if (special && f !== 'aloft') for (let i = 0; i < 12000 && !w.creatures.some(special); i++) stepWorld(w);

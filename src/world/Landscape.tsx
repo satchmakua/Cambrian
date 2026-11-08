@@ -16,7 +16,7 @@ import { mulberry32 } from '../engine/rng';
 import { heightAt, biomeAt, moistureAt, normalAt, WATER_LEVEL, type Terrain } from '../sim/terrain';
 import type { World } from '../sim/world';
 import { yearLook } from './seasonLook';
-import { FOLIAGE_TIME, coniferGeometry, crownGeometry, foliageMaterial } from './foliage';
+import { FOLIAGE_TIME, coniferGeometry, crownGeometry, foliageMaterial, withSightCut } from './foliage';
 
 const RES = 200; // terrain grid quads per side
 
@@ -311,6 +311,9 @@ export function Bushes({ world }: { world: World }) {
   const leaf = useMemo(() => crownGeometry([[0, 0, 0, 1], [0.55, -0.15, 0.25, 0.7], [-0.5, -0.2, -0.2, 0.65], [0.1, 0.35, -0.35, 0.6]], 0.2, 2), []);
   const leafMat = useMemo(() => foliageMaterial(9, 0.5), []);
   useEffect(() => () => leafMat.dispose(), [leafMat]);
+  // (the berries go with their leaves along the follow camera's sightline — left behind, they floated)
+  const berryMat = useMemo(() => withSightCut(new THREE.MeshStandardMaterial({ color: 0xc8322e, roughness: 0.35, emissive: 0x3a0808 })), []);
+  useEffect(() => () => berryMat.dispose(), [berryMat]);
   const berry = useMemo(() => new THREE.SphereGeometry(0.16, 8, 6), []);
   useEffect(() => () => {
     leaf.dispose();
@@ -364,9 +367,7 @@ export function Bushes({ world }: { world: World }) {
   return (
     <>
       <instancedMesh ref={bushRef} args={[leaf, leafMat, plants.length]} castShadow receiveShadow />
-      <instancedMesh ref={fruitRef} args={[berry, undefined, plants.length * MAX_FRUIT_PER_BUSH]}>
-        <meshStandardMaterial color={0xc8322e} roughness={0.35} emissive={0x3a0808} />
-      </instancedMesh>
+      <instancedMesh ref={fruitRef} args={[berry, berryMat, plants.length * MAX_FRUIT_PER_BUSH]} />
     </>
   );
 }
@@ -422,7 +423,16 @@ export function Decor({ terrain, world }: { terrain: Terrain; world?: World }) {
     rock: new THREE.DodecahedronGeometry(1, 0),
   }), []);
   useEffect(() => () => Object.values(geos).forEach((g) => g.dispose()), [geos]);
-  const mats = useMemo(() => ({ crown: foliageMaterial(7, 1), pine: foliageMaterial(11, 0.6) }), []);
+  // (trunks are seen through along the follow camera's sightline, like the leaves)
+  const mats = useMemo(
+    () => ({
+      crown: foliageMaterial(7, 1),
+      pine: foliageMaterial(11, 0.6),
+      trunk: withSightCut(new THREE.MeshStandardMaterial({ color: 0x4a3626, roughness: 0.9 })),
+      pineTrunk: withSightCut(new THREE.MeshStandardMaterial({ color: 0x3e2c20, roughness: 0.9 })),
+    }),
+    [],
+  );
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
   useEffect(() => {
     const o = new THREE.Object3D();
@@ -506,13 +516,9 @@ export function Decor({ terrain, world }: { terrain: Terrain; world?: World }) {
 
   return (
     <>
-      <instancedMesh ref={trunkRef} args={[geos.trunk, undefined, trees.length]} castShadow>
-        <meshStandardMaterial color={0x4a3626} roughness={0.9} />
-      </instancedMesh>
+      <instancedMesh ref={trunkRef} args={[geos.trunk, mats.trunk, trees.length]} castShadow />
       <instancedMesh ref={crownRef} args={[geos.crown, mats.crown, trees.length]} castShadow receiveShadow />
-      <instancedMesh ref={pineTrunkRef} args={[geos.trunk, undefined, pines.length]} castShadow>
-        <meshStandardMaterial color={0x3e2c20} roughness={0.9} />
-      </instancedMesh>
+      <instancedMesh ref={pineTrunkRef} args={[geos.trunk, mats.pineTrunk, pines.length]} castShadow />
       <instancedMesh ref={pineRef} args={[geos.pine, mats.pine, pines.length]} castShadow receiveShadow />
       <instancedMesh ref={rockRef} args={[geos.rock, undefined, rocks.length]} castShadow receiveShadow>
         <meshStandardMaterial color={0x6f6a62} roughness={0.92} flatShading />

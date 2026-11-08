@@ -561,10 +561,28 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   clumped fur; the followed World creature in the fine skin. **Tests:** `wings.test.ts › plumage
   sheets`, `beak.test.ts`, `bodyplan.test.ts › frog / dragon`, `jawed.test.ts`.
 
+- [x] **M57 — Bodies at rest and in their prime.** Apes wear bare faces (a skin mask the coat and
+  the fur shells give way to, a matte skin nose, brown eyes); sleepers lie down on their bellies with
+  their legs folded (the last joint's fold solved against the floor, so a deer's long cannons don't
+  drive through it); carcasses go limp with their eyes shut; the young wear a youngster's
+  proportions (big head and eyes, short legs, stub tail) until well on to maturity. Dev:
+  `?motion=sleep|dead`, `?juvenile=1`, `?follow=young`, `?look=carcass`. **Tests:**
+  `tests/viewer/face.test.ts`, `tests/engine/juvenile.test.ts`, `rig.test.ts › asleep / carcass`.
+
+- [x] **M58 — Gaits that grip.** A walk takes shorter steps than a run; quadrupeds break into a
+  rotary gallop with a flexing back; a steady stance stroke, a per-leg swing sized to its reach and
+  the trunk's sway undone at the hips keep a planted foot planted (slip from ~35% of the body's speed
+  to 1–8%); feeders solve their neck bend and chest dip so the mouth reaches the grass with every
+  foot planted. **Tests:** `rig.test.ts › walk / gallop / feeder / planted foot`.
+
+- [x] **M59 — Watching them.** The follow camera sees through leaves, trunks and berries along its
+  sightline (a dithered tunnel that widens toward the creature); heads turn to what a creature is
+  dealing with — prey, predator, mate, attacker. **Tests:** `tests/world/foliage.test.ts`,
+  `rig.test.ts › look`.
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.
-- [ ] **Feet that grip the ground.** Foot planting / IK so strides don't slide.
 - [ ] **A lineage film.** A wild species' body changes over the generations, as a strip of portraits.
 
 ---

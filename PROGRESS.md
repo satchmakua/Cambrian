@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry, M53–M56). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry, M57–M59). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -44,6 +44,27 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic; **+ gait playback** |
 
 ---
+
+## Part 3h — Bodies at rest, gaits that grip, watching them (M57–M59) · 2026-11-08
+
+- **Measure, then fix.** Each motion change came with a number before it had a picture: the planted
+  foot's slip as a fraction of the body's speed (35% → 1–8%), how far a feeding mouth misses the
+  grass (a deer's: 0.61 of its shoulder height → reaching it), how far folded legs sink through the
+  floor. Stills from the Studio's frozen gait phase (`?gaitphase=`) and `?motion=` checked the look.
+- **Solve, don't tune.** One fixed leg fold for sleeping, one fixed neck pitch for feeding, one
+  swing angle for every leg each read fine on a cat and failed on a deer. The rig template now
+  solves them per body. Every standing pose is a set of pitches about the body's X axis, so the
+  solves are planar forward kinematics mirroring the bone hierarchy (`planarFK`), walking only the
+  chains that move: ~2 ms per new body (a full-skeleton search first cost ~70 ms — a frame hitch for
+  every newborn mutant).
+- **The young are a viewer transform.** `juvenileGenome` re-proportions a genome (pure, bounded,
+  cached); the World draws it until 60% of maturity. The sim never sees it — saves and replays are
+  untouched.
+- **Seeing through leaves** is a shared GLSL helper and one uniform: leaves, trunks and berries
+  discard fragments in a tunnel round the camera→creature sightline with an ordered (Bayer) dither.
+  A random per-pixel dither left a speckle of stray leaves; berries left out floated in the hole.
+- **The screenshot harness** now opens a fresh page per shot: a page left animating (a motion
+  preview) kept the main thread so busy that navigating it on timed out.
 
 ## Part 3g — Nests, reviews and two visual audits (M53–M56) · 2026-10-31
 

@@ -35,20 +35,23 @@ const wait = Number(process.env.WAIT ?? 2500);
 const browser = await chromium.launch({
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 });
-const page = await browser.newPage({ viewport: { width: w, height: h } });
 const errors = [];
-page.on('console', (m) => {
-  if (m.type() === 'error') errors.push(m.text());
-});
-page.on('pageerror', (e) => errors.push(String(e)));
 
+// A fresh page per shot: a page left animating (a motion preview, a running World) keeps the main
+// thread so busy that navigating it on to the next query timed out.
 for (const q of queries) {
+  const page = await browser.newPage({ viewport: { width: w, height: h } });
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  page.on('pageerror', (e) => errors.push(String(e)));
   const url = base + (base.includes('?') ? '&' : '?') + q;
-  await page.goto(url, { waitUntil: 'load' });
+  await page.goto(url, { waitUntil: 'load', timeout: 120000 });
   await page.waitForTimeout(wait);
   const name = q.replace(/[^a-z0-9=_-]+/gi, '_').slice(0, 120) + '.png';
   await page.screenshot({ path: path.join(outdir, name), timeout: 120000 });
   console.log('shot', name);
+  await page.close();
 }
 if (errors.length) console.log('console errors:\n' + errors.slice(0, 10).join('\n'));
 await browser.close();

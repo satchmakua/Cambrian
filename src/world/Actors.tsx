@@ -16,7 +16,8 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
 import { CreatureMesh, prebuildSkin, type Detail } from '../viewer/CreatureMesh';
-import { createRig, poseRig } from '../viewer/rig';
+import { createRig, LOOK_MAX, poseDead, poseRig, SLEEP_DROP } from '../viewer/rig';
+import { juvenileGenome, JUVENILE_UNTIL } from '../engine/juvenile';
 import { JawContext, type JawControl } from '../viewer/mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from '../viewer/flight';
 import { LidContext, type LidControl } from '../viewer/eyelids';
@@ -91,6 +92,17 @@ function rigOf(p: Phenotype): Rig {
   return r;
 }
 
+/** What a creature is paying attention to, if anything: the creature it hunts, flees, courts, or that
+ *  just bit it (for a moment). Returns that creature's position (y at its mid-height). */
+function lookTarget(w: World, c: Creature): { x: number; y: number; z: number } | null {
+  let id = -1;
+  if (c.action === 'hunt' || c.action === 'flee' || c.action === 'mate') id = c.target;
+  else if (c.attacker >= 0 && w.time - c.attackedAt < 1.5) id = c.attacker;
+  if (id < 0) return null;
+  const o = w.creatures.find((x) => x.id === id && x.alive);
+  return o ? { x: o.x, y: o.y + o.traits.height * 0.5 * growthOf(o), z: o.z } : null;
+}
+
 function angleLerp(a: number, b: number, t: number): number {
   const d = Math.atan2(Math.sin(b - a), Math.cos(b - a));
   return a + d * t;
@@ -144,7 +156,12 @@ function applyShadows(root: THREE.Object3D | null, detail: Detail): void {
 }
 
 export function Actor({ c, world, onPick, selected }: { c: Creature; world: World; onPick: (id: number) => void; selected: boolean }) {
-  const { phenotype, traits } = bodyOf(c.genome);
+  // the young wear a youngster's proportions — a big head, big eyes, short legs — until they are well
+  // on their way to grown (scaled-down adults at their mothers' heels read as miniatures, not young)
+  const youngNow = () => c.age < c.traits.maturity * JUVENILE_UNTIL;
+  const [young, setYoung] = useState(youngNow);
+  const { traits } = bodyOf(c.genome);
+  const { phenotype } = bodyOf(young ? juvenileGenome(c.genome) : c.genome);
   const place = rigOf(phenotype);
   const mode = useSkinMode(phenotype);
   const ref = useRef<THREE.Group>(null);
@@ -154,7 +171,7 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
   const voice = useMemo(() => voiceOf(traits), [traits]);
   const heard = useRef({ action: c.action, bitten: c.attackedAt, last: -1e9, born: c.age < 2 });
   const shown = useRef<{ e: Emote | null; pop: number }>({ e: null, pop: 0 });
-  const pose = useRef({ x: c.x, z: c.z, h: c.heading, sleep: 0, eat: 0, bob: Math.random() * 10, turn: 0, alt: c.alt, fly: 0, beat: Math.random() * 6, climb: 0, display: 0, stalk: 0 });
+  const pose = useRef({ x: c.x, z: c.z, h: c.heading, sleep: 0, eat: 0, bob: Math.random() * 10, turn: 0, alt: c.alt, fly: 0, beat: Math.random() * 6, climb: 0, display: 0, stalk: 0, lookYaw: 0, lookPitch: 0 });
   const swimmer = traits.habitat === 'water' || traits.locomotion === 'swim' || traits.locomotion === 'drift';
   // each actor animates its own skeleton (bones can't be shared between skinned meshes)
   const rig = useMemo(() => createRig(phenotype), [phenotype]);
@@ -167,6 +184,7 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
   useFrame((_, dt) => {
     const g = ref.current;
     if (!g) return;
+    if (young && !youngNow()) setYoung(false); // grown up: the adult body takes over
     const k = Math.min(1, dt * 10);
     const P = pose.current;
     const px = P.x, pz = P.z, ph = P.h;
@@ -188,6 +206,21 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
     P.display += ((courting ? 1 : 0) - P.display) * Math.min(1, dt * 3);
     // stalking: hunting, but not yet charging
     P.stalk += ((c.action === 'hunt' && c.chaseT <= 0 && c.alt <= AIRBORNE ? 1 : 0) - P.stalk) * Math.min(1, dt * 4);
+    // attention: the head turns to what it is dealing with — a hunter fixes on its prey, prey watches
+    // the predator (it glances back over its shoulder as it runs), a suitor faces its mate, and a
+    // bitten animal rounds on its attacker. Otherwise it looks where it is going.
+    const seen = lookTarget(world, c);
+    let wantYaw = 0, wantPitch = 0;
+    if (seen && c.alt <= AIRBORNE) {
+      const dx = seen.x - P.x, dz = seen.z - P.z;
+      const yaw = Math.atan2(Math.sin(Math.atan2(dx, dz) - P.h), Math.cos(Math.atan2(dx, dz) - P.h));
+      // (what is behind it is looked at only as far as a neck turns; a runner glances, it can't stare)
+      wantYaw = Math.max(-LOOK_MAX, Math.min(LOOK_MAX, yaw)) * (c.action === 'flee' ? 0.6 : 1);
+      const dist = Math.max(0.5, Math.hypot(dx, dz));
+      wantPitch = Math.max(-0.4, Math.min(0.4, -Math.atan2(seen.y - (c.y + c.traits.height * 0.7), dist)));
+    }
+    P.lookYaw += (wantYaw - P.lookYaw) * Math.min(1, dt * 5);
+    P.lookPitch += (wantPitch - P.lookPitch) * Math.min(1, dt * 5);
     if (flight) {
       // (a displaying bird half-opens its wings and shivers them; the flight beat takes over aloft)
       flight.spread = Math.max(P.fly, 0.55 * P.display * (1 - P.fly));
@@ -215,6 +248,7 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
         idle: Math.max(0, 1 - vis / Math.max(0.3, traits.speed * 0.3)) * (1 - P.eat) * (1 - P.sleep) * (1 - P.fly) * (1 - P.display),
         display: P.display,
         stalk: P.stalk,
+        look: [P.lookYaw, P.lookPitch],
       });
     }
     const ground = heightAt(world.terrain, P.x, P.z);
@@ -228,7 +262,7 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
       // a walker out of its depth floats, back above the surface, paddling
       y = Math.max(y, WATER_LEVEL - place.height * s * 0.4);
     }
-    y -= P.sleep * place.height * s * 0.28; // settle low to sleep
+    y -= P.sleep * rig.template.belly * s * SLEEP_DROP; // lie down on its belly to sleep
     y -= P.stalk * place.height * s * 0.12; // crouch to stalk
     // aloft: ride above the ground or the water, nose up into a climb, bank into turns
     if (P.alt > 0.01) y = Math.max(y, Math.max(ground, WATER_LEVEL) + place.lift * s * (1 - P.fly * 0.5)) + P.alt;
@@ -334,6 +368,13 @@ export function Carcass({ k, world }: { k: Corpse; world: World }) {
   const rig = rigOf(phenotype);
   const ref = useRef<THREE.Group>(null);
   const side = useMemo(() => (k.id % 2 === 0 ? 1 : -1), [k.id]);
+  // the body gone limp, eyes shut (in its standing pose, knocked over, it read as a statue)
+  const limp = useMemo(() => {
+    const r = createRig(phenotype);
+    poseDead(r);
+    return r;
+  }, [phenotype]);
+  const lids = useMemo<LidControl>(() => ({ shut: 1, blink: false }), []);
   useFrame(() => {
     const g = ref.current;
     if (!g) return;
@@ -349,7 +390,9 @@ export function Carcass({ k, world }: { k: Corpse; world: World }) {
   return (
     <group ref={ref}>
       <group position={[-rig.center[0], 0, -rig.center[2]]}>
-        <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" detail="none" carved={false} />
+        <LidContext.Provider value={lids}>
+          <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" rig={limp} detail="none" carved={false} />
+        </LidContext.Provider>
       </group>
     </group>
   );
