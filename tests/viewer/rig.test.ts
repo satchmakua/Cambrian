@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { rigTemplate, createRig, ensureSkinWeights, poseRig, gaitAmplitude } from '../../src/viewer/rig';
+import { rigTemplate, createRig, ensureSkinWeights, poseRig, poseDead, gaitAmplitude } from '../../src/viewer/rig';
 import { buildSmoothGeometry } from '../../src/viewer/smoothSkin';
 
 const p = (kind: string, seed = 11) => grow(genomeOfMorphotype(seed, kind));
@@ -145,6 +145,19 @@ describe('animation rig', () => {
     // neither spiders nor birds gallop
     expect(rigTemplate(p('arachnid')).gallops).toBe(false);
     expect(rigTemplate(p('bird')).gallops).toBe(false);
+  });
+
+  it('a carcass goes limp: legs half-flexed, the neck sagging — not the standing pose knocked over', () => {
+    const ph = p('canid');
+    const r = createRig(ph);
+    poseDead(r);
+    const pitch = (i: number) => new THREE.Euler().setFromQuaternion(r.bones[i].quaternion).x;
+    for (const L of r.template.legs) expect(pitch(L.nodes[1]), 'knee').toBeGreaterThan(0.2);
+    expect(pitch(r.template.neck[0])).toBeGreaterThan(0.3);
+    // and it's a pose, not an animation: posing again changes nothing
+    const before = r.bones.map((b) => b.quaternion.clone());
+    poseDead(r);
+    r.bones.forEach((b, i) => expect(b.quaternion.angleTo(before[i])).toBeLessThan(1e-6));
   });
 });
 

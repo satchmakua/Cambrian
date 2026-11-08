@@ -16,7 +16,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
 import { CreatureMesh, prebuildSkin, type Detail } from '../viewer/CreatureMesh';
-import { createRig, poseRig, SLEEP_DROP } from '../viewer/rig';
+import { createRig, poseDead, poseRig, SLEEP_DROP } from '../viewer/rig';
 import { juvenileGenome, JUVENILE_UNTIL } from '../engine/juvenile';
 import { JawContext, type JawControl } from '../viewer/mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from '../viewer/flight';
@@ -341,6 +341,13 @@ export function Carcass({ k, world }: { k: Corpse; world: World }) {
   const rig = rigOf(phenotype);
   const ref = useRef<THREE.Group>(null);
   const side = useMemo(() => (k.id % 2 === 0 ? 1 : -1), [k.id]);
+  // the body gone limp, eyes shut (in its standing pose, knocked over, it read as a statue)
+  const limp = useMemo(() => {
+    const r = createRig(phenotype);
+    poseDead(r);
+    return r;
+  }, [phenotype]);
+  const lids = useMemo<LidControl>(() => ({ shut: 1, blink: false }), []);
   useFrame(() => {
     const g = ref.current;
     if (!g) return;
@@ -356,7 +363,9 @@ export function Carcass({ k, world }: { k: Corpse; world: World }) {
   return (
     <group ref={ref}>
       <group position={[-rig.center[0], 0, -rig.center[2]]}>
-        <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" detail="none" carved={false} />
+        <LidContext.Provider value={lids}>
+          <CreatureMesh phenotype={phenotype} skinMode={mode} quality="low" rig={limp} detail="none" carved={false} />
+        </LidContext.Provider>
       </group>
     </group>
   );

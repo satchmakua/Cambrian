@@ -30,7 +30,7 @@ import { SkeletonOverlay, BONE_COLORS } from './SkeletonOverlay';
 import { StudioEnvironment } from './StudioEnvironment';
 import { mouthVariant, eyeVariant } from './partStyles';
 import type { SkinQuality } from './smoothSkin';
-import { createRig, poseRig, SLEEP_DROP, type RigInstance } from './rig';
+import { createRig, poseDead, poseRig, SLEEP_DROP, type RigInstance } from './rig';
 import { juvenileGenome } from '../engine/juvenile';
 import { JawContext, type JawControl } from './mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from './flight';
@@ -38,7 +38,7 @@ import { LidContext, type LidControl } from './eyelids';
 import { traitsOf } from '../sim/traits';
 
 /** The Studio's motion preview: the World's gait, run in place so a body's movement can be judged. */
-export type Motion = 'still' | 'walk' | 'run' | 'eat' | 'sleep' | 'fly';
+export type Motion = 'still' | 'walk' | 'run' | 'eat' | 'sleep' | 'fly' | 'dead';
 
 const DEV_JAW: number | null =
   import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('jawopen')
@@ -61,6 +61,12 @@ function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl, flight
   const frozen = devGaitPhase();
   useFrame((_, dt) => {
     if (!rig) return;
+    if (motion === 'dead') {
+      // (dev: the World's carcass pose, upright so the limp legs and sagging neck can be judged)
+      poseDead(rig);
+      invalidate();
+      return;
+    }
     const speed = motion === 'walk' ? cruise * 0.55 : motion === 'run' ? cruise * 1.7 : 0;
     if (frozen !== null) rig.phase = frozen; // a zero-dt pose holds the frozen phase at full stride
     jaw.open = motion === 'eat' ? 0.3 + 0.45 * Math.max(0, Math.sin(rig.t * 9)) : motion === 'run' ? 0.7 : 0;
@@ -145,7 +151,7 @@ export function SpecimenContent({
   const jaw = useMemo<JawControl>(() => ({ open: 1 }), []);
   const flight = useMemo<FlightControl>(() => ({ spread: 0, flap: 0 }), []);
   const lids = useMemo<LidControl>(() => ({ shut: 0 }), []);
-  lids.shut = motion === 'sleep' ? 1 : 0;
+  lids.shut = motion === 'sleep' || motion === 'dead' ? 1 : 0;
   const rig = useMotion(phenotype, skinMode === 'capsules' ? 'still' : motion, jaw, flight);
   return (
     <>
@@ -589,7 +595,7 @@ export function Studio({
   const [bestiarySeed, setBestiarySeed] = useState(() => (import.meta.env.DEV && typeof location !== 'undefined' ? Number(new URLSearchParams(location.search).get('bseed') ?? 1) : 1));
   const [motion, setMotion] = useState<Motion>(() => {
     const m = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('motion') : null;
-    return m === 'walk' || m === 'run' || m === 'eat' || m === 'sleep' || m === 'fly' ? m : 'still';
+    return m === 'walk' || m === 'run' || m === 'eat' || m === 'sleep' || m === 'fly' || m === 'dead' ? m : 'still';
   });
   const winged = useMemo(() => traitsOf(grow(genome)).winged, [genome]);
   return (

@@ -387,6 +387,24 @@ export function gaitAmplitude(speed: number, cruise: number): number {
   return 0.16 + (GAIT_AMP_MAX - 0.16) * f;
 }
 
+/**
+ * A carcass's pose: the body gone limp. The legs hang half-flexed (a dead animal's legs neither stand
+ * nor fold neatly), the neck sags, the trunk bends a little along its length and the tail curls. A
+ * body toppled over in its standing pose read as a statue knocked off its plinth, not a dead animal.
+ */
+export function poseDead(r: RigInstance): void {
+  const T = r.template;
+  for (const b of r.bones) b.quaternion.identity();
+  const nT = T.trunk.length;
+  for (let k = 1; k < nT; k++) setRot(r.bones[T.trunk[k]], 0, 0.07, 0);
+  T.neck.forEach((i, k) => setRot(r.bones[i], k === 0 ? 0.45 : 0.15, 0.12, 0));
+  for (const L of T.legs) {
+    const fold = L.fore ? [0.2, 0.35, -0.25] : [0.3, 0.55, -0.35];
+    L.nodes.slice(0, 3).forEach((i, j) => setRot(r.bones[i], fold[j] * (L.arched ? 0.4 : 1), 0, 0));
+  }
+  for (const chain of T.tails) chain.forEach((i) => setRot(r.bones[i], 0.08, 0.18, 0));
+}
+
 export function poseRig(r: RigInstance, inp: PoseInput): void {
   const T = r.template;
   r.t += inp.dt;
