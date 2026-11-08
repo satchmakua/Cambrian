@@ -37,6 +37,12 @@ export interface LegChain {
   offset: number; // gait phase offset (0..1) — the walk and the trot
   gallop: number; // …and at a run (a quadruped's gallop: the forelegs together, then the hind)
   length: number; // hip→foot reach (bu)
+  /** the index in the trunk chain of the node this leg's hip hangs from (−1: not the trunk) */
+  trunkAt: number;
+  /** an arched (sprawled) leg sweeps about the vertical at its hip, so its foot's fore-aft travel is
+   *  levered by the foot's SIDEWAYS offset from the hip (a leg fanned forward or back moves its foot
+   *  less per radian) */
+  reachH: number;
   /** asleep: the fold of the leg's last joint (the ankle, or a two-link leg's knee) that sets its foot
    *  on the floor beside the lying body */
   sleepLast: number;
@@ -291,6 +297,7 @@ export function rigTemplate(p: Phenotype): RigTemplate {
     else neck.push(i);
   });
   trunk.sort((a, b) => p.nodes[a].pos[2] - p.nodes[b].pos[2]);
+  const trunkIndex = new Map(trunk.map((i, k) => [i, k]));
   neck.sort((a, b) => (p.nodes[a].segment ?? 0) - (p.nodes[b].segment ?? 0) || p.nodes[a].pos[2] - p.nodes[b].pos[2]);
 
   // limb chains: walk each terminal back to its first non-same-role ancestor
@@ -323,6 +330,8 @@ export function rigTemplate(p: Phenotype): RigTemplate {
         offset: 0,
         gallop: 0,
         length: Math.hypot(foot.pos[0] - hip.pos[0], foot.pos[1] - hip.pos[1], foot.pos[2] - hip.pos[2]),
+        reachH: Math.max(Math.abs(foot.pos[0] - hip.pos[0]), 0.4 * Math.hypot(foot.pos[0] - hip.pos[0], foot.pos[2] - hip.pos[2])),
+        trunkAt: -1,
         sleepLast: 0,
         graze: [0, 0, 0],
       });
@@ -330,6 +339,7 @@ export function rigTemplate(p: Phenotype): RigTemplate {
     else if (r === 'arm') arms.push(chainOf(i));
     else if (r === 'fin' || r === 'tentacle' || (r === 'other' && nd.part?.kind === 'antenna')) others.push(chainOf(i));
   });
+  for (const l of legs) l.trunkAt = trunkIndex.get(parent[l.nodes[0]]) ?? -1;
   // pairs front → back by hip z; the trot/tripod rule sets each leg's phase
   const zs = [...new Set(legs.map((l) => Math.round(p.nodes[l.nodes[0]].pos[2] * 20) / 20))].sort((a, b) => b - a);
   for (const l of legs) {
@@ -385,6 +395,8 @@ export interface RigInstance {
   rest: THREE.Vector3[]; // bone rest positions (local)
   phase: number;
   t: number;
+  /** the trunk's accumulated yaw at each trunk node, this pose (legs undo it — see poseRig) */
+  trunkYaw: number[];
   /** the tail's wag phase (accumulated, so its frequency can ramp without the tail jumping) */
   wag: number;
 }
@@ -408,7 +420,7 @@ export function createRig(p: Phenotype): RigInstance {
   });
   root.updateMatrixWorld(true);
   const skeleton = new THREE.Skeleton([root, ...bones]);
-  return { template, bones, root, skeleton, rest, phase: 0, t: 0, wag: 0 };
+  return { template, bones, root, skeleton, rest, phase: 0, t: 0, wag: 0, trunkYaw: [] };
 }
 
 // --- skin weights --------------------------------------------------------------------------------
@@ -521,6 +533,13 @@ function setRot(b: THREE.Bone, ax: number, ay: number, az: number): void {
   if (az) b.quaternion.multiply(q2.setFromAxisAngle(Z, az));
 }
 
+/** A leg's fore-aft stroke through the gait cycle, −1 … 1. The stance half (cos(ph) > 0) runs a
+ *  straight line from −1 to 1; the swing half eases back from 1 to −1. */
+export function strokeOf(ph: number): number {
+  const t = ((((ph + Math.PI / 2) / (Math.PI * 2)) % 1) + 1) % 1; // 0 … ½ stance, ½ … 1 swing
+  return t < 0.5 ? -1 + 4 * t : Math.cos(((t - 0.5) / 0.5) * Math.PI);
+}
+
 function smooth01(x: number): number {
   const t = x < 0 ? 0 : x > 1 ? 1 : x;
   return t * t * (3 - 2 * t);
@@ -581,6 +600,10 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
   // trunk: lateral undulation (sprawlers sway, slitherers/swimmers send a wave down the body)
   const nT = T.trunk.length;
   const wave = T.legless || inp.swim;
+  // the trunk's accumulated yaw at each of its nodes: the legs undo it at their hips, so a swaying
+  // sprawler's planted feet hold the ground while the body wiggles between them
+  if (r.trunkYaw.length !== nT) r.trunkYaw = new Array(nT).fill(0);
+  r.trunkYaw[0] = 0;
   for (let k = 1; k < nT; k++) {
     const u = k / Math.max(1, nT - 1);
     let yaw = 0;
@@ -595,6 +618,7 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
     // joints, so the back curves rather than kinking at one; the legs fold to keep their feet planted)
     const dip = (T.grazeDip * inp.eat * awake) / Math.max(1, nT - 1);
     setRot(r.bones[T.trunk[k]], flex * awake + dip, yaw * awake, 0);
+    r.trunkYaw[k] = r.trunkYaw[k - 1] + yaw * awake;
   }
   // idle: a slow look around (two incommensurate waves, so the glances never settle into a loop),
   // a breath that lifts the chest, and a lazy weight shift
@@ -626,7 +650,10 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
   // legs
   for (const L of T.legs) {
     const ph = P + (L.offset + (L.gallop - L.offset) * gal) * Math.PI * 2;
-    const s = Math.sin(ph);
+    // the stroke, −1 … 1: a STEADY stance (the planted foot slides back at a constant rate, keeping
+    // pace with the ground — on a sine it sped up and slowed down under the body, and skated) and a
+    // quicker eased swing forward through the air
+    const s = strokeOf(ph);
     const c = Math.cos(ph);
     const hip = r.bones[L.nodes[0]];
     // Convention: a positive hip angle carries the foot BACKWARD (the stance stroke, while it is
@@ -636,14 +663,22 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
     if (L.arched) {
       // sweep fore-aft about the vertical (yaw ×side so both flanks agree on "backward"), and lift on
       // the forward stroke by rolling the leg up about the body axis (+Z roll raises the +X side)
-      const sweep = 0.32 * moving * s * L.side;
+      // (sized like a column leg's swing: the foot travels half a stride while it is down)
+      const sweepAmp = moving > 0 ? Math.min(0.6, Math.asin(Math.min(0.95, stride / (4 * Math.max(L.reachH, 1e-3))))) : 0.32;
+      const sweep = sweepAmp * moving * s * L.side;
       const lift = 0.3 * moving * swingPhase;
       const fold = 0.45 * inp.sleep; // feet draw up under a resting body
-      setRot(hip, 0, sweep * awake, L.side * (lift * awake + fold));
+      const unsway = L.trunkAt >= 0 ? -r.trunkYaw[L.trunkAt] : 0;
+      setRot(hip, 0, sweep * awake + unsway, L.side * (lift * awake + fold));
     } else {
       // swing fore-aft at the hip; flex the knee (shin back and up) through the swing phase. In flight
       // the legs trail back along the belly with the feet folded up under the tail.
-      const swing = amp * moving * s * awake * (1 - 0.35 * stalk);
+      // each leg's swing is sized so its foot travels exactly half a stride while it is down: a long
+      // leg sweeps a smaller angle than a short one for the same step (one angle for every leg slid
+      // the long ones' feet forward and dragged the short ones')
+      const reach = Math.min(0.95, stride / (4 * Math.max(L.length, 1e-3)));
+      const legAmp = moving > 0 ? Math.asin(reach) : amp;
+      const swing = legAmp * moving * s * awake * (1 - 0.35 * stalk);
       // ASLEEP the animal lies on its belly (the body is lowered by `belly`): a quadruped's forelegs
       // reach forward along the ground (the sphinx), every other leg folds up tight beside the belly —
       // thigh forward, shin folded back along it, foot tucked. (Standing with the head dropped and the
@@ -656,7 +691,8 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
       // a stalker creeps on flexed legs (hip forward, knee folded): the body rides low; a feeder
       // folds its legs (as solved) to let its chest dip with its feet planted
       const eat = inp.eat * awake;
-      setRot(hip, swing + hipLie * lie + 0.95 * fly - 0.28 * stalk + L.graze[0] * eat, 0, 0);
+      const unsway = L.trunkAt >= 0 ? -r.trunkYaw[L.trunkAt] : 0;
+      setRot(hip, swing + hipLie * lie + 0.95 * fly - 0.28 * stalk + L.graze[0] * eat, unsway, 0);
       if (L.nodes.length > 1) {
         const knee = r.bones[L.nodes[1]];
         setRot(knee, 0.6 * moving * swingPhase * awake + kneeLie * lie + 0.7 * fly + 0.5 * stalk + L.graze[1] * eat, 0, 0);

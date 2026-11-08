@@ -187,5 +187,43 @@ describe('animation rig', () => {
     // most reach the grass outright
     expect(misses.filter((m) => m < 0.15).length / misses.length).toBeGreaterThan(0.6);
   });
+
+  it('a planted foot holds the ground: it slides back under the body exactly as fast as the body moves', () => {
+    // (on a sine stroke, one swing angle for every leg, and with the trunk's sway carrying the hips
+    // round, planted feet skated at ~35% of the body's speed)
+    const slipOf = (id: string, seed: number, speed: number, cruise: number) => {
+      const ph = p(id, seed);
+      const r = createRig(ph);
+      const dt = 1 / 120;
+      let slip = 0;
+      let n = 0;
+      for (const leg of r.template.legs) {
+        const f = leg.nodes[leg.nodes.length - 1];
+        let prevZ = NaN;
+        let prevDown = false;
+        r.phase = 0;
+        for (let i = 0; i < 360; i++) {
+          poseRig(r, { dt, speed, cruise, sleep: 0, eat: 0, swim: false, turn: 0 });
+          const z = footWorld(r, f).z + speed * dt * i; // world z: the body has moved on speed·t
+          const down = Math.cos((r.phase + leg.offset) * Math.PI * 2) > 0.3; // well inside its stance
+          if (down && prevDown) {
+            slip += Math.abs(z - prevZ) / dt;
+            n++;
+          }
+          prevZ = z;
+          prevDown = down;
+        }
+      }
+      return slip / n / speed;
+    };
+    // column legs (mammals, birds) hold fast; a sprawler's sweep about the vertical a little less so
+    for (const id of ['ungulate', 'canid', 'felid', 'ursid', 'bird']) {
+      for (const seed of [1, 2]) {
+        expect(slipOf(id, seed, 1.6, 3), `${id} #${seed} walk`).toBeLessThan(0.12);
+        expect(slipOf(id, seed, 3, 3), `${id} #${seed} trot`).toBeLessThan(0.12);
+      }
+    }
+    for (const id of ['lizard', 'crocodilian', 'arachnid', 'crab']) expect(slipOf(id, 1, 2, 3), id).toBeLessThan(0.3);
+  });
 });
 
