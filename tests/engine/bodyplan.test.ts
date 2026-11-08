@@ -203,6 +203,29 @@ describe('body plans', () => {
     }
   });
 
+  it('a crab is wide and flat, its claws held out in front and four pairs of legs splayed to its sides', () => {
+    // (a round domed body on three pairs of stubby legs read as a beetle)
+    for (let seed = 1; seed <= 8; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'crab'));
+      const body = trunkOf(p)[0];
+      const s = body.scale ?? [1, 1, 1];
+      expect(s[0] / s[2], `#${seed} wider than long`).toBeGreaterThan(1.25);
+      expect(s[1] / s[0], `#${seed} flat`).toBeLessThan(0.55);
+      const halfW = body.radius * s[0];
+      const claws = p.nodes.filter((n) => n.terminal === 'pincer');
+      expect(claws.length, `#${seed} claws`).toBe(2);
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      const hips = p.nodes.filter((n, i) => n.part?.kind === 'leg' && p.nodes[parent.get(i)!].kind === 'spine');
+      for (const c of claws) {
+        expect(c.pos[2], `#${seed} claw ahead`).toBeGreaterThan(body.pos[2] + body.radius * s[2] * 0.6);
+        expect(c.radius, `#${seed} a big claw`).toBeGreaterThan(1.8 * Math.max(...hips.map((h) => h.radius)));
+      }
+      const feet = p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg');
+      expect(feet.length, `#${seed} legs`).toBe(8);
+      for (const f of feet) expect(Math.abs(f.pos[0]), `#${seed} splayed`).toBeGreaterThan(halfW * 1.15);
+    }
+  });
+
   it('a crab keeps its legs on its one body: no waist pinched behind its head', () => {
     for (let seed = 1; seed <= 8; seed++) {
       const p = grow(genomeOfMorphotype(seed, 'crab'));

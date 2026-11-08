@@ -65,6 +65,7 @@ export function grow(genome: Genome): Phenotype {
   const atCap = () => nodes.length >= NODE_MAX;
   let legPairsHere = 0; // leg pairs on the segment currently growing (hexapods+ get arthropod legs)
   let legGenesHere: AppendageGene[] = []; // …and their genes (a jumper's hind legs outreach its fore)
+  let tagmaHere = false; // …and whether that segment is an arthropod's thorax (see isTagma)
 
   growSegment(dev.body, [0, 0, 0], [0, 0, 0, 1], 0, -1, null);
 
@@ -176,6 +177,7 @@ export function grow(genome: Genome): Phenotype {
     const haunched = new Set<number>();
     legGenesHere = seg.appendages.filter((a) => a.kind === 'leg');
     legPairsHere = legGenesHere.length;
+    tagmaHere = isTagma(seg, depth);
     for (const app of seg.appendages) {
       if (atCap()) break;
       const ai = clampInt(Math.round(app.attachT * (spine.length - 1)), 0, spine.length - 1);
@@ -411,23 +413,26 @@ export function grow(genome: Genome): Phenotype {
         // each pair FANS around the body by its slot — the front legs reach forward, the hind legs
         // back, the middle ones out to the side — so the legs radiate from the thorax like a spider's
         // or a beetle's instead of standing in a row of parallel arches
-        const fan = (app.attachT - 0.5) * (legPairsHere >= 4 ? 2.3 : 1.9);
+        // a SPIDER's eight legs (on a cephalothorax) radiate widest; a CRAB's (eight on the trunk,
+        // under its shell) splay out to the side
+        const spider = legPairsHere >= 4 && tagmaHere;
+        const decapod = legPairsHere >= 4 && !tagmaHere;
+        const fan = (app.attachT - 0.5) * (spider ? 2.3 : decapod ? 1.3 : 1.9);
         const hx = sideX * Math.cos(fan);
         const hz = Math.sin(fan);
-        // a spider's knees peak high over its back and its long shins reach far out and down; a
+        // a spider's knees peak high over its back and its long shins reach far out and down; a crab's
+        // legs reach out low and level from under the shell and bend straight down to their points; a
         // hexapod's femur runs out nearer level, the tibia drops steeply and the tarsus angles out
-        // along the ground (one profile for both read either as a spider on stilts or an insect
-        // lying on its belly)
-        const octo = legPairsHere >= 4;
+        // along the ground (one profile for all read as a spider on stilts or an insect on its belly)
         const n = app.segments - 1; // segment advances (n nodes span n-1 lengths)
+        const [k0, mid, end]: Vec3[] = spider
+          ? [[hx, 0.85, hz], [hx * 0.6, -0.75, hz * 0.6], [hx * 0.3, -1, hz * 0.3]]
+          : decapod
+            ? [[hx, 0.45, hz], [hx * 0.75, -0.3, hz * 0.75], [hx * 0.2, -1, hz * 0.2]]
+            : [[hx, 0.4, hz], [hx * 0.45, -1, hz * 0.45], [hx * 0.6, -0.45, hz * 0.6]];
         arch = [];
         if (n <= 1) arch.push(norm([hx * 0.7, -0.7, hz * 0.7]));
-        else
-          for (let k = 0; k < n; k++) {
-            if (k === 0) arch.push(octo ? norm([hx, 0.85, hz]) : norm([hx, 0.4, hz]));
-            else if (k === n - 1) arch.push(octo ? norm([hx * 0.3, -1, hz * 0.3]) : norm([hx * 0.6, -0.45, hz * 0.6]));
-            else arch.push(octo ? norm([hx * 0.6, -0.75, hz * 0.6]) : norm([hx * 0.45, -1, hz * 0.45]));
-          }
+        else for (let k = 0; k < n; k++) arch.push(norm(k === 0 ? k0 : k === n - 1 ? end : mid));
         dir = arch[0];
         startPos = [base.pos[0] + sideX * flank * 0.9, base.pos[1] + base.radius * 0.05, base.pos[2]];
       } else if (splay > 0.5) {

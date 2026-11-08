@@ -57,6 +57,7 @@ interface Morpho {
   legTerm?: readonly Terminal[];
   wings?: number;
   arms?: number; // prob of a forward-reaching grasping arm pair (primate)
+  claws?: number; // prob of a pair of CHELIPEDS — a crab's big claws, held out in front (see cheliped)
   dorsal?: number;
   pectoral?: number;
   tail?: number;
@@ -137,7 +138,7 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'shark', cluster: 'familiar', weight: 0.6, eyeEl: [0.15, 0.35], tailAz: [4.71, 4.71], tailCurl: [-0.03, 0.02], tailDroop: [-1.57, -1.5], headShape: ['wedge', 'tapered'], headSize: [0.85, 1.0], girth: [0.45, 0.62], repeat: [5, 7], height: [0.95, 1.2], elong: [1.4, 1.7], taper: [1.06, 1.13], legPairs: [0], dorsal: 1, pectoral: 1, tail: 1, tailTerm: ['fin'], tailLen: [0.6, 0.85], tailThick: [0.45, 0.6], tailSegs: [3, 4], gills: 0.95, head: 0.85, eyeStyle: [0.1, 0.3], eyeAz: [0.2, 0.4], mouthStyle: [0.13, 0.24], covering: ['skin'], pattern: ['plain', 'gradient'], hue: [0.55, 0.62], sat: [0.2, 0.45] },
   { id: 'bird', cluster: 'familiar', weight: 1.3, elong: [1.25, 1.45], taper: [1.12, 1.2], legAz: [4.62, 4.71], girth: [0.34, 0.5], repeat: [2, 3], height: [1.0, 1.3], neck: [0.42, 0.52], neckLinks: [2, 2], neckLift: [-0.42, -0.3], headSize: [0.5, 0.6], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 1.0], legThick: [0.15, 0.21], legTerm: ['claw'], wings: 0.95, tail: 0.85, tailTerm: ['fin'], tailLen: [0.22, 0.36], tailSegs: [2, 2], rear: [-0.22, -0.1], crest: 0.45, eyeStyle: [0, 0.2], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'plain', 'spots'], hue: [0.05, 0.65], sat: [0.5, 0.9] },
   { id: 'raptor', cluster: 'familiar', weight: 1.2, elong: [1.25, 1.45], taper: [1.12, 1.2], legAz: [4.62, 4.71], girth: [0.4, 0.54], repeat: [2, 3], height: [1.0, 1.25], neck: [0.45, 0.55], neckLinks: [2, 2], neckLift: [-0.4, -0.28], headSize: [0.62, 0.76], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 0.95], legThick: [0.18, 0.24], legTerm: ['claw'], wings: 1, tail: 0.85, tailTerm: ['fin'], tailLen: [0.22, 0.36], tailSegs: [2, 2], rear: [-0.2, -0.08], crest: 0.3, headShape: ['wedge'], eyeStyle: [0, 0.15], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'mottle'], hue: [0.06, 0.12] },
-  { id: 'crab', cluster: 'familiar', weight: 1.2, girth: [0.45, 0.62], repeat: [1, 2], height: [0.5, 0.7], elong: [0.7, 0.95], legPairs: [3], posture: 'sprawling', legLen: [0.6, 0.85], legAz: [3.6, 4.0], legTerm: ['pincer', 'claw'], tail: 0.0, antennae: 0.6, carapace: 0.85, stalkEyes: 0.9, eyeStyle: [0, 0.3], eyeAz: [1.2, 1.6], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['mottle', 'reticulate'], sheen: [0.3, 0.55], hue: [0.02, 0.1], sat: [0.5, 0.85] },
+  { id: 'crab', cluster: 'familiar', weight: 1.2, girth: [0.5, 0.62], repeat: [1, 1], height: [0.4, 0.5], elong: [0.78, 0.92], legPairs: [4], posture: 'sprawling', legLen: [0.78, 0.98], legThick: [0.18, 0.24], legTerm: ['claw'], claws: 1, head: 0, tail: 0.0, carapace: 0.95, stalkEyes: 0.95, eyeStyle: [0, 0.3], eyeAz: [1.2, 1.4], eyeEl: [0.9, 1.1], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['mottle', 'reticulate', 'plain'], sheen: [0.3, 0.55], hue: [0.0, 0.1], sat: [0.5, 0.85] },
   { id: 'insectoid', cluster: 'familiar', weight: 1.2, tagmata: 'insect', carapace: 0.4, girth: [0.32, 0.44], repeat: [3, 3], height: [0.8, 0.92], elong: [0.75, 0.92], taper: [1.08, 1.15], thorax: [0.62, 0.74], thoraxLong: [1.15, 1.4], legPairs: [3], posture: 'sprawling', legLen: [0.85, 1.05], legThick: [0.26, 0.34], hindLeg: [1.25, 1.1], foreLeg: [0.85, 1.0], legTerm: ['claw'], headSize: [0.82, 0.98], headShape: ['round', 'broad'], antennae: 0.95, eyeStyle: [0.6, 0.8], eyeCount: [2], eyeAz: [0.2, 0.45], eyeEl: [0.5, 0.75], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['bands', 'spots', 'plain', 'reticulate'], sheen: [0.6, 0.95], hue: [0.0, 0.6], sat: [0.5, 0.9] },
   { id: 'arachnid', cluster: 'familiar', weight: 0.9, tagmata: 'spider', girth: [0.42, 0.56], repeat: [1, 1], height: [0.85, 1.0], elong: [1.3, 1.7], thorax: [0.6, 0.7], thoraxLong: [1.1, 1.25], legPairs: [4], posture: 'sprawling', legLen: [1.4, 1.75], legThick: [0.22, 0.3], foreLeg: [1.1, 1.0], legTerm: ['claw'], eyeStyle: [0.2, 0.4], eyeCount: [6, 8], mouthStyle: [0.38, 0.49], covering: ['fur', 'chitin'], pattern: ['mottle', 'bands'], hue: [0.02, 0.09], sat: [0.3, 0.6] },
   // upright grasping ape/monkey: long limbs, deep chest, flat forward-eyed face, expressive head
@@ -251,6 +252,8 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
   }
   // a forward-reaching grasping arm pair (primate) near the shoulders
   if (chance(rng, m.arms ?? 0)) apps.push(graspArm(rng, rg(rng, m.armT, [0.62, 0.78]), girth, m));
+  // (no draw unless the morph has claws: every other morphotype's genome stream stays as it was)
+  if (m.claws && chance(rng, m.claws)) apps.push(cheliped(rng, girth));
   // wings, fins
   // wings root at the SHOULDERS — the front of the trunk (t → 1 is toward the head)
   if (chance(rng, m.wings ?? 0)) apps.push(wing(rng, range(rng, 0.68, 0.86), girth));
@@ -614,6 +617,22 @@ function graspArm(rng: Rng, attachT: number, girth: number, m?: Morpho): Appenda
     thickness: clamp(girth * rg(rng, m?.armThick, [0.18, 0.28]), A.thickness),
     taper: rg(rng, m?.armTaper, [0.7, 0.85]),
     curl: [range(rng, 0.35, 0.55), 0], // an elbow bend
+  });
+}
+
+// A CHELIPED (a crab's claw arm): from the front corner of the shell it reaches out and forward, then
+// bends in at each joint so the two big claws meet in front of the face; stout and barely tapering, so
+// the claw at its tip — a swollen palm with a fixed and a hinged finger — is the biggest thing on it.
+function cheliped(rng: Rng, girth: number): AppendageGene {
+  return part('arm', 'pincer', true, range(rng, 0, 0.3), {
+    attachT: range(rng, 0.9, 0.98),
+    attachAzimuth: range(rng, 3.0, 3.15), // out to the side, held up a touch
+    attachElevation: range(rng, 0.5, 0.7), // and forward
+    segments: 3,
+    length: clamp(girth * range(rng, 0.4, 0.5), A.length),
+    thickness: clamp(girth * range(rng, 0.3, 0.36), A.thickness),
+    taper: range(rng, 0.95, 1.0),
+    curl: [range(rng, -0.08, 0.02), range(rng, 0.48, 0.6)], // carried level; each joint folds it inward
   });
 }
 

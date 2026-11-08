@@ -32,6 +32,7 @@ import { buildFieldPrims, fieldAt } from './bodyField';
 import { eyeClearings, eyeSeat, isSwimmer } from './eyeSeat';
 import { coatDark, coatFin, coatMain, coatPattern } from './palette';
 import { faceMaskOf, isApe } from './face';
+import { clawGeometry } from './claw';
 import { getGeometry, retainGeometry, releaseGeometry } from './geometryCache';
 import { mouthCarves } from './mouthLine';
 import { sampleTrajectory, type Trajectory } from '../physics/fitness';
@@ -596,7 +597,7 @@ function Feature({
         <Mouth f={f} dark={footColor} skin={skin} phenotype={phenotype} carves={carves} recessed={recessed} surface={surface} />
       );
     case 'pincer':
-      return <Pincer f={f} color={footColor} />;
+      return <Pincer f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} />;
     case 'fin':
       return f.kind === 'wing' ? (
         <Wing f={f} color={finColor} phenotype={phenotype} lite={lite} />
@@ -1050,17 +1051,32 @@ function Horn({ f, color }: { f: MeshFeature; color: number }) {
   );
 }
 
-// A pincer: two prongs that converge — a crab claw.
-function Pincer({ f, color }: { f: MeshFeature; color: number }) {
+// A pincer: a crab's claw — a swollen palm in the creature's own skin, two curved fingers closing on
+// each other, dark at the points (claw.ts).
+function Pincer({ f, color, skin, origin }: { f: MeshFeature; color: number; skin?: THREE.Material; origin: readonly number[] }) {
   const r = Math.max(f.radius, 0.06);
+  const geo = useMemo(() => {
+    const g = clawGeometry(r, f.quat);
+    bakeSkin(g.shell, origin);
+    return g;
+  }, [r, f.quat, origin]);
+  useEffect(() => () => {
+    geo.shell.dispose();
+    geo.tips.dispose();
+  }, [geo]);
+  const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.4).getHex(), [color]);
   return (
-    <group quaternion={f.quat}>
-      {[-1, 1].map((side) => (
-        <mesh key={side} position={[side * r * 0.45, 0, r * 0.9]} rotation={[Math.PI / 2, 0, side * 0.45]} scale={[r * 0.45, r * 2.0, r * 0.45]} castShadow>
-          <coneGeometry args={[1, 1, 7]} />
-          <meshStandardMaterial color={color} roughness={0.55} />
+    <group>
+      {skin ? (
+        <mesh geometry={geo.shell} material={skin} castShadow />
+      ) : (
+        <mesh geometry={geo.shell} castShadow>
+          <meshStandardMaterial color={color} roughness={0.5} />
         </mesh>
-      ))}
+      )}
+      <mesh geometry={geo.tips} castShadow>
+        <meshStandardMaterial color={dark} roughness={0.32} metalness={0.05} />
+      </mesh>
     </group>
   );
 }

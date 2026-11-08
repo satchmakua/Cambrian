@@ -141,13 +141,22 @@ export function buildShellGeometry(p: Phenotype, quality: SkinQuality = 'high'):
   if (sub.edges.length === 0) {
     // a one-node trunk: build the field from that node alone
     const n = trunk[0];
+    // (its own SHAPE: as a sphere of the node's radius, a crab's wide flat carapace became a ball)
+    const s = n.scale ?? [1, 1, 1];
+    const rIn = n.radius * Math.min(s[0], s[1], s[2]);
     prims.nc = 1;
     prims.ax[0] = prims.bx[0] = n.pos[0];
     prims.ay[0] = prims.by[0] = n.pos[1];
     prims.az[0] = prims.bz[0] = n.pos[2];
-    prims.ra[0] = prims.rb[0] = prims.pr[0] = n.radius;
+    prims.ra[0] = prims.rb[0] = prims.pr[0] = rIn;
+    prims.an[0] = 0;
+    prims.ch[0] = 0;
+    prims.ord = Int32Array.of(0);
     prims.cx[0] = n.pos[0]; prims.cy[0] = n.pos[1]; prims.cz[0] = n.pos[2]; prims.hl[0] = 0;
-    prims.ne = 0;
+    prims.ec = Float64Array.from(n.pos);
+    prims.eq = Float64Array.from(n.quat);
+    prims.er = Float64Array.from([n.radius * s[0], n.radius * s[1], n.radius * s[2]]);
+    prims.ne = 1;
   }
   let rMax = 0, ySum = 0;
   let zMin = Infinity, zMax = -Infinity;
@@ -161,8 +170,11 @@ export function buildShellGeometry(p: Phenotype, quality: SkinQuality = 'high'):
   prims.k = 0.4 * rMax;
   // the shell's size gene: the carapace part's thickness (relative to the trunk) sets how proud it sits
   const prominence = Math.min(1.6, Math.max(0.6, shellNode.radius / Math.max(rMax, 1e-3)));
-  const t0 = rMax * 0.1 * prominence; // flank thickness
-  const dome = rMax * 0.22 * prominence; // extra on top — the domed back
+  // a turtle's horn shell is thick and domed; a crab's carapace or a beetle's wing-cases are a thin
+  // chitin skin over the body's own shape (domed like a turtle's, a flat crab became a beetle)
+  const thin = p.genomeRef.covering.type === 'chitin';
+  const t0 = rMax * (thin ? 0.07 : 0.1) * prominence; // flank thickness
+  const dome = rMax * (thin ? 0.06 : 0.22) * prominence; // extra on top — the domed back
   const yCut = yMid - rMax * 0.28; // the skirt: covers the back and upper flanks, not the belly
   const flare = rMax * 0.18; // the rim lips outward over the legs
 

@@ -139,8 +139,12 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
       ax[i] = a.pos[0]; ay[i] = a.pos[1]; az[i] = a.pos[2];
       bx[i] = b.pos[0]; by[i] = b.pos[1]; bz[i] = b.pos[2];
       const rB = stalkTip(a, b) ? Math.min(a.radius * 0.8, b.radius * 0.45) : b.radius;
-      pr[i] = (a.radius + rB) * 0.5;
-      ra[i] = a.radius;
+      // a limb's root cone starts INSIDE a shaped body node: at the node's scalar radius its base
+      // sphere stood proud of a flattened body — a crab's eight leg roots swelled its flat carapace
+      // into a ball — so it starts at the node's narrowest cross-section instead
+      const rA = a.kind === 'spine' && b.kind !== 'spine' && a.scale ? a.radius * Math.min(a.scale[0], a.scale[1], 1) : a.radius;
+      pr[i] = (rA + rB) * 0.5;
+      ra[i] = rA;
       rb[i] = rB;
       included.add(a);
       included.add(b);

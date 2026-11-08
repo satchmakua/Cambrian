@@ -594,6 +594,13 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   down / dead arthropod`, `mutate.test.ts › arthropod keeps its thorax`, `mandibles.test.ts ›
   chelicerae`.
 
+- [x] **M61 — Crabs.** A wide, flat carapace (a thin chitin skin over the body's own shape — a
+  one-node trunk's shell was a sphere of its radius, so every crab wore a ball), a pair of chelipeds
+  held out in front ending in real claws (a swollen palm, a fixed and a hinged finger, dark at the
+  points), four pairs of walking legs splayed low to the sides, eyes on stalks at the front edge.
+  Limb roots now start inside a shaped body node instead of at its full radius. **Tests:**
+  `bodyplan.test.ts › crab`, `smoothSkin.test.ts › crab's carapace`, `claw.test.ts`.
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.
