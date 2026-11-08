@@ -20,6 +20,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { coatMain } from '../palette';
+import { faceMaskOf } from '../face';
 import type { Phenotype } from '../../engine/grow';
 import type { Vec3 } from '../../engine/genome';
 import type { Carve } from '../bodyField';
@@ -378,9 +379,16 @@ export function JawedMouth({
   const pal = phenotype.genomeRef.palette;
   const coat = useMemo(() => coatMain(pal).getHex(), [pal]);
   // a wet nose: mostly near-black, sometimes the dusky pink of a cat's or a pig's
+  // (an ape has no wet rhinarium: its nose is the bare face's own skin, a shade darker)
+  const ape = useMemo(() => faceMaskOf(phenotype), [phenotype]);
   const noseColor = useMemo(
-    () => (hash01(phenotype.genomeRef.seed, 0x4e05) < 0.62 ? 0x1c1416 : new THREE.Color().setHSL(0.98, 0.32, 0.42).getHex()),
-    [phenotype],
+    () =>
+      ape
+        ? new THREE.Color(ape.color).multiplyScalar(0.7).getHex()
+        : hash01(phenotype.genomeRef.seed, 0x4e05) < 0.62
+          ? 0x1c1416
+          : new THREE.Color().setHSL(0.98, 0.32, 0.42).getHex(),
+    [phenotype, ape],
   );
 
   const fang = useMemo(() => ((JAWED_PARAMS[variant] as JawedParams).blunt ? bluntGeometry() : fangGeometry()), [variant]);
@@ -395,12 +403,12 @@ export function JawedMouth({
       // the jaw masses wear the body's own dark skin tone so they read as part of the head — a
       // mammal's wear its coat (the chin and the lip fold are fur)
       jaw: new THREE.MeshStandardMaterial({ color: muzzled ? coat : dark, roughness: muzzled ? 0.85 : 0.62 }),
-      nose: new THREE.MeshPhysicalMaterial({ color: noseColor, roughness: 0.38, clearcoat: 0.6, clearcoatRoughness: 0.35 }),
+      nose: new THREE.MeshPhysicalMaterial({ color: noseColor, roughness: ape ? 0.7 : 0.38, clearcoat: ape ? 0 : 0.6, clearcoatRoughness: 0.35 }),
       nostril: new THREE.MeshStandardMaterial({ color: 0x050405, roughness: 0.9 }),
       interior: new THREE.MeshStandardMaterial({ color: INTERIOR, roughness: 0.3, side: THREE.DoubleSide }),
       teeth: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42 }),
     };
-  }, [dark, muzzled, shut, coat, noseColor]);
+  }, [dark, muzzled, shut, coat, noseColor, ape]);
 
   // dispose per lifetime: the per-creature geometries turn over with `built`, but the shared fang
   // and the materials must NOT be disposed on every phenotype swap while still in use

@@ -17,6 +17,7 @@
  */
 import * as THREE from 'three';
 import { coatAccent, coatBelly, coatMain, coatPattern } from './palette';
+import type { FaceMask } from './face';
 import type { Palette, Covering, CoveringType, PatternType } from '../engine/genome';
 
 const COVERING_INDEX: Record<CoveringType, number> = {
@@ -90,7 +91,14 @@ export interface FurShell {
   eyes?: readonly number[];
 }
 
-export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, bare: BareLegs | null = null, shell: FurShell | null = null): THREE.MeshPhysicalMaterial {
+export function makeCreatureMaterial(
+  pal: Palette,
+  cov: Covering,
+  seed: number,
+  bare: BareLegs | null = null,
+  shell: FurShell | null = null,
+  face: FaceMask | null = null,
+): THREE.MeshPhysicalMaterial {
   // A moodier base than the raw palette: real integument is rarely a bright, saturated toy. We
   // desaturate and darken a touch so creatures read as living tissue, not painted plastic.
   // (see palette.ts: the palette is sRGB HSL — read as linear, every coat came out a pale pastel)
@@ -154,6 +162,9 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
     shader.uniforms.uShellH = { value: shell ? shell.h : -1 };
     shader.uniforms.uShellLen = { value: shell ? shell.len : 0 };
     shader.uniforms.uShellDen = { value: shell ? shell.density : 1 };
+    // a bare face (an ape's) — w = 0 when there is none
+    shader.uniforms.uFace = { value: face ? new THREE.Vector4(face.c[0], face.c[1], face.c[2], face.r) : new THREE.Vector4(0, 0, 0, 0) };
+    shader.uniforms.uFaceCol = { value: new THREE.Color(face ? face.color : 0) };
     // (unused slots keep r = 0, which clears nothing)
     shader.uniforms.uEyes = { value: Array.from({ length: 6 }, (_, i) => new THREE.Vector4(...(shell?.eyes?.slice(i * 4, i * 4 + 4) ?? []).concat([0, 0, 0, 0]).slice(0, 4))) };
 
@@ -205,6 +216,13 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
           skin = mix(skin, uPattern2, smoothstep(0.55, 0.95, pat) * uContrast * 0.4);
           // low-frequency tonal break-up so the surface never reads as flat plastic
           skin *= 0.92 + 0.16 * fbmA(bp * 2.2, 2.2);
+          // a bare face (an ape's): the coat gives way to skin round the eyes and the muzzle, and the
+          // pile's relief smooths out there (the fur shells stop at its edge, below)
+          float faceW = uFace.w > 0.0 ? 1.0 - smoothstep(uFace.w * 0.62, uFace.w, length(vBodyPos - uFace.xyz)) : 0.0;
+          if (faceW > 0.0) {
+            skin = mix(skin, uFaceCol * (0.9 + 0.2 * fbmA(bp * 9.0, 9.0)), faceW);
+            gHb *= 1.0 - 0.85 * faceW;
+          }
           // bare legs: the plumage ends in a soft cuff and the shank below is keratin scutes
           // (only on the legs themselves — vLeg — not a low belly or tail under the same height)
           float bare = vLeg * (1.0 - smoothstep(uBareY - uBareBand, uBareY + uBareBand, vBodyPos.y));
@@ -258,7 +276,7 @@ export function makeCreatureMaterial(pal: Palette, cov: Covering, seed: number, 
             float u = uShellH / sLen;
             float dc = length(fract(q) - 0.5 - jit * 0.5);
             float far = smoothstep(0.28, 1.15, gFw * uShellDen);
-            if (u > 1.0 || dc > 0.62 * (1.0 - u) || far > hash13(cell + 5.0) || vFlesh > 0.05 || bare > 0.3) discard;
+            if (u > 1.0 || dc > 0.62 * (1.0 - u) || far > hash13(cell + 5.0) || vFlesh > 0.05 || bare > 0.3 || faceW > 0.3) discard;
             // depth in the pile: shadowed at the root, catching light at the tips; each lock its own shade
             diffuseColor.rgb *= mix(0.62, 1.12, uShellH) * (0.93 + 0.14 * hash13(cid + 9.0));
           }
@@ -338,7 +356,7 @@ uniform float uPScale; uniform float uContrast; uniform float uSheen; uniform fl
 uniform vec3 uOff;
 uniform int uDebug;
 uniform float uBareY; uniform float uBareBand; uniform vec3 uBareCol;
-uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6];
+uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6]; uniform vec4 uFace; uniform vec3 uFaceCol;
 
 // Per-fragment globals, primed at the top of the colour stage and reused by the roughness + normal
 // stages (so the expensive relief is evaluated once per pixel, not three times).

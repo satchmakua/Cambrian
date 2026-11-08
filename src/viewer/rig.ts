@@ -45,7 +45,7 @@ export interface RigTemplate {
   legs: LegChain[];
   arms: number[][];
   others: number[][]; // fins / tentacles / antennae chains that sway
-  stride: number; // bu per gait cycle
+  stride: number; // bu per gait cycle at the full run swing (a walk steps shorter: see gaitAmplitude)
   sprawl: number; // 0 upright mammal … 1 sprawling / arthropod (spine sway amplitude)
   legless: boolean;
 }
@@ -284,6 +284,15 @@ function setRot(b: THREE.Bone, ax: number, ay: number, az: number): void {
   if (az) b.quaternion.multiply(q2.setFromAxisAngle(Z, az));
 }
 
+/** the hip swing at a full run (rad) — the template's stride is measured for it */
+const GAIT_AMP_MAX = 0.42;
+
+/** The hip's fore-aft swing for a speed: short steps at a walk, the full reach at a run. */
+export function gaitAmplitude(speed: number, cruise: number): number {
+  const f = Math.min(1, Math.max(0, speed / Math.max(cruise, 1e-3) / 1.3));
+  return 0.16 + (GAIT_AMP_MAX - 0.16) * f;
+}
+
 export function poseRig(r: RigInstance, inp: PoseInput): void {
   const T = r.template;
   r.t += inp.dt;
@@ -291,7 +300,12 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
   const grounded = 1 - fly;
   // airborne, the legs don't stride (the airspeed would spin the gait clock) — they fold up
   const moving = Math.min(1, inp.speed / Math.max(0.2, inp.cruise * 0.35)) * grounded;
-  r.phase = (r.phase + (inp.speed * grounded * inp.dt) / T.stride) % 1;
+  // Stride with speed: a walk takes short steps, a run reaches out (at the full ±0.42 rad a walking cat
+  // swung its legs like a galloping one). The step's length follows the swing, so the planted foot
+  // still keeps pace with the ground instead of skating.
+  const amp = gaitAmplitude(inp.speed, inp.cruise);
+  const stride = T.stride * (Math.sin(amp) / Math.sin(GAIT_AMP_MAX));
+  r.phase = (r.phase + (inp.speed * grounded * inp.dt) / stride) % 1;
   const P = r.phase * Math.PI * 2;
   const awake = 1 - inp.sleep;
   const show = (inp.display ?? 0) * awake;
@@ -362,7 +376,7 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
     } else {
       // swing fore-aft at the hip; flex the knee (shin back and up) through the swing phase. In flight
       // the legs trail back along the belly with the feet folded up under the tail.
-      const swing = 0.42 * moving * s * awake * (1 - 0.35 * stalk);
+      const swing = amp * moving * s * awake * (1 - 0.35 * stalk);
       const tuck = inp.sleep * 0.9;
       // a stalker creeps on flexed legs (hip forward, knee folded): the body rides low
       setRot(hip, swing - tuck * 0.5 + 0.95 * fly - 0.28 * stalk, 0, 0);

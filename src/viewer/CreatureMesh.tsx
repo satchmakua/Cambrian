@@ -31,6 +31,7 @@ import { ensureSkinWeights, type RigInstance } from './rig';
 import { buildFieldPrims, fieldAt } from './bodyField';
 import { eyeClearings, eyeSeat, isSwimmer } from './eyeSeat';
 import { coatDark, coatFin, coatMain, coatPattern } from './palette';
+import { faceMaskOf, isApe } from './face';
 import { getGeometry, retainGeometry, releaseGeometry } from './geometryCache';
 import { mouthCarves } from './mouthLine';
 import { sampleTrajectory, type Trajectory } from '../physics/fitness';
@@ -156,7 +157,8 @@ export function CreatureMesh({
   const cov = phenotype.genomeRef.covering;
   const seed = phenotype.genomeRef.seed;
 
-  const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed, bareLegsOf(phenotype)), [pal, cov, seed, phenotype]);
+  const face = useMemo(() => faceMaskOf(phenotype), [phenotype]);
+  const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed, bareLegsOf(phenotype), null, face), [pal, cov, seed, phenotype, face]);
   useEffect(() => () => bodyMat.dispose(), [bodyMat]);
   // shell fur: FUR_SHELLS layers of the body out to a pile scaled to the creature
   const furMats = useMemo(() => {
@@ -166,8 +168,8 @@ export function CreatureMesh({
     const len = Math.min(0.08, Math.max(0.022, size * 0.0095));
     const bare = bareLegsOf(phenotype);
     const eyes = eyeClearings(phenotype, data.features);
-    return Array.from({ length: FUR_SHELLS }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / FUR_SHELLS, len, density: 3.2 / len, eyes }));
-  }, [fur, cov, skinMode, phenotype, pal, seed, data]);
+    return Array.from({ length: FUR_SHELLS }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / FUR_SHELLS, len, density: 3.2 / len, eyes }, face));
+  }, [fur, cov, skinMode, phenotype, pal, seed, data, face]);
   useEffect(() => () => furMats.forEach((m) => m.dispose()), [furMats]);
 
   // physics playback (post-roadmap): when a recorded gait is present, capsules re-pose from it
@@ -243,7 +245,8 @@ export function CreatureMesh({
   // than tied to the body hue (which gave every animal an eye a shade off its own coat). Warm animal
   // colors dominate; striking blues/reds/violets appear as a minority, so eye colour is a real point
   // of variety without every creature reading as a clown.
-  const irisColor = useMemo(() => irisFor(seed), [seed]);
+  // (an ape's eyes are a warm dark brown — the curated palette's yellow-greens read as a cat's)
+  const irisColor = useMemo(() => (isApe(phenotype) ? new THREE.Color().setHSL(0.07 + 0.03 * unitHash(seed, 0xa9e), 0.55, 0.22).getHex() : irisFor(seed)), [seed, phenotype]);
 
   // scratch buffer the trajectory sampler writes each played-back frame into
   const animScratch = useMemo(() => new Float32Array(data.nodes.length * 3), [data]);

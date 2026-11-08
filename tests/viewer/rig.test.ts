@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { rigTemplate, createRig, ensureSkinWeights, poseRig } from '../../src/viewer/rig';
+import { rigTemplate, createRig, ensureSkinWeights, poseRig, gaitAmplitude } from '../../src/viewer/rig';
 import { buildSmoothGeometry } from '../../src/viewer/smoothSkin';
 
 const p = (kind: string, seed = 11) => grow(genomeOfMorphotype(seed, kind));
@@ -67,4 +67,29 @@ describe('animation rig', () => {
     expect(curled.distanceTo(rest)).toBeGreaterThan(0.02);
     for (const b of r.bones) for (const c of b.quaternion.toArray()) expect(Number.isFinite(c)).toBe(true);
   });
+
+  it('a walk takes short steps and a run reaches out — and the planted foot keeps pace either way', () => {
+    // (at the full ±0.42 rad swing whatever the speed, a walking cat swung its legs like a galloping
+    // one)
+    const cruise = 4;
+    const walk = gaitAmplitude(cruise * 0.55, cruise);
+    const run = gaitAmplitude(cruise * 1.7, cruise);
+    expect(walk).toBeLessThan(0.3);
+    expect(run).toBeCloseTo(0.42, 6);
+    expect(gaitAmplitude(0, cruise)).toBeGreaterThan(0.1);
+    // over one stance (half a cycle) the body moves half a stride while the hip swings the foot back
+    // through 2·sin(amp)·leg: the same distance at a walk as at a run, so the foot never skates
+    const ph = p('felid');
+    const r = createRig(ph);
+    const T = r.template;
+    for (const speed of [cruise * 0.55, cruise * 1.7]) {
+      const before = r.phase;
+      poseRig(r, { dt: 0.01, speed, cruise, sleep: 0, eat: 0, swim: false, turn: 0 });
+      const cyclesPerUnit = (((r.phase - before + 1) % 1) / 0.01) / speed; // cycles per distance
+      const strideNow = 1 / cyclesPerUnit;
+      const amp = gaitAmplitude(speed, cruise);
+      expect(strideNow / Math.sin(amp)).toBeCloseTo(T.stride / Math.sin(0.42), 3);
+    }
+  });
 });
+
