@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { rigTemplate, createRig, ensureSkinWeights, poseRig, poseDead, gaitAmplitude } from '../../src/viewer/rig';
+import { rigTemplate, createRig, ensureSkinWeights, poseRig, poseDead, gaitAmplitude, SLEEP_DROP } from '../../src/viewer/rig';
 import { buildSmoothGeometry } from '../../src/viewer/smoothSkin';
 
 const p = (kind: string, seed = 11) => grow(genomeOfMorphotype(seed, kind));
@@ -246,6 +246,57 @@ describe('animation rig', () => {
     const behind = at([3, 0]);
     const max = at([1.1, 0]);
     expect(behind.distanceTo(max)).toBeLessThan(1e-9);
+  });
+
+  it('an insect glances with its head alone: its thorax, and the six legs on it, stay put', () => {
+    // (the thorax is the section past the abdomen that carries the legs — counted as "neck", a glance
+    // swung all six legs round with the head)
+    const ph = p('insectoid');
+    const r = createRig(ph);
+    const T = rigTemplate(ph);
+    for (const l of T.legs) expect(l.trunkAt).toBeGreaterThanOrEqual(0);
+    const mi = ph.nodes.findIndex((n) => n.terminal === 'mouth');
+    const feet = T.legs.map((l) => l.nodes[l.nodes.length - 1]);
+    const at = (look?: [number, number]) => {
+      poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 0, swim: false, turn: 0, look });
+      return { mouth: footWorld(r, mi), feet: feet.map((f) => footWorld(r, f)) };
+    };
+    const ahead = at();
+    const aside = at([0.9, 0]);
+    expect(aside.mouth.x).toBeGreaterThan(ahead.mouth.x + 0.05);
+    aside.feet.forEach((f, i) => expect(f.distanceTo(ahead.feet[i])).toBeLessThan(1e-6));
+  });
+
+  it('an arthropod lies down to rest with its feet still on the floor — not treading the air', () => {
+    for (const kind of ['insectoid', 'arachnid']) {
+      for (const seed of [2, 5]) {
+        const ph = p(kind, seed);
+        const r = createRig(ph);
+        const T = r.template;
+        const feetAt = (sleep: number) => {
+          poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep, eat: 0, swim: false, turn: 0 });
+          return T.legs.map((l) => footWorld(r, l.nodes[l.nodes.length - 1]).y - sleep * T.belly * SLEEP_DROP);
+        };
+        const standing = feetAt(0);
+        const lying = feetAt(1);
+        lying.forEach((y, i) => expect(Math.abs(y - standing[i]), `${kind} #${seed}`).toBeLessThan(0.02));
+      }
+    }
+  });
+
+  it('a dead arthropod curls its legs in beneath it', () => {
+    const ph = p('arachnid', 2);
+    const r = createRig(ph);
+    poseDead(r);
+    const T = r.template;
+    for (const l of T.legs) {
+      const hip = footWorld(r, l.nodes[0]);
+      const foot = footWorld(r, l.nodes[l.nodes.length - 1]);
+      const rest = ph.nodes[l.nodes[l.nodes.length - 1]].pos;
+      const restHip = ph.nodes[l.nodes[0]].pos;
+      // the foot ends far closer in to the body than it stood
+      expect(Math.hypot(foot.x - hip.x, foot.z - hip.z)).toBeLessThan(0.5 * Math.hypot(rest[0] - restHip[0], rest[2] - restHip[2]));
+    }
   });
 
   it('a sleeper breathes: its chest rises and falls, slowly', () => {

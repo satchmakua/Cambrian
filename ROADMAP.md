@@ -580,6 +580,20 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   dealing with — prey, predator, mate, attacker. **Tests:** `tests/world/foliage.test.ts`,
   `rig.test.ts › look`.
 
+- [x] **M60 — Bodies by their plan: arthropods of tagmata.** An insect is a head, a thorax carrying
+  all six legs and a legless abdomen; a spider a cephalothorax carrying its eight legs, its eyes and
+  its chelicerae, with a big abdomen behind it on a narrow waist (one trunk with the legs spaced
+  down it read as a caterpillar and a tick). The legs radiate from the thorax — front pairs reaching
+  forward, hind pairs back — and a spider's knees peak over its back; beetles close glossy wing-cases
+  over the abdomen, split by a dark seam and wearing the body's own markings. Arthropods lie down
+  with their feet still on the floor and die with their legs curled under them. The rig's trunk runs
+  through the leg-bearing section, and a lineage keeps its thorax (legs come and go a pair at a
+  time). Three silhouettes retuned: ratites (a long neck held up on long legs), mustelids (a thick
+  low tail, small round ears), cats (long and lean, a round head with big ears). **Tests:**
+  `bodyplan.test.ts › insect / spider / crab / ratite`, `rig.test.ts › insect glance / arthropod lies
+  down / dead arthropod`, `mutate.test.ts › arthropod keeps its thorax`, `mandibles.test.ts ›
+  chelicerae`.
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.

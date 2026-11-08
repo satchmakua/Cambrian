@@ -219,6 +219,12 @@ export function CreatureMesh({
   const shellMat = useMemo(() => {
     if (!hasShell) return null;
     const crab = cov.type === 'chitin';
+    // a BEETLE's wing-cases (a chitin shell over an arthropod's abdomen) wear the body's own coat and
+    // markings — a ladybird's spots, a tiger beetle's bands — glossier, split by the dark seam where
+    // the two cases meet; a crab's carapace keeps its seamed plates
+    if (crab && tagmata(phenotype)) {
+      return makeCreatureMaterial(pal, { ...cov, sheen: Math.min(1, cov.sheen + 0.15) }, seed ^ 0x5e11, null, null, null, trunkGirth(phenotype) * 0.07);
+    }
     const hueA = crab ? pal.hueA : pal.hueA + (0.09 - pal.hueA) * 0.45;
     const shellPal = crab
       ? { ...pal, light: pal.light * 0.82, sat: pal.sat * 0.9, hueB: pal.hueA }
@@ -231,7 +237,7 @@ export function CreatureMesh({
       patternContrast: 0.55,
     };
     return makeCreatureMaterial(shellPal, shellCov, seed ^ 0x5e11);
-  }, [hasShell, pal, cov, seed]);
+  }, [hasShell, pal, cov, seed, phenotype]);
   useEffect(() => () => shellMat?.dispose(), [shellMat]);
 
   const playing = !!trajectory; // the recorded physics gait is the only motion left
@@ -1103,6 +1109,13 @@ function Fin({ f, color, lite = false, phenotype }: { f: MeshFeature; color: num
       ))}
     </group>
   );
+}
+
+/** An arthropod of tagmata: its legs hang from a section past the trunk (a thorax ahead of the abdomen). */
+function tagmata(p: Phenotype): boolean {
+  const parent = new Int32Array(p.nodes.length).fill(-1);
+  for (const [a, b] of p.edges) parent[b] = a;
+  return p.nodes.some((n, i) => n.part?.kind === 'leg' && parent[i] >= 0 && p.nodes[parent[i]].kind === 'spine' && (p.nodes[parent[i]].segment ?? 0) > 0);
 }
 
 function trunkGirth(p: Phenotype): number {

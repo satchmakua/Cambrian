@@ -98,6 +98,7 @@ export function makeCreatureMaterial(
   bare: BareLegs | null = null,
   shell: FurShell | null = null,
   face: FaceMask | null = null,
+  seam = 0, // a beetle's wing-cases: the half-width of the dark suture down the back's midline (0 = none)
 ): THREE.MeshPhysicalMaterial {
   // A moodier base than the raw palette: real integument is rarely a bright, saturated toy. We
   // desaturate and darken a touch so creatures read as living tissue, not painted plastic.
@@ -165,6 +166,7 @@ export function makeCreatureMaterial(
     // a bare face (an ape's) — w = 0 when there is none
     shader.uniforms.uFace = { value: face ? new THREE.Vector4(face.c[0], face.c[1], face.c[2], face.r) : new THREE.Vector4(0, 0, 0, 0) };
     shader.uniforms.uFaceCol = { value: new THREE.Color(face ? face.color : 0) };
+    shader.uniforms.uSeam = { value: seam };
     // (unused slots keep r = 0, which clears nothing)
     shader.uniforms.uEyes = { value: Array.from({ length: 6 }, (_, i) => new THREE.Vector4(...(shell?.eyes?.slice(i * 4, i * 4 + 4) ?? []).concat([0, 0, 0, 0]).slice(0, 4))) };
 
@@ -216,6 +218,8 @@ export function makeCreatureMaterial(
           skin = mix(skin, uPattern2, smoothstep(0.55, 0.95, pat) * uContrast * 0.4);
           // low-frequency tonal break-up so the surface never reads as flat plastic
           skin *= 0.92 + 0.16 * fbmA(bp * 2.2, 2.2);
+          // a beetle's wing-cases meet in a dark seam down the middle of the back
+          if (uSeam > 0.0) skin = mix(skin, uPattern2 * 0.3, (1.0 - smoothstep(uSeam * 0.35, uSeam, abs(vBodyPos.x))) * smoothstep(0.45, 0.75, up));
           // a bare face (an ape's): the coat gives way to skin round the eyes and the muzzle, and the
           // pile's relief smooths out there (the fur shells stop at its edge, below)
           float faceW = uFace.w > 0.0 ? 1.0 - smoothstep(uFace.w * 0.62, uFace.w, length(vBodyPos - uFace.xyz)) : 0.0;
@@ -356,7 +360,7 @@ uniform float uPScale; uniform float uContrast; uniform float uSheen; uniform fl
 uniform vec3 uOff;
 uniform int uDebug;
 uniform float uBareY; uniform float uBareBand; uniform vec3 uBareCol;
-uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6]; uniform vec4 uFace; uniform vec3 uFaceCol;
+uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6]; uniform vec4 uFace; uniform vec3 uFaceCol; uniform float uSeam;
 
 // Per-fragment globals, primed at the top of the colour stage and reused by the roughness + normal
 // stages (so the expensive relief is evaluated once per pixel, not three times).

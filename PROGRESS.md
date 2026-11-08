@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry, M57–M59). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry, M60). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -44,6 +44,24 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic; **+ gait playback** |
 
 ---
+
+## Part 3i — Arthropods of tagmata, three silhouettes (M60) · 2026-11-08
+
+- **Structure before tuning.** No prior could make one trunk with legs spaced down it into an insect
+  or a spider: the body plan itself was wrong. The arthropod compiler (`compileArthropod`) builds the
+  abdomen as the trunk and a leg-bearing thorax as its child, and growth reads the plan from the
+  genome's own shape — a section past the trunk carrying three or more leg pairs is a thorax — so its
+  joints pinch to waists and its legs fan out. No new genes: mutation, sharing and saves are untouched.
+- **Everything that assumed "legs live on the trunk"** turned up by grepping for `body.appendages`
+  and `segment === 0`: the bauplan's leg normaliser (now per section), the leg-count mutation (now on
+  the leg-bearing section — and dropping a body section may no longer delete the thorax, all six
+  legs with it), and the rig's trunk/neck split (the trunk runs through the last leg-bearing section;
+  counted as "neck", the thorax swung all six legs round with every glance).
+- **Variants read off the phenotype.** A beetle's wing-cases are the existing conforming shell over
+  what is now the abdomen; a spider's chelicerae are the mandibles mouth on a face that sits on a
+  leg-bearing section. Neither needed a gene.
+- **Solve, again.** The arched legs' fixed sleeping roll left a resting insect's feet treading the
+  air; it is now solved per leg, so each foot stays on the floor as the body lies down.
 
 ## Part 3h — Bodies at rest, gaits that grip, watching them (M57–M59) · 2026-11-08
 

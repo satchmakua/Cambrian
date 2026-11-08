@@ -75,5 +75,29 @@ describe('breederOffspring', () => {
       }
     }
   });
-});
 
+  it("an arthropod keeps its thorax: its legs come and go a pair at a time there, all on the one section", () => {
+    // (dropping a faceless section between trunk and head deleted an insect's thorax, all six legs
+    // with it, and a lost leg pair could regrow on the abdomen)
+    const rates = { point: 0.1, pointSigma: 0.05, structural: 1, duplication: 0, macro: 0 };
+    for (const kind of ['insectoid', 'arachnid']) {
+      for (const seed of [1, 2, 3, 4]) {
+        let g = genomeOfMorphotype(seed, kind);
+        const legSections = () => {
+          const out: number[] = [];
+          for (let s: typeof g.body | undefined = g.body, k = 0; s; s = s.child, k++) if (s.appendages.some((a) => a.kind === 'leg')) out.push(k);
+          return out;
+        };
+        expect(legSections()).toEqual([1]);
+        let legless = false; // (a lineage that loses every leg regrows them on its trunk)
+        for (let gen = 0; gen < 80; gen++) {
+          g = mutate(g, 7000 + gen, gen, rates, true);
+          const at = legSections();
+          expect(at.length, `${kind} #${seed} gen ${gen}`).toBeLessThanOrEqual(1);
+          legless ||= at.length === 0;
+          if (!legless) expect(at[0], `${kind} #${seed} gen ${gen}`).toBeGreaterThanOrEqual(1);
+        }
+      }
+    }
+  });
+});

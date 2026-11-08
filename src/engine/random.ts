@@ -100,6 +100,11 @@ interface Morpho {
   headWide?: Rg; // head width ×girth (broad skull > 1) — default [0.85, 1.15]
   headDome?: Rg; // head height ×girth (domed cranium > 1, flat < 1) — default [0.78, 1.3]
   head?: number; // default 0.9
+  /** an ARTHROPOD body of tagmata: the trunk is a legless ABDOMEN, the legs ride a thorax ahead of it
+   *  (an insect then grows a head on the thorax; a spider's cephalothorax IS its head) — see compileArthropod */
+  tagmata?: 'insect' | 'spider';
+  thorax?: Rg; // thorax / cephalothorax girth ×the abdomen's — default [0.6, 0.72]
+  thoraxLong?: Rg; // its length ×its girth — default [1.1, 1.3]
   eyeStyle?: Rg; // 0 round … 1 glowing
   eyeCount?: readonly number[];
   eyeAz?: Rg; // placement (1.0 up-fwd, ~0.3 side, ~1.6 top — but a PAIR near 1.57 merges on the midline)
@@ -133,8 +138,8 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'bird', cluster: 'familiar', weight: 1.3, elong: [1.25, 1.45], taper: [1.12, 1.2], legAz: [4.62, 4.71], girth: [0.34, 0.5], repeat: [2, 3], height: [1.0, 1.3], neck: [0.42, 0.52], neckLinks: [2, 2], neckLift: [-0.42, -0.3], headSize: [0.5, 0.6], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 1.0], legThick: [0.15, 0.21], legTerm: ['claw'], wings: 0.95, tail: 0.85, tailTerm: ['fin'], tailLen: [0.22, 0.36], tailSegs: [2, 2], rear: [-0.22, -0.1], crest: 0.45, eyeStyle: [0, 0.2], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'plain', 'spots'], hue: [0.05, 0.65], sat: [0.5, 0.9] },
   { id: 'raptor', cluster: 'familiar', weight: 1.2, elong: [1.25, 1.45], taper: [1.12, 1.2], legAz: [4.62, 4.71], girth: [0.4, 0.54], repeat: [2, 3], height: [1.0, 1.25], neck: [0.45, 0.55], neckLinks: [2, 2], neckLift: [-0.4, -0.28], headSize: [0.62, 0.76], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 0.95], legThick: [0.18, 0.24], legTerm: ['claw'], wings: 1, tail: 0.85, tailTerm: ['fin'], tailLen: [0.22, 0.36], tailSegs: [2, 2], rear: [-0.2, -0.08], crest: 0.3, headShape: ['wedge'], eyeStyle: [0, 0.15], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'mottle'], hue: [0.06, 0.12] },
   { id: 'crab', cluster: 'familiar', weight: 1.2, girth: [0.45, 0.62], repeat: [1, 2], height: [0.5, 0.7], elong: [0.7, 0.95], legPairs: [3], posture: 'sprawling', legLen: [0.6, 0.85], legAz: [3.6, 4.0], legTerm: ['pincer', 'claw'], tail: 0.0, antennae: 0.6, carapace: 0.85, stalkEyes: 0.9, eyeStyle: [0, 0.3], eyeAz: [1.2, 1.6], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['mottle', 'reticulate'], sheen: [0.3, 0.55], hue: [0.02, 0.1], sat: [0.5, 0.85] },
-  { id: 'insectoid', cluster: 'familiar', weight: 1.2, girth: [0.3, 0.44], repeat: [4, 6], height: [0.75, 0.95], legPairs: [3], posture: 'sprawling', legLen: [0.55, 0.8], legAz: [3.7, 4.1], legTerm: ['claw'], antennae: 0.9, eyeStyle: [0.6, 0.8], eyeCount: [2], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['bands', 'reticulate'], sheen: [0.6, 0.95], hue: [0.1, 0.6], sat: [0.5, 0.9] },
-  { id: 'arachnid', cluster: 'familiar', weight: 0.9, girth: [0.36, 0.52], repeat: [1, 2], height: [0.8, 1.05], legPairs: [4], posture: 'sprawling', legLen: [0.72, 1.35], legAz: [3.6, 4.0], legTerm: ['claw'], eyeStyle: [0.2, 0.4], eyeCount: [4, 6], mouthStyle: [0.38, 0.49], covering: ['fur', 'chitin'], pattern: ['mottle', 'bands'], hue: [0.02, 0.09], sat: [0.3, 0.6] },
+  { id: 'insectoid', cluster: 'familiar', weight: 1.2, tagmata: 'insect', carapace: 0.4, girth: [0.32, 0.44], repeat: [3, 3], height: [0.8, 0.92], elong: [0.75, 0.92], taper: [1.08, 1.15], thorax: [0.62, 0.74], thoraxLong: [1.15, 1.4], legPairs: [3], posture: 'sprawling', legLen: [0.85, 1.05], legThick: [0.26, 0.34], hindLeg: [1.25, 1.1], foreLeg: [0.85, 1.0], legTerm: ['claw'], headSize: [0.82, 0.98], headShape: ['round', 'broad'], antennae: 0.95, eyeStyle: [0.6, 0.8], eyeCount: [2], eyeAz: [0.2, 0.45], eyeEl: [0.5, 0.75], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['bands', 'spots', 'plain', 'reticulate'], sheen: [0.6, 0.95], hue: [0.0, 0.6], sat: [0.5, 0.9] },
+  { id: 'arachnid', cluster: 'familiar', weight: 0.9, tagmata: 'spider', girth: [0.42, 0.56], repeat: [1, 1], height: [0.85, 1.0], elong: [1.3, 1.7], thorax: [0.6, 0.7], thoraxLong: [1.1, 1.25], legPairs: [4], posture: 'sprawling', legLen: [1.4, 1.75], legThick: [0.22, 0.3], foreLeg: [1.1, 1.0], legTerm: ['claw'], eyeStyle: [0.2, 0.4], eyeCount: [6, 8], mouthStyle: [0.38, 0.49], covering: ['fur', 'chitin'], pattern: ['mottle', 'bands'], hue: [0.02, 0.09], sat: [0.3, 0.6] },
   // upright grasping ape/monkey: long limbs, deep chest, flat forward-eyed face, expressive head
   // upright ape: a biped (long legs) with forward-reaching grasping arms, a tall domed-skulled flat face
   { id: 'primate', cluster: 'familiar', weight: 1.0, eyeAz: [0.12, 0.25], eyeEl: [1.05, 1.15], girth: [0.27, 0.33], repeat: [3, 3], height: [0.74, 0.86], taper: [1.08, 1.15], elong: [1.25, 1.4], rear: [-0.46, -0.34], neck: [0.46, 0.56], headSize: [0.72, 0.86], muzzle: [0.62, 0.7], muzzleDrop: [0.38, 0.5], legPairs: [1], posture: 'upright', legLen: [1.05, 1.4], legThick: [0.46, 0.58], legTerm: ['foot'], arms: 1, armLen: [1.0, 1.22], armThick: [0.36, 0.44], armTaper: [0.84, 0.92], armAz: [3.32, 3.48], armEl: [-0.4, -0.24], armT: [0.84, 0.94], tail: 0.4, tailSegs: [3, 5], tailLen: [0.5, 0.8], tailThick: [0.14, 0.22], tailAz: [1.45, 1.7], tailDroop: [-1.0, -0.8], tailCurl: [-0.32, -0.18], ears: 0.7, earStyle: [0.7, 1], earAz: [0.3, 0.5], earSize: [0.62, 0.78], head: 1.0, headShape: ['domed'], headDome: [0.95, 1.12], snout: [0.22, 0.38], eyeStyle: [0, 0.15], mouthStyle: [0.07, 0.12], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.04, 0.1], sat: [0.3, 0.6] },
@@ -217,7 +222,8 @@ function weightedMorpho(rng: Rng, pool: readonly Morpho[]): Morpho {
 function compile(rng: Rng, seed: number, m: Morpho): Genome {
   const symmetry: Symmetry = m.symmetry ?? 'bilateral';
   const girth = rg(rng, m.girth);
-  return symmetry === 'radial' ? compileRadial(rng, seed, m, girth) : compileBilateral(rng, seed, m, girth);
+  if (symmetry === 'radial') return compileRadial(rng, seed, m, girth);
+  return m.tagmata ? compileArthropod(rng, seed, m, girth) : compileBilateral(rng, seed, m, girth);
 }
 
 function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Genome {
@@ -296,6 +302,65 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
     faceOnBody(rng, apps, girth, m, eyeStyle);
   }
   return scaffold(rng, seed, 'bilateral', 4, body, m);
+}
+
+// An ARTHROPOD is built of tagmata, not one trunk: an insect is a head, a thorax carrying all six legs,
+// and a legless, segmented abdomen behind; a spider a cephalothorax carrying its eight legs, eyes and
+// fangs, with a big round abdomen behind it on a narrow waist. Drawn as one trunk with the legs spread
+// evenly down it, every insect read as a caterpillar and every spider as a tick. The ABDOMEN is the
+// trunk here (segment 0) and the leg-bearing thorax its child: grow pinches a waist at each joint
+// of a leg-bearing section past the trunk, and fans the legs out from it.
+function compileArthropod(rng: Rng, seed: number, m: Morpho, girth: number): Genome {
+  const spider = m.tagmata === 'spider';
+  const sb = GENE_BOUNDS.segment.size;
+  const height = rg(rng, m.height, [0.85, 1.0]);
+  const elong = rg(rng, m.elong, [1.0, 1.2]);
+  const eyeStyle = clamp(rg(rng, m.eyeStyle, [0, 0.95]), [0, 1]);
+  const abdomen: SegmentGene = {
+    size: [clamp(girth, sb), clamp(girth * height, sb), clamp(girth * elong, sb)],
+    repeat: randint(rng, m.repeat[0], m.repeat[1]),
+    taper: clamp(rg(rng, m.taper, [0.95, 1.05]), GENE_BOUNDS.segment.taper),
+    curve: [clamp(rg(rng, m.rear, [-0.06, 0.02]), GENE_BOUNDS.segment.curvePitch), 0],
+    appendages: [],
+  };
+  if (chance(rng, m.tail ?? 0)) abdomen.appendages.push(tail(rng, girth, pick(rng, m.tailTerm ?? (['none'] as const)), m));
+  // a BEETLE: hard wing-cases (elytra) closed over the abdomen — the conforming shell, on this trunk
+  if (chance(rng, m.carapace ?? 0)) abdomen.appendages.push(carapace(rng, girth));
+
+  const tg = girth * rg(rng, m.thorax, [0.6, 0.72]);
+  const apps: AppendageGene[] = [];
+  const lp = pick(rng, m.legPairs ?? ([3] as const));
+  const legTerm = pick(rng, m.legTerm ?? (['claw'] as const));
+  const slots = legSlots(lp);
+  for (let i = 0; i < lp; i++) {
+    const g = leg(rng, clamp(slots[i] + range(rng, -0.04, 0.04), A.attachT), girth, { term: legTerm, lenMul: m.legLen, thickMul: m.legThick, azimuth: m.legAz, posture: m.posture });
+    g.segments = 4; // a jointed arch: femur up to the knee, tibia and metatarsus down, the tarsus on the ground
+    const scale = i === 0 ? m.hindLeg : i === lp - 1 ? m.foreLeg : undefined;
+    if (scale) {
+      g.length = clamp(g.length * scale[0], A.length);
+      g.thickness = clamp(g.thickness * scale[1], A.thickness);
+    }
+    apps.push(g);
+  }
+  if (chance(rng, m.wings ?? 0)) apps.push(wing(rng, range(rng, 0.55, 0.75), tg));
+  const thorax: SegmentGene = {
+    size: [clamp(tg, sb), clamp(tg * range(rng, 0.8, 0.95), sb), clamp(tg * rg(rng, m.thoraxLong, [1.1, 1.3]), sb)],
+    repeat: 1,
+    taper: 1,
+    curve: [0, 0],
+    appendages: apps,
+  };
+  abdomen.child = thorax;
+  if (spider) {
+    // the cephalothorax is the head too: its eyes crowd the brow in rows, the fangs hang below the front
+    const eyeCount = pick(rng, m.eyeCount ?? ([8] as const));
+    for (let p = 0; p < Math.max(1, Math.round(eyeCount / 2)); p++) {
+      const e = eyes(rng, 0.95, false, tg * (p === 0 ? 1.15 : 0.85), { style: [eyeStyle, eyeStyle], az: range(rng, 1.0, 1.1) - p * 0.12, el: [1.2 - p * 0.22, 1.3 - p * 0.22] });
+      apps.push(e);
+    }
+    apps.push(mouth(rng, tg, m.mouthStyle));
+  } else thorax.child = headSeg(rng, tg, m, eyeStyle);
+  return scaffold(rng, seed, 'bilateral', 4, abdomen, m);
 }
 
 function compileRadial(rng: Rng, seed: number, m: Morpho, girth: number): Genome {

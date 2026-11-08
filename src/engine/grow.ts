@@ -19,6 +19,9 @@ export type Quat = [number, number, number, number]; // [x, y, z, w]
 /** Fusiform bulge: how much fatter the middle of a body chain is than its ends. */
 const BODY_BULGE = 0.35;
 
+/** An arthropod's tagma joint (pedicel / petiole / neck): the waist's radius ×the thinner section's. */
+const TAGMA_WAIST = 0.36;
+
 /** Minimum grown radius for an eye bulb (bu) — the face must always read (M19/M24). */
 const EYE_R_MIN = 0.06;
 
@@ -63,7 +66,7 @@ export function grow(genome: Genome): Phenotype {
   let legPairsHere = 0; // leg pairs on the segment currently growing (hexapods+ get arthropod legs)
   let legGenesHere: AppendageGene[] = []; // …and their genes (a jumper's hind legs outreach its fore)
 
-  growSegment(dev.body, [0, 0, 0], [0, 0, 0, 1], 0, -1);
+  growSegment(dev.body, [0, 0, 0], [0, 0, 0, 1], 0, -1, null);
 
   if (nodes.length === 0) addNode([0, 0, 0], [0, 0, 0, 1], R_MIN, 'spine'); // never empty
 
@@ -75,7 +78,7 @@ export function grow(genome: Genome): Phenotype {
 
   // --- recursive growth -------------------------------------------------------
 
-  function growSegment(seg: SegmentGene, startPos: Vec3, startQuat: Quat, depth: number, parentIdx: number): void {
+  function growSegment(seg: SegmentGene, startPos: Vec3, startQuat: Quat, depth: number, parentIdx: number, parentSeg: SegmentGene | null): void {
     // Body thickness is the cross-section (size x,y); size z stretches the segment
     // forward. The stride is kept near the radius so consecutive capsules overlap into
     // a continuous mass, and a fusiform profile makes the torso bulge in the middle —
@@ -131,6 +134,25 @@ export function grow(genome: Genome): Phenotype {
       norm = flat / grown;
     }
 
+    // A TAGMA JOINT (either side is an arthropod's leg-bearing thorax): the sections are hard capsules
+    // hinged on a narrow waist — a spider's pedicel, an ant's petiole, an insect's neck — not one body
+    // flowing into the next. A slim waist node sits just off the parent's front and this section
+    // starts a radius past it, so abdomen, thorax and head read as separate parts.
+    if (parentSeg && parentIdx >= 0 && dev.symmetry === 'bilateral' && (isTagma(parentSeg, depth - 1) || isTagma(seg, depth)) && !atCap()) {
+      const P = nodes[parentIdx];
+      const fwd = qRotate([0, 0, 1], startQuat);
+      const r0 = girth * profileAt(0) * norm;
+      const rw = Math.max(R_MIN, TAGMA_WAIST * Math.min(P.radius, r0));
+      const wAt = surfaceExtent(P, fwd) + rw * 0.2;
+      const wPos: Vec3 = [P.pos[0] + fwd[0] * wAt, P.pos[1] + fwd[1] * wAt, P.pos[2] + fwd[2] * wAt];
+      const w = addNode(wPos, startQuat, rw, 'spine');
+      nodes[w].segment = depth;
+      edges.push([parentIdx, w]);
+      prev = w;
+      const cAt = rw * 0.2 + r0 * (segScale?.[2] ?? 1);
+      pos = [wPos[0] + fwd[0] * cAt, wPos[1] + fwd[1] * cAt, wPos[2] + fwd[2] * cAt];
+    }
+
     for (let i = 0; i < seg.repeat; i++) {
       if (atCap()) break;
       const radius = girth * Math.pow(seg.taper, i) * profileAt(i) * norm;
@@ -173,7 +195,7 @@ export function grow(genome: Genome): Phenotype {
     }
 
     if (seg.child && depth + 1 < DEPTH_MAX && !atCap()) {
-      growSegment(seg.child, pos, quat, depth + 1, prev);
+      growSegment(seg.child, pos, quat, depth + 1, prev, seg);
     }
   }
 
@@ -183,8 +205,11 @@ export function grow(genome: Genome): Phenotype {
       // a one-node trunk: spread along its own length (fore-aft by the slot), on the node's surface
       const n = nodes[spine[0]];
       const fwd = qRotate([0, 0, 1], n.quat);
-      const reach = surfaceExtent(n, fwd) * 0.85 * (t - 0.5) * 2;
-      return { ...n, pos: [n.pos[0] + fwd[0] * reach, n.pos[1] + fwd[1] * reach, n.pos[2] + fwd[2] * reach] };
+      const u = 0.85 * (clamp(t, [0, 1]) - 0.5) * 2;
+      const reach = surfaceExtent(n, fwd) * u;
+      // (the cross-section narrows toward the node's ends: a leg slotted near the front or back of an
+      // oval body seats on ITS flank there, not on the widest girth, where its hip floated in the air)
+      return { ...n, pos: [n.pos[0] + fwd[0] * reach, n.pos[1] + fwd[1] * reach, n.pos[2] + fwd[2] * reach], radius: n.radius * Math.sqrt(1 - u * u) };
     }
     const f = clamp(t, [0, 1]) * (spine.length - 1);
     const i0 = Math.min(Math.floor(f), spine.length - 2);
@@ -383,15 +408,25 @@ export function grow(genome: Genome): Phenotype {
       // (an extreme splay alone only arches a CHITINOUS body's legs: a frog or a lizard that drew a wide
       // stance is still a vertebrate sprawler, not a spider standing on its knuckles)
       if (legPairsHere >= 3 || (splay > 0.72 && dev.covering.type === 'chitin')) {
-        const zf = (app.attachT - 0.5) * 1.4;
+        // each pair FANS around the body by its slot — the front legs reach forward, the hind legs
+        // back, the middle ones out to the side — so the legs radiate from the thorax like a spider's
+        // or a beetle's instead of standing in a row of parallel arches
+        const fan = (app.attachT - 0.5) * (legPairsHere >= 4 ? 2.3 : 1.9);
+        const hx = sideX * Math.cos(fan);
+        const hz = Math.sin(fan);
+        // a spider's knees peak high over its back and its long shins reach far out and down; a
+        // hexapod's femur runs out nearer level, the tibia drops steeply and the tarsus angles out
+        // along the ground (one profile for both read either as a spider on stilts or an insect
+        // lying on its belly)
+        const octo = legPairsHere >= 4;
         const n = app.segments - 1; // segment advances (n nodes span n-1 lengths)
         arch = [];
-        if (n <= 1) arch.push(norm([sideX * 0.7, -0.7, zf]));
+        if (n <= 1) arch.push(norm([hx * 0.7, -0.7, hz * 0.7]));
         else
           for (let k = 0; k < n; k++) {
-            if (k === 0) arch.push(norm([sideX, 0.55, zf]));
-            else if (k === n - 1) arch.push(norm([sideX * 0.22, -1, zf * 0.35]));
-            else arch.push(norm([sideX * 0.6, -0.45, zf * 0.8]));
+            if (k === 0) arch.push(octo ? norm([hx, 0.85, hz]) : norm([hx, 0.4, hz]));
+            else if (k === n - 1) arch.push(octo ? norm([hx * 0.3, -1, hz * 0.3]) : norm([hx * 0.6, -0.45, hz * 0.6]));
+            else arch.push(octo ? norm([hx * 0.6, -0.75, hz * 0.6]) : norm([hx * 0.45, -1, hz * 0.45]));
           }
         dir = arch[0];
         startPos = [base.pos[0] + sideX * flank * 0.9, base.pos[1] + base.radius * 0.05, base.pos[2]];
@@ -570,13 +605,18 @@ function pullLegAzimuth(az: number, coh: number): number {
 const UPRIGHT_PITCH = -0.26;
 
 function normalizeLegs(g: Genome, coh: number): void {
-  const legs = g.body.appendages.filter((p) => p.kind === 'leg');
+  // every leg-bearing section: the trunk, or an arthropod's thorax ahead of its abdomen
+  for (let s: SegmentGene | undefined = g.body; s; s = s.child) normalizeSectionLegs(s, s === g.body, coh);
+}
+
+function normalizeSectionLegs(seg: SegmentGene, trunk: boolean, coh: number): void {
+  const legs = seg.appendages.filter((p) => p.kind === 'leg');
   const pairs = legs.length;
   if (pairs === 0) return;
   // a REARED biped (the trunk pitched up off its hips: an ape, a kangaroo, a humanoid) stands on
   // its pelvis — the trunk's bottom end — not at a horizontal walker's balance point mid-body (a
   // bird's or a raptor's), where the legs sprouted from its belly
-  const slots = pairs === 1 && g.body.curve[0] < UPRIGHT_PITCH ? [0.06] : legSlots(pairs);
+  const slots = pairs === 1 && trunk && seg.curve[0] < UPRIGHT_PITCH ? [0.06] : legSlots(pairs);
   legs.sort((x, y) => x.attachT - y.attachT); // front-to-back; assign slots in order
   legs.forEach((leg, i) => {
     leg.pair = true; // legs are always mirrored
@@ -585,6 +625,29 @@ function normalizeLegs(g: Genome, coh: number): void {
     leg.attachElevation = lerp(leg.attachElevation, 0, coh); // legs don't tilt fore/aft
     leg.roll = lerp(leg.roll, 0, coh);
   });
+}
+
+/** A body section past the trunk carrying three or more leg pairs: an arthropod's thorax (an insect's)
+ *  or cephalothorax (a spider's), with a legless abdomen behind it — its joints are pinched waists. */
+function isTagma(seg: SegmentGene, depth: number): boolean {
+  if (depth < 1) return false;
+  let pairs = 0;
+  for (const a of seg.appendages) if (a.kind === 'leg') pairs++;
+  return pairs >= 3;
+}
+
+/** The section that carries the legs (the most of them): the trunk, or an arthropod's thorax. */
+export function legBearer(g: Genome): SegmentGene {
+  let best = g.body;
+  let most = 0;
+  for (let s: SegmentGene | undefined = g.body; s; s = s.child) {
+    const n = s.appendages.filter((a) => a.kind === 'leg').length;
+    if (n > most) {
+      most = n;
+      best = s;
+    }
+  }
+  return best;
 }
 
 /** The head = the front-most body section (the deepest `child`), or the trunk if there is none. */

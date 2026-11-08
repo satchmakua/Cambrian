@@ -141,5 +141,75 @@ describe('body plans', () => {
       expect(belly - ground, `#${seed} legs`).toBeGreaterThan(0.9 * (back - belly));
     }
   });
-});
+  it('an insect is head, thorax and abdomen: all six legs hang from the thorax, each joint a narrow waist', () => {
+    // (one trunk with the legs spread evenly down it read as a caterpillar)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'insectoid'));
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      const sections = new Set(p.nodes.filter((n) => n.kind === 'spine').map((n) => n.segment));
+      expect(sections.size, `#${seed} sections`).toBe(3);
+      const hips = p.nodes.filter((n, i) => n.part?.kind === 'leg' && p.nodes[parent.get(i)!].kind === 'spine');
+      expect(hips.length, `#${seed} legs`).toBe(6);
+      for (const h of hips) expect(p.nodes[parent.get(p.nodes.indexOf(h))!].segment, `#${seed} hip on the thorax`).toBe(1);
+      // the waists: the narrowest spine node at each joint is well under the sections it joins
+      for (const seg of [1, 2]) {
+        const here = p.nodes.filter((n) => n.kind === 'spine' && n.segment === seg);
+        const before = p.nodes.filter((n) => n.kind === 'spine' && n.segment === seg - 1);
+        const waist = Math.min(...here.map((n) => n.radius));
+        const bulk = Math.min(Math.max(...here.map((n) => n.radius)), Math.max(...before.map((n) => n.radius)));
+        expect(waist / bulk, `#${seed} joint ${seg}`).toBeLessThan(0.5);
+      }
+    }
+  });
 
+  it("a spider's legs radiate from its cephalothorax, knees high, round a big abdomen held off the ground", () => {
+    // (legs bunched under one round body read as a tick)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'arachnid'));
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      const abdomen = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 0);
+      const ceph = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 1);
+      const rA = Math.max(...abdomen.map((n) => n.radius));
+      const rC = Math.max(...ceph.map((n) => n.radius));
+      expect(rA / rC, `#${seed} abdomen ×ceph`).toBeGreaterThan(1.4);
+      // the face rides the cephalothorax
+      const eye = p.nodes.findIndex((n) => n.terminal === 'eye');
+      let up = eye;
+      while (p.nodes[up].kind !== 'spine') up = parent.get(up)!;
+      expect(p.nodes[up].segment, `#${seed} eyes`).toBe(1);
+      const legs = legChains(p);
+      expect(legs.length, `#${seed} legs`).toBe(8);
+      const zC = ceph[ceph.length - 1].pos[2];
+      const fore = legs.filter((l) => l.nodes[0].pos[2] > zC);
+      const hind = legs.filter((l) => l.nodes[0].pos[2] < zC - 0.1);
+      expect(fore.length + hind.length, `#${seed} fanned pairs`).toBeGreaterThanOrEqual(4);
+      for (const l of legs) {
+        const [hip, knee] = l.nodes;
+        const foot = l.nodes[l.nodes.length - 1];
+        expect(knee.pos[1], `#${seed} knee above the hip`).toBeGreaterThan(hip.pos[1] + 0.2);
+        // the front pairs reach forward, the back pairs back
+        if (hip.pos[2] > zC + 0.1) expect(foot.pos[2], `#${seed} fore foot`).toBeGreaterThan(hip.pos[2]);
+        if (hip.pos[2] < zC - 0.1) expect(foot.pos[2], `#${seed} hind foot`).toBeLessThan(hip.pos[2]);
+      }
+      // a leg span well beyond the body's length, and the abdomen slung clear of the ground
+      const feet = legs.map((l) => l.nodes[l.nodes.length - 1]);
+      const span = Math.max(...feet.map((f) => f.pos[0])) - Math.min(...feet.map((f) => f.pos[0]));
+      const body = p.nodes.filter((n) => n.kind === 'spine');
+      const len = Math.max(...body.map((n) => n.pos[2] + n.radius)) - Math.min(...body.map((n) => n.pos[2] - n.radius * (n.scale?.[2] ?? 1)));
+      expect(span / len, `#${seed} span`).toBeGreaterThan(1.3);
+      const ground = Math.min(...feet.map((f) => f.pos[1]));
+      const belly = Math.min(...abdomen.map((n) => n.pos[1] - n.radius * (n.scale?.[1] ?? 1)));
+      expect(belly - ground, `#${seed} clearance`).toBeGreaterThan(0.25 * rA);
+    }
+  });
+
+  it('a crab keeps its legs on its one body: no waist pinched behind its head', () => {
+    for (let seed = 1; seed <= 8; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'crab'));
+      const head = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) > 0);
+      const trunk = trunkOf(p);
+      if (head.length === 0) continue;
+      expect(Math.min(...head.map((n) => n.radius)) / Math.max(...trunk.map((n) => n.radius)), `#${seed}`).toBeGreaterThan(0.4);
+    }
+  });
+});
