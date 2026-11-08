@@ -127,5 +127,19 @@ describe('body plans', () => {
       }
     }
   });
+
+  it('a ratite holds a long neck up over its body, its head high, on long legs', () => {
+    // (a ball of a body with a short drooping neck on stubby legs read as a dodo or a kiwi)
+    for (let seed = 1; seed <= 8; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'ratite'));
+      const t = trunkOf(p);
+      const back = Math.max(...t.map((n) => n.pos[1] + n.radius * (n.scale?.[1] ?? 1)));
+      const belly = Math.min(...t.map((n) => n.pos[1] - n.radius * (n.scale?.[1] ?? 1)));
+      const ground = Math.min(...p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg').map((n) => n.pos[1]));
+      const eye = p.nodes.find((n) => n.terminal === 'eye')!;
+      expect(eye.pos[1] - back, `#${seed} head above the back`).toBeGreaterThan(0.15 * (back - belly));
+      expect(belly - ground, `#${seed} legs`).toBeGreaterThan(0.9 * (back - belly));
+    }
+  });
 });
 
