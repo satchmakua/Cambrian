@@ -635,6 +635,21 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   button's rectangle measured against the canvas's own. Bears are brown, not salmon pink.
   **Test:** `tests/viewer/scissor.test.ts` (and a driven Breed session: every pick and reroll redraws).
 
+- [x] **M68 — Quick picks.** A breeder pick no longer recompiles shaders: swapping a litter disposed
+  all nine thumbnails' materials before their replacements rendered, so three freed the programs they
+  shared and linked them again (4–14 per pick — a 100–500 ms compile each on a real GPU). Every
+  canvas now keeps the programs it compiles (`KeepPrograms`). Skin weights cost half as much (and no
+  longer put a stalk-eyed creature's body on the wrong bones); the hero shows a new creature at once
+  and sharpens a moment later; the lineage saves when the browser is idle; thumbnails redraw only
+  when they change. **Tests:** `programs.test.ts`, `rig.test.ts › stalk-eyed skinning`; driven
+  sessions — every pick and reroll redraws, and 12 rapid steps settle on the current litter.
+
+- [x] **M69 — The World's camera and load.** WASD or the arrow keys pan over the ground (Shift
+  hurries; panning takes the camera back from following and the documentary); the zoom goes in to a
+  creature's whiskers. The scene mounts paused while three compiles its shaders — in parallel where
+  the browser has `KHR_parallel_shader_compile` — behind a short "Waking the world…"; portraits wait
+  for idle time and encode off the main thread. **Test:** `tests/world/keyPan.test.ts`.
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.

@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, ContactShadows } from '@react-three/drei';
 import { StudioEnvironment } from './StudioEnvironment';
+import { KeepPrograms } from './programs';
 
 // Dev/headless: a URL `view` param picks a canonical camera angle for reproducible face shots.
 // The creature faces +Z, so 'front' looks back along +Z at the head; 'side' from +X. `head=1`
@@ -139,6 +140,7 @@ export function CreatureViewer({
       dpr={[1, 2]}
       camera={{ position: [dist * 0.52, dist * 0.42, dist * 0.78], fov: 42 }}
     >
+      <KeepPrograms />
       <color attach="background" args={['#0f1116']} />
       <hemisphereLight args={['#cfe0ff', '#2a2620', 0.55]} />
       <ambientLight intensity={0.22} />
@@ -186,5 +188,18 @@ function IdleCreature({ phenotype, skinMode, trajectory, alive }: { phenotype: P
     // a swimmer idles with a slow fin-and-tail scull; a walker stands
     poseRig(rig, { dt: Math.min(dt, 0.05), speed: swim ? 0.25 : 0, cruise: 1, sleep: 0, eat: 0, swim, turn: 0, idle: 1 });
   });
-  return <CreatureMesh phenotype={phenotype} skinMode={skinMode} trajectory={trajectory} rig={rig} carved={!rig} fur />;
+  // A pick should show the new creature at once: its skin is first built at the thumbnails' quality
+  // (a fraction of the cost), and the full one replaces it a moment later — off the click's frame.
+  // (Frozen headless captures go straight to full quality.)
+  const [full, setFull] = useState(!alive);
+  useEffect(() => {
+    if (!alive) {
+      setFull(true);
+      return;
+    }
+    setFull(false);
+    const t = setTimeout(() => setFull(true), 150);
+    return () => clearTimeout(t);
+  }, [phenotype, alive]);
+  return <CreatureMesh phenotype={phenotype} skinMode={skinMode} trajectory={trajectory} rig={rig} carved={!rig} quality={full ? 'high' : 'low'} fur />;
 }

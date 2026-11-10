@@ -5,6 +5,7 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OffspringThumb } from './OffspringThumb';
+import { KeepPrograms } from './programs';
 import type { Genome } from '../engine/genome';
 
 interface Props {
@@ -46,7 +47,9 @@ export function OffspringGallery({ offspring, generation, onPick, onReroll }: Pr
       </div>
       {/* one canvas for all nine, laid over the gallery (clicks pass through to the buttons) */}
       {/* (inline: the canvas wrapper's own inline pointer-events would beat the stylesheet) */}
-      <Canvas className="gallery-canvas" style={{ pointerEvents: 'none' }} frameloop="demand" dpr={[1, 1.75]} gl={{ antialias: true, preserveDrawingBuffer: import.meta.env.DEV }}>
+      {/* (the drawing buffer is kept between frames: each thumbnail redraws only when it changes) */}
+      <Canvas className="gallery-canvas" style={{ pointerEvents: 'none' }} frameloop="demand" dpr={[1, 1.75]} gl={{ antialias: true, preserveDrawingBuffer: true }}>
+        <KeepPrograms />
         <Relayout target={body} />
         {offspring.map((g, i) => (
           <OffspringThumb key={i} slot={i} genome={g} track={slots} />

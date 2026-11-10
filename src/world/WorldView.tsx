@@ -17,6 +17,7 @@ import { useWorldUi, getWorld, populate, strangerGenome, bumpVersion, autosave, 
 import { DAY_LENGTH, YEAR_DAYS, dayNumber, speciesById, stepWorld, type HistorySample } from '../sim/world';
 import { howItDiffers } from '../sim/lineage';
 import { usePortrait } from '../viewer/portrait';
+import { KeepPrograms, WarmShaders } from '../viewer/programs';
 import { NARRATOR, sentence } from './narrator';
 import { spell, weatherAt } from '../sim/weather';
 
@@ -141,6 +142,7 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
   const ff = useWorldUi((s) => s.ff);
   const chron = useWorldUi((s) => s.chronicle);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [warm, setWarm] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
     if (!notice) return;
@@ -230,9 +232,14 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
   const sel = snap?.selected ?? null;
   return (
     <div className="world">
-      <Canvas className="world-canvas" shadows dpr={[1, 1.75]} camera={{ position: [40, 38, 70], fov: 45, near: 0.2, far: 1200 }} gl={{ preserveDrawingBuffer: import.meta.env.DEV }}>
+      {/* the scene mounts paused while its shaders compile (in parallel, where the browser can), then runs */}
+      <Canvas className="world-canvas" frameloop={warm ? 'always' : 'never'} shadows dpr={[1, 1.75]} camera={{ position: [40, 38, 70], fov: 45, near: 0.2, far: 1200 }} gl={{ preserveDrawingBuffer: import.meta.env.DEV }}>
+        <KeepPrograms />
+        {!warm && <WarmShaders onReady={() => setWarm(true)} />}
         <WorldScene />
       </Canvas>
+      {!warm && <div className="world-loading">Waking the world…</div>}
+      {warm && <div className="cam-hint">drag to orbit · scroll to zoom · WASD or arrows to pan (Shift: faster)</div>}
 
       <header className="world-bar">
         <h1>Cambrian</h1>

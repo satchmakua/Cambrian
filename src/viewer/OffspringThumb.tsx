@@ -12,7 +12,7 @@
  * gallery's canvas sits in the right-hand rail, so after its first frame every thumbnail decided it
  * was offscreen and never drew again: the litter froze on the first generation it showed.)
  */
-import { useEffect, useMemo, useState, type MutableRefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { createPortal, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { grow } from '../engine/grow';
@@ -28,7 +28,8 @@ export function OffspringThumb({ genome, slot, track }: { genome: Genome; slot: 
   const [smooth, setSmooth] = useState(false);
   useEffect(() => {
     setSmooth(false);
-    const t = setTimeout(() => setSmooth(true), 60 + slot * 90);
+    // (one ~20–50 ms build per slot, spaced so input still gets in between them)
+    const t = setTimeout(() => setSmooth(true), 40 + slot * 55);
     return () => clearTimeout(t);
   }, [phenotype, slot]);
 
@@ -41,12 +42,20 @@ export function OffspringThumb({ genome, slot, track }: { genome: Genome; slot: 
     return cam;
   }, [framing]);
 
-  // the canvas renders on demand: ask for a frame whenever this thumbnail's content changes (and once
-  // more shortly after, when a freshly built skin has landed in the scene)
+  // The canvas renders on demand and keeps its pixels between frames (preserveDrawingBuffer), so a
+  // thumbnail redraws only when ITS content changed or it moved — a skin upgrading in one slot used to
+  // redraw all nine scenes, twice, for each of the nine upgrades. Ask for a frame whenever this
+  // thumbnail's content changes (and once more shortly after, when a freshly built skin has landed).
   const invalidate = useThree((s) => s.invalidate);
+  const dirty = useRef(true);
+  const drawn = useRef({ left: NaN, bottom: NaN, width: NaN, height: NaN, cw: 0, ch: 0 });
   useEffect(() => {
+    dirty.current = true;
     invalidate();
-    const t = setTimeout(() => invalidate(), 120);
+    const t = setTimeout(() => {
+      dirty.current = true;
+      invalidate();
+    }, 120);
     return () => clearTimeout(t);
   }, [phenotype, smooth, invalidate]);
 
@@ -55,6 +64,13 @@ export function OffspringThumb({ genome, slot, track }: { genome: Genome; slot: 
     if (!el) return;
     const r = scissorRect(el.getBoundingClientRect(), gl.domElement.getBoundingClientRect());
     if (!r) return;
+    // (a resized drawing buffer comes back blank: everything redraws)
+    const cw = gl.domElement.width;
+    const ch = gl.domElement.height;
+    const d = drawn.current;
+    if (!dirty.current && d.left === r.left && d.bottom === r.bottom && d.width === r.width && d.height === r.height && d.cw === cw && d.ch === ch) return;
+    dirty.current = false;
+    Object.assign(d, r, { cw, ch });
     const aspect = r.width / r.height;
     if (camera.aspect !== aspect) {
       camera.aspect = aspect;
@@ -69,6 +85,8 @@ export function OffspringThumb({ genome, slot, track }: { genome: Genome; slot: 
     gl.render(scene, camera);
     gl.setScissorTest(false);
     gl.autoClear = autoClear;
+    // what this slot shows now (headless checks read it: the preview must match the litter)
+    el.dataset.drawn = `${genome.seed}:${smooth ? 'skin' : 'kit'}`;
   }, 1);
 
   const c = framing.center;

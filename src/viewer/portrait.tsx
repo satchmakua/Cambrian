@@ -16,6 +16,7 @@ import { grow, type Phenotype } from '../engine/grow';
 import { encodeGenome } from '../engine/share';
 import { CreatureMesh } from './CreatureMesh';
 import { StudioEnvironment } from './StudioEnvironment';
+import { KeepPrograms } from './programs';
 import { framingOf } from './Studio';
 import { LidContext } from './eyelids';
 
@@ -50,6 +51,7 @@ function Scene({ phenotype, onReady }: { phenotype: Phenotype; onReady: (draw: (
         position={[d * 0.66, d * 0.3, d * 0.7]}
         onUpdate={(cam: THREE.PerspectiveCamera) => cam.lookAt(0, 0, 0)}
       />
+      <KeepPrograms />
       <StudioEnvironment />
       <hemisphereLight args={['#cfe0ff', '#2a2620', 0.55]} />
       <directionalLight position={[f.size, f.size * 1.6, f.size]} intensity={1.15} />
@@ -79,18 +81,29 @@ function render(phenotype: Phenotype): Promise<string> {
   return new Promise<string>((resolve) => {
     const done = (draw: () => void) => {
       draw();
-      resolve(canvas!.toDataURL('image/png'));
+      // encoded off the main thread (toDataURL encodes the PNG synchronously, in the middle of
+      // whatever the page is doing — a World's first seconds)
+      canvas!.toBlob((b) => resolve(b ? URL.createObjectURL(b) : canvas!.toDataURL('image/png')), 'image/png');
     };
     root!.render(<Scene key={Math.random()} phenotype={phenotype} onReady={done} />);
   });
 }
 
-/** A PNG data URL of this genome's creature (cached; drawn one at a time). */
+/** Wait for the page to be idle (a portrait never competes with a scene's first frames or a click). */
+function idle(): Promise<void> {
+  return new Promise((resolve) => {
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+    if (w.requestIdleCallback) w.requestIdleCallback(() => resolve(), { timeout: 2500 });
+    else setTimeout(resolve, 250);
+  });
+}
+
+/** A PNG (object/data) URL of this genome's creature (cached; drawn one at a time, when the page is idle). */
 export function portraitOf(genome: Genome): Promise<string> {
   const key = encodeGenome(genome);
   let p = CACHE.get(key);
   if (!p) {
-    p = chain.then(() => render(grow(genome)));
+    p = chain.then(idle).then(() => render(grow(genome)));
     chain = p.catch(() => undefined);
     CACHE.set(key, p);
   }
