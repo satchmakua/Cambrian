@@ -33,6 +33,7 @@ import { eyeClearings, eyeSeat, isSwimmer } from './eyeSeat';
 import { coatDark, coatFin, coatMain, coatPattern } from './palette';
 import { faceMaskOf, isApe } from './face';
 import { clawGeometry } from './claw';
+import { frillGeometry, frillPlan } from './frill';
 import { getGeometry, retainGeometry, releaseGeometry } from './geometryCache';
 import { mouthCarves } from './mouthLine';
 import { sampleTrajectory, type Trajectory } from '../physics/fitness';
@@ -604,7 +605,7 @@ function Feature({
       ) : f.kind === 'tail' && phenotype.genomeRef.covering.type === 'feathers' ? (
         <TailFan phenotype={phenotype} />
       ) : f.kind === 'frill' ? (
-        <Frill f={f} color={finColor} />
+        <Frill f={f} color={finColor} phenotype={phenotype} />
       ) : (
         <Fin f={f} color={finColor} lite={lite} phenotype={phenotype} />
       );
@@ -1140,13 +1141,24 @@ function trunkGirth(p: Phenotype): number {
   return g || 0.4;
 }
 
-// A frill: a broad, thin fanned collar — wider and rounder than a fin.
-function Frill({ f, color }: { f: MeshFeature; color: number }) {
-  const r = Math.max(f.radius, 0.06);
+// A frill: half a ruff of ribbed skin round the neck — the pair is the whole collar (frill.ts).
+function Frill({ f, color, phenotype }: { f: MeshFeature; color: number; phenotype: Phenotype }) {
+  const geo = useMemo(() => {
+    const parent = new Int32Array(phenotype.nodes.length).fill(-1);
+    for (const [a, b] of phenotype.edges) parent[b] = a;
+    let c = parent[f.idx];
+    while (c >= 0 && phenotype.nodes[c].kind !== 'spine') c = parent[c];
+    const node = phenotype.nodes[f.idx];
+    const neck = c >= 0 ? phenotype.nodes[c] : node;
+    const neckR = neck.radius * Math.min(neck.scale?.[0] ?? 1, neck.scale?.[1] ?? 1);
+    const plan = frillPlan(neckR, Math.max(f.radius, 0.06) * 2.1, node.pos[0] >= neck.pos[0] ? 1 : -1);
+    const offset: [number, number, number] = [neck.pos[0] - node.pos[0], neck.pos[1] - node.pos[1], neck.pos[2] - node.pos[2]];
+    return frillGeometry(plan, offset, new THREE.Color(color), coatPattern(phenotype.genomeRef.palette));
+  }, [f.idx, f.radius, color, phenotype]);
+  useEffect(() => () => geo.dispose(), [geo]);
   return (
-    <mesh quaternion={f.quat} scale={[r * 2.1, r * 1.5, r * 0.16]} castShadow>
-      <sphereGeometry args={[1, 16, 12]} />
-      <meshStandardMaterial color={color} roughness={0.6} metalness={0.0} side={THREE.DoubleSide} />
+    <mesh geometry={geo} castShadow>
+      <meshStandardMaterial vertexColors roughness={0.55} metalness={0.0} side={THREE.DoubleSide} />
     </mesh>
   );
 }
