@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry, M60–M63). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry, M60–M64). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -45,7 +45,7 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ---
 
-## Part 3i — Arthropods of tagmata, three silhouettes, crabs, apes, deer (M60–M63) · 2026-11-08
+## Part 3i — Arthropods of tagmata, three silhouettes, crabs, apes, deer, stance (M60–M64) · 2026-11-08
 
 - **The crab's ball was two bugs, not a prior.** Flattening the crab's trunk changed nothing on
   screen: its carapace shell, for a one-node trunk, was built from a sphere of the node's scalar
@@ -58,6 +58,10 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 - **One bad seed is a range bug.** A deer that sat low turned out to be a posture's segment range
   ([3, 4]): a third of all deer drew three-link legs. The stance test's floor for deer had been set
   below that deer, so it passed; it is now set at what a deer is (legs ≥ 0.85 of its depth).
+- **Tried and reverted:** dropping the trunk's mid-way swell on chest-heavy quadrupeds (so the
+  belly tucks up). Side by side with the old shapes it made dogs a touch more athletic and cats weak
+  in the rump — not a clear win, so the dog's fawn look was fixed in its own priors instead. The
+  front view found the real fault: every mammal stood splayed like a foal.
 
 - **Structure before tuning.** No prior could make one trunk with legs spaced down it into an insect
   or a spider: the body plan itself was wrong. The arthropod compiler (`compileArthropod`) builds the

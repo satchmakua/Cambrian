@@ -83,6 +83,24 @@ describe('body plans', () => {
     }
   });
 
+  it('cats, dogs and bears stand with their legs straight down under them — not splayed like a foal', () => {
+    // (each leg leaned out up to 27° from the shoulder: an A-frame stance, every one a newborn)
+    for (const id of ['felid', 'canid', 'ursid']) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+        p.nodes.forEach((n, i) => {
+          if (n.kind !== 'terminal' || n.part?.kind !== 'leg') return;
+          let c = i;
+          while (p.nodes[parent.get(c)!].part?.kind === 'leg') c = parent.get(c)!;
+          const hip = p.nodes[c];
+          const lean = Math.atan2(Math.abs(n.pos[0]) - Math.abs(hip.pos[0]), hip.pos[1] - n.pos[1]);
+          expect(lean, `${id} #${seed}`).toBeLessThan((16 * Math.PI) / 180);
+        });
+      }
+    }
+  });
+
   it("a quadruped's elbow sits behind its shoulder; its knee in front of its hip", () => {
     for (const id of ['felid', 'canid', 'ungulate', 'ursid']) {
       for (let seed = 1; seed <= 12; seed++) {

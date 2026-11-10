@@ -613,6 +613,12 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   straight on from the brow (a domed cranium with the muzzle drooping off it read as a camel).
   **Test:** `bodyplan.test.ts › stand on their legs` (a deer's legs now at least 0.85 of its depth).
 
+- [x] **M64 — Standing straight.** Cats, dogs and bears stand with their legs straight down under the
+  body (each leaned out up to 27° from the shoulder — an A-frame stance, every one a newborn foal);
+  dogs carry a bigger head with big pointed ears on a lower, thicker neck and a long bushy tail (a
+  slim raised neck, a small head and stub ears read as a fawn). **Test:** `bodyplan.test.ts › legs
+  straight down`.
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.
