@@ -71,7 +71,29 @@ export interface RigTemplate {
    *  down to the grass */
   graze: number;
   grazeDip: number;
+  /** a long legless body's resting line: at rest it lies in a loose S (see restBends) */
+  rest: RestLine | null;
 }
+
+/**
+ * Where a slitherer's body runs, for its resting S: the arc position (0 at the tail tip … 1 at the
+ * last trunk node) of the midpoint of each trunk link and of each link of its main tail.
+ */
+export interface RestLine {
+  trunkS: number[]; // link k = trunk[k] → trunk[k+1]
+  tail: number[]; // the main tail chain, root → tip (empty: no tail)
+  tailS: number[]; // link j = (j ? tail[j−1] : trunk[tailAt]) → tail[j]
+  tailAt: number; // the trunk index the tail hangs from
+  /** the bends' amplitude (rad of heading): full for a long thin body, none for a stubby one */
+  amp: number;
+  /** each animal lies its own way: the side its body swings to, and 1 (an S) … 1.5 (an S with a
+   *  hook) waves of bend from tail to head */
+  side: 1 | -1;
+  waves: number;
+}
+
+/** the resting S's heading swing (rad): enough to read as an S, never turning the body back on itself */
+export const REST_BEND = 0.85;
 
 const TEMPLATES = new WeakMap<Phenotype, RigTemplate>();
 
@@ -294,6 +316,112 @@ function solveSleepFold(p: Phenotype, l: LegChain, floor: number, belly: number)
   return bestErr < Infinity ? best : fallback;
 }
 
+/**
+ * A legless body's resting line (null when it is too short to lie in an S). The bends scale with the
+ * body's slenderness: a snake thirty times longer than it is thick lies in a full S, a slug in none.
+ */
+function restLine(p: Phenotype, parent: Int32Array, trunk: number[], tails: number[][]): RestLine | null {
+  const nT = trunk.length;
+  if (nT < 4) return null;
+  const dist = (a: number, b: number) => {
+    const A = p.nodes[a].pos;
+    const B = p.nodes[b].pos;
+    return Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]);
+  };
+  // the main tail: the longest chain hanging from the trunk's rear half
+  let tail: number[] = [];
+  let tailAt = 0;
+  let tailLen = 0;
+  for (const c of tails) {
+    const at = trunk.indexOf(parent[c[0]]);
+    if (at < 0 || at > nT / 2) continue;
+    let L = dist(trunk[at], c[0]);
+    for (let j = 1; j < c.length; j++) L += dist(c[j - 1], c[j]);
+    if (L > tailLen) {
+      tail = c;
+      tailAt = at;
+      tailLen = L;
+    }
+  }
+  // arc positions along the line tail tip → trunk[tailAt] → … → trunk[nT − 1]
+  const tailMid: number[] = []; // distance back from trunk[tailAt] to each tail link's midpoint
+  let back = 0;
+  for (let j = 0; j < tail.length; j++) {
+    const d = dist(j ? tail[j - 1] : trunk[tailAt], tail[j]);
+    tailMid.push(back + d / 2);
+    back += d;
+  }
+  const trunkMid: number[] = []; // distance from trunk[tailAt] to each trunk link's midpoint
+  let fwd = 0;
+  for (let k = 0; k < nT - 1; k++) {
+    const d = dist(trunk[k], trunk[k + 1]);
+    trunkMid.push(k < tailAt ? 0 : fwd + d / 2);
+    if (k >= tailAt) fwd += d;
+  }
+  const total = tailLen + fwd;
+  if (total <= 0) return null;
+  let girth = 0;
+  for (const i of trunk) girth += 2 * p.nodes[i].radius * Math.max(p.nodes[i].scale?.[0] ?? 1, p.nodes[i].scale?.[1] ?? 1);
+  girth /= nT;
+  const slender = total / Math.max(girth, 1e-3);
+  const amp = REST_BEND * smooth01((slender - 5) / 9);
+  if (amp < 0.02) return null;
+  // (each animal its own lie, from its seed: the same body always lies the same way)
+  const h = (Math.imul(p.genomeRef.seed >>> 0, 2654435761) >>> 0) / 4294967296;
+  return {
+    trunkS: trunkMid.map((m) => (tailLen + m) / total),
+    tail,
+    tailS: tailMid.map((m) => (tailLen - m) / total),
+    tailAt,
+    amp,
+    side: h < 0.5 ? 1 : -1,
+    waves: 1 + 0.5 * ((h * 2) % 1),
+  };
+}
+
+/** The resting S's heading at arc position s (0 tail tip … 1 head end), about the line's own axis. */
+function restCurve(R: RestLine, amp: number, s: number): number {
+  return R.side * amp * Math.cos(2 * Math.PI * R.waves * s - Math.PI * (R.waves - 1));
+}
+
+/**
+ * The resting S as joint yaws (rad): `trunk[k]` for each trunk bone (bone 0 turns the whole body so
+ * the S lies along the body's facing, the last bone sets the neck on the curve's end tangent), and
+ * `tail[j]` for each bone of the main tail. The headings come from the curve sampled at each link's
+ * midpoint; a joint's yaw is the change in heading across it.
+ */
+export function restBends(R: RestLine, amp: number, trunk: number[], tail: number[]): void {
+  // the axis from tail tip to head end, so the S is centred on the way the body faces
+  let sx = 0;
+  let sz = 0;
+  for (let i = 0; i < 16; i++) {
+    const t = restCurve(R, amp, (i + 0.5) / 16);
+    sx += Math.sin(t);
+    sz += Math.cos(t);
+  }
+  const axis = Math.atan2(sx, sz);
+  const at = (s: number) => restCurve(R, amp, s) - axis;
+  const nL = R.trunkS.length;
+  // links behind the tail's root (a rump stub under the tail) ride along with it
+  const rootHeading = at(R.trunkS[Math.min(R.tailAt, nL - 1)]);
+  let prev = 0;
+  for (let k = 0; k < nL; k++) {
+    const want = k <= R.tailAt ? rootHeading : at(R.trunkS[k]);
+    trunk[k] = want - prev;
+    prev = want;
+  }
+  trunk[nL] = at(1) - prev;
+  // the tail's first link turns with the trunk link it hangs from; each joint after bends to the curve
+  let tprev = rootHeading;
+  for (let j = 0; j < R.tail.length; j++) {
+    if (j + 1 < R.tail.length) {
+      const want = at(R.tailS[j + 1]);
+      tail[j] = want - tprev;
+      tprev = want;
+    } else tail[j] = 0;
+  }
+}
+
 export function rigTemplate(p: Phenotype): RigTemplate {
   const hit = TEMPLATES.get(p);
   if (hit) return hit;
@@ -407,10 +535,12 @@ export function rigTemplate(p: Phenotype): RigTemplate {
     belly,
     graze: 0,
     grazeDip: 0,
+    rest: null,
   };
   const g = solveGraze(p, parent, trunk, neck, legs, arms);
   tmpl.graze = g.neck;
   tmpl.grazeDip = g.dip;
+  if (tmpl.legless) tmpl.rest = restLine(p, parent, trunk, tails);
   TEMPLATES.set(p, tmpl);
   return tmpl;
 }
@@ -429,6 +559,9 @@ export interface RigInstance {
   trunkYaw: number[];
   /** the tail's wag phase (accumulated, so its frequency can ramp without the tail jumping) */
   wag: number;
+  /** scratch: this pose's resting-S joint yaws (trunk bones, main tail bones) */
+  restT: number[];
+  restTail: number[];
 }
 
 export function createRig(p: Phenotype): RigInstance {
@@ -450,7 +583,7 @@ export function createRig(p: Phenotype): RigInstance {
   });
   root.updateMatrixWorld(true);
   const skeleton = new THREE.Skeleton([root, ...bones]);
-  return { template, bones, root, skeleton, rest, phase: 0, t: 0, wag: 0, trunkYaw: [] };
+  return { template, bones, root, skeleton, rest, phase: 0, t: 0, wag: 0, trunkYaw: [], restT: [], restTail: [] };
 }
 
 // --- skin weights --------------------------------------------------------------------------------
@@ -706,10 +839,18 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
   // trunk: lateral undulation (sprawlers sway, slitherers/swimmers send a wave down the body)
   const nT = T.trunk.length;
   const wave = T.legless || inp.swim;
+  // At rest a slitherer lies in a loose S (stretched dead straight it read as a stick); the bends
+  // fade as it sets off and its travelling wave takes over, and asleep it coils a little tighter.
+  // (Not a swimmer: a fish hangs in the water straight.)
+  const R = inp.swim ? null : T.rest;
+  const restAmp = R ? R.amp * (1 - moving) * (1 + 0.25 * inp.sleep) * grounded : 0;
+  if (R && restAmp > 1e-3) restBends(R, restAmp, r.restT, r.restTail);
+  const restOn = R !== null && restAmp > 1e-3;
+  if (restOn) setRot(r.bones[T.trunk[0]], 0, r.restT[0], 0);
   // the trunk's accumulated yaw at each of its nodes: the legs undo it at their hips, so a swaying
   // sprawler's planted feet hold the ground while the body wiggles between them
   if (r.trunkYaw.length !== nT) r.trunkYaw = new Array(nT).fill(0);
-  r.trunkYaw[0] = 0;
+  r.trunkYaw[0] = restOn ? r.restT[0] : 0;
   for (let k = 1; k < nT; k++) {
     const u = k / Math.max(1, nT - 1);
     let yaw = 0;
@@ -723,8 +864,9 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
     // feeding, a long-legged grazer tips its chest down toward the grass (spread over the trunk's
     // joints, so the back curves rather than kinking at one; the legs fold to keep their feet planted)
     const dip = (T.grazeDip * inp.eat * awake) / Math.max(1, nT - 1);
-    setRot(r.bones[T.trunk[k]], flex * awake + dip, yaw * awake, 0);
-    r.trunkYaw[k] = r.trunkYaw[k - 1] + yaw * awake;
+    const lie = restOn ? r.restT[k] : 0;
+    setRot(r.bones[T.trunk[k]], flex * awake + dip, yaw * awake + lie, 0);
+    r.trunkYaw[k] = r.trunkYaw[k - 1] + yaw * awake + lie;
   }
   // idle: a slow look around (two incommensurate waves, so the glances never settle into a loop),
   // a breath that lifts the chest, and a lazy weight shift
@@ -819,13 +961,18 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
     const side = r.bones[chain[0]].position.x >= 0 ? 1 : -1;
     setRot(r.bones[chain[0]], -0.3 * moving * Math.sin(P + (side > 0 ? 0 : Math.PI)) * awake, 0, 0);
   });
-  // tails sway (a slow wag; a swimmer's tail drives the stroke)
+  // tails sway (a slow wag; a swimmer's tail drives the stroke). A resting slitherer's tail carries
+  // on its S, lying still but for the tip's idle flick.
   for (const chain of T.tails) {
+    const lying = restOn && chain === R!.tail;
+    const still = lying ? restAmp / Math.max(R!.amp, 1e-3) : 0;
     for (let j = 0; j < chain.length; j++) {
       const amp = ((inp.swim || T.legless ? 0.28 * (0.4 + moving) : 0.08 + 0.1 * moving) * (1 - 0.7 * fly) + 0.22 * show) * (1 - 0.8 * stalk);
-      const yaw = amp * Math.sin((inp.swim ? P : r.wag + P * 0.5) - j * 0.8);
+      const u = j / Math.max(1, chain.length - 1);
+      const flick = lying ? 1 - Math.min(1, still) * (1 - 0.3 * u * u) : 1;
+      const yaw = amp * flick * Math.sin((inp.swim ? P : r.wag + P * 0.5) - j * 0.8);
       // a displaying tail is raised (−pitch lifts it), each link a little more — a flag, not a droop
-      setRot(r.bones[chain[j]], -0.08 * inp.sleep - 0.1 * fly - 0.32 * show, yaw * awake, 0);
+      setRot(r.bones[chain[j]], -0.08 * inp.sleep - 0.1 * fly - 0.32 * show, yaw * awake + (lying ? r.restTail[j] : 0), 0);
     }
   }
   // fins, tentacles and antennae drift

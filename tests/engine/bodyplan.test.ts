@@ -47,6 +47,34 @@ describe('body plans', () => {
     }
   });
 
+  it('a fish is deep and flattened side to side, narrowing to a slim stalk before its tail fin', () => {
+    // (a round tube of even girth with a fin at each end read as an eel, or a sausage)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'fish'));
+      const t = trunkOf(p).sort((a, b) => a.pos[2] - b.pos[2]);
+      const depth = (n: Phenotype['nodes'][number]) => n.radius * (n.scale?.[1] ?? 1);
+      const width = (n: Phenotype['nodes'][number]) => n.radius * (n.scale?.[0] ?? 1);
+      const peak = t.reduce((b, n) => (depth(n) > depth(b) ? n : b), t[0]);
+      expect(depth(peak) / width(peak), `#${seed} compressed`).toBeGreaterThan(1.45);
+      // a spindle, not a loaf: the body thins steadily back to the rump…
+      expect(depth(t[0]) / depth(peak), `#${seed} rump`).toBeLessThan(0.6);
+      // …where a slim stalk carries the tail fin
+      const stalk = p.nodes.find((n) => n.part?.kind === 'tail');
+      expect(stalk, `#${seed} tail`).toBeDefined();
+      expect(stalk!.radius / depth(t[0]), `#${seed} stalk`).toBeLessThan(0.6);
+      // it has a head (not its face on the blunt front of the trunk), and a fish's proportions
+      expect(p.nodes.some((n) => n.kind === 'spine' && (n.segment ?? 0) > 0), `#${seed} head`).toBe(true);
+      expect((p.bounds.max[2] - p.bounds.min[2]) / (2 * depth(peak)), `#${seed} length/depth`).toBeLessThan(4);
+    }
+    // and most carry an anal fin on the belly toward the tail, opposite the dorsal
+    let anal = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const fins = genomeOfMorphotype(seed, 'fish').body.appendages.filter((a) => a.kind === 'fin' && Math.abs(a.attachAzimuth - Math.PI * 1.5) < 0.01);
+      anal += fins.length > 0 ? 1 : 0;
+    }
+    expect(anal).toBeGreaterThanOrEqual(8);
+  });
+
   it('a snake is an even rope that lies flat and runs on into a tail', () => {
     for (let seed = 1; seed <= 12; seed++) {
       const p = grow(genomeOfMorphotype(seed, 'serpent'));

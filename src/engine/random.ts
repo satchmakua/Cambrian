@@ -60,6 +60,7 @@ interface Morpho {
   claws?: number; // prob of a pair of CHELIPEDS — a crab's big claws, held out in front (see cheliped)
   dorsal?: number;
   pectoral?: number;
+  anal?: number; // prob of an anal fin: a keel under the rear of a fish's body, opposite the dorsal
   tail?: number;
   tailTerm?: readonly Terminal[];
   tailLen?: Rg; // tail segment length ×girth — default [0.7, 1.4]; birds keep a short stub under a feather fan
@@ -135,7 +136,7 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'crocodilian', cluster: 'familiar', weight: 0.5, tailTaper: [0.82, 0.88], tailAz: [4.6, 4.8], tailCurl: [0.04, 0.08], tailDroop: [-1.52, -1.4], tailLen: [0.72, 1.0], tailSegs: [5, 6], tailThick: [0.68, 0.84], eyeT: [0.1, 0.28], head: 1, girth: [0.4, 0.55], repeat: [5, 7], height: [0.55, 0.75], elong: [1.3, 1.6], legPairs: [2], posture: 'sprawling', legLen: [0.5, 0.72], legThick: [0.44, 0.58], legAz: [3.55, 3.78], legTerm: ['claw'], headShape: ['flat'], snout: [0.8, 1.0], tail: 0.95, spines: 0.7, eyeStyle: [0.4, 0.6], eyeAz: [1.0, 1.2], mouthStyle: [0.14, 0.24], covering: ['plates', 'scales'], pattern: ['mottle', 'reticulate'], hue: [0.2, 0.35], sat: [0.3, 0.6] },
   { id: 'serpent', cluster: 'familiar', weight: 0.6, tailTaper: [0.74, 0.82], tailAz: [4.71, 4.71], tailCurl: [0, 0.02], tailDroop: [-1.57, -1.53], tailThick: [0.85, 0.95], tailLen: [0.9, 1.2], tailSegs: [5, 6], rear: [-0.004, 0.004], taper: [0.985, 1.0], head: 1, girth: [0.22, 0.32], repeat: [17, 24], elong: [1.3, 1.5], headShape: ['wedge'], wind: 0.9, legPairs: [0], tail: 1, eyeStyle: [0.4, 0.6], mouthStyle: [0.14, 0.24], covering: ['scales'], pattern: ['bands', 'stripes', 'reticulate'], hue: [0.1, 0.4], sat: [0.5, 0.85] },
   { id: 'anuran', cluster: 'familiar', weight: 0.6, head: 1, eyeEl: [0.2, 0.35], snout: [0, 0.05], headSize: [0.9, 1.05], headDome: [0.5, 0.68], headWide: [1.35, 1.7], headShape: ['broad', 'flat'], eyeT: [0.35, 0.5], girth: [0.5, 0.7], repeat: [1, 2], height: [0.62, 0.78], legPairs: [2], posture: 'sprawling', legLen: [0.5, 0.7], hindLeg: [1.45, 1.6], foreLeg: [0.7, 0.78], legTerm: ['claw'], tail: 0.0, eyeStyle: [0, 0.2], eyeAz: [0.8, 1.05], mouthStyle: [0.07, 0.12], covering: ['skin'], pattern: ['spots', 'mottle'], sheen: [0.55, 0.85], hue: [0.25, 0.45], sat: [0.5, 0.85] },
-  { id: 'fish', cluster: 'familiar', weight: 0.7, eyeEl: [0.15, 0.35], tailAz: [4.71, 4.71], tailCurl: [-0.03, 0.02], tailDroop: [-1.57, -1.5], headShape: ['round', 'blocky'], headSize: [0.85, 1.0], girth: [0.4, 0.58], repeat: [4, 6], height: [1.05, 1.45], elong: [1.3, 1.6], taper: [1.06, 1.13], legPairs: [0], dorsal: 1, pectoral: 1, tail: 1, tailTerm: ['fin'], tailLen: [0.5, 0.75], tailThick: [0.5, 0.66], tailSegs: [3, 3], gills: 0.9, head: 0.85, eyeStyle: [0, 0.2], eyeAz: [0.2, 0.4], mouthStyle: [0.07, 0.12], covering: ['scales'], pattern: ['plain', 'spots', 'stripes'], sheen: [0.35, 0.6], hue: [0.45, 0.65], sat: [0.4, 0.8] },
+  { id: 'fish', cluster: 'familiar', weight: 0.7, eyeEl: [0.15, 0.35], tailAz: [4.71, 4.71], tailCurl: [-0.03, 0.02], tailDroop: [-1.57, -1.5], headShape: ['domed', 'wedge'], headSize: [1.15, 1.4], headWide: [0.78, 0.92], headDome: [1.35, 1.7], girth: [0.36, 0.5], repeat: [6, 8], height: [1.6, 2.1], elong: [0.8, 0.95], taper: [1.12, 1.15], rear: [-0.012, 0.012], legPairs: [0], dorsal: 1, pectoral: 1, anal: 0.85, tail: 1, tailTerm: ['fin'], tailLen: [0.55, 0.8], tailThick: [0.3, 0.42], tailSegs: [3, 3], gills: 0.9, head: 1, eyeStyle: [0, 0.2], eyeAz: [0.2, 0.4], mouthStyle: [0.07, 0.12], covering: ['scales'], pattern: ['plain', 'spots', 'stripes'], sheen: [0.35, 0.6], hue: [0.45, 0.65], sat: [0.4, 0.8] }, // deep and flattened side to side, the head running on from the body's depth, a slim stalk before the tail fin (a round tube read as an eel)
   { id: 'shark', cluster: 'familiar', weight: 0.6, eyeEl: [0.15, 0.35], tailAz: [4.71, 4.71], tailCurl: [-0.03, 0.02], tailDroop: [-1.57, -1.5], headShape: ['wedge', 'tapered'], headSize: [0.85, 1.0], girth: [0.45, 0.62], repeat: [5, 7], height: [0.95, 1.2], elong: [1.4, 1.7], taper: [1.06, 1.13], legPairs: [0], dorsal: 1, pectoral: 1, tail: 1, tailTerm: ['fin'], tailLen: [0.6, 0.85], tailThick: [0.45, 0.6], tailSegs: [3, 4], gills: 0.95, head: 0.85, eyeStyle: [0.1, 0.3], eyeAz: [0.2, 0.4], mouthStyle: [0.13, 0.24], covering: ['skin'], pattern: ['plain', 'gradient'], hue: [0.55, 0.62], sat: [0.2, 0.45] },
   { id: 'bird', cluster: 'familiar', weight: 1.3, elong: [1.25, 1.45], taper: [1.12, 1.2], legAz: [4.62, 4.71], girth: [0.34, 0.5], repeat: [2, 3], height: [1.0, 1.3], neck: [0.42, 0.52], neckLinks: [2, 2], neckLift: [-0.42, -0.3], headSize: [0.5, 0.6], headShape: ['round', 'round', 'broad'], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 1.0], legThick: [0.15, 0.21], legTerm: ['claw'], wings: 0.95, tail: 0.85, tailTerm: ['fin'], tailLen: [0.22, 0.36], tailSegs: [2, 2], rear: [-0.22, -0.1], crest: 0.45, eyeStyle: [0, 0.2], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'plain', 'spots'], hue: [0.05, 0.65], sat: [0.5, 0.9] },
   { id: 'raptor', cluster: 'familiar', weight: 1.2, elong: [1.25, 1.45], taper: [1.12, 1.2], legAz: [4.62, 4.71], girth: [0.4, 0.54], repeat: [2, 3], height: [1.0, 1.25], neck: [0.45, 0.55], neckLinks: [2, 2], neckLift: [-0.4, -0.28], headSize: [0.56, 0.66], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 0.95], legThick: [0.18, 0.24], legTerm: ['claw'], wings: 1, tail: 0.85, tailTerm: ['fin'], tailLen: [0.22, 0.36], tailSegs: [2, 2], rear: [-0.2, -0.08], crest: 0.3, headShape: ['round', 'broad'], eyeStyle: [0, 0.15], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'mottle'], hue: [0.06, 0.12] },
@@ -265,6 +266,8 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
   // pectorals just behind the gill slits (the trunk runs rump 0 → head 1: at 0.25–0.45 they stuck
   // out beside the tail)
   if (chance(rng, m.pectoral ?? 0)) apps.push(pectoralFin(rng, range(rng, 0.66, 0.8), girth));
+  // (no draw unless the morph has one: every other morphotype's genome stream stays as it was)
+  if (m.anal && chance(rng, m.anal)) apps.push(analFin(rng, range(rng, 0.14, 0.3), girth));
   // tail
   // a tail ends plain unless the morphotype says otherwise (a caudal FIN belongs to swimmers — the old
   // ['none','fin'] default gave bears, deer and apes a fish's tail fan)
@@ -736,6 +739,20 @@ function dorsalFin(rng: Rng, attachT: number, girth: number): AppendageGene {
     thickness: clamp(girth * range(rng, 0.42, 0.6), A.thickness),
     taper: range(rng, 0.9, 0.98),
     curl: [range(rng, -0.1, 0.2), 0],
+  });
+}
+
+/** A fish's anal fin: one blade on the belly's midline toward the tail, the dorsal's counterpart. */
+function analFin(rng: Rng, attachT: number, girth: number): AppendageGene {
+  return part('fin', 'fin', false, range(rng, 0, 0.3), {
+    attachT,
+    attachAzimuth: Math.PI * 1.5,
+    attachElevation: range(rng, -0.35, -0.15), // raked back toward the tail
+    segments: 1,
+    length: clamp(girth * range(rng, 0.14, 0.24), A.length),
+    thickness: clamp(girth * range(rng, 0.34, 0.48), A.thickness),
+    taper: range(rng, 0.9, 0.98),
+    curl: [range(rng, -0.1, 0.1), 0],
   });
 }
 

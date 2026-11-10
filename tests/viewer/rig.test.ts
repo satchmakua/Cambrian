@@ -325,6 +325,51 @@ describe('animation rig', () => {
     }
   });
 
+  it('a resting snake lies in a loose S, along the way it faces — and straightens out to slither', () => {
+    // (stretched dead straight at rest, a snake read as a stick)
+    for (const seed of [1, 3, 5]) {
+      const ph = p('serpent', seed);
+      const T = rigTemplate(ph);
+      expect(T.rest, `#${seed}`).not.toBeNull();
+      const R = T.rest!;
+      const r = createRig(ph);
+      const line = [...R.tail.slice().reverse(), ...T.trunk.slice(R.tailAt)];
+      poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 0, swim: false, turn: 0 });
+      const pts = line.map((i) => footWorld(r, i));
+      const tip = pts[0];
+      const end = pts[pts.length - 1];
+      const L = pts.slice(1).reduce((t, v, i) => t + v.distanceTo(pts[i]), 0);
+      // the body runs along its facing (+Z): the chord from tail tip to head end is nearly straight ahead
+      expect(Math.abs(Math.atan2(end.x - tip.x, end.z - tip.z)), `#${seed} chord`).toBeLessThan(0.2);
+      // it never doubles back on itself…
+      pts.slice(1).forEach((v, i) => expect(Math.abs(Math.atan2(v.x - pts[i].x, v.z - pts[i].z)), `#${seed} link ${i}`).toBeLessThan(Math.PI / 2));
+      // …and it bends to both sides of that chord: an S, not a C
+      const dx = end.x - tip.x;
+      const dz = end.z - tip.z;
+      const dl = Math.hypot(dx, dz);
+      const off = pts.map((v) => ((v.x - tip.x) * dz - (v.z - tip.z) * dx) / dl);
+      expect(Math.max(...off), `#${seed} one side`).toBeGreaterThan(0.03 * L);
+      expect(Math.min(...off), `#${seed} other side`).toBeLessThan(-0.03 * L);
+      // under way, its own travelling wave takes over: the resting bends are gone
+      poseRig(r, { dt: 0, speed: 1, cruise: 1, sleep: 0, eat: 0, swim: false, turn: 0 });
+      expect(r.bones[T.trunk[0]].quaternion.angleTo(new THREE.Quaternion()), `#${seed} moving`).toBeLessThan(1e-9);
+      // asleep it coils a little tighter
+      poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 1, eat: 0, swim: false, turn: 0 });
+      const curl = (q: THREE.Quaternion) => q.angleTo(new THREE.Quaternion());
+      const sleepBend = T.trunk.reduce((t, i) => t + curl(r.bones[i].quaternion), 0);
+      poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 0, swim: false, turn: 0 });
+      const restBend = T.trunk.reduce((t, i) => t + curl(r.bones[i].quaternion), 0);
+      expect(sleepBend, `#${seed} asleep`).toBeGreaterThan(restBend);
+    }
+  });
+
+  it('a fish hangs straight in the water, and a stubby legless body has no S to lie in', () => {
+    const fish = createRig(p('fish', 2));
+    poseRig(fish, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 0, swim: true, turn: 0 });
+    expect(fish.bones[fish.template.trunk[0]].quaternion.angleTo(new THREE.Quaternion())).toBeLessThan(1e-9);
+    expect(rigTemplate(p('slime', 3)).rest).toBeNull();
+  });
+
   it('a sleeper breathes: its chest rises and falls, slowly', () => {
     const r = createRig(p('canid'));
     const chest = r.bones[r.template.trunk[r.template.trunk.length - 1]];
