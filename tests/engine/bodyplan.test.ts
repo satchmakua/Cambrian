@@ -101,6 +101,21 @@ describe('body plans', () => {
     }
   });
 
+  it('lizards and crocodiles sprawl: the upper leg reaches out to the side, not down like a post', () => {
+    // (the sprawl starts at a splay of 0.5, and a third of crocodiles drew less: thin column legs under
+    // a long body)
+    for (const id of ['lizard', 'crocodilian']) {
+      for (let seed = 1; seed <= 12; seed++) {
+        for (const l of legChains(grow(genomeOfMorphotype(seed, id)))) {
+          const [hip, knee] = l.nodes;
+          const out = Math.abs(knee.pos[0]) - Math.abs(hip.pos[0]);
+          const len = Math.hypot(knee.pos[0] - hip.pos[0], knee.pos[1] - hip.pos[1], knee.pos[2] - hip.pos[2]);
+          expect(out / len, `${id} #${seed}`).toBeGreaterThan(0.6);
+        }
+      }
+    }
+  });
+
   it("a quadruped's elbow sits behind its shoulder; its knee in front of its hip", () => {
     for (const id of ['felid', 'canid', 'ungulate', 'ursid']) {
       for (let seed = 1; seed <= 12; seed++) {
