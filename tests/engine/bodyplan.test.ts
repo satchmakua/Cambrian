@@ -358,6 +358,27 @@ describe('body plans', () => {
     }
   });
 
+  it("an ape's arms hang down from its shoulders to the ground in front of it — not swept out behind", () => {
+    // (aimed out and back, they ran out to the sides and lay along the floor behind the shoulders: in
+    // a thumbnail the ape was a hunched lump sliding on its belly)
+    for (let seed = 1; seed <= 8; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'primate'));
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      for (let i = 0; i < p.nodes.length; i++) {
+        const h = p.nodes[i];
+        if (h.terminal !== 'hand') continue;
+        let s = i;
+        while (p.nodes[parent.get(s)!].part?.kind === 'arm') s = parent.get(s)!;
+        const S = p.nodes[s].pos;
+        const d = [h.pos[0] - S[0], h.pos[1] - S[1], h.pos[2] - S[2]];
+        const len = Math.hypot(d[0], d[1], d[2]);
+        expect(-d[1] / len, `#${seed} hangs down`).toBeGreaterThan(0.75);
+        expect(d[2], `#${seed} not behind`).toBeGreaterThan(-0.05 * len);
+        expect(Math.abs(h.pos[0]) - Math.abs(S[0]), `#${seed} not splayed`).toBeLessThan(0.5 * len);
+      }
+    }
+  });
+
   it('a theropod: a level body balanced over its legs, a long tail held out behind, the head out in front', () => {
     // (as an upright walker on a deep two-link trunk it read as a blob — a cartoon dinosaur, a penguin)
     for (let seed = 1; seed <= 8; seed++) {
