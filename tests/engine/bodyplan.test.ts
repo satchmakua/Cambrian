@@ -266,6 +266,17 @@ describe('body plans', () => {
     }
   });
 
+  it("a bird's head is round — about as wide as it is tall — not a tall narrow hood", () => {
+    for (const id of ['bird', 'raptor']) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const g = genomeOfMorphotype(seed, id);
+        let head = g.body;
+        while (head.child) head = head.child;
+        expect(head.size[1] / head.size[0], `${id} #${seed}`).toBeLessThan(1.3);
+      }
+    }
+  });
+
   it('a crab is wide and flat, its claws held out in front and four pairs of legs splayed to its sides', () => {
     // (a round domed body on three pairs of stubby legs read as a beetle)
     for (let seed = 1; seed <= 8; seed++) {

@@ -624,6 +624,10 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   long tail held out behind to counterweigh a big-jawed reptile head on an S-curved neck, small
   arms. **Test:** `bodyplan.test.ts › theropod`.
 
+- [x] **M66 — Birds' heads.** A bird's and a raptor's skull is round or broad (the raptor was pinned
+  to a tall, narrow wedge and the bird drew any skull at all: heads and necks merged into a hood, a
+  cobra's). **Test:** `bodyplan.test.ts › bird's head is round`.
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.
