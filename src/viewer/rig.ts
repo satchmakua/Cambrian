@@ -93,6 +93,22 @@ export interface RestLine {
   waves: number;
 }
 
+/** the body wave's phase step per trunk joint (rad): a slitherer's, a swimmer's */
+const SLITHER_K = 0.95;
+const SWIM_K = 1.1;
+
+/** the mean length of a chain's links */
+function meanLink(p: Phenotype, chain: number[]): number {
+  if (chain.length < 2) return 0;
+  let L = 0;
+  for (let k = 1; k < chain.length; k++) {
+    const a = p.nodes[chain[k - 1]].pos;
+    const b = p.nodes[chain[k]].pos;
+    L += Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  }
+  return L / (chain.length - 1);
+}
+
 /** the resting S's heading swing (rad): enough to read as an S, never turning the body back on itself */
 export const REST_BEND = 0.85;
 
@@ -606,7 +622,10 @@ export function rigTemplate(p: Phenotype): RigTemplate {
     legs,
     arms,
     others,
-    stride: legs.length ? Math.max(0.6, meanLeg * 1.6) : Math.max(0.8, trunk.length * 0.5),
+    // (a legless body's stride is its body wave's length: the wave then runs back along the body
+    // exactly as fast as the body moves forward, so every part follows the head's path — at half the
+    // trunk's length it ran a third as fast, and the body skated sideways over the ground)
+    stride: legs.length ? Math.max(0.6, meanLeg * 1.6) : Math.max(0.8, ((2 * Math.PI) / SLITHER_K) * meanLink(p, trunk)),
     sprawl: legs.length >= 6 ? 1 : archedFrac > 0.5 ? 0.9 : 0.25,
     legless: legs.length === 0,
     gallops: legs.length === 4 && zs.length === 2 && archedFrac === 0,
@@ -933,8 +952,10 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
     const u = k / Math.max(1, nT - 1);
     let yaw = 0;
     // a slitherer throws big S-curves down its whole length; a swimmer's wave grows toward the tail
-    if (T.legless && !inp.swim) yaw = 0.42 * moving * Math.sin(P - k * 0.95);
-    else if (wave) yaw = 0.24 * moving * Math.sin(P - k * 1.1) * (0.35 + 0.65 * (1 - u));
+    // (both waves run BACK along the body, head to tail — the push that drives it forward; run the
+    // other way, a snake or a fish undulated like it was moonwalking)
+    if (T.legless && !inp.swim) yaw = 0.42 * moving * Math.sin(P + k * SLITHER_K);
+    else if (wave) yaw = 0.24 * moving * Math.sin(P + k * SWIM_K) * (0.35 + 0.65 * (1 - u));
     else yaw = 0.05 * T.sprawl * moving * Math.sin(P - k * 0.8);
     yaw -= inp.turn * 0.06 * awake; // lean into turns
     // galloping, the back coils as the legs gather under the body and stretches as they reach out
@@ -1048,7 +1069,10 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
       const amp = ((inp.swim || T.legless ? 0.28 * (0.4 + moving) : 0.08 + 0.1 * moving) * (1 - 0.7 * fly) + 0.22 * show) * (1 - 0.8 * stalk);
       const u = j / Math.max(1, chain.length - 1);
       const flick = lying ? 1 - Math.min(1, still) * (1 - 0.3 * u * u) : 1;
-      const yaw = amp * flick * Math.sin((inp.swim ? P : r.wag + P * 0.5) - j * 0.8);
+      // a swimmer's or a slitherer's tail carries the body wave on toward its tip; any other tail wags
+      // on its own clock
+      const waveK = inp.swim ? SWIM_K : SLITHER_K;
+      const yaw = amp * flick * Math.sin(inp.swim || T.legless ? P - (j + 1) * waveK : r.wag + P * 0.5 - j * 0.8);
       // a displaying tail is raised (−pitch lifts it), each link a little more — a flag, not a droop
       setRot(r.bones[chain[j]], -0.08 * inp.sleep - 0.1 * fly - 0.32 * show, yaw * awake + (lying ? r.restTail[j] : 0), 0);
     }

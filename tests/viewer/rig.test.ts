@@ -382,6 +382,47 @@ describe('animation rig', () => {
     expect(restPosed(cat)).toBe(cat);
   });
 
+  it("a slitherer's and a swimmer's body wave runs head to tail, keeping pace with the ground", () => {
+    // (it ran tail to head — a snake or a fish undulating like it was moonwalking — and a third as
+    // fast as the snake moved, so its body skated sideways)
+    const yawOf = (q: THREE.Quaternion) => new THREE.Euler().setFromQuaternion(q, 'YXZ').y;
+    for (const [kind, swim] of [['serpent', false], ['fish', true]] as const) {
+      const ph = p(kind, 2);
+      const T = rigTemplate(ph);
+      const r = createRig(ph);
+      const k = Math.floor(T.trunk.length / 2);
+      const head: number[] = [];
+      const tail: number[] = [];
+      const speed = 2;
+      for (let f = 0; f < 600; f++) {
+        poseRig(r, { dt: 1 / 60, speed, cruise: 2, sleep: 0, eat: 0, swim, turn: 0 });
+        head.push(yawOf(r.bones[T.trunk[k]].quaternion));
+        tail.push(yawOf(r.bones[T.trunk[k - 1]].quaternion));
+      }
+      // the joint nearer the tail repeats the one nearer the head after a lag
+      let best = -Infinity;
+      let lag = 0;
+      for (let L = -40; L <= 40; L++) {
+        let c = 0;
+        for (let t = 60; t < 540; t++) c += tail[t] * head[t - L];
+        if (c > best) {
+          best = c;
+          lag = L;
+        }
+      }
+      expect(lag, kind).toBeGreaterThan(0);
+      if (!swim) {
+        // …at the ground's speed: one link's length in the time the body moves that far
+        const a = ph.nodes[T.trunk[k]].pos;
+        const b = ph.nodes[T.trunk[k - 1]].pos;
+        const link = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+        const waveSpeed = link / (lag / 60);
+        expect(waveSpeed / speed, `${kind} wave speed`).toBeGreaterThan(0.75);
+        expect(waveSpeed / speed, `${kind} wave speed`).toBeLessThan(1.35);
+      }
+    }
+  });
+
   it('a fish hangs straight in the water, and a stubby legless body has no S to lie in', () => {
     const fish = createRig(p('fish', 2));
     poseRig(fish, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 0, swim: true, turn: 0 });
