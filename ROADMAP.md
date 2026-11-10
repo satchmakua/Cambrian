@@ -650,6 +650,13 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   the browser has `KHR_parallel_shader_compile` — behind a short "Waking the world…"; portraits wait
   for idle time and encode off the main thread. **Test:** `tests/world/keyPan.test.ts`.
 
+- [x] **M70 — Stances, frills, close-ups.** A body's legs share one stance, decided from their mean
+  splay (a third of turtles sprawled the fore and stood the hind on posts), and crocodiles and turtles
+  sit wholly in the sprawl (a third of crocodiles stood on thin columns). Frills are ribbed ruffs
+  round the neck (`frill.ts`), not a pale disc. In the World a creature near the camera wears its
+  fine skin, built one per frame behind every plain skin. **Tests:** `bodyplan.test.ts › sprawl /
+  legs agree`, `frill.test.ts`.
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.
