@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M67–M71; M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M67–M72; M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -44,6 +44,18 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic; **+ gait playback** |
 
 ---
+
+## M72 — Apes, still snakes, ears, cats and dogs · 2026-11-10
+
+- **Look at litters, not specimens.** Random "Any Kind" litters (what a player breeds from) showed
+  the primates as hunched lumps: their arms, aimed out and back and half again as long as the
+  shoulders are high, lay along the floor behind them. The morphotype's own Studio plates had hidden
+  it behind a front view.
+- **Pose once, not per frame.** The static views have no rig, so `restPosed` applies the rig's rest
+  bends to the nodes (all yaws: angles add down the tree) and the skin is built along the curve —
+  checked against the rig's own FK to 1e-15.
+- **An orientation can be the whole problem.** Cat and dog ears were the right size and shape, but
+  faced dead ahead: edge-on in profile they read as horns. Turned out to their side they read.
 
 ## M71 — Snakes, fish, frogs, whole limbs · 2026-11-10
 

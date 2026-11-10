@@ -665,6 +665,13 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   legs. **Tests:** `rig.test.ts › resting snake / fish hangs straight`, `bodyplan.test.ts › fish /
   frog sits up`, `mouthLine.test.ts › lips stay on the face`, `smoothSkin.test.ts › thin limbs whole`.
 
+- [x] **M72 — Apes, still snakes, ears, cats and dogs.** Apes knuckle-walk, arms hanging from the
+  shoulders as front legs (they lay swept out behind). The litter's and the bestiary's snakes lie in
+  the rig's resting S (`restPosed`). Ears open forward and out, so a profile shows them; cats and
+  dogs carry their heads on thicker, lower necks, stand on sturdier legs, and hold their tails back
+  and up. **Tests:** `bodyplan.test.ts › ape's arms / cat's or dog's tail`, `rig.test.ts › still
+  view S`, `ear.test.ts`.
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.
