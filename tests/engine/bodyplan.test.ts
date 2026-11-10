@@ -244,6 +244,28 @@ describe('body plans', () => {
     }
   });
 
+  it('a theropod: a level body balanced over its legs, a long tail held out behind, the head out in front', () => {
+    // (as an upright walker on a deep two-link trunk it read as a blob — a cartoon dinosaur, a penguin)
+    for (let seed = 1; seed <= 8; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'biped'));
+      const t = trunkOf(p);
+      const dz = t[t.length - 1].pos[2] - t[0].pos[2];
+      expect(Math.abs(t[t.length - 1].pos[1] - t[0].pos[1]) / dz, `#${seed} level`).toBeLessThan(0.35);
+      const feet = p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg');
+      for (const f of feet) {
+        expect(f.pos[2], `#${seed} feet under the body`).toBeGreaterThan(t[0].pos[2]);
+        expect(f.pos[2], `#${seed} feet under the body`).toBeLessThan(t[t.length - 1].pos[2]);
+      }
+      const tail = p.nodes.filter((n) => n.part?.kind === 'tail');
+      const tip = tail.reduce((a, b) => (b.pos[2] < a.pos[2] ? b : a));
+      expect(t[0].pos[2] - tip.pos[2], `#${seed} long tail`).toBeGreaterThan(0.8 * dz);
+      const ground = Math.min(...feet.map((f) => f.pos[1]));
+      expect(tip.pos[1] - ground, `#${seed} tail held up`).toBeGreaterThan(0.25 * (t[0].pos[1] - ground));
+      const mouth = p.nodes.find((n) => n.terminal === 'mouth')!;
+      expect(mouth.pos[2], `#${seed} head out front`).toBeGreaterThan(t[t.length - 1].pos[2] + t[t.length - 1].radius);
+    }
+  });
+
   it('a crab is wide and flat, its claws held out in front and four pairs of legs splayed to its sides', () => {
     // (a round domed body on three pairs of stubby legs read as a beetle)
     for (let seed = 1; seed <= 8; seed++) {

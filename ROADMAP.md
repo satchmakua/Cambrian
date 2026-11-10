@@ -619,6 +619,11 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   slim raised neck, a small head and stub ears read as a fawn). **Test:** `bodyplan.test.ts › legs
   straight down`.
 
+- [x] **M65 — Theropods.** The generic biped (an upright walker on a deep two-link trunk — a blob, a
+  cartoon dinosaur, a penguin) is a theropod: a level body balanced over two long, strong legs, a
+  long tail held out behind to counterweigh a big-jawed reptile head on an S-curved neck, small
+  arms. **Test:** `bodyplan.test.ts › theropod`.
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.
