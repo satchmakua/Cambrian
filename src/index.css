@@ -1477,11 +1477,6 @@ body,
   font-style: italic;
 }
 
-.thumb-view {
-  position: absolute;
-  inset: 0;
-}
-
 /* a narrower window: drop the title and tighten the bar so it stays one row */
 @media (max-width: 1180px) {
   .world-bar {

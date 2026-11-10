@@ -185,6 +185,19 @@ describe('smooth skin (M15)', () => {
     }
   });
 
+  it("a crab's carapace is a thin skin over its wide flat body — not a dome (the beetle-ball)", async () => {
+    const { buildShellGeometry } = await import('../../src/viewer/smoothSkin');
+    for (let seed = 1; seed <= 6; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'crab'));
+      const shell = buildShellGeometry(p, 'low');
+      if (!shell) continue;
+      const { max } = scan(shell.getAttribute('position').array as ArrayLike<number>);
+      const t = p.nodes.find((n) => n.kind === 'spine' && n.segment === 0)!;
+      const back = t.pos[1] + t.radius * (t.scale?.[1] ?? 1);
+      expect(max[1] - back, `#${seed}`).toBeLessThan(0.2 * t.radius);
+    }
+  });
+
   it('an anisotropic trunk is one smooth elliptical tube — no per-node bulges (the caterpillar)', async () => {
     const { buildFieldPrims, fieldAt } = await import('../../src/viewer/bodyField');
     for (const id of ['fish', 'felid', 'crocodilian']) {

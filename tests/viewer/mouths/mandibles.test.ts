@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import type * as THREE from 'three';
 import { grow, type Phenotype } from '../../../src/engine/grow';
 import { defaultGenome } from '../../../src/engine/genome';
-import { randomGenome } from '../../../src/engine/random';
+import { randomGenome, genomeOfMorphotype } from '../../../src/engine/random';
 import { buildFieldPrims, fieldAt } from '../../../src/viewer/bodyField';
-import { buildMandibles, type MandiblesBuild } from '../../../src/viewer/mouths/mandibles';
+import { buildMandibles, buildChelicerae, isChelicerate, type MandiblesBuild } from '../../../src/viewer/mouths/mandibles';
 
 // Blade hinges are corner samples of the mouth line — the same on-surface tolerance as mouthLine
 // plus a hair for the Newton fallback on soft saddles.
@@ -183,6 +183,34 @@ describe('mandibles mouth (mouth overhaul)', () => {
     for (let i = 0; i < a.count; i++) {
       const d = Math.hypot(a.getX(i) - b.getX(i), a.getY(i) - b.getY(i), a.getZ(i) - b.getZ(i));
       expect(d).toBeGreaterThan(proud.r * 0.1);
+    }
+  });
+
+  it("a spider's mandibles are chelicerae: two fangs hanging side by side from its face, mirror twins", () => {
+    for (let seed = 1; seed <= 6; seed++) {
+      const spider = grow(genomeOfMorphotype(seed, 'arachnid'));
+      const mi = spider.nodes.findIndex((n) => n.terminal === 'mouth');
+      expect(isChelicerate(spider, mi), `#${seed}`).toBe(true);
+      const insect = grow(genomeOfMorphotype(seed, 'insectoid'));
+      expect(isChelicerate(insect, insect.nodes.findIndex((n) => n.terminal === 'mouth')), `#${seed} insect`).toBe(false);
+      const b = buildChelicerae(spider, mi, [])!;
+      const prims = buildFieldPrims(spider, 'body');
+      const o = spider.nodes[mi].pos;
+      const r = Math.max(spider.nodes[mi].radius, 0.06);
+      for (const side of [0, 1] as const) {
+        const root = b.basePaths[side][0];
+        // rooted at the skin (a hair under it), the fang tip hanging well below the root
+        expect(Math.abs(fieldAt(prims, root[0] + o[0], root[1] + o[1], root[2] + o[2])), `#${seed} root`).toBeLessThan(0.2 * r);
+        const tip = b.fangPaths[side][b.fangPaths[side].length - 1];
+        expect(tip[1], `#${seed} hangs`).toBeLessThan(root[1] - 0.5 * r);
+        expect(allFinite(b.bases[side]) && allFinite(b.fangs[side])).toBe(true);
+      }
+      // the pair mirrors across the midline (the mouth node sits on it)
+      const [l, rr] = [b.fangPaths[0], b.fangPaths[1]];
+      l.forEach((pt, i) => {
+        expect(pt[0] + o[0]).toBeCloseTo(-(rr[i][0] + o[0]), 6);
+        expect(pt[1]).toBeCloseTo(rr[i][1], 6);
+      });
     }
   });
 });

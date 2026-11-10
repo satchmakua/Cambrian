@@ -44,7 +44,7 @@ export interface LegChain {
    *  less per radian) */
   reachH: number;
   /** asleep: the fold of the leg's last joint (the ankle, or a two-link leg's knee) that sets its foot
-   *  on the floor beside the lying body */
+   *  on the floor beside the lying body — or, an arched leg, the roll at its hip that does */
   sleepLast: number;
   /** feeding: the hip, knee and ankle pitches that keep the foot planted while the chest dips */
   graze: [number, number, number];
@@ -53,7 +53,7 @@ export interface LegChain {
 export interface RigTemplate {
   parent: Int32Array;
   roles: Role[];
-  trunk: number[]; // segment-0 spine nodes, back → front
+  trunk: number[]; // the trunk's spine nodes (through the last leg-bearing section), back → front
   neck: number[]; // spine nodes beyond the trunk (neck + head), back → front
   tails: number[][]; // tail chains, root → tip
   legs: LegChain[];
@@ -228,6 +228,24 @@ function lieLastDefault(l: LegChain): number {
 }
 
 /**
+ * An ARCHED leg (an arthropod's) lying down: the body drops `drop` onto the floor and the whole leg
+ * swings up about its hip (a roll about the body axis, raising its side) just far enough to keep the
+ * foot on the floor. A fixed roll left a resting insect's feet treading the air a third of its height
+ * up, and would have driven a long-legged spider's through the ground.
+ */
+function solveArchedLie(p: Phenotype, l: LegChain, drop: number): number {
+  const hip = p.nodes[l.nodes[0]].pos;
+  const foot = p.nodes[l.nodes[l.nodes.length - 1]].pos;
+  // the foot in the hip's (|x|, y) plane: rolling by θ turns (a, b) to (…, a sin θ + b cos θ); solve
+  // a sin θ + b cos θ = b + drop
+  const a = Math.abs(foot[0] - hip[0]);
+  const b = foot[1] - hip[1];
+  const R = Math.hypot(a, b);
+  if (R < 1e-6 || drop <= 0) return 0;
+  return Math.asin(Math.max(-1, Math.min(1, (b + drop) / R))) - Math.atan2(b, a);
+}
+
+/**
  * The fold of a leg's last joint that rests a lying animal's foot on the floor. The rig's joints all
  * pitch about the body's X axis (bones rest unrotated), so the lie pose is a planar fold in (y, z):
  * fold the hip (and the knee, on a longer leg), then pick the last joint's angle that brings the
@@ -236,8 +254,9 @@ function lieLastDefault(l: LegChain): number {
  * bones half their length into the ground.
  */
 function solveSleepFold(p: Phenotype, l: LegChain, floor: number, belly: number): number {
+  if (l.arched) return solveArchedLie(p, l, belly * SLEEP_DROP);
   const def = lieLastDefault(l);
-  if (l.arched || l.nodes.length < 3 || belly <= 0) return def;
+  if (l.nodes.length < 3 || belly <= 0) return def;
   const pts = l.nodes.map((i) => [p.nodes[i].pos[1], p.nodes[i].pos[2]]);
   const rad = l.nodes.map((i) => p.nodes[i].radius);
   // positive pitch carries the foot BACK: (y, z) → (y cos − z sin, y sin + z cos) about the pivot
@@ -292,11 +311,19 @@ export function rigTemplate(p: Phenotype): RigTemplate {
     if (k === 'tentacle') return 'tentacle';
     return 'other';
   });
+  // the TRUNK runs to the last section that carries legs: the trunk itself, or — an arthropod's —
+  // the abdomen AND the thorax ahead of it (its legs hang from the thorax; were it counted as "neck",
+  // a glance would swing all six legs round with the head)
+  let legSeg = 0;
+  p.nodes.forEach((_, i) => {
+    const up = parent[i];
+    if (roles[i] === 'leg' && up >= 0 && p.nodes[up].kind === 'spine') legSeg = Math.max(legSeg, p.nodes[up].segment ?? 0);
+  });
   const trunk: number[] = [];
   const neck: number[] = [];
   p.nodes.forEach((nd, i) => {
     if (nd.kind !== 'spine') return;
-    if ((nd.segment ?? 0) === 0) trunk.push(i);
+    if ((nd.segment ?? 0) <= legSeg) trunk.push(i);
     else neck.push(i);
   });
   trunk.sort((a, b) => p.nodes[a].pos[2] - p.nodes[b].pos[2]);
@@ -561,6 +588,9 @@ export function gaitAmplitude(speed: number, cruise: number): number {
   return 0.16 + (GAIT_AMP_MAX - 0.16) * f;
 }
 
+/** a dead arthropod's leg curl at the hip, knee and next joint (rad; + folds the leg down and in) */
+const DEAD_CURL = [0.35, 0.75, 0.3];
+
 /**
  * A carcass's pose: the body gone limp. The legs hang half-flexed (a dead animal's legs neither stand
  * nor fold neatly), the neck sags, the trunk bends a little along its length and the tail curls. A
@@ -573,8 +603,17 @@ export function poseDead(r: RigInstance): void {
   for (let k = 1; k < nT; k++) setRot(r.bones[T.trunk[k]], 0, 0.07, 0);
   T.neck.forEach((i, k) => setRot(r.bones[i], k === 0 ? 0.45 : 0.15, 0.12, 0));
   for (const L of T.legs) {
+    if (L.arched) {
+      // an arthropod dies with its legs curled in beneath it (its flexors win): each joint folds down
+      // and inward in the leg's own vertical plane — about Y × the leg's reach
+      const reach = new THREE.Vector3();
+      for (let j = 1; j < L.nodes.length; j++) reach.add(r.bones[L.nodes[j]].position);
+      const axis = new THREE.Vector3(reach.z, 0, -reach.x).normalize();
+      L.nodes.slice(0, 3).forEach((i, j) => r.bones[i].quaternion.setFromAxisAngle(axis, DEAD_CURL[j]));
+      continue;
+    }
     const fold = L.fore ? [0.2, 0.35, -0.25] : [0.3, 0.55, -0.35];
-    L.nodes.slice(0, 3).forEach((i, j) => setRot(r.bones[i], fold[j] * (L.arched ? 0.4 : 1), 0, 0));
+    L.nodes.slice(0, 3).forEach((i, j) => setRot(r.bones[i], fold[j], 0, 0));
   }
   for (const chain of T.tails) chain.forEach((i) => setRot(r.bones[i], 0.08, 0.18, 0));
 }
@@ -679,7 +718,7 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
       const sweepAmp = moving > 0 ? Math.min(0.6, Math.asin(Math.min(0.95, stride / (4 * Math.max(L.reachH, 1e-3))))) : 0.32;
       const sweep = sweepAmp * moving * s * L.side;
       const lift = 0.3 * moving * swingPhase;
-      const fold = 0.45 * inp.sleep; // feet draw up under a resting body
+      const fold = L.sleepLast * inp.sleep; // the leg swings up to keep its foot on the floor as the body lies down
       const unsway = L.trunkAt >= 0 ? -r.trunkYaw[L.trunkAt] : 0;
       setRot(hip, 0, sweep * awake + unsway, L.side * (lift * awake + fold));
     } else {

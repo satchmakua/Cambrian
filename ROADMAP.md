@@ -580,6 +580,61 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   dealing with — prey, predator, mate, attacker. **Tests:** `tests/world/foliage.test.ts`,
   `rig.test.ts › look`.
 
+- [x] **M60 — Bodies by their plan: arthropods of tagmata.** An insect is a head, a thorax carrying
+  all six legs and a legless abdomen; a spider a cephalothorax carrying its eight legs, its eyes and
+  its chelicerae, with a big abdomen behind it on a narrow waist (one trunk with the legs spaced
+  down it read as a caterpillar and a tick). The legs radiate from the thorax — front pairs reaching
+  forward, hind pairs back — and a spider's knees peak over its back; beetles close glossy wing-cases
+  over the abdomen, split by a dark seam and wearing the body's own markings. Arthropods lie down
+  with their feet still on the floor and die with their legs curled under them. The rig's trunk runs
+  through the leg-bearing section, and a lineage keeps its thorax (legs come and go a pair at a
+  time). Three silhouettes retuned: ratites (a long neck held up on long legs), mustelids (a thick
+  low tail, small round ears), cats (long and lean, a round head with big ears). **Tests:**
+  `bodyplan.test.ts › insect / spider / crab / ratite`, `rig.test.ts › insect glance / arthropod lies
+  down / dead arthropod`, `mutate.test.ts › arthropod keeps its thorax`, `mandibles.test.ts ›
+  chelicerae`.
+
+- [x] **M61 — Crabs.** A wide, flat carapace (a thin chitin skin over the body's own shape — a
+  one-node trunk's shell was a sphere of its radius, so every crab wore a ball), a pair of chelipeds
+  held out in front ending in real claws (a swollen palm, a fixed and a hinged finger, dark at the
+  points), four pairs of walking legs splayed low to the sides, eyes on stalks at the front edge.
+  Limb roots now start inside a shaped body node instead of at its full radius. **Tests:**
+  `bodyplan.test.ts › crab`, `smoothSkin.test.ts › crab's carapace`, `claw.test.ts`.
+
+- [x] **M62 — Apes.** A reared trunk is a torso — chest broad over a narrower waist and hips, no
+  belly swelling between them (a pear) — with the head on the shoulders (no neck), close-set eyes on
+  the brow above the muzzle, and long, near-straight arms hanging down and out so the knuckles rest
+  on the ground: a gorilla's or a baboon's silhouette instead of a seal's. Hands, like tails, rest on
+  the ground and never pass through it. **Test:** `bodyplan.test.ts › ape`.
+
+- [x] **M63 — Deer.** Every hooved leg has its four links (a deer that drew three sat on legs half
+  its body's depth, a pig on stilts); a shallower, compact trunk instead of a deep humped one; the
+  neck rising steeply from the shoulders; ears almost always; a low skull with the muzzle running
+  straight on from the brow (a domed cranium with the muzzle drooping off it read as a camel).
+  **Test:** `bodyplan.test.ts › stand on their legs` (a deer's legs now at least 0.85 of its depth).
+
+- [x] **M64 — Standing straight.** Cats, dogs and bears stand with their legs straight down under the
+  body (each leaned out up to 27° from the shoulder — an A-frame stance, every one a newborn foal);
+  dogs carry a bigger head with big pointed ears on a lower, thicker neck and a long bushy tail (a
+  slim raised neck, a small head and stub ears read as a fawn). **Test:** `bodyplan.test.ts › legs
+  straight down`.
+
+- [x] **M65 — Theropods.** The generic biped (an upright walker on a deep two-link trunk — a blob, a
+  cartoon dinosaur, a penguin) is a theropod: a level body balanced over two long, strong legs, a
+  long tail held out behind to counterweigh a big-jawed reptile head on an S-curved neck, small
+  arms. **Test:** `bodyplan.test.ts › theropod`.
+
+- [x] **M66 — Birds' heads.** A bird's and a raptor's skull is round or broad (the raptor was pinned
+  to a tall, narrow wedge and the bird drew any skull at all: heads and necks merged into a hood, a
+  cobra's). **Test:** `bodyplan.test.ts › bird's head is round`.
+
+- [x] **M67 — The breeder's litter redraws.** Picking a parent or rolling a new litter left the
+  gallery showing its first nine creatures: drei's `<View>` judges a view offscreen by its WINDOW
+  position against the canvas's SIZE, and the gallery's canvas sits in the right-hand rail, so every
+  thumbnail went dark after its first frame. Each thumbnail now draws itself, scissored, into its
+  button's rectangle measured against the canvas's own. Bears are brown, not salmon pink.
+  **Test:** `tests/viewer/scissor.test.ts` (and a driven Breed session: every pick and reroll redraws).
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.

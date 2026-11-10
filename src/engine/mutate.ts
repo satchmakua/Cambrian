@@ -14,6 +14,7 @@
 import { mulberry32, mix32, range, type Rng } from './rng';
 import { GENE_BOUNDS, DEPTH_MAX, clamp } from './bounds';
 import type { Genome, SegmentGene, AppendageGene, Symmetry, Terminal, PartKind, CoveringType, PatternType } from './genome';
+import { legBearer } from './grow';
 
 const OP_SALT = 0x9e3779b9;
 
@@ -131,16 +132,18 @@ function isLeg(a: AppendageGene): boolean {
  */
 function changeBauplan(g: Genome, rng: Rng): void {
   if (g.symmetry === 'radial') return; // radialCount is the radial bauplan; point-mutated already
-  const legs = g.body.appendages.filter(isLeg);
+  // (on the section that carries the legs: the trunk, or an arthropod's thorax ahead of its abdomen)
+  const seg = legBearer(g);
+  const legs = seg.appendages.filter(isLeg);
   const grow = rng() < 0.5 ? -1 : 1;
   const target = clampInt(legs.length + grow, [0, 5]);
   if (target === legs.length) return;
   if (target < legs.length) {
-    const idx = g.body.appendages.indexOf(legs[Math.floor(rng() * legs.length)]);
-    if (idx >= 0) g.body.appendages.splice(idx, 1);
+    const idx = seg.appendages.indexOf(legs[Math.floor(rng() * legs.length)]);
+    if (idx >= 0) seg.appendages.splice(idx, 1);
   } else {
-    if (g.body.appendages.length >= GENE_BOUNDS.segment.appendageCount[1]) return;
-    g.body.appendages.push(legs.length > 0 ? structuredClone(legs[0]) : freshLeg(rng));
+    if (seg.appendages.length >= GENE_BOUNDS.segment.appendageCount[1]) return;
+    seg.appendages.push(legs.length > 0 ? structuredClone(legs[0]) : freshLeg(rng));
   }
 }
 
@@ -217,13 +220,14 @@ function addChild(g: Genome, rng: Rng): void {
 
 // Lose a body section — but never the head: drop a faceless link from between trunk and head (a
 // neck link, a trunk section) and close the gap. (Dropping the last segment beheaded the lineage:
-// its face fell back onto the trunk and it became a blob.)
+// its face fell back onto the trunk and it became a blob.) Nor a section that carries legs — an
+// insect's thorax: legs come and go a pair at a time (changeBauplan), never all six at a stroke.
 function removeChild(g: Genome, rng: Rng): void {
   const chain = segments(g);
   const removable: number[] = [];
   for (let k = 1; k < chain.length; k++) {
     const isHead = k === chain.length - 1 && chain[k].appendages.some(isFace);
-    if (!isHead && !chain[k].appendages.some(isFace)) removable.push(k);
+    if (!isHead && !chain[k].appendages.some(isFace) && !chain[k].appendages.some(isLeg)) removable.push(k);
   }
   if (removable.length === 0) return;
   const k = removable[Math.floor(rng() * removable.length)];

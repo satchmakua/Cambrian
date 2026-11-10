@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry, M57–M59). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry, M67; M60–M66 before it). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -44,6 +44,52 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic; **+ gait playback** |
 
 ---
+
+## M67 — The frozen litter · 2026-11-10
+
+- **Reported, reproduced, then read the library.** A driven Breed session (DOM clicks, the gallery
+  canvas read back with `toDataURL`, since dev keeps its drawing buffer) showed the hero and lineage
+  advancing while the nine thumbnails never changed. drei's `View` source had the cause: its
+  offscreen test compares the element's window rectangle with the canvas's width/height — right only
+  for a canvas at the window origin (the Studio's), wrong for the gallery's in the right rail. The
+  gallery no longer uses `View`; `scissor.ts` measures each button against the canvas's own rectangle.
+- **Watch the inline styles.** Dropping drei's `eventSource` let R3F's wrapper put an inline
+  `pointer-events: auto` over the buttons, beating the stylesheet — the canvas swallowed every click.
+  A hit-test at each thumbnail's centre (and a real mouse click) now checks that clicks get through.
+
+## Part 3i — Arthropods of tagmata, silhouettes, crabs, apes, deer, stance, theropods, birds (M60–M66) · 2026-11-08
+
+- **The crab's ball was two bugs, not a prior.** Flattening the crab's trunk changed nothing on
+  screen: its carapace shell, for a one-node trunk, was built from a sphere of the node's scalar
+  radius (ignoring its shape), and every limb's root cone started from a sphere of that radius too.
+  Both now honour the node's ellipsoid; the leg-root fix also slims flat lizards' and frogs' hips.
+- **An ape's pear was the torso rule, not its genes.** Every trunk swells mid-way (the fusiform
+  bulge), which is right for a horizontal body and wrong for an upright one: an ape's belly was its
+  widest part. A reared trunk now grows as a torso (chest over hips); with that, the head set on the
+  shoulders and arms that hang straight to the ground, the primate stopped reading as a seal.
+- **One bad seed is a range bug.** A deer that sat low turned out to be a posture's segment range
+  ([3, 4]): a third of all deer drew three-link legs. The stance test's floor for deer had been set
+  below that deer, so it passed; it is now set at what a deer is (legs ≥ 0.85 of its depth).
+- **Tried and reverted:** dropping the trunk's mid-way swell on chest-heavy quadrupeds (so the
+  belly tucks up). Side by side with the old shapes it made dogs a touch more athletic and cats weak
+  in the rump — not a clear win, so the dog's fawn look was fixed in its own priors instead. The
+  front view found the real fault: every mammal stood splayed like a foal.
+
+- **Structure before tuning.** No prior could make one trunk with legs spaced down it into an insect
+  or a spider: the body plan itself was wrong. The arthropod compiler (`compileArthropod`) builds the
+  abdomen as the trunk and a leg-bearing thorax as its child, and growth reads the plan from the
+  genome's own shape — a section past the trunk carrying three or more leg pairs is a thorax — so its
+  joints pinch to waists and its legs fan out. No new genes: mutation, sharing and saves are untouched.
+- **Everything that assumed "legs live on the trunk"** turned up by grepping for `body.appendages`
+  and `segment === 0`: the bauplan's leg normaliser (now per section), the leg-count mutation (now on
+  the leg-bearing section — and dropping a body section may no longer delete the thorax, all six
+  legs with it), and the rig's trunk/neck split (the trunk runs through the last leg-bearing section;
+  counted as "neck", the thorax swung all six legs round with every glance).
+- **Variants read off the phenotype.** A beetle's wing-cases are the existing conforming shell over
+  what is now the abdomen; a spider's chelicerae are the mandibles mouth on a face that sits on a
+  leg-bearing section. Neither needed a gene.
+- **Solve, again.** The arched legs' fixed sleeping roll left a resting insect's feet treading the
+  air; it is now solved per leg, so each foot stays on the floor as the body lies down.
 
 ## Part 3h — Bodies at rest, gaits that grip, watching them (M57–M59) · 2026-11-08
 

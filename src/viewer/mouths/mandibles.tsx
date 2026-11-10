@@ -149,7 +149,120 @@ export function buildMandibles(
   };
 }
 
-export function MandiblesMouth({
+/**
+ * A SPIDER's mouth: its mandibled face sits on the leg-bearing cephalothorax (it has no separate
+ * head), so the "mandibles" are CHELICERAE — two stout bases hanging side by side below the eyes,
+ * each ending in a curved fang folded in toward the other — not an insect's pincers swung across a
+ * lipped mouth (on a spider the lip line read as a cartoon grin).
+ */
+export function isChelicerate(p: Phenotype, idx: number): boolean {
+  const parent = new Int32Array(p.nodes.length).fill(-1);
+  for (const [a, b] of p.edges) parent[b] = a;
+  let s = idx;
+  while (s >= 0 && p.nodes[s].kind !== 'spine') s = parent[s];
+  if (s < 0) return false;
+  const seg = p.nodes[s].segment ?? 0;
+  if (seg === 0) return false;
+  return p.nodes.some((n, i) => n.part?.kind === 'leg' && parent[i] >= 0 && p.nodes[parent[i]].kind === 'spine' && (p.nodes[parent[i]].segment ?? 0) === seg);
+}
+
+export interface CheliceraeBuild {
+  /** node-relative: the two bases' centerlines and the two fangs', [left, right] */
+  basePaths: [Vec3[], Vec3[]];
+  fangPaths: [Vec3[], Vec3[]];
+  bases: [THREE.BufferGeometry, THREE.BufferGeometry];
+  fangs: [THREE.BufferGeometry, THREE.BufferGeometry];
+}
+
+/** Pure build: the chelicerae root on the mouth line's front (on the true skin by construction). */
+export function buildChelicerae(phenotype: Phenotype, idx: number, carves: readonly Carve[], surface: SkinSurface = 'kit'): CheliceraeBuild | null {
+  const spec = mouthSpec(phenotype, idx);
+  if (!spec) return null;
+  const r = spec.r;
+  const line = buildMouthLine(phenotype, spec, carves, 17, surface);
+  const upper = relRow(line.upper, spec.node.pos);
+  const last = upper.length - 1;
+  const { aim, up } = spec;
+  const add = (a: Vec3, b: Vec3, k: number): Vec3 => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
+  const build = (side: -1 | 1) => {
+    // rooted a third of the way out from the front centre, just under the skin so it grows out of it
+    const s = upper[Math.round(last / 2 + side * last * 0.16)];
+    const root = add(s.p, s.n, -0.12 * r);
+    const L: Vec3 = [-side * spec.right[0], -side * spec.right[1], -side * spec.right[2]]; // inward
+    // the base: stout, hanging down and a little forward, its front swelling
+    const dir = norm3([aim[0] * 0.5 - up[0] * 0.86, aim[1] * 0.5 - up[1] * 0.86, aim[2] * 0.5 - up[2] * 0.86]);
+    const len = r * 0.85;
+    const base: Vec3[] = [];
+    for (let k = 0; k < 6; k++) {
+      const u = k / 5;
+      base.push(add(add(root, dir, len * u), aim, r * 0.1 * Math.sin(Math.PI * u)));
+    }
+    // the fang: from the base's tip, down, then folding in toward its twin and back under
+    const tip = base[base.length - 1];
+    const fang: Vec3[] = [];
+    for (let k = 0; k < 7; k++) {
+      const u = k / 6;
+      const a = u * 1.7;
+      const q = add(add(tip, up, -Math.sin(a) * r * 0.36), L, (1 - Math.cos(a)) * r * 0.36);
+      fang.push(add(q, aim, -0.12 * r * u));
+    }
+    const pts = (path: Vec3[]): SweepPoint[] => path.map((p) => ({ p, n: aim }));
+    return {
+      base,
+      fang,
+      baseGeo: sweepTube(pts(base), { radius: (u) => r * (0.25 - 0.07 * u), radialSegments: 12 }),
+      fangGeo: sweepTube(pts(fang), { radius: (u) => r * (0.1 - 0.092 * u), radialSegments: 8 }),
+    };
+  };
+  const a = build(-1);
+  const b = build(1);
+  return { basePaths: [a.base, b.base], fangPaths: [a.fang, b.fang], bases: [a.baseGeo, b.baseGeo], fangs: [a.fangGeo, b.fangGeo] };
+}
+
+function CheliceraeMouth({ f, phenotype, carves, dark, surface }: { f: MeshFeature; phenotype: Phenotype; carves: readonly Carve[]; dark: number; surface: SkinSurface }) {
+  const built = useMemo(() => buildChelicerae(phenotype, f.idx, carves, surface), [phenotype, f.idx, carves, surface]);
+  const mats = useMemo(
+    () => ({
+      base: new THREE.MeshStandardMaterial({ color: new THREE.Color(dark).lerp(new THREE.Color(0x241d18), 0.3), roughness: 0.5, metalness: 0.05 }),
+      fang: new THREE.MeshStandardMaterial({ color: 0x120c0a, roughness: 0.22, metalness: 0.15 }),
+    }),
+    [dark],
+  );
+  useEffect(
+    () => () => {
+      if (built) [...built.bases, ...built.fangs].forEach((g) => g.dispose());
+    },
+    [built],
+  );
+  useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
+  if (!built) return null;
+  return (
+    <group>
+      <mesh geometry={built.bases[0]} material={mats.base} castShadow />
+      <mesh geometry={built.bases[1]} material={mats.base} castShadow />
+      <mesh geometry={built.fangs[0]} material={mats.fang} />
+      <mesh geometry={built.fangs[1]} material={mats.fang} />
+    </group>
+  );
+}
+
+export function MandiblesMouth(props: {
+  f: MeshFeature;
+  phenotype: Phenotype;
+  carves: readonly Carve[];
+  recessed: boolean;
+  dark: number;
+  surface?: SkinSurface;
+}) {
+  const spider = useMemo(() => isChelicerate(props.phenotype, props.f.idx), [props.phenotype, props.f.idx]);
+  return spider ? (
+    <CheliceraeMouth f={props.f} phenotype={props.phenotype} carves={props.carves} dark={props.dark} surface={props.surface ?? 'kit'} />
+  ) : (
+    <InsectMandibles {...props} />
+  );
+}
+
+function InsectMandibles({
   f,
   phenotype,
   carves,
