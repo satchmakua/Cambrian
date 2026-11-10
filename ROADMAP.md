@@ -607,6 +607,12 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   on the ground: a gorilla's or a baboon's silhouette instead of a seal's. Hands, like tails, rest on
   the ground and never pass through it. **Test:** `bodyplan.test.ts › ape`.
 
+- [x] **M63 — Deer.** Every hooved leg has its four links (a deer that drew three sat on legs half
+  its body's depth, a pig on stilts); a shallower, compact trunk instead of a deep humped one; the
+  neck rising steeply from the shoulders; ears almost always; a low skull with the muzzle running
+  straight on from the brow (a domed cranium with the muzzle drooping off it read as a camel).
+  **Test:** `bodyplan.test.ts › stand on their legs` (a deer's legs now at least 0.85 of its depth).
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.

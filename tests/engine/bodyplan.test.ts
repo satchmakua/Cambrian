@@ -70,7 +70,7 @@ describe('body plans', () => {
   });
 
   it('cats, dogs and deer stand on their legs, well clear of the ground', () => {
-    for (const [id, min] of [['felid', 0.55], ['canid', 0.55], ['ungulate', 0.5], ['ursid', 0.25]] as const) {
+    for (const [id, min] of [['felid', 0.55], ['canid', 0.55], ['ungulate', 0.85], ['ursid', 0.25]] as const) {
       for (let seed = 1; seed <= 12; seed++) {
         const p = grow(genomeOfMorphotype(seed, id));
         const t = trunkOf(p);
