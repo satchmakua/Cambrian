@@ -358,6 +358,22 @@ describe('body plans', () => {
     }
   });
 
+  it("a cat's or a dog's tail sweeps back and levels out or curves up — not a stick falling to the ground", () => {
+    // (drooped steeply with a downward curl, it ran straight to the floor: from behind, a fifth leg)
+    for (const id of ['felid', 'canid']) {
+      for (let seed = 1; seed <= 8; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const tail = p.nodes.filter((n) => n.part?.kind === 'tail').sort((a, b) => b.pos[2] - a.pos[2]); // root → tip
+        if (tail.length < 3) continue;
+        const [prev, tip] = tail.slice(-2);
+        const ground = Math.min(...p.nodes.filter((n) => n.part?.kind === 'leg' && n.kind === 'terminal').map((n) => n.pos[1]));
+        expect((tip.pos[1] - prev.pos[1]) / Math.abs(tip.pos[2] - prev.pos[2]), `${id} #${seed} tip level`).toBeGreaterThan(-0.35);
+        expect(tip.pos[1] - ground, `${id} #${seed} off the ground`).toBeGreaterThan(0.25 * (p.bounds.max[1] - ground));
+        expect(tip.pos[2], `${id} #${seed} behind`).toBeLessThan(tail[0].pos[2]);
+      }
+    }
+  });
+
   it("an ape's arms hang down from its shoulders to the ground in front of it — not swept out behind", () => {
     // (aimed out and back, they ran out to the sides and lay along the floor behind the shoulders: in
     // a thumbnail the ape was a hunched lump sliding on its belly)
