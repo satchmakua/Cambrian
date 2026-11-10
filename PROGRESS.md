@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry, M60–M66). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry, M67; M60–M66 before it). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -44,6 +44,18 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic; **+ gait playback** |
 
 ---
+
+## M67 — The frozen litter · 2026-11-10
+
+- **Reported, reproduced, then read the library.** A driven Breed session (DOM clicks, the gallery
+  canvas read back with `toDataURL`, since dev keeps its drawing buffer) showed the hero and lineage
+  advancing while the nine thumbnails never changed. drei's `View` source had the cause: its
+  offscreen test compares the element's window rectangle with the canvas's width/height — right only
+  for a canvas at the window origin (the Studio's), wrong for the gallery's in the right rail. The
+  gallery no longer uses `View`; `scissor.ts` measures each button against the canvas's own rectangle.
+- **Watch the inline styles.** Dropping drei's `eventSource` let R3F's wrapper put an inline
+  `pointer-events: auto` over the buttons, beating the stylesheet — the canvas swallowed every click.
+  A hit-test at each thumbnail's centre (and a real mouse click) now checks that clicks get through.
 
 ## Part 3i — Arthropods of tagmata, silhouettes, crabs, apes, deer, stance, theropods, birds (M60–M66) · 2026-11-08
 

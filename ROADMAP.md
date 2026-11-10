@@ -628,6 +628,13 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   to a tall, narrow wedge and the bird drew any skull at all: heads and necks merged into a hood, a
   cobra's). **Test:** `bodyplan.test.ts › bird's head is round`.
 
+- [x] **M67 — The breeder's litter redraws.** Picking a parent or rolling a new litter left the
+  gallery showing its first nine creatures: drei's `<View>` judges a view offscreen by its WINDOW
+  position against the canvas's SIZE, and the gallery's canvas sits in the right-hand rail, so every
+  thumbnail went dark after its first frame. Each thumbnail now draws itself, scissored, into its
+  button's rectangle measured against the canvas's own. Bears are brown, not salmon pink.
+  **Test:** `tests/viewer/scissor.test.ts` (and a driven Breed session: every pick and reroll redraws).
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.
