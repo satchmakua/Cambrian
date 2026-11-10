@@ -34,10 +34,12 @@ function meanRadius(prims: FieldPrims): number {
   return meanR / Math.max(prims.nc, 1);
 }
 
-/** Floor every cone radius at ~0.6 of a grid cell, so a thin limb (a leg, a tail tip) is always at
- *  least one cell thick and can't be missed/fragmented by the marching tets (M24). */
+/** Floor every cone radius at a little over half a grid cell's diagonal, so a thin limb (a leg, a
+ *  tail tip) always holds a sample inside it wherever it runs and can't be missed by the marching
+ *  tets (M24). At 0.6 of a cell a thin tube slipped between the samples: a mouse's tail or a spider's
+ *  legs came out as rows of dashes — a third of the thumbnails had such fragments. */
 function floorRadii(prims: FieldPrims, cell: number): void {
-  const rFloor = 0.6 * cell;
+  const rFloor = 0.88 * cell;
   for (let m = 0; m < prims.nc; m++) {
     if (prims.pr[m] < rFloor) prims.pr[m] = rFloor;
     if (prims.ra[m] < rFloor) prims.ra[m] = rFloor;
