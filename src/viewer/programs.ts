@@ -53,3 +53,41 @@ export function KeepPrograms(): null {
   }, [gl]);
   return null;
 }
+
+/**
+ * Compile every material in the scene before its first visible frame: mount the scene with the
+ * canvas's frameloop paused, and this reports `onReady` once three's `compileAsync` has them all. Where
+ * the browser offers KHR_parallel_shader_compile the programs build on the GPU process's own threads,
+ * in parallel, and the page stays responsive (the World's ~35 programs, linked one by one on its first
+ * frame, were most of its load); without it three compiles as before and the first frame pays. A
+ * timeout guarantees the scene is shown whatever happens.
+ */
+export function WarmShaders({ onReady, timeoutMs = 6000 }: { onReady: () => void; timeoutMs?: number }): null {
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
+  useEffect(() => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      onReady();
+    };
+    const t = setTimeout(finish, timeoutMs);
+    // (after this commit and the browser's next frame: the scene graph is assembled)
+    const raf = requestAnimationFrame(() => {
+      try {
+        gl.compileAsync(scene, camera).then(finish, finish);
+      } catch {
+        finish();
+      }
+    });
+    return () => {
+      done = true;
+      clearTimeout(t);
+      cancelAnimationFrame(raf);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gl, scene, camera]);
+  return null;
+}

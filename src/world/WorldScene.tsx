@@ -12,7 +12,8 @@ import { OrbitControls, Sky, Stars } from '@react-three/drei';
 import * as THREE from 'three';
 import { stepWorld, STEP, dayPhase, isNight, climate, growthOf, type World } from '../sim/world';
 import { SOUND } from './audio';
-import { heightAt } from '../sim/terrain';
+import { heightAt, WATER_LEVEL } from '../sim/terrain';
+import { PAN_KEYS, keysToAxes, panDelta } from './keyPan';
 import { TerrainMesh, Water, Bushes, Decor, updateSeasonLook } from './Landscape';
 import { Grass } from './Flora';
 import { Nests } from './Nests';
@@ -206,6 +207,64 @@ function FollowCam() {
   return null;
 }
 
+/**
+ * WASD / the arrow keys pan the view over the ground (Shift hurries): the orbit target and the camera
+ * slide together, the pivot riding the ground beneath it, held inside the world. Taking the camera
+ * back ends following and the documentary.
+ */
+function KeyPan() {
+  const camera = useThree((s) => s.camera);
+  const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3; update: () => void } | null;
+  const held = useRef(new Set<string>());
+  const view = useMemo(() => new THREE.Vector3(), []);
+  useEffect(() => {
+    const typing = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+    };
+    const down = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || typing(e)) return;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') held.current.add(e.code);
+      if (!PAN_KEYS.has(e.code)) return;
+      held.current.add(e.code);
+      e.preventDefault(); // (the arrows would scroll the page)
+    };
+    const up = (e: KeyboardEvent) => held.current.delete(e.code);
+    const drop = () => held.current.clear();
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', drop);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', drop);
+    };
+  }, []);
+  useFrame((_, dt) => {
+    if (!controls || held.current.size === 0) return;
+    const axes = keysToAxes(held.current);
+    if (!axes.fwd && !axes.right) return;
+    const ui = useWorldUi.getState();
+    if (ui.documentary) ui.setDocumentary(false);
+    if (ui.follow) ui.setFollow(false);
+    camera.getWorldDirection(view);
+    const t = controls.target;
+    const [dx, dz] = panDelta(axes, view.x, view.z, camera.position.distanceTo(t), Math.min(dt, 0.1));
+    const terrain = getWorld().terrain;
+    const half = terrain.size * 0.48;
+    const nx = Math.min(half, Math.max(-half, t.x + dx));
+    const nz = Math.min(half, Math.max(-half, t.z + dz));
+    const ground = Math.max(heightAt(terrain, nx, nz), WATER_LEVEL);
+    const dy = (ground - t.y) * Math.min(1, dt * 4);
+    camera.position.x += nx - t.x;
+    camera.position.z += nz - t.z;
+    camera.position.y += dy;
+    t.set(nx, t.y + dy, nz);
+    controls.update();
+  });
+  return null;
+}
+
 function Cast({ world }: { world: World }) {
   // re-read the cast whenever the version bumps (polled cheaply each frame)
   const [, setV] = useState(0);
@@ -262,11 +321,12 @@ export function WorldScene() {
         makeDefault
         target={[lake.lakeX, 0, lake.lakeZ + lake.lakeR * 0.9]}
         maxPolarAngle={Math.PI * 0.47}
-        minDistance={4}
+        minDistance={1.2}
         maxDistance={220}
         enableDamping
       />
       <FollowCam />
+      <KeyPan />
       {import.meta.env.DEV && <DevLook />}
       <Director />
       <SoundDriver />

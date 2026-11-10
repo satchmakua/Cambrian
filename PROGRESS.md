@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entry, M67; M60–M66 before it). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M67–M69; M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -44,6 +44,22 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic; **+ gait playback** |
 
 ---
+
+## M68–M69 — Quick picks, the World's camera and load · 2026-11-10
+
+- **Profile the browser, not the engine.** A pick's engine work is ~10 ms (litter, archive, growth).
+  The CPU profile of a driven session (CDP `Profiler`, long-task observer, `linkProgram` counted in
+  an init script) put everything else in shader programs: 4–14 links on every pick. three frees a
+  program when its last material is disposed, and a litter swap disposes all nine before the new
+  ones render — the same shaders, relinked each time. `KeepPrograms` pins what a renderer compiles
+  (an after-frame pass over `gl.info.programs`). Remaining first-ever variants are a few, once.
+- **Software GL distorts the picture.** SwiftShader makes a link cost seconds and a context loss
+  tens of seconds; the measurements that transfer are counts (links per pick) and CPU self time.
+- **Same results, measured.** The skin-weight rewrite was checked with a per-morph fingerprint of
+  the weights — identical for every creature but the stalk-eyed crab, whose change was the bug fix.
+- **The World** compiles its scene with `compileAsync` before its first frame (the canvas mounts
+  with `frameloop="never"`): parallel on the GPU process where the extension exists, no worse where
+  it doesn't. Portraits wait for idle and use `toBlob` (async encoding) instead of `toDataURL`.
 
 ## M67 — The frozen litter · 2026-11-10
 
