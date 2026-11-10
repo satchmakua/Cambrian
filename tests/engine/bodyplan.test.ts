@@ -216,6 +216,36 @@ describe('body plans', () => {
     }
   });
 
+  it('a frog sits up on its forelegs, its long hind feet folded forward beside it', () => {
+    // (it lay on its belly like a pillow, the hind legs swollen into round lobes at its rump)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'anuran'));
+      const t = trunkOf(p).sort((a, b) => a.pos[2] - b.pos[2]);
+      expect(t.length, `#${seed}`).toBeGreaterThanOrEqual(2);
+      // the chest rides higher than the rump
+      expect(t[t.length - 1].pos[1] - t[0].pos[1], `#${seed} chest up`).toBeGreaterThan(0.05);
+      const legs = legChains(p);
+      const hind = legs.filter((l) => l.attachT < 0.5);
+      const fore = legs.filter((l) => l.attachT >= 0.5);
+      expect(hind.length && fore.length, `#${seed}`).toBeTruthy();
+      for (const { nodes } of hind) {
+        // thigh forward, shin back, and the long foot forward again along the ground: a Z
+        expect(nodes.length, `#${seed} hind links`).toBeGreaterThanOrEqual(4);
+        const [, , ankle, toe] = nodes;
+        expect(toe.pos[2], `#${seed} foot forward`).toBeGreaterThan(ankle.pos[2]);
+        // a muscular thigh, not a lobe as big as the body
+        expect(nodes[0].radius, `#${seed} haunch`).toBeLessThan(0.85 * Math.max(...t.map((n) => n.radius)));
+      }
+      // the forelegs reach down from the raised chest to the ground
+      for (const { nodes } of fore) expect(nodes[0].pos[1] - nodes[nodes.length - 1].pos[1], `#${seed} fore reach`).toBeGreaterThan(0.25);
+      // and big eyes bulge from the top of the head
+      const head = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) > 0);
+      const headW = Math.max(...head.map((n) => n.radius * (n.scale?.[0] ?? 1)));
+      const eye = p.nodes.find((n) => n.terminal === 'eye');
+      expect(eye!.radius / headW, `#${seed} eye`).toBeGreaterThan(0.16);
+    }
+  });
+
   it("a dragon's head is a long reptilian skull — a cranium with a jaw running out ahead of it", () => {
     // (a short round cranium under two horns read as a cat's face)
     for (const id of ['dragon', 'wyvern']) {

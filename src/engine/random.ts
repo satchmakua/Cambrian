@@ -113,6 +113,8 @@ interface Morpho {
   eyeAz?: Rg; // placement (1.0 up-fwd, ~0.3 side, ~1.6 top — but a PAIR near 1.57 merges on the midline)
   eyeEl?: Rg; // forward tilt of the eyes: ~1.1 forward (cat, ape) … ~0.6 lateral (deer, mouse) … ~0.25 a fish's
   eyeT?: Rg; // where along a plain head the eyes sit — default [0.7, 0.98] (front); a croc's ride far back
+  eyeSize?: number; // × the eye's usual size (a frog's bulge from the top of its head)
+  hindSegs?: number; // the hind pair's link count (a frog's thigh, shin and long foot fold in a Z)
   mouthStyle?: Rg; // bands (viewer/partStyles mouthVariant): <0.06 herbivore · <0.125 maw · <0.25 fanged · <0.375 beak ·
   //                   <0.5 mandibles · <0.625 sucker · <0.75 lamprey · <0.85 baleen · <0.93 proboscis · else trunk
   covering?: readonly CoveringType[]; // skin material (MORPHOLOGY §7); default ['skin']
@@ -135,7 +137,7 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'lizard', cluster: 'familiar', weight: 0.6, tailTaper: [0.8, 0.88], tailAz: [4.6, 4.8], tailCurl: [0.04, 0.08], tailDroop: [-1.52, -1.4], tailLen: [0.75, 1.0], tailSegs: [5, 6], tailThick: [0.6, 0.78], eyeT: [0.45, 0.6], head: 1, girth: [0.32, 0.46], repeat: [4, 6], height: [0.6, 0.8], elong: [1.2, 1.5], legPairs: [2], posture: 'sprawling', legLen: [0.58, 0.88], legAz: [3.66, 3.86], legTerm: ['claw'], headShape: ['flat', 'wedge'], snout: [0.4, 0.65], tail: 0.95, frill: 0.25, eyeStyle: [0.4, 0.6], mouthStyle: [0.07, 0.18], covering: ['scales'], pattern: ['bands', 'reticulate', 'mottle'], hue: [0.22, 0.42], sat: [0.5, 0.85] },
   { id: 'crocodilian', cluster: 'familiar', weight: 0.5, tailTaper: [0.82, 0.88], tailAz: [4.6, 4.8], tailCurl: [0.04, 0.08], tailDroop: [-1.52, -1.4], tailLen: [0.72, 1.0], tailSegs: [5, 6], tailThick: [0.68, 0.84], eyeT: [0.1, 0.28], head: 1, girth: [0.4, 0.55], repeat: [5, 7], height: [0.55, 0.75], elong: [1.3, 1.6], legPairs: [2], posture: 'sprawling', legLen: [0.5, 0.72], legThick: [0.44, 0.58], legAz: [3.55, 3.78], legTerm: ['claw'], headShape: ['flat'], snout: [0.8, 1.0], tail: 0.95, spines: 0.7, eyeStyle: [0.4, 0.6], eyeAz: [1.0, 1.2], mouthStyle: [0.14, 0.24], covering: ['plates', 'scales'], pattern: ['mottle', 'reticulate'], hue: [0.2, 0.35], sat: [0.3, 0.6] },
   { id: 'serpent', cluster: 'familiar', weight: 0.6, tailTaper: [0.74, 0.82], tailAz: [4.71, 4.71], tailCurl: [0, 0.02], tailDroop: [-1.57, -1.53], tailThick: [0.85, 0.95], tailLen: [0.9, 1.2], tailSegs: [5, 6], rear: [-0.004, 0.004], taper: [0.985, 1.0], head: 1, girth: [0.22, 0.32], repeat: [17, 24], elong: [1.3, 1.5], headShape: ['wedge'], wind: 0.9, legPairs: [0], tail: 1, eyeStyle: [0.4, 0.6], mouthStyle: [0.14, 0.24], covering: ['scales'], pattern: ['bands', 'stripes', 'reticulate'], hue: [0.1, 0.4], sat: [0.5, 0.85] },
-  { id: 'anuran', cluster: 'familiar', weight: 0.6, head: 1, eyeEl: [0.2, 0.35], snout: [0, 0.05], headSize: [0.9, 1.05], headDome: [0.5, 0.68], headWide: [1.35, 1.7], headShape: ['broad', 'flat'], eyeT: [0.35, 0.5], girth: [0.5, 0.7], repeat: [1, 2], height: [0.62, 0.78], legPairs: [2], posture: 'sprawling', legLen: [0.5, 0.7], hindLeg: [1.45, 1.6], foreLeg: [0.7, 0.78], legTerm: ['claw'], tail: 0.0, eyeStyle: [0, 0.2], eyeAz: [0.8, 1.05], mouthStyle: [0.07, 0.12], covering: ['skin'], pattern: ['spots', 'mottle'], sheen: [0.55, 0.85], hue: [0.25, 0.45], sat: [0.5, 0.85] },
+  { id: 'anuran', cluster: 'familiar', weight: 0.6, head: 1, eyeEl: [0.2, 0.35], snout: [0, 0.05], headSize: [0.9, 1.05], headDome: [0.5, 0.68], headWide: [1.1, 1.35], headShape: ['broad', 'flat'], eyeT: [0.35, 0.5], girth: [0.5, 0.7], repeat: [2, 2], height: [0.62, 0.78], rear: [-0.22, -0.16], legPairs: [2], posture: 'sprawling', legLen: [0.5, 0.7], hindLeg: [1.5, 1.05], hindSegs: 4, foreLeg: [0.7, 0.78], legTerm: ['claw'], tail: 0.0, eyeStyle: [0, 0.2], eyeAz: [0.8, 1.05], eyeSize: 1.45, mouthStyle: [0.07, 0.12], covering: ['skin'], pattern: ['spots', 'mottle'], sheen: [0.55, 0.85], hue: [0.25, 0.45], sat: [0.5, 0.85] },
   { id: 'fish', cluster: 'familiar', weight: 0.7, eyeEl: [0.15, 0.35], tailAz: [4.71, 4.71], tailCurl: [-0.03, 0.02], tailDroop: [-1.57, -1.5], headShape: ['domed', 'wedge'], headSize: [1.15, 1.4], headWide: [0.78, 0.92], headDome: [1.35, 1.7], girth: [0.36, 0.5], repeat: [6, 8], height: [1.6, 2.1], elong: [0.8, 0.95], taper: [1.12, 1.15], rear: [-0.012, 0.012], legPairs: [0], dorsal: 1, pectoral: 1, anal: 0.85, tail: 1, tailTerm: ['fin'], tailLen: [0.55, 0.8], tailThick: [0.3, 0.42], tailSegs: [3, 3], gills: 0.9, head: 1, eyeStyle: [0, 0.2], eyeAz: [0.2, 0.4], mouthStyle: [0.07, 0.12], covering: ['scales'], pattern: ['plain', 'spots', 'stripes'], sheen: [0.35, 0.6], hue: [0.45, 0.65], sat: [0.4, 0.8] }, // deep and flattened side to side, the head running on from the body's depth, a slim stalk before the tail fin (a round tube read as an eel)
   { id: 'shark', cluster: 'familiar', weight: 0.6, eyeEl: [0.15, 0.35], tailAz: [4.71, 4.71], tailCurl: [-0.03, 0.02], tailDroop: [-1.57, -1.5], headShape: ['wedge', 'tapered'], headSize: [0.85, 1.0], girth: [0.45, 0.62], repeat: [5, 7], height: [0.95, 1.2], elong: [1.4, 1.7], taper: [1.06, 1.13], legPairs: [0], dorsal: 1, pectoral: 1, tail: 1, tailTerm: ['fin'], tailLen: [0.6, 0.85], tailThick: [0.45, 0.6], tailSegs: [3, 4], gills: 0.95, head: 0.85, eyeStyle: [0.1, 0.3], eyeAz: [0.2, 0.4], mouthStyle: [0.13, 0.24], covering: ['skin'], pattern: ['plain', 'gradient'], hue: [0.55, 0.62], sat: [0.2, 0.45] },
   { id: 'bird', cluster: 'familiar', weight: 1.3, elong: [1.25, 1.45], taper: [1.12, 1.2], legAz: [4.62, 4.71], girth: [0.34, 0.5], repeat: [2, 3], height: [1.0, 1.3], neck: [0.42, 0.52], neckLinks: [2, 2], neckLift: [-0.42, -0.3], headSize: [0.5, 0.6], headShape: ['round', 'round', 'broad'], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 1.0], legThick: [0.15, 0.21], legTerm: ['claw'], wings: 0.95, tail: 0.85, tailTerm: ['fin'], tailLen: [0.22, 0.36], tailSegs: [2, 2], rear: [-0.22, -0.1], crest: 0.45, eyeStyle: [0, 0.2], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'plain', 'spots'], hue: [0.05, 0.65], sat: [0.5, 0.9] },
@@ -253,6 +255,7 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
       g.length = clamp(g.length * scale[0], A.length);
       g.thickness = clamp(g.thickness * scale[1], A.thickness);
     }
+    if (m.hindSegs && lp >= 2 && i === 0) g.segments = m.hindSegs;
     apps.push(g);
   }
   // a forward-reaching grasping arm pair (primate) near the shoulders
@@ -439,7 +442,7 @@ function headSeg(rng: Rng, bodyGirth: number, m: Morpho, eyeStyle: number): Segm
   const stalk = chance(rng, m.stalkEyes ?? 0);
   const eyeCount = pick(rng, m.eyeCount ?? ([2] as const));
   for (let p = 0; p < Math.max(1, Math.round(eyeCount / 2)); p++) {
-    apps.push(eyes(rng, rg(rng, m.eyeT, [0.7, 0.98]), false, g, { style: [eyeStyle, eyeStyle], az: m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.18, 0.5) + p * 0.3, stalk, el: m.eyeEl }));
+    apps.push(eyes(rng, rg(rng, m.eyeT, [0.7, 0.98]), false, g, { style: [eyeStyle, eyeStyle], az: m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.18, 0.5) + p * 0.3, stalk, el: m.eyeEl, size: m.eyeSize }));
   }
   apps.push(mouth(rng, g, m.mouthStyle)); // every face has a mouth
   if (chance(rng, m.horns ?? 0)) apps.push(horns(rng, g));
@@ -775,6 +778,7 @@ interface EyeOpts {
   az?: number;
   el?: Rg; // forward tilt (rad): ~1.1 a cat's or an ape's forward gaze, ~0.6 a deer's lateral one
   stalk?: boolean; // ride a multi-segment eyestalk (crab / snail) — M23
+  size?: number; // × the usual eye size
 }
 function eyes(rng: Rng, attachT: number, antennae: boolean, refGirth: number, o: EyeOpts = {}): AppendageGene {
   const stalk = o.stalk ?? false;
@@ -788,7 +792,7 @@ function eyes(rng: Rng, attachT: number, antennae: boolean, refGirth: number, o:
     length: clamp(refGirth * (stalk ? range(rng, 0.55, 0.9) : range(rng, 0.45, 0.7)), A.length),
     // eyes sized smaller relative to the head than before (they read as big cartoon eyes otherwise);
     // grow then pushes them proud of the body so they stay clearly visible even in capsule mode.
-    thickness: clamp(Math.max(0.07, refGirth * (stalk ? range(rng, 0.14, 0.2) : range(rng, 0.18, 0.26))), A.thickness),
+    thickness: clamp(Math.max(0.07, refGirth * (stalk ? range(rng, 0.14, 0.2) : range(rng, 0.18, 0.26)) * (o.size ?? 1)), A.thickness),
     taper: stalk ? range(rng, 0.92, 0.99) : range(rng, 0.85, 0.95),
     curl: [range(rng, -0.2, 0.1), 0],
   });
