@@ -657,6 +657,14 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   fine skin, built one per frame behind every plain skin. **Tests:** `bodyplan.test.ts › sprawl /
   legs agree`, `frill.test.ts`.
 
+- [x] **M71 — Snakes, fish, frogs, whole limbs.** A resting snake lies in a loose S (the rig poses it,
+  each animal its own lie; it straightens to slither). Fish are deep and flattened side to side, thin
+  steadily to a slim tail stalk, and carry an anal fin. Frogs sit up on their forelegs with long hind
+  feet folded beside them, big eyes on top, and a closed mouth that stays on the face (a flat head's
+  lips no longer slide under the chin). Thin limbs come out whole in every skin — no dashed tails or
+  legs. **Tests:** `rig.test.ts › resting snake / fish hangs straight`, `bodyplan.test.ts › fish /
+  frog sits up`, `mouthLine.test.ts › lips stay on the face`, `smoothSkin.test.ts › thin limbs whole`.
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.

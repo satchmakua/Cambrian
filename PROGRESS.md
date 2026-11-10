@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M67–M70; M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M67–M71; M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -44,6 +44,21 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic; **+ gait playback** |
 
 ---
+
+## M71 — Snakes, fish, frogs, whole limbs · 2026-11-10
+
+- **Know where a shape can come from.** Growth keeps a bilateral spine on the midline (it drops the
+  yaw bend), so a snake can never be grown in an S: its resting curve lives in the rig, as one
+  heading curve over trunk and tail, centred on the facing, faded out by the travelling wave.
+- **A prior's chance can hide a body plan.** One fish in seven had no head (`head: 0.85`): its face
+  sat on the trunk's blunt front, the egg-shaped ones. And a one-node trunk can't tilt — the frog lay
+  flat until its trunk had two links for the pitch to act between.
+- **Measure the artifact, then sweep.** A dashed mouse tail became a count (separate pieces of the
+  built skin); swept over every morphotype it was 79 of 248 skins, mostly at thumbnail quality. The
+  radius floor was below half a grid cell's diagonal, so a thin tube could slip between samples.
+- **Census a geometric fix before keeping it.** The lip-on-face clamp first narrowed every mammal's
+  mouth and every croc's: an old/new diff of lip positions per morph showed it. Muzzles (the mandible
+  drops by design), long snouts (the mouth runs along the jaw line) and radial bodies are exempt.
 
 ## M70 — Stances, frills, close-ups · 2026-11-10
 
