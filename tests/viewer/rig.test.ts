@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { rigTemplate, createRig, ensureSkinWeights, poseRig, poseDead, gaitAmplitude, SLEEP_DROP } from '../../src/viewer/rig';
+import { rigTemplate, createRig, ensureSkinWeights, poseRig, poseDead, gaitAmplitude, restPosed, SLEEP_DROP } from '../../src/viewer/rig';
 import { buildSmoothGeometry } from '../../src/viewer/smoothSkin';
 
 const p = (kind: string, seed = 11) => grow(genomeOfMorphotype(seed, kind));
@@ -361,6 +361,25 @@ describe('animation rig', () => {
       const restBend = T.trunk.reduce((t, i) => t + curl(r.bones[i].quaternion), 0);
       expect(sleepBend, `#${seed} asleep`).toBeGreaterThan(restBend);
     }
+  });
+
+  it('a still view shows a snake in the same S the rig poses at rest (no rig there to pose it)', () => {
+    for (const seed of [1, 4]) {
+      const ph = p('serpent', seed);
+      const posed = restPosed(ph);
+      expect(posed).not.toBe(ph);
+      expect(restPosed(ph)).toBe(posed); // cached
+      const r = createRig(ph);
+      poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 0, swim: false, turn: 0 });
+      const T = rigTemplate(ph);
+      for (const i of [...T.trunk, ...T.neck]) expect(footWorld(r, i).distanceTo(new THREE.Vector3(...posed.nodes[i].pos))).toBeLessThan(1e-9);
+      // the bounds follow the curve; the body neither sinks nor rises
+      for (const n of posed.nodes) for (let k = 0; k < 3; k++) expect(n.pos[k] - n.radius).toBeGreaterThanOrEqual(posed.bounds.min[k] - 1e-9);
+      posed.nodes.forEach((n, i) => expect(n.pos[1]).toBeCloseTo(ph.nodes[i].pos[1], 9));
+    }
+    // a legged body is drawn as it grew
+    const cat = p('felid');
+    expect(restPosed(cat)).toBe(cat);
   });
 
   it('a fish hangs straight in the water, and a stubby legless body has no S to lie in', () => {

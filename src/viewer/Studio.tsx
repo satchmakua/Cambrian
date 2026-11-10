@@ -31,7 +31,7 @@ import { StudioEnvironment } from './StudioEnvironment';
 import { KeepPrograms } from './programs';
 import { mouthVariant, eyeVariant } from './partStyles';
 import type { SkinQuality } from './smoothSkin';
-import { createRig, poseDead, poseRig, SLEEP_DROP, type RigInstance } from './rig';
+import { createRig, poseDead, poseRig, restPosed, SLEEP_DROP, type RigInstance } from './rig';
 import { juvenileGenome } from '../engine/juvenile';
 import { JawContext, type JawControl } from './mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from './flight';
@@ -524,7 +524,8 @@ function BestiaryCard({
   ready: boolean;
   onAdopt: () => void;
 }) {
-  const phenotype = useMemo(() => grow(genome), [genome]);
+  // (a snake lies in its resting S, as it does on the main stage)
+  const phenotype = useMemo(() => restPosed(grow(genome)), [genome]);
   const framing = useMemo(() => framingOf(phenotype), [phenotype]);
   const box = useRef<HTMLButtonElement>(null);
   const d = framing.size * 2.0;

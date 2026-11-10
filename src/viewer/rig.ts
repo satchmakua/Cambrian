@@ -24,6 +24,7 @@
  */
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
+import type { Vec3 } from '../engine/genome';
 import { buildFieldPrims, roundConeDist } from './bodyField';
 
 export type Role = 'spine' | 'leg' | 'arm' | 'tail' | 'wing' | 'fin' | 'tentacle' | 'other';
@@ -420,6 +421,83 @@ export function restBends(R: RestLine, amp: number, trunk: number[], tail: numbe
       tprev = want;
     } else tail[j] = 0;
   }
+}
+
+const POSED = new WeakMap<Phenotype, Phenotype>();
+
+/**
+ * The phenotype lying in its resting S, for the views that draw a creature without a rig (the
+ * litter's thumbnails, the bestiary): there a snake lay as straight as a stick. The rig's resting
+ * bends are applied to the nodes themselves — positions and frames, down the tree — so its skin is
+ * built along the curve at no extra cost. Every bend is a yaw, so the rotations compose by adding
+ * angles. Returns the phenotype itself when it has no S to lie in. (Pure; cached per phenotype.)
+ */
+export function restPosed(p: Phenotype): Phenotype {
+  const hit = POSED.get(p);
+  if (hit) return hit;
+  // (only a legless body lies in an S: a legged one skips the rig template altogether)
+  if (p.nodes.some((n) => n.part?.kind === 'leg')) return p;
+  const T = rigTemplate(p);
+  const R = T.rest;
+  if (!R) {
+    POSED.set(p, p);
+    return p;
+  }
+  const trunkYaw: number[] = [];
+  const tailYaw: number[] = [];
+  restBends(R, R.amp, trunkYaw, tailYaw);
+  const yaw = new Float64Array(p.nodes.length);
+  T.trunk.forEach((i, k) => (yaw[i] = trunkYaw[k] ?? 0));
+  R.tail.forEach((i, j) => (yaw[i] = tailYaw[j] ?? 0));
+  // parents before children: the tree's edges in breadth-first order from the roots
+  const kids: number[][] = p.nodes.map(() => []);
+  for (const [a, b] of p.edges) kids[a].push(b);
+  const order: number[] = [];
+  for (let i = 0; i < p.nodes.length; i++) if (T.parent[i] < 0) order.push(i);
+  for (let h = 0; h < order.length; h++) order.push(...kids[order[h]]);
+  const heading = new Float64Array(p.nodes.length); // each bone's world yaw (its own included)
+  const nodes = p.nodes.map((n) => ({ ...n, pos: [...n.pos] as Vec3, quat: [...n.quat] as Quat4 }));
+  for (const i of order) {
+    const par = T.parent[i];
+    const base = par >= 0 ? heading[par] : 0;
+    heading[i] = base + yaw[i];
+    if (par >= 0) {
+      // the offset from the parent, turned by the parent's heading
+      const o = p.nodes[i].pos;
+      const q = p.nodes[par].pos;
+      const dx = o[0] - q[0];
+      const dz = o[2] - q[2];
+      const c = Math.cos(base);
+      const sn = Math.sin(base);
+      const P = nodes[par].pos;
+      nodes[i].pos = [P[0] + c * dx + sn * dz, P[1] + (o[1] - q[1]), P[2] - sn * dx + c * dz];
+    }
+    // the node's own frame turns halfway into its bend (a cross-section across the curve)
+    const a = (base + 0.5 * yaw[i]) / 2;
+    const ry: Quat4 = [0, Math.sin(a), 0, Math.cos(a)];
+    nodes[i].quat = quatMul(ry, p.nodes[i].quat);
+  }
+  const min: Vec3 = [Infinity, Infinity, Infinity];
+  const max: Vec3 = [-Infinity, -Infinity, -Infinity];
+  for (const n of nodes) {
+    for (let k = 0; k < 3; k++) {
+      min[k] = Math.min(min[k], n.pos[k] - n.radius);
+      max[k] = Math.max(max[k], n.pos[k] + n.radius);
+    }
+  }
+  const out: Phenotype = { nodes, edges: p.edges, bounds: { min, max }, genomeRef: p.genomeRef };
+  POSED.set(p, out);
+  return out;
+}
+
+type Quat4 = [number, number, number, number];
+function quatMul(a: Quat4, b: Quat4): Quat4 {
+  return [
+    a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+    a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+    a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+    a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+  ];
 }
 
 export function rigTemplate(p: Phenotype): RigTemplate {
