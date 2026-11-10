@@ -66,6 +66,7 @@ export function grow(genome: Genome): Phenotype {
   let legPairsHere = 0; // leg pairs on the segment currently growing (hexapods+ get arthropod legs)
   let legGenesHere: AppendageGene[] = []; // …and their genes (a jumper's hind legs outreach its fore)
   let tagmaHere = false; // …and whether that segment is an arthropod's thorax (see isTagma)
+  let sprawlHere = false; // …and whether its legs sprawl (decided once for them all — see below)
 
   growSegment(dev.body, [0, 0, 0], [0, 0, 0, 1], 0, -1, null);
 
@@ -181,6 +182,9 @@ export function grow(genome: Genome): Phenotype {
     legGenesHere = seg.appendages.filter((a) => a.kind === 'leg');
     legPairsHere = legGenesHere.length;
     tagmaHere = isTagma(seg, depth);
+    // A body sprawls or it stands: decided once, from its legs' mean splay. Judged leg by leg, a turtle
+    // whose genes sat either side of the line stood on its hind legs like posts and sprawled the fore.
+    sprawlHere = legPairsHere > 0 && legGenesHere.reduce((t, a) => t + clamp((4.712 - a.attachAzimuth) * 0.62, [0.12, 1.05]), 0) / legPairsHere > 0.5;
     for (const app of seg.appendages) {
       if (atCap()) break;
       const ai = clampInt(Math.round(app.attachT * (spine.length - 1)), 0, spine.length - 1);
@@ -440,7 +444,7 @@ export function grow(genome: Genome): Phenotype {
         else for (let k = 0; k < n; k++) arch.push(norm(k === 0 ? k0 : k === n - 1 ? end : mid));
         dir = arch[0];
         startPos = [base.pos[0] + sideX * flank * 0.9, base.pos[1] + base.radius * 0.05, base.pos[2]];
-      } else if (splay > 0.5) {
+      } else if (sprawlHere) {
         // a SPRAWLER (lizard, croc, newt): the upper leg juts out sideways at hip height, the elbow /
         // knee sits out beside the body and the shin drops to a foot planted wide — the push-up stance,
         // not a mammal's column tucked under the belly. Same polyline machinery as the arthropod arch

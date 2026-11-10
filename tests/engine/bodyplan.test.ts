@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { grow, type Phenotype } from '../../src/engine/grow';
-import { genomeOfMorphotype } from '../../src/engine/random';
+import { genomeOfMorphotype, randomGenome } from '../../src/engine/random';
 
 const trunkOf = (p: Phenotype) => p.nodes.filter((n) => n.kind === 'spine' && n.segment === 0);
 
@@ -114,6 +114,47 @@ describe('body plans', () => {
         }
       }
     }
+  });
+
+  it("a body's legs agree: they all sprawl or all stand — never sprawled forelegs on post hind legs", () => {
+    let mixedBodies = 0;
+    let checked = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      const p = grow(randomGenome(seed));
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      // per trunk node: does each leg hanging from it reach out (a sprawl) or drop (a column)?
+      const bySection = new Map<number, Set<boolean>>();
+      for (const l of legChains(p)) {
+        if (l.nodes.length < 3) continue;
+        const [hip, knee] = l.nodes;
+        if (knee.pos[1] > hip.pos[1] + 0.02) continue; // an arched (arthropod) leg: neither
+        const out = Math.abs(knee.pos[0]) - Math.abs(hip.pos[0]);
+        const len = Math.hypot(knee.pos[0] - hip.pos[0], knee.pos[1] - hip.pos[1], knee.pos[2] - hip.pos[2]);
+        const base = p.nodes[parent.get(p.nodes.indexOf(hip))!];
+        const seg = base.segment ?? 0;
+        if (!bySection.has(seg)) bySection.set(seg, new Set());
+        bySection.get(seg)!.add(out / len > 0.6);
+      }
+      for (const kinds of bySection.values()) {
+        checked++;
+        if (kinds.size > 1) mixedBodies++;
+      }
+    }
+    expect(checked).toBeGreaterThan(50);
+    expect(mixedBodies).toBe(0);
+    // and one whose genes sit either side of the line (as a turtle's could): one stance for both pairs
+    const g = genomeOfMorphotype(2, 'lizard');
+    const [hind, fore] = g.body.appendages.filter((a) => a.kind === 'leg').sort((a, b) => a.attachT - b.attachT);
+    hind.attachAzimuth = 3.97; // splay ≈ 0.46
+    fore.attachAzimuth = 3.86; // splay ≈ 0.53
+    const stances = new Set(
+      legChains(grow(g)).map((l) => {
+        const [hip, knee] = l.nodes;
+        const len = Math.hypot(knee.pos[0] - hip.pos[0], knee.pos[1] - hip.pos[1], knee.pos[2] - hip.pos[2]);
+        return (Math.abs(knee.pos[0]) - Math.abs(hip.pos[0])) / len > 0.6;
+      }),
+    );
+    expect(stances.size).toBe(1);
   });
 
   it("a quadruped's elbow sits behind its shoulder; its knee in front of its hip", () => {
