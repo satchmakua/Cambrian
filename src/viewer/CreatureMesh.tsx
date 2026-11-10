@@ -100,7 +100,8 @@ function bakeBodyPos(geo: THREE.BufferGeometry, matrix: THREE.Matrix4): void {
 
 export type Detail = 'full' | 'lite' | 'none';
 
-const skinKey = (full: boolean, quality: SkinQuality, carved = true) => `${full ? 'hybrid' : 'smooth'}:${quality}${carved ? '' : ':intact'}`;
+/** The geometry cache's key for a skin (the World's skin scheduler builds ahead under the same key). */
+export const skinKey = (full: boolean, quality: SkinQuality, carved = true) => `${full ? 'hybrid' : 'smooth'}:${quality}${carved ? '' : ':intact'}`;
 
 function buildSkin(phenotype: Phenotype, full: boolean, carves: readonly Carve[], quality: SkinQuality): THREE.BufferGeometry {
   const g = buildSmoothGeometry(phenotype, full, carves, quality);

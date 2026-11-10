@@ -43,6 +43,11 @@ export function getGeometry(p: Phenotype, key: string, build: () => THREE.Buffer
   return e.geo;
 }
 
+/** Is this surface built (and not yet swept)? */
+export function hasGeometry(p: Phenotype, key: string): boolean {
+  return entry(p, key) !== undefined;
+}
+
 export function retainGeometry(p: Phenotype, key: string): void {
   const e = entry(p, key);
   if (!e) return;
