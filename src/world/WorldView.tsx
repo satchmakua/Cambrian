@@ -17,6 +17,7 @@ import { useWorldUi, getWorld, populate, strangerGenome, bumpVersion, autosave, 
 import { DAY_LENGTH, YEAR_DAYS, dayNumber, speciesById, stepWorld, type HistorySample } from '../sim/world';
 import { howItDiffers } from '../sim/lineage';
 import { usePortrait } from '../viewer/portrait';
+import { KeepPrograms } from '../viewer/programs';
 import { NARRATOR, sentence } from './narrator';
 import { spell, weatherAt } from '../sim/weather';
 
@@ -231,6 +232,7 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
   return (
     <div className="world">
       <Canvas className="world-canvas" shadows dpr={[1, 1.75]} camera={{ position: [40, 38, 70], fov: 45, near: 0.2, far: 1200 }} gl={{ preserveDrawingBuffer: import.meta.env.DEV }}>
+        <KeepPrograms />
         <WorldScene />
       </Canvas>
 

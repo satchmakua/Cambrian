@@ -24,7 +24,7 @@
  */
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
-import { buildFieldPrims, isHybridNode, roundConeDist } from './bodyField';
+import { buildFieldPrims, roundConeDist } from './bodyField';
 
 export type Role = 'spine' | 'leg' | 'arm' | 'tail' | 'wing' | 'fin' | 'tentacle' | 'other';
 
@@ -464,66 +464,126 @@ const SKINNED = new WeakSet<THREE.BufferGeometry>();
  */
 export function ensureSkinWeights(geo: THREE.BufferGeometry, p: Phenotype): void {
   if (SKINNED.has(geo)) return;
-  const template = rigTemplate(p);
+  // The same primitives the hybrid skin was polygonized from: a vertex rides the bones of the
+  // primitives it lies on, softly weighted by how close each is. (The edge list used to be rebuilt
+  // here with a filter that missed the eyestalk tips, so on a stalk-eyed creature every primitive
+  // after the first stalk was skinned to the wrong bone — the field now says which edge it came from.)
   const prims = buildFieldPrims(p, 'hybrid');
-  // the bone each field primitive rides: rebuild the same edge list buildFieldPrims used
-  let edges = p.edges.filter(([a, b]) => isHybridNode(p.nodes[a]) && isHybridNode(p.nodes[b]));
-  if (edges.length === 0) edges = p.edges;
-  const segBone = edges.map(([a]) => a + 1);
+  const nc = prims.nc;
   const shaped: number[] = [];
   const included = new Set<number>();
-  for (const [a, b] of edges) {
-    included.add(a);
-    included.add(b);
+  for (let m = 0; m < nc; m++) {
+    included.add(prims.ia[m]);
+    included.add(prims.ib[m]);
   }
   for (const i of included) if (p.nodes[i].scale) shaped.push(i);
-  void template;
+  const n = nc + shaped.length;
+
+  // per-primitive constants, once: its bone, its falloff, and a bounding sphere (centre + reach) whose
+  // distance bounds the primitive's own from below — so a vertex only pays exact distances to the few
+  // primitives that can matter (it used to pay every cone and allocate a Vector3, a Quaternion and a
+  // Map per vertex)
+  const bone = new Int32Array(n);
+  const sig = new Float64Array(n);
+  const cx = new Float64Array(n), cy = new Float64Array(n), cz = new Float64Array(n);
+  const reach = new Float64Array(n);
+  const minR = new Float64Array(n);
+  const inv: THREE.Quaternion[] = [];
+  for (let m = 0; m < nc; m++) {
+    const r = Math.max(prims.ra[m], prims.rb[m]);
+    bone[m] = prims.ia[m] + 1;
+    sig[m] = 0.05 + 0.22 * r;
+    cx[m] = prims.cx[m]; cy[m] = prims.cy[m]; cz[m] = prims.cz[m];
+    reach[m] = prims.hl[m] + r;
+  }
+  for (let s = 0; s < shaped.length; s++) {
+    const nd = p.nodes[shaped[s]];
+    const sc = nd.scale!;
+    const m = nc + s;
+    bone[m] = shaped[s] + 1;
+    sig[m] = 0.05 + 0.22 * nd.radius;
+    cx[m] = nd.pos[0]; cy[m] = nd.pos[1]; cz[m] = nd.pos[2];
+    reach[m] = nd.radius * Math.max(sc[0], sc[1], sc[2]);
+    minR[m] = nd.radius * Math.min(sc[0], sc[1], sc[2]);
+    inv.push(new THREE.Quaternion(nd.quat[0], nd.quat[1], nd.quat[2], nd.quat[3]).invert());
+  }
+  const q = new THREE.Vector3();
+  const exact = (m: number, x: number, y: number, z: number): number => {
+    if (m < nc) return roundConeDist(x, y, z, prims.ax[m], prims.ay[m], prims.az[m], prims.bx[m], prims.by[m], prims.bz[m], prims.ra[m], prims.rb[m]);
+    const s = m - nc;
+    const nd = p.nodes[shaped[s]];
+    const sc = nd.scale!;
+    q.set(x - nd.pos[0], y - nd.pos[1], z - nd.pos[2]).applyQuaternion(inv[s]);
+    const rx = nd.radius * sc[0], ry = nd.radius * sc[1], rz = nd.radius * sc[2];
+    return (Math.hypot(q.x / rx, q.y / ry, q.z / rz) - 1) * minR[m];
+  };
+  // a lower bound on primitive m's distance from its bounding sphere (an ellipsoid's distance is
+  // scaled by its shortest semi-axis, so its bound is too)
+  const lower = (m: number, d: number): number => (m < nc ? d - reach[m] : (d / reach[m] - 1) * minR[m]);
 
   const pos = geo.getAttribute('position') as THREE.BufferAttribute;
   const nV = pos.count;
   const skinIndex = new Uint16Array(nV * 4);
   const skinWeight = new Float32Array(nV * 4);
-  const nc = Math.min(prims.nc, edges.length);
-  const dist = new Float64Array(nc + shaped.length);
-  const acc = new Map<number, number>();
+  const lb = new Float64Array(n);
+  const dist = new Float64Array(n);
+  const acc = new Float64Array(p.nodes.length + 1); // per-bone weight (bones are node index + 1)
+  const touched: number[] = [];
+  const topB = [0, 0, 0, 0];
+  const topW = [0, 0, 0, 0];
   for (let v = 0; v < nV; v++) {
     const x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
-    let dmin = Infinity;
-    for (let m = 0; m < nc; m++) {
-      const d = roundConeDist(x, y, z, prims.ax[m], prims.ay[m], prims.az[m], prims.bx[m], prims.by[m], prims.bz[m], prims.ra[m], prims.rb[m]);
-      dist[m] = d;
+    let first = 0;
+    for (let m = 0; m < n; m++) {
+      const dx = x - cx[m], dy = y - cy[m], dz = z - cz[m];
+      lb[m] = lower(m, Math.sqrt(dx * dx + dy * dy + dz * dz));
+      dist[m] = NaN;
+      if (lb[m] < lb[first]) first = m;
+    }
+    // the nearest primitive: start from the likeliest, then only those whose bound can beat it
+    let dmin = (dist[first] = exact(first, x, y, z));
+    for (let m = 0; m < n; m++) {
+      if (m === first || lb[m] >= dmin) continue;
+      const d = (dist[m] = exact(m, x, y, z));
       if (d < dmin) dmin = d;
     }
-    for (let s = 0; s < shaped.length; s++) {
-      const nd = p.nodes[shaped[s]];
-      const sc = nd.scale!;
-      // a conservative ellipsoid distance (as the field does it)
-      const q = new THREE.Vector3(x - nd.pos[0], y - nd.pos[1], z - nd.pos[2]).applyQuaternion(
-        new THREE.Quaternion(nd.quat[0], nd.quat[1], nd.quat[2], nd.quat[3]).invert(),
-      );
-      const rx = nd.radius * sc[0], ry = nd.radius * sc[1], rz = nd.radius * sc[2];
-      const d = (Math.hypot(q.x / rx, q.y / ry, q.z / rz) - 1) * Math.min(rx, ry, rz);
-      dist[nc + s] = d;
-      if (d < dmin) dmin = d;
+    touched.length = 0;
+    for (let m = 0; m < n; m++) {
+      if (lb[m] - dmin > sig[m] * 4) continue; // can't contribute
+      const d = Number.isNaN(dist[m]) ? exact(m, x, y, z) : dist[m];
+      const dd = d - dmin;
+      if (dd > sig[m] * 4) continue;
+      const b = bone[m];
+      if (acc[b] === 0) touched.push(b);
+      acc[b] += Math.exp(-dd / sig[m]);
     }
-    acc.clear();
-    for (let m = 0; m < nc + shaped.length; m++) {
-      const bone = m < nc ? segBone[m] : shaped[m - nc] + 1;
-      const r = m < nc ? Math.max(prims.ra[m], prims.rb[m]) : p.nodes[shaped[m - nc]].radius;
-      const sigma = 0.05 + 0.22 * r;
-      const dd = dist[m] - dmin;
-      if (dd > sigma * 4) continue;
-      const w = Math.exp(-dd / sigma);
-      acc.set(bone, (acc.get(bone) ?? 0) + w);
+    // the four heaviest bones
+    let k = 0;
+    for (const b of touched) {
+      const w = acc[b];
+      acc[b] = 0;
+      let j = k < 4 ? k++ : 4;
+      if (j === 4 && w <= topW[3]) continue;
+      if (j === 4) j = 3;
+      while (j > 0 && topW[j - 1] < w) {
+        topB[j] = topB[j - 1];
+        topW[j] = topW[j - 1];
+        j--;
+      }
+      topB[j] = b;
+      topW[j] = w;
     }
-    const top = [...acc.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
-    if (top.length === 0) top.push([1, 1]); // no segment at all (a one-node blob): ride node 0's bone
+    if (k === 0) {
+      // no primitive at all (a one-node blob): ride node 0's bone
+      topB[0] = 1;
+      topW[0] = 1;
+      k = 1;
+    }
     let sum = 0;
-    for (const [, w] of top) sum += w;
-    for (let k = 0; k < 4; k++) {
-      const e = top[k];
-      skinIndex[v * 4 + k] = e ? e[0] : 0;
-      skinWeight[v * 4 + k] = e ? e[1] / (sum || 1) : 0;
+    for (let j = 0; j < k; j++) sum += topW[j];
+    for (let j = 0; j < 4; j++) {
+      skinIndex[v * 4 + j] = j < k ? topB[j] : 0;
+      skinWeight[v * 4 + j] = j < k ? topW[j] / (sum || 1) : 0;
     }
   }
   geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndex, 4));

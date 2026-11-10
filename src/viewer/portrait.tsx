@@ -16,6 +16,7 @@ import { grow, type Phenotype } from '../engine/grow';
 import { encodeGenome } from '../engine/share';
 import { CreatureMesh } from './CreatureMesh';
 import { StudioEnvironment } from './StudioEnvironment';
+import { KeepPrograms } from './programs';
 import { framingOf } from './Studio';
 import { LidContext } from './eyelids';
 
@@ -50,6 +51,7 @@ function Scene({ phenotype, onReady }: { phenotype: Phenotype; onReady: (draw: (
         position={[d * 0.66, d * 0.3, d * 0.7]}
         onUpdate={(cam: THREE.PerspectiveCamera) => cam.lookAt(0, 0, 0)}
       />
+      <KeepPrograms />
       <StudioEnvironment />
       <hemisphereLight args={['#cfe0ff', '#2a2620', 0.55]} />
       <directionalLight position={[f.size, f.size * 1.6, f.size]} intensity={1.15} />

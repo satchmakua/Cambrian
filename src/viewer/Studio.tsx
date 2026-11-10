@@ -28,6 +28,7 @@ import type { SkinMode } from '../ui/store';
 import { CreatureMesh } from './CreatureMesh';
 import { SkeletonOverlay, BONE_COLORS } from './SkeletonOverlay';
 import { StudioEnvironment } from './StudioEnvironment';
+import { KeepPrograms } from './programs';
 import { mouthVariant, eyeVariant } from './partStyles';
 import type { SkinQuality } from './smoothSkin';
 import { createRig, poseDead, poseRig, SLEEP_DROP, type RigInstance } from './rig';
@@ -642,6 +643,7 @@ export function Studio({
         gl={{ preserveDrawingBuffer: import.meta.env.DEV, antialias: true }}
         dpr={[1, 2]}
       >
+        <KeepPrograms />
         <View.Port />
       </Canvas>
     </div>

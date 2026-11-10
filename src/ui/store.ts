@@ -165,9 +165,28 @@ function loadInitial(): Session {
   return rootedAt(genomeOfMorphotype(3, 'canid'), 'auto', {});
 }
 
+// Saving is off the click's path: the lineage's JSON grows with every generation (~2 MB by the 200th,
+// ~16 ms to stringify), so each commit only marks the session dirty and the write happens when the
+// browser is idle — the latest state wins, and leaving the page flushes it.
+let unsaved: Session | null = null;
+function flushSave(): void {
+  const s = unsaved;
+  unsaved = null;
+  if (s) persist(s);
+}
+function persistSoon(s: Session): void {
+  const scheduled = unsaved !== null;
+  unsaved = s;
+  if (scheduled) return;
+  const w = typeof window !== 'undefined' ? (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }) : null;
+  if (w?.requestIdleCallback) w.requestIdleCallback(flushSave, { timeout: 2000 });
+  else setTimeout(flushSave, 300);
+}
+if (typeof window !== 'undefined') window.addEventListener('pagehide', flushSave);
+
 export const useStore = create<AppState>((set, get) => {
   const commit = (s: Session) => {
-    persist(s);
+    persistSoon(s);
     set({ ...s, playback: null, playbackOn: false }); // a new creature invalidates the recorded gait
   };
   const CLEAR_GAIT = { playback: null, playbackOn: false } as const; // for the set-callback actions
@@ -214,7 +233,7 @@ export const useStore = create<AppState>((set, get) => {
         };
         const nodes = { ...state.nodes, [id]: node };
         const b = batch(nodes, id, state.counter + 1, state.symmetryMode, state.menagerie);
-        persist(b);
+        persistSoon(b);
         return { ...b, ...CLEAR_GAIT };
       }),
 
@@ -222,7 +241,7 @@ export const useStore = create<AppState>((set, get) => {
       set((state) => {
         if (!state.nodes[id]) return state;
         const b = batch(state.nodes, id, state.counter, state.symmetryMode, state.menagerie);
-        persist(b);
+        persistSoon(b);
         return { ...b, ...CLEAR_GAIT };
       }),
 
@@ -250,7 +269,7 @@ export const useStore = create<AppState>((set, get) => {
         const nodes = { ...state.nodes, [cur.id]: { ...cur, genome } };
         // re-batch from the same streamSeed so the offspring track the new coherence too
         const b = batch(nodes, cur.id, state.counter, state.symmetryMode, state.menagerie, state.streamSeed);
-        persist(b);
+        persistSoon(b);
         return { ...b, ...CLEAR_GAIT };
       }),
 
@@ -277,7 +296,7 @@ export const useStore = create<AppState>((set, get) => {
           parentId = id;
         }
         const b = batch(nodes, parentId, counter, state.symmetryMode, state.menagerie);
-        persist(b);
+        persistSoon(b);
         return { ...b, ...CLEAR_GAIT };
       }),
 
@@ -315,7 +334,7 @@ export const useStore = create<AppState>((set, get) => {
             parentId = id;
           }
           const b = batch(nodes, parentId, counter, state.symmetryMode, state.menagerie);
-          persist(b);
+          persistSoon(b);
           return {
             ...b,
             physicsRunning: false,

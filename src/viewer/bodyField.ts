@@ -46,6 +46,10 @@ export interface FieldPrims {
   sx1: Float64Array;
   sy1: Float64Array;
   nc: number;
+  /** each cone's edge: its parent node `ia` and child node `ib` (both the node itself in the one-prim-
+   *  per-node fallback) — what a vertex on that cone is skinned to */
+  ia: Int32Array;
+  ib: Int32Array;
   /** ellipsoid nodes (per-node anisotropy): centers ec (3·ne), orientations eq (4·ne), semi-axes er (3·ne) */
   ec: Float64Array;
   eq: Float64Array;
@@ -109,6 +113,8 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   const pr = new Float64Array(nc);
   const ra = new Float64Array(nc);
   const rb = new Float64Array(nc);
+  const ia = new Int32Array(nc);
+  const ib = new Int32Array(nc);
   const included = new Set<BodyNode>();
   const an = new Uint8Array(nc);
   const aq = new Float64Array(nc * 4);
@@ -136,6 +142,8 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
         sx0[i] = a.scale?.[0] ?? 1; sy0[i] = a.scale?.[1] ?? 1;
         sx1[i] = b.scale?.[0] ?? 1; sy1[i] = b.scale?.[1] ?? 1;
       }
+      ia[i] = edges[i][0];
+      ib[i] = edges[i][1];
       ax[i] = a.pos[0]; ay[i] = a.pos[1]; az[i] = a.pos[2];
       bx[i] = b.pos[0]; by[i] = b.pos[1]; bz[i] = b.pos[2];
       const rB = stalkTip(a, b) ? Math.min(a.radius * 0.8, b.radius * 0.45) : b.radius;
@@ -154,6 +162,7 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
       const n = p.nodes[i];
       ax[i] = bx[i] = n.pos[0]; ay[i] = by[i] = n.pos[1]; az[i] = bz[i] = n.pos[2];
       pr[i] = ra[i] = rb[i] = n.radius;
+      ia[i] = ib[i] = i;
       included.add(n);
     }
   }
@@ -217,7 +226,7 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     for (let i = 0; i < nc; i++) ch[i] = i;
   }
   const ord = Int32Array.from({ length: nc }, (_, i) => i).sort((a, b) => ch[a] - ch[b] || a - b);
-  return { ax, ay, az, bx, by, bz, pr, ra, rb, cx, cy, cz, hl, an, aq, sx0, sy0, sx1, sy1, nc, ch, ord, ec, eq, er, ne, k: 0, excess };
+  return { ax, ay, az, bx, by, bz, pr, ra, rb, cx, cy, cz, hl, an, aq, sx0, sy0, sx1, sy1, nc, ia, ib, ch, ord, ec, eq, er, ne, k: 0, excess };
 }
 
 // rotate v by the CONJUGATE of q (world → the prim's local frame), inlined, no allocation of q'

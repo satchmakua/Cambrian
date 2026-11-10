@@ -53,6 +53,32 @@ describe('animation rig', () => {
     }
   });
 
+  it('a stalk-eyed creature is skinned to the bones it lies on', () => {
+    // (the skinning rebuilt the skin's edge list without the eyestalk tips, so every primitive after
+    // the first stalk rode the wrong bone — a crab's legs pulled along by its eyes)
+    for (const seed of [1, 2, 3]) {
+      // its eyes grown FIRST (a gene order evolution can reach), so every leg and claw comes after them
+      const g = genomeOfMorphotype(seed, 'crab');
+      g.body.appendages.sort((a, b) => Number(b.terminal === 'eye') - Number(a.terminal === 'eye'));
+      const ph = grow(g);
+      expect(ph.nodes.some((n) => n.part?.kind === 'eyestalk')).toBe(true);
+      const geo = buildSmoothGeometry(ph, true, [], 'low');
+      ensureSkinWeights(geo, ph);
+      let reach = 0;
+      for (const [a, b] of ph.edges) {
+        const A = ph.nodes[a].pos, B = ph.nodes[b].pos;
+        reach = Math.max(reach, Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]) + Math.max(ph.nodes[a].radius, ph.nodes[b].radius) * 1.8);
+      }
+      const pos = geo.getAttribute('position');
+      const si = geo.getAttribute('skinIndex');
+      for (let v = 0; v < pos.count; v++) {
+        const n = ph.nodes[si.getX(v) - 1];
+        const d = Math.hypot(pos.getX(v) - n.pos[0], pos.getY(v) - n.pos[1], pos.getZ(v) - n.pos[2]);
+        expect(d, `#${seed} vertex ${v}`).toBeLessThan(reach);
+      }
+    }
+  });
+
   it('walking swings the feet, sleeping folds them; every pose stays finite', () => {
     const ph = p('felid');
     const r = createRig(ph);
