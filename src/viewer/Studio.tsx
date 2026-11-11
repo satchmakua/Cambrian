@@ -52,6 +52,13 @@ function devGaitPhase(): number | null {
   return v === null ? null : Number(v);
 }
 
+/** (dev: ?rigt=SECONDS holds the rig's clock there — a feeding hand at the mouth, a tail mid-wag) */
+function devRigTime(): number | null {
+  if (!import.meta.env.DEV || typeof location === 'undefined') return null;
+  const v = new URLSearchParams(location.search).get('rigt');
+  return v === null ? null : Number(v);
+}
+
 /** Animate a rig in place for the Studio preview (the canvas renders on demand, so keep asking). */
 function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl, flight: FlightControl): RigInstance | null {
   const rig = useMemo(() => (motion === 'still' ? null : createRig(phenotype)), [phenotype, motion]);
@@ -60,8 +67,10 @@ function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl, flight
   const swim = traits.habitat === 'water' || traits.locomotion === 'swim';
   const invalidate = useThree((s) => s.invalidate);
   const frozen = devGaitPhase();
+  const heldT = devRigTime();
   useFrame((_, dt) => {
     if (!rig) return;
+    if (heldT !== null) rig.t = heldT;
     if (motion === 'dead') {
       // (dev: the World's carcass pose, upright so the limp legs and sagging neck can be judged)
       poseDead(rig);
@@ -76,7 +85,7 @@ function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl, flight
     flight.flap = motion === 'fly' ? wingbeat(frozen !== null ? 0 : rig.t * 7, 0.6) : 0;
     if (DEV_JAW !== null) jaw.open = DEV_JAW;
     poseRig(rig, {
-      dt: frozen !== null ? 0 : Math.min(dt, 0.05),
+      dt: frozen !== null || heldT !== null ? 0 : Math.min(dt, 0.05),
       speed,
       cruise,
       sleep: motion === 'sleep' ? 1 : 0,

@@ -74,6 +74,34 @@ export interface RigTemplate {
   grazeDip: number;
   /** a long legless body's resting line: at rest it lies in a loose S (see restBends) */
   rest: RestLine | null;
+  /** how each arm (parallel to `arms`) folds as the body lies down, and how it feeds */
+  armPose: ArmPose[];
+}
+
+/**
+ * An arm's poses, measured in the sagittal plane (every joint pitches about the body's X axis).
+ *  - Lying down, the body drops toward the floor: an arm long enough to reach it (an ape's, which
+ *    stands on its knuckles) swings forward about the shoulder just far enough to rest its hand on
+ *    the floor — hanging straight, it sank through the ground to the elbow.
+ *  - Feeding, a hand that can reach the mouth carries the food up to it: the shoulder and elbow
+ *    pitches that put the hand at the lips (null when the arm is too short — a theropod's — or it
+ *    ends in a claw, not a hand).
+ */
+export interface ArmPose {
+  shoulderH: number; // the shoulder's height over the ground, less the hand's radius (∞: no ground known)
+  reach: number; // shoulder → hand
+  psi0: number; // the arm's rest angle forward of straight down (rad)
+  elbow: number; // the elbow's index in the chain
+  feed: [number, number] | null;
+}
+
+/** The shoulder pitch (rad; negative swings the hand forward) that rests a hanging arm's hand on the
+ *  floor once the body has dropped `drop` toward it; 0 while the hand still hangs clear. */
+export function armLie(a: ArmPose, drop: number): number {
+  if (!(a.reach > 1e-6) || !Number.isFinite(a.shoulderH)) return 0;
+  const c = (a.shoulderH - drop) / a.reach;
+  if (c >= Math.cos(a.psi0)) return 0;
+  return -(Math.acos(Math.max(-1, c)) - a.psi0);
 }
 
 /**
@@ -92,6 +120,13 @@ export interface RestLine {
   side: 1 | -1;
   waves: number;
 }
+
+/** how fast a feeder's hand goes to its mouth and back (rad/s: one bite every ~2.4 s) */
+const FEED_RATE = 2.6;
+/** a hand-feeder's nod to meet its hand (rad at the first neck joint) */
+const FEED_NOD = 0.25;
+/** …and how far past the arm's reach the mouth may be for the arm still to feed it (× its length) */
+const FEED_STRETCH = 1.3;
 
 /** the body wave's phase step per trunk joint (rad): a slitherer's, a swimmer's */
 const SLITHER_K = 0.95;
@@ -166,10 +201,12 @@ const GRAZE_DIP_MAX = 0.42;
  * (The searches walk only the chains that move — the mouth's ancestry, then each leg — so a new body
  * costs a millisecond or two, not a frame.)
  */
-function solveGraze(p: Phenotype, parent: Int32Array, trunk: number[], neck: number[], legs: LegChain[], arms: number[][]): { neck: number; dip: number } {
+function solveGraze(p: Phenotype, parent: Int32Array, trunk: number[], neck: number[], legs: LegChain[], handFed: boolean): { neck: number; dip: number } {
   const DEF = { neck: 0.55, dip: 0 };
   const mouth = p.nodes.findIndex((n) => n.terminal === 'mouth');
-  if (neck.length === 0 || legs.length === 0 || trunk.length === 0 || arms.length > 0 || mouth < 0) return DEF;
+  // (a hand-feeder only nods to meet its hand — see ArmPose)
+  if (handFed) return { neck: FEED_NOD, dip: 0 };
+  if (neck.length === 0 || legs.length === 0 || trunk.length === 0 || mouth < 0) return DEF;
   const ground = Math.min(...legs.map((l) => p.nodes[l.nodes[l.nodes.length - 1]].pos[1] - p.nodes[l.nodes[l.nodes.length - 1]].radius));
   const n = p.nodes.length;
   const nT = trunk.length;
@@ -331,6 +368,64 @@ function solveSleepFold(p: Phenotype, l: LegChain, floor: number, belly: number)
     }
   }
   return bestErr < Infinity ? best : fallback;
+}
+
+/** Where the mouth is, in (y, z), once the head has nodded to meet a feeding hand (null: no mouth). */
+function feedingMouth(p: Phenotype, parent: Int32Array, neck: number[]): [number, number] | null {
+  const mouth = p.nodes.findIndex((n) => n.terminal === 'mouth');
+  if (mouth < 0) return null;
+  const pitch = new Float64Array(p.nodes.length);
+  neck.forEach((i, k) => (pitch[i] = k === 0 ? FEED_NOD : GRAZE_CURL));
+  const fk = planarFK(p, parent, pitch);
+  return [fk.y[mouth], fk.z[mouth]];
+}
+
+function armPoseOf(p: Phenotype, chain: number[], legs: LegChain[], mouth: [number, number] | null): ArmPose {
+  const S = p.nodes[chain[0]].pos;
+  const hand = p.nodes[chain[chain.length - 1]];
+  const H = hand.pos;
+  const dy = H[1] - S[1];
+  const dz = H[2] - S[2];
+  const ground = legs.length ? Math.min(...legs.map((l) => p.nodes[l.nodes[l.nodes.length - 1]].pos[1] - p.nodes[l.nodes[l.nodes.length - 1]].radius)) : -Infinity;
+  const elbow = Math.max(1, Math.min(chain.length - 2, Math.floor((chain.length - 1) / 2)));
+  const pose: ArmPose = { shoulderH: S[1] - ground - hand.radius, reach: Math.hypot(dy, dz), psi0: Math.atan2(dz, -dy), elbow, feed: null };
+  // feeding: two-link reach from the shoulder (upper arm to the elbow, forearm to the hand) to a point
+  // just below and in front of the lips
+  if (!mouth || hand.terminal !== 'hand' || chain.length < 3) return pose;
+  const E = p.nodes[chain[elbow]].pos;
+  const u = [E[1] - S[1], E[2] - S[2]];
+  const v = [H[1] - E[1], H[2] - E[2]];
+  const T = [mouth[0] - 0.6 * hand.radius - S[1], mouth[1] + 0.9 * hand.radius - S[2]];
+  const L1 = Math.hypot(u[0], u[1]);
+  const L2 = Math.hypot(v[0], v[1]);
+  let D = Math.hypot(T[0], T[1]);
+  // (a mouth far out of reach is no hand-feeder's; one a little out of reach is met as near as the
+  // arm goes — the hand stops at the chin)
+  if (L1 < 1e-6 || L2 < 1e-6 || D < 1e-6 || D > (L1 + L2) * FEED_STRETCH) return pose;
+  const within = Math.min(Math.max(D, Math.abs(L1 - L2) * 1.02), (L1 + L2) * 0.98);
+  T[0] *= within / D;
+  T[1] *= within / D;
+  D = within;
+  // a pitch θ turns a (y, z) vector's polar angle atan2(z, y) by +θ; bend the elbow by b so the hand
+  // is the right distance from the shoulder, then swing the whole arm by a onto the target
+  const ang = (w: number[]) => Math.atan2(w[1], w[0]);
+  const wrap = (x: number) => Math.atan2(Math.sin(x), Math.cos(x));
+  const inner = Math.acos(Math.max(-1, Math.min(1, (D * D - L1 * L1 - L2 * L2) / (2 * L1 * L2))));
+  let best: [number, number] | null = null;
+  let bestElbow = Infinity;
+  for (const sgn of [1, -1]) {
+    const b = wrap(ang(u) + sgn * inner - ang(v));
+    const w = [u[0] + v[0] * Math.cos(b) - v[1] * Math.sin(b), u[1] + v[0] * Math.sin(b) + v[1] * Math.cos(b)];
+    const a = wrap(ang(T) - ang(w));
+    // the natural fold carries the elbow low (below the line from shoulder to hand)
+    const elbowY = u[0] * Math.cos(a) - u[1] * Math.sin(a);
+    if (elbowY < bestElbow) {
+      bestElbow = elbowY;
+      best = [a, b];
+    }
+  }
+  pose.feed = best;
+  return pose;
 }
 
 /**
@@ -633,8 +728,13 @@ export function rigTemplate(p: Phenotype): RigTemplate {
     graze: 0,
     grazeDip: 0,
     rest: null,
+    armPose: [],
   };
-  const g = solveGraze(p, parent, trunk, neck, legs, arms);
+
+  // a hand that reaches the mouth feeds it; anything else — a theropod on its little arms — brings
+  // its mouth down to the food
+  tmpl.armPose = arms.map((chain) => armPoseOf(p, chain, legs, feedingMouth(p, parent, neck)));
+  const g = solveGraze(p, parent, trunk, neck, legs, tmpl.armPose.some((a) => a.feed !== null));
   tmpl.graze = g.neck;
   tmpl.grazeDip = g.dip;
   if (tmpl.legless) tmpl.rest = restLine(p, parent, trunk, tails);
@@ -1055,10 +1155,18 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
       }
     }
   }
-  // arms swing opposite the legs
-  r.template.arms.forEach((chain) => {
+  // arms swing opposite the legs; lying down, an arm that reaches the floor swings forward to rest
+  // its hand on it; feeding, one hand at a time carries the food up to the mouth and goes back for more
+  const drop = T.belly * SLEEP_DROP * inp.sleep;
+  const feeding = inp.eat * awake * (1 - moving);
+  const bite = (r.t * FEED_RATE) / (2 * Math.PI);
+  const lift = feeding > 0 ? feeding * (0.5 - 0.5 * Math.cos(r.t * FEED_RATE)) : 0;
+  r.template.arms.forEach((chain, n) => {
     const side = r.bones[chain[0]].position.x >= 0 ? 1 : -1;
-    setRot(r.bones[chain[0]], -0.3 * moving * Math.sin(P + (side > 0 ? 0 : Math.PI)) * awake, 0, 0);
+    const A = T.armPose[n];
+    const feed = lift > 0 && A.feed && (Math.floor(bite) + n) % 2 === 0 ? A.feed : null;
+    setRot(r.bones[chain[0]], -0.3 * moving * Math.sin(P + (side > 0 ? 0 : Math.PI)) * awake + armLie(A, drop) + (feed ? feed[0] * lift : 0), 0, 0);
+    if (feed) setRot(r.bones[chain[A.elbow]], feed[1] * lift, 0, 0);
   });
   // tails sway (a slow wag; a swimmer's tail drives the stroke). A resting slitherer's tail carries
   // on its S, lying still but for the tip's idle flick.

@@ -382,6 +382,79 @@ describe('animation rig', () => {
     expect(restPosed(cat)).toBe(cat);
   });
 
+  it("lying down, an ape rests its hands on the floor — its arms don't sink through it", () => {
+    // (an ape stands on its knuckles: as the body dropped to sleep, the straight arms went into the
+    // ground to the elbow)
+    for (const seed of [1, 2, 3, 5, 101]) {
+      const ph = p('primate', seed);
+      const r = createRig(ph);
+      const T = r.template;
+      expect(T.arms.length, `#${seed}`).toBe(2);
+      const ground = Math.min(...T.legs.map((l) => ph.nodes[l.nodes[l.nodes.length - 1]].pos[1] - ph.nodes[l.nodes[l.nodes.length - 1]].radius));
+      for (const sleep of [0.5, 1]) {
+        poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep, eat: 0, swim: false, turn: 0 });
+        const floor = ground + T.belly * SLEEP_DROP * sleep;
+        for (const chain of T.arms) {
+          const h = chain[chain.length - 1];
+          const clear = footWorld(r, h).y - ph.nodes[h].radius - floor;
+          expect(clear, `#${seed} sleep ${sleep}`).toBeGreaterThan(-0.02);
+          // …and a hand that stood on the ground is still on it, reaching forward
+          const stood = ph.nodes[h].pos[1] - ph.nodes[h].radius - ground < 0.05;
+          if (stood) {
+            expect(clear, `#${seed} sleep ${sleep} on the floor`).toBeLessThan(0.02);
+            expect(footWorld(r, h).z, `#${seed} forward`).toBeGreaterThan(ph.nodes[h].pos[2]);
+          }
+        }
+      }
+    }
+  });
+
+  it('feeding, an ape carries food to its mouth one hand at a time; a theropod lowers its head instead', () => {
+    for (const seed of [1, 3, 5, 14, 101]) {
+      const ph = p('primate', seed);
+      const r = createRig(ph);
+      const T = r.template;
+      const mi = ph.nodes.findIndex((n) => n.terminal === 'mouth');
+      const hands = T.arms.map((c) => c[c.length - 1]);
+      const ground = Math.min(...T.legs.map((l) => ph.nodes[l.nodes[l.nodes.length - 1]].pos[1] - ph.nodes[l.nodes[l.nodes.length - 1]].radius));
+      const closest = hands.map(() => Infinity);
+      let both = 0;
+      for (let f = 0; f < 60 * 6; f++) {
+        poseRig(r, { dt: 1 / 60, speed: 0, cruise: 1, sleep: 0, eat: 1, swim: false, turn: 0 });
+        const M = footWorld(r, mi);
+        let up = 0;
+        hands.forEach((h, k) => {
+          const H = footWorld(r, h);
+          closest[k] = Math.min(closest[k], Math.hypot(H.y - M.y, H.z - M.z));
+          expect(H.y - ph.nodes[h].radius - ground, `#${seed} hand above the ground`).toBeGreaterThan(-0.02);
+          if (H.y - ph.nodes[h].pos[1] > 0.1) up++;
+        });
+        if (up === 2) both++;
+      }
+      // each hand reaches the lips in turn (within a couple of hand-widths), never both at once
+      hands.forEach((h, k) => expect(closest[k], `#${seed} hand ${k}`).toBeLessThan(2.5 * ph.nodes[h].radius));
+      expect(both, `#${seed}`).toBe(0);
+    }
+    // little arms that can't reach: the mouth goes down to the food, the feet stay planted
+    for (const seed of [1, 2, 3]) {
+      const ph = p('biped', seed);
+      const r = createRig(ph);
+      const T = r.template;
+      expect(T.armPose.every((a) => a.feed === null), `biped #${seed}`).toBe(true);
+      const mi = ph.nodes.findIndex((n) => n.terminal === 'mouth');
+      const before = footWorld(r, mi).y;
+      poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 1, swim: false, turn: 0 });
+      const ground = Math.min(...T.legs.map((l) => ph.nodes[l.nodes[l.nodes.length - 1]].pos[1] - ph.nodes[l.nodes[l.nodes.length - 1]].radius));
+      const tall = Math.max(...T.legs.map((l) => ph.nodes[l.nodes[0]].pos[1])) - ground;
+      expect((before - footWorld(r, mi).y) / tall, `biped #${seed} head down`).toBeGreaterThan(0.45);
+      for (const l of T.legs) {
+        const ft = l.nodes[l.nodes.length - 1];
+        const w = footWorld(r, ft);
+        expect(Math.hypot(w.y - ph.nodes[ft].pos[1], w.z - ph.nodes[ft].pos[2]) / tall, `biped #${seed} foot`).toBeLessThan(0.05);
+      }
+    }
+  });
+
   it("a slitherer's and a swimmer's body wave runs head to tail, keeping pace with the ground", () => {
     // (it ran tail to head — a snake or a fish undulating like it was moonwalking — and a third as
     // fast as the snake moved, so its body skated sideways)
