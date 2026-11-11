@@ -358,6 +358,34 @@ describe('body plans', () => {
     }
   });
 
+  it('an octopus: a tall mantle over arms that root beneath it and sprawl along the ground', () => {
+    // (its arms left the middle of a round body and curled up at every joint: an umbrella blown
+    // inside out, with the eyes and the beak on top)
+    for (let seed = 1; seed <= 10; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'cephalopod'));
+      const body = p.nodes.filter((n) => n.kind === 'spine');
+      expect(body.length, `#${seed}`).toBe(1);
+      const B = body[0];
+      const halfH = B.radius * (B.scale?.[1] ?? 1);
+      const halfW = B.radius * Math.max(B.scale?.[0] ?? 1, B.scale?.[2] ?? 1);
+      expect(halfH / halfW, `#${seed} mantle`).toBeGreaterThan(1.15);
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      const arms = p.nodes.filter((n) => n.part?.kind === 'tentacle');
+      const roots = arms.filter((n) => p.nodes[parent.get(p.nodes.indexOf(n))!] === B);
+      expect(roots.length, `#${seed}`).toBeGreaterThanOrEqual(6);
+      // rooted on the underside…
+      for (const r of roots) expect(r.pos[1] - B.pos[1], `#${seed} root`).toBeLessThan(-0.5 * halfH);
+      // …and lying low: no arm rises above the mantle's middle, and the tips reach well out
+      const reach = Math.max(...arms.map((n) => Math.hypot(n.pos[0] - B.pos[0], n.pos[2] - B.pos[2])));
+      for (const n of arms) expect(n.pos[1], `#${seed} arm low`).toBeLessThan(B.pos[1]);
+      expect(reach, `#${seed} sprawl`).toBeGreaterThan(1.5 * halfW);
+      // the eyes ring the mantle below its top; the beak is underneath
+      for (const e of p.nodes.filter((n) => n.terminal === 'eye')) expect(e.pos[1] - B.pos[1], `#${seed} eye`).toBeLessThan(0.6 * halfH);
+      const mouth = p.nodes.find((n) => n.terminal === 'mouth')!;
+      expect(mouth.pos[1], `#${seed} beak`).toBeLessThan(B.pos[1] - 0.5 * halfH);
+    }
+  });
+
   it("a cat's or a dog's tail sweeps back and levels out or curves up — not a stick falling to the ground", () => {
     // (drooped steeply with a downward curl, it ran straight to the floor: from behind, a fifth leg)
     for (const id of ['felid', 'canid']) {

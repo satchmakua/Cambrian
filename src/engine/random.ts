@@ -164,7 +164,7 @@ const MORPHOTYPES: readonly Morpho[] = [
   // --- uncanny ---
   { id: 'dragon', cluster: 'uncanny', weight: 0.9, eyeEl: [0.7, 0.85], muzzleDrop: [0.12, 0.24], snout: [0.5, 0.75], muzzle: [0.52, 0.62], tailTaper: [0.8, 0.88], tailSegs: [5, 6], tailThick: [0.32, 0.45], tailDroop: [-1.5, -1.3], girth: [0.5, 0.72], repeat: [4, 6], elong: [1.2, 1.5], neck: [0.5, 0.6], neckLinks: [2, 2], neckLift: [-0.38, -0.26], headSize: [0.6, 0.75], legPairs: [2], posture: 'digitigrade', legLen: [0.5, 0.68], legTerm: ['claw'], wings: 0.85, tail: 0.95, tailTerm: ['none', 'barb', 'club'], headShape: ['flat', 'wedge'], horns: 0.9, spines: 0.8, crest: 0.3, eyeStyle: [0.4, 0.9], mouthStyle: [0.14, 0.24], covering: ['scales', 'plates'], pattern: ['reticulate', 'bands', 'mottle'], sheen: [0.35, 0.8], hue: [0.0, 0.95], sat: [0.5, 0.9] },
   { id: 'wyvern', cluster: 'uncanny', weight: 0.85, headShape: ['flat', 'wedge'], eyeEl: [0.7, 0.85], muzzleDrop: [0.12, 0.24], snout: [0.5, 0.75], muzzle: [0.52, 0.62], tailTaper: [0.82, 0.88], tailSegs: [5, 6], tailThick: [0.3, 0.42], tailDroop: [-1.5, -1.3], girth: [0.42, 0.58], repeat: [3, 5], elong: [1.2, 1.5], neck: [0.48, 0.58], neckLinks: [2, 2], neckLift: [-0.38, -0.26], headSize: [0.62, 0.78], legPairs: [1], posture: 'digitigrade', legLen: [0.55, 0.75], legTerm: ['claw'], wings: 1, tail: 0.95, tailTerm: ['barb'], horns: 0.8, spines: 0.6, eyeStyle: [0.4, 0.9], mouthStyle: [0.14, 0.24], covering: ['scales'], pattern: ['bands', 'reticulate'], sheen: [0.3, 0.7], hue: [0.0, 0.95], sat: [0.5, 0.9] },
-  { id: 'cephalopod', cluster: 'uncanny', weight: 1.2, symmetry: 'radial', radialCount: [6, 10], girth: [0.5, 0.78], height: [0.7, 1.1], repeat: [1, 2], eyeStyle: [0.8, 1], mouthStyle: [0.26, 0.37], covering: ['slime'], pattern: ['spots', 'ocelli', 'gradient'], sheen: [0.7, 1.0], hue: [0.6, 0.95], sat: [0.4, 0.85] },
+  { id: 'cephalopod', cluster: 'uncanny', weight: 1.2, symmetry: 'radial', radialCount: [6, 10], girth: [0.5, 0.78], height: [1.3, 1.65], repeat: [1, 1], eyeEl: [0.12, 0.3], eyeSize: 1.5, eyeStyle: [0.8, 1], mouthStyle: [0.26, 0.37], covering: ['slime'], pattern: ['spots', 'ocelli', 'gradient'], sheen: [0.7, 1.0], hue: [0.6, 0.95], sat: [0.4, 0.85] },
   { id: 'horror', cluster: 'uncanny', weight: 1.0, symmetry: 'radial', radialCount: [5, 9], girth: [0.45, 0.75], repeat: [1, 2], eyeStyle: [0.7, 1], mouthStyle: [0.5, 0.78], covering: ['skin', 'slime'], pattern: ['ocelli', 'mottle'], sheen: [0.4, 0.8], hue: [0.7, 1.0], sat: [0.3, 0.7] },
   { id: 'slime', cluster: 'uncanny', weight: 0.7, girth: [0.5, 0.72], repeat: [2, 2], height: [0.55, 0.72], elong: [0.9, 1.1], taper: [0.84, 0.94], legPairs: [0], stalkEyes: 0.85, eyeAz: [1.0, 1.3], mouthStyle: [0.07, 0.12], tail: 0.0, head: 0.0, eyeStyle: [0.7, 1], covering: ['slime'], pattern: ['gradient', 'mottle'], sheen: [0.8, 1.0], hue: [0.25, 0.7], sat: [0.5, 0.9], light: [0.45, 0.7] },
   { id: 'urchin', cluster: 'uncanny', weight: 0.6, symmetry: 'radial', radialCount: [8, 12], girth: [0.45, 0.7], repeat: [1, 1], height: [0.9, 1.1], covering: ['chitin'], pattern: ['mottle', 'bands'], hue: [0.6, 0.95], sat: [0.4, 0.8] },
@@ -381,10 +381,12 @@ function compileRadial(rng: Rng, seed: number, m: Morpho, girth: number): Genome
   const height = rg(rng, m.height, [0.7, 1.1]);
   const apps: AppendageGene[] = [arm(rng, girth, range(rng, 0.3, 0.6), m)];
   if (chance(rng, 0.4)) apps.push(arm(rng, girth * 0.6, range(rng, 0.45, 0.75), m, true)); // a second ring
-  apps.push(eyes(rng, range(rng, 0.6, 0.95), false, girth, { style: m.eyeStyle, az: 1.5 })); // a crown of eyes (always — a face reads)
-  // a central maw at the front: elevation ≈ +Z so grow's radial array collapses it onto the axis
+  // a crown of eyes (always — a face reads); an octopus's ring the mantle lower down, looking out
+  apps.push(eyes(rng, range(rng, 0.6, 0.95), false, girth, { style: m.eyeStyle, az: 1.5, el: m.eyeEl, size: m.eyeSize }));
+  // a central maw: elevation ≈ ±90° so grow's radial array collapses it onto the axis — on the crown,
+  // or (an octopus's beak) underneath, in the middle of its arms
   const mo = mouth(rng, girth, m.mouthStyle);
-  mo.attachElevation = 1.35;
+  mo.attachElevation = m.id === 'cephalopod' ? -1.35 : 1.35;
   apps.push(mo);
 
   const body: SegmentGene = {
@@ -909,15 +911,23 @@ function arm(rng: Rng, girth: number, attachT: number, m: Morpho, spiky = false)
   return part(long ? 'tentacle' : 'spine', term, false, range(rng, 0, 1), {
     attachT: clamp(attachT, A.attachT),
     attachAzimuth: range(rng, 0, 0.4),
-    // (an octopus sprawls its arms out along the ground rather than standing on them like stilts)
-    attachElevation: m.id === 'cephalopod' ? range(rng, -0.32, -0.08) : long ? range(rng, -0.6, -0.1) : range(rng, -0.3, 0.3),
+    // (an octopus sprawls its arms out along the ground rather than standing on them like stilts:
+    // they leave the mantle angled down, level off along the floor and lift a little at the tips)
+    attachElevation: m.id === 'cephalopod' ? range(rng, -0.36, -0.24) : long ? range(rng, -0.6, -0.1) : range(rng, -0.3, 0.3),
     segments: spiky ? randint(rng, 1, 2) : long ? randint(rng, 3, 5) : randint(rng, 2, 4),
     length: clamp(girth * range(rng, spiky ? 0.4 : long ? 0.9 : 0.6, spiky ? 0.8 : long ? 1.8 : 1.4), A.length),
     // an octopus's arms are thick at the mantle, taper and curl; the rest keep slender spines
     thickness: clamp(girth * (m.id === 'cephalopod' ? range(rng, 0.26, 0.36) : range(rng, 0.12, 0.3)), A.thickness),
     taper: m.id === 'cephalopod' ? range(rng, 0.7, 0.8) : range(rng, 0.6, 0.88),
-    curl: [m.id === 'cephalopod' ? range(rng, -0.42, -0.18) : range(rng, -0.3, 0.4), range(rng, -0.1, 0.1)],
+    // (curled up hard at every joint, the arms rose over the body like an umbrella blown inside out;
+    // an octopus's arms also all sweep round the same way — a slow pinwheel)
+    curl: m.id === 'cephalopod' ? [range(rng, -0.14, -0.08), swirl(range(rng, -0.1, 0.1))] : [range(rng, -0.3, 0.4), range(rng, -0.1, 0.1)],
   });
+}
+
+/** a sideways curl of 0.1–0.24 rad per joint, to the side the draw fell on */
+function swirl(d: number): number {
+  return (d < 0 ? -1 : 1) * (0.1 + 1.4 * Math.abs(d));
 }
 
 // =============================================================================

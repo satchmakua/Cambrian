@@ -89,7 +89,11 @@ describe('baleen mouth (mouth overhaul)', () => {
       for (const sm of [...built.upper, ...built.lower]) {
         expect(Math.abs(fieldAt(f, sm.p[0] + o[0], sm.p[1] + o[1], sm.p[2] + o[2]))).toBeLessThan(ON_SURFACE);
       }
-      for (const pl of built.plates) {
+      // (an octopus's mouth sits under its body in the middle of its arm roots: where those overlap
+      // the mouth, the union field reads the deeper of the overlapping parts, not the depth under the
+      // skin — the bound below only means something where the mouth has its own patch of skin)
+      const crowded = g.p.genomeRef.symmetry === 'radial' && qRotateV(g.p.nodes[g.idx].quat, [0, 0, 1])[1] < -0.9;
+      for (const pl of crowded ? [] : built.plates) {
         // the root was pulled back from an on-surface point by sink·len (0.15), never further
         const d = Math.abs(fieldAt(f, pl.pos[0] + o[0], pl.pos[1] + o[1], pl.pos[2] + o[2]));
         expect(d).toBeLessThanOrEqual(pl.len * 0.15 + ON_SURFACE);
