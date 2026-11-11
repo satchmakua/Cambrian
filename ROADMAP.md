@@ -672,6 +672,13 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   and up. **Tests:** `bodyplan.test.ts › ape's arms / cat's or dog's tail`, `rig.test.ts › still
   view S`, `ear.test.ts`.
 
+- [x] **M73 — Body waves, ape hands, octopuses.** A slitherer's and a swimmer's wave runs head to
+  tail at the body's own speed (it ran backward, a third as fast). An ape rests its hands on the floor
+  when it lies down and feeds hand to mouth, one hand at a time; arms too short to reach (a
+  theropod's) leave the head to go down to the food. Octopuses stand a tall mantle over arms rooted
+  beneath it and sprawled along the ground; every radial arm curls like its siblings. **Tests:**
+  `rig.test.ts › body wave / ape rests its hands / feeding`, `bodyplan.test.ts › octopus`.
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.

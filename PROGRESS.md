@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M67–M72; M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M67–M73; M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -44,6 +44,23 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic; **+ gait playback** |
 
 ---
+
+## M73 — Body waves, ape hands, octopuses · 2026-11-11
+
+- **Check a motion's direction, not just its look.** A still frame of a slithering snake looked
+  right; the wave's crest, tracked over time, ran tail to head. The lag between neighbouring joints
+  (a cross-correlation) is now the test, and sets the wave's speed against the ground's.
+- **A change in one pose is a change in all of them.** Hanging the ape's arms to the ground fixed
+  its stance and broke its sleep (the body drops; the arms went through the floor). Every pose that
+  moves the body needs the new limb checked: the lie-down fold is solved per frame from the drop.
+- **Reach, then decide the behaviour.** Whether a hand can reach the mouth (a two-link solve, the
+  head nodding to meet it) now decides how an armed body feeds; before, any arm at all meant "glance
+  down", which left theropods eating air.
+- **A shortest-arc frame is not a consistent frame.** Radial parts were each oriented by the
+  shortest turn from +Z, which twists near −Z: one arm in every octopus and star curled its own way.
+  An upright frame (heading, then tilt) makes the array truly radial.
+- **A union field's inside is not a depth.** Inside two overlapping parts it reads the deeper one;
+  two mouth tests that bound a root's depth under the skin skip mouths crowded by arm roots.
 
 ## M72 — Apes, still snakes, ears, cats and dogs · 2026-11-10
 
