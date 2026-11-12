@@ -494,6 +494,7 @@ export function stepWorld(w: World, dt = STEP): void {
   if (Math.floor(w.time / DAY_LENGTH) !== day) immigrate(w);
   rebuildBuckets(w);
   for (const c of w.creatures) if (c.alive) live(w, c, dt);
+  keepRoom(w, dt);
   // the dead are kept one step for the viewer's fade, then culled
   w.creatures = w.creatures.filter((c) => c.alive);
   // eggs hatch
@@ -1605,6 +1606,194 @@ function steer(w: World, c: Creature, goal: { x: number; z: number } | null, pac
   c.x = nx;
   c.z = nz;
   c.heading = Math.atan2(Math.sin(c.heading), Math.cos(c.heading));
+}
+
+// --- room: bodies do not pass through each other ---------------------------------------------------
+
+/** Two bodies on the ground ease apart once nearer than this share of their radii summed. A bite lands
+ *  inside 0.9 of the sum and a mating inside all of it, and the pair engaged in either is let be
+ *  anyway (see `engaged`): a long hunter's footprint must never hold its jaws off its prey. */
+const ROOM = 0.8;
+/** The share of an overlap eased out each second: soft, so a herd settles shoulder to shoulder and
+ *  is seen to shuffle aside rather than bounce. */
+const ROOM_RATE = 4;
+/** A long body's footprint runs down its heading over this share of its length: its trunk, from the
+ *  shoulders to the hips (a snout or a tail tip may still pass over a neighbour's). */
+const ROOM_SPAN = 0.7;
+/** the closest points of the last `segmentGap` (on the first segment, then the second) */
+const ROOM_AT = new Float64Array(4);
+
+/** The distance between segments p1 + s·d1 and p2 + t·d2 (s, t in 0..1); the closest points are
+ *  left in ROOM_AT. */
+function segmentGap(p1x: number, p1z: number, d1x: number, d1z: number, p2x: number, p2z: number, d2x: number, d2z: number): number {
+  const rx = p1x - p2x, rz = p1z - p2z;
+  const A = d1x * d1x + d1z * d1z, E = d2x * d2x + d2z * d2z, F = d2x * rx + d2z * rz;
+  let s = 0, t = 0;
+  if (A <= 1e-9) {
+    if (E > 1e-9) t = Math.min(1, Math.max(0, F / E));
+  } else {
+    const C = d1x * rx + d1z * rz;
+    if (E <= 1e-9) {
+      s = Math.min(1, Math.max(0, -C / A));
+    } else {
+      const B = d1x * d2x + d1z * d2z;
+      const den = A * E - B * B;
+      s = den > 1e-9 ? Math.min(1, Math.max(0, (B * F - C * E) / den)) : 0;
+      t = (B * s + F) / E;
+      if (t < 0) {
+        t = 0;
+        s = Math.min(1, Math.max(0, -C / A));
+      } else if (t > 1) {
+        t = 1;
+        s = Math.min(1, Math.max(0, (B - C) / A));
+      }
+    }
+  }
+  ROOM_AT[0] = p1x + d1x * s;
+  ROOM_AT[1] = p1z + d1z * s;
+  ROOM_AT[2] = p2x + d2x * t;
+  ROOM_AT[3] = p2z + d2z * t;
+  return Math.hypot(ROOM_AT[0] - ROOM_AT[2], ROOM_AT[1] - ROOM_AT[3]);
+}
+
+/** A creature's footprint: its trunk, a segment out along its heading both ways by `half`, `r` round. */
+function footprintOf(c: Creature): { half: number; r: number } {
+  const g = growthOf(c);
+  const r = c.traits.radius * g;
+  return { half: Math.max(0, c.traits.length * g * ROOM_SPAN * 0.5 - r), r };
+}
+
+/** How far apart two creatures' footprints are, less the room they keep (negative: they overlap by that much). */
+export function footprintGap(a: Creature, b: Creature): number {
+  const fa = footprintOf(a), fb = footprintOf(b);
+  const ax = Math.sin(a.heading) * fa.half, az = Math.cos(a.heading) * fa.half;
+  const bx = Math.sin(b.heading) * fb.half, bz = Math.cos(b.heading) * fb.half;
+  return segmentGap(a.x - ax, a.z - az, 2 * ax, 2 * az, b.x - bx, b.z - bz, 2 * bx, 2 * bz) - ROOM * (fa.r + fb.r);
+}
+
+/** A hunter at its prey's throat, or a pair courting: close is the point. */
+function engaged(a: Creature, b: Creature): boolean {
+  return ((a.action === 'hunt' || a.action === 'mate') && a.target === b.id) || ((b.action === 'hunt' || b.action === 'mate') && b.target === a.id);
+}
+
+/** keepRoom's per-step scratch: each body on the ground, its trunk's half-vector, the room it keeps
+ *  and its weight, and the box round it (grown as the valley fills, never shrunk) */
+const RS = {
+  c: [] as Creature[],
+  hx: new Float64Array(64), hz: new Float64Array(64), r: new Float64Array(64), m: new Float64Array(64),
+  x0: new Float64Array(64), x1: new Float64Array(64), z0: new Float64Array(64), z1: new Float64Array(64),
+  keys: new Float64Array(64),
+};
+function roomScratch(n: number): void {
+  if (RS.hx.length >= n) return;
+  const len = Math.max(n, RS.hx.length * 2);
+  for (const k of ['hx', 'hz', 'r', 'm', 'x0', 'x1', 'z0', 'z1', 'keys'] as const) RS[k] = new Float64Array(len);
+}
+/** the sort key's index field: a box's west edge in 1/64 bu, then its body's index below it (a numeric
+ *  sort of plain numbers, several times faster than sorting indices through a comparator) */
+const ROOM_IDX = 4096;
+/** the pass runs every other step, over both steps' time */
+const ROOM_EVERY = 2;
+/** the most a body is moved in one pass (bu) */
+const ROOM_PUSH = 0.5;
+
+/**
+ * May a body pushed to (x, z) stand there? Its ground is known where it stands (`y`, from its own
+ * step): well clear of the waterline, a push of ROOM_PUSH can't carry it across where it may stand
+ * (a bu of height to spare, against banks no steeper than one in one), and the terrain — fractal
+ * noise and the river's course, the dearest thing in the pass — goes unsampled.
+ */
+function mayStand(w: World, c: Creature, x: number, z: number): boolean {
+  if (!inBounds(w.terrain, x, z)) return false;
+  const t = c.traits;
+  if (t.habitat === 'amphibious') return true;
+  if (t.habitat === 'land' ? c.y > WATER_LEVEL + 0.5 : c.y < WATER_LEVEL - 1.3) return true;
+  return canStand(w, t, x, z);
+}
+
+/**
+ * Bodies keep their room. Released on one spot, or drawn to one another by the herd, animals stood
+ * inside each other: two crocodiles crossed like a pair of scissors, centipedes ran through
+ * centipedes. Each pair on the ground whose footprints overlap is eased apart along the line between
+ * their nearest points, the lighter giving way the more — a mouse steps round a bear, not the bear
+ * round the mouse. Not aloft (a flock passes over and under), not a fish against a walker (the one
+ * is under the water, the other wades above it), never where the one moved couldn't stand.
+ *
+ * The pairs are found by sweep and prune (each body's box, sorted by its west edge, against the boxes
+ * that start before its east edge ends): a body meets only the few it could touch, so a valley of a
+ * hundred and fifty costs about what thirty did.
+ */
+function keepRoom(w: World, dt: number): void {
+  if (w.stepCount % ROOM_EVERY) return;
+  const k = Math.min(1, dt * ROOM_EVERY * ROOM_RATE);
+  const cs = RS.c;
+  cs.length = 0;
+  for (const c of w.creatures) if (c.alive && c.alt <= AIRBORNE) cs.push(c);
+  const n = Math.min(cs.length, ROOM_IDX);
+  if (n < 2) return;
+  roomScratch(n);
+  const keys = RS.keys.subarray(0, n);
+  for (let i = 0; i < n; i++) {
+    const c = cs[i];
+    const g = growthOf(c);
+    const r = c.traits.radius * g;
+    const half = Math.max(0, c.traits.length * g * ROOM_SPAN * 0.5 - r);
+    const hx = Math.sin(c.heading) * half, hz = Math.cos(c.heading) * half;
+    const R = ROOM * r;
+    RS.hx[i] = hx;
+    RS.hz[i] = hz;
+    RS.r[i] = R;
+    RS.m[i] = c.traits.mass * g * g * g;
+    RS.x0[i] = c.x - Math.abs(hx) - R;
+    RS.x1[i] = c.x + Math.abs(hx) + R;
+    RS.z0[i] = c.z - Math.abs(hz) - R;
+    RS.z1[i] = c.z + Math.abs(hz) + R;
+    // (the valley is a few hundred bu across: shifted positive, its 1/64ths fit far inside 2^53 with the index under them)
+    keys[i] = Math.floor((RS.x0[i] + 65536) * 64) * ROOM_IDX + i;
+  }
+  keys.sort();
+  const x0 = RS.x0;
+  for (let oi = 0; oi < n; oi++) {
+    const i = keys[oi] % ROOM_IDX;
+    const a = cs[i];
+    for (let oj = oi + 1; oj < n; oj++) {
+      const j = keys[oj] % ROOM_IDX;
+      if (x0[j] > RS.x1[i]) break; // sorted by the west edge: none further on can reach
+      if (RS.z0[j] > RS.z1[i] || RS.z1[j] < RS.z0[i]) continue;
+      const b = cs[j];
+      if ((a.traits.habitat === 'water') !== (b.traits.habitat === 'water')) continue;
+      const room = RS.r[i] + RS.r[j];
+      const d = segmentGap(a.x - RS.hx[i], a.z - RS.hz[i], 2 * RS.hx[i], 2 * RS.hz[i], b.x - RS.hx[j], b.z - RS.hz[j], 2 * RS.hx[j], 2 * RS.hz[j]);
+      if (d >= room || engaged(a, b)) continue;
+      let dx = ROOM_AT[0] - ROOM_AT[2], dz = ROOM_AT[1] - ROOM_AT[3];
+      if (d < 1e-6) {
+        // trunks crossing at a point (or one on top of the other): part them across a's heading, the
+        // side picked by where b stands (by their ids if it stands dead on the line)
+        const side = Math.sin(a.heading) * (b.z - a.z) - Math.cos(a.heading) * (b.x - a.x);
+        const sgn = Math.abs(side) > 1e-6 ? Math.sign(side) : (a.id + b.id) % 2 ? 1 : -1;
+        dx = Math.cos(a.heading) * sgn;
+        dz = -Math.sin(a.heading) * sgn;
+      } else {
+        dx /= d;
+        dz /= d;
+      }
+      // the lighter gives way: each moves by the other's share of their combined weight (a herd
+      // released in a heap parts over a second or two, not in one leap)
+      const ma = RS.m[i], mb = RS.m[j];
+      const push = Math.min(ROOM_PUSH, (room - d) * k);
+      const sa = (push * mb) / (ma + mb), sb = (push * ma) / (ma + mb);
+      const ax = a.x + dx * sa, az = a.z + dz * sa;
+      if (mayStand(w, a, ax, az)) {
+        a.x = ax;
+        a.z = az;
+      }
+      const bx = b.x - dx * sb, bz = b.z - dz * sb;
+      if (mayStand(w, b, bx, bz)) {
+        b.x = bx;
+        b.z = bz;
+      }
+    }
+  }
 }
 
 /** A cheap deterministic fingerprint of the world state (for replay tests). */
