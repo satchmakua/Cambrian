@@ -58,10 +58,20 @@ describe('body plans', () => {
       expect(depth(peak) / width(peak), `#${seed} compressed`).toBeGreaterThan(1.45);
       // a spindle, not a loaf: the body thins steadily back to the rump…
       expect(depth(t[0]) / depth(peak), `#${seed} rump`).toBeLessThan(0.6);
-      // …where a slim stalk carries the tail fin
-      const stalk = p.nodes.find((n) => n.part?.kind === 'tail');
-      expect(stalk, `#${seed} tail`).toBeDefined();
-      expect(stalk!.radius / depth(t[0]), `#${seed} stalk`).toBeLessThan(0.6);
+      // …where a short stalk carries the tail fin, carrying the taper on: slimmer than the rump, but
+      // not a stick (a rod a third of the rump's depth, a fifth of the body long, was a pinch and a pole)
+      const tail = p.nodes.filter((n) => n.part?.kind === 'tail');
+      expect(tail.length, `#${seed} tail`).toBe(2);
+      expect(tail[0].radius / depth(t[0]), `#${seed} stalk`).toBeLessThan(0.85);
+      expect(tail[0].radius / depth(t[0]), `#${seed} stalk`).toBeGreaterThan(0.45);
+      expect(t[0].pos[2] - tail[1].pos[2], `#${seed} stalk length`).toBeLessThan(0.2 * (p.bounds.max[2] - p.bounds.min[2]));
+      // a wedge of a head: three links narrowing to a small mouth at the tip, the eyes back on its sides
+      const head = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 1).sort((a, b) => a.pos[2] - b.pos[2]);
+      expect(head.length, `#${seed} head links`).toBe(3);
+      expect(depth(head[2]) / depth(head[0]), `#${seed} snout`).toBeLessThan(0.5);
+      expect(depth(head[0]) / depth(peak), `#${seed} head joins the body`).toBeGreaterThan(0.6);
+      const eye = p.nodes.find((n) => n.terminal === 'eye')!;
+      expect(eye.pos[2], `#${seed} eye behind the snout tip`).toBeLessThan(head[2].pos[2]);
       // it has a head (not its face on the blunt front of the trunk), and a fish's proportions
       expect(p.nodes.some((n) => n.kind === 'spine' && (n.segment ?? 0) > 0), `#${seed} head`).toBe(true);
       expect((p.bounds.max[2] - p.bounds.min[2]) / (2 * depth(peak)), `#${seed} length/depth`).toBeLessThan(4);
@@ -73,6 +83,49 @@ describe('body plans', () => {
       anal += fins.length > 0 ? 1 : 0;
     }
     expect(anal).toBeGreaterThanOrEqual(8);
+  });
+
+  it('a fish and a shark wear different fins, and each a full set', () => {
+    const fins = (id: string, seed: number) => genomeOfMorphotype(seed, id).body.appendages.filter((a) => a.kind === 'fin');
+    const tailOf = (id: string, seed: number) => genomeOfMorphotype(seed, id).body.appendages.find((a) => a.kind === 'tail')!;
+    let pelvics = 0;
+    let second = 0;
+    for (let seed = 1; seed <= 16; seed++) {
+      // every fin of a body is of one cut: a bony fish's (0.3–0.6) or a shark's (over 0.6)
+      for (const f of [...fins('fish', seed), tailOf('fish', seed)]) {
+        expect(f.style, `fish #${seed}`).toBeGreaterThanOrEqual(0.3);
+        expect(f.style, `fish #${seed}`).toBeLessThan(0.6);
+      }
+      for (const f of [...fins('shark', seed), tailOf('shark', seed)]) expect(f.style, `shark #${seed}`).toBeGreaterThanOrEqual(0.6);
+      // the fish: its dorsal stands over the deepest part of the body (it sat back by the tail), its
+      // pectorals lie back along the flank (they stuck out level, like a plane's wings)
+      const dorsal = fins('fish', seed).find((f) => Math.abs(f.attachAzimuth - Math.PI / 2) < 0.01)!;
+      expect(dorsal.attachT, `fish #${seed} dorsal`).toBeGreaterThanOrEqual(0.5);
+      const pect = fins('fish', seed).find((f) => f.pair && f.attachAzimuth < 4.1)!;
+      expect(pect.attachElevation, `fish #${seed} pectorals laid back`).toBeLessThan(-0.7);
+      if (fins('fish', seed).some((f) => f.pair && f.attachAzimuth > 4.2)) pelvics++;
+      // the shark: a second, smaller dorsal toward the tail
+      if (fins('shark', seed).filter((f) => Math.abs(f.attachAzimuth - Math.PI / 2) < 0.01).length === 2) second++;
+    }
+    expect(pelvics).toBeGreaterThanOrEqual(12);
+    expect(second).toBeGreaterThanOrEqual(11);
+  });
+
+  it('a shark has a long pointed snout with its mouth set back beneath it', () => {
+    // (a blunt melon with a grin on its very tip, and no snout at all, read as a porpoise)
+    for (let seed = 1; seed <= 16; seed++) {
+      const g = genomeOfMorphotype(seed, 'shark');
+      const p = grow(g);
+      const head = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 1).sort((a, b) => a.pos[2] - b.pos[2]);
+      expect(head.length, `#${seed} head links`).toBe(3);
+      expect(head[2].radius / head[0].radius, `#${seed} pointed`).toBeLessThan(0.55);
+      const mouth = p.nodes.find((n) => n.terminal === 'mouth')!;
+      // the snout runs on past the mouth, and the mouth is on the underside
+      expect(head[2].pos[2] + head[2].radius - mouth.pos[2], `#${seed} snout past the mouth`).toBeGreaterThan(0.25 * head[0].radius);
+      expect(mouth.pos[1], `#${seed} mouth below the head's axis`).toBeLessThan(head[1].pos[1]);
+      const eye = p.nodes.find((n) => n.terminal === 'eye')!;
+      expect(eye.pos[1], `#${seed} eyes above the mouth`).toBeGreaterThan(mouth.pos[1]);
+    }
   });
 
   it('a snake is an even rope that lies flat and runs on into a tail', () => {

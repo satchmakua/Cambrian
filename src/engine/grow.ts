@@ -750,7 +750,10 @@ function ensureFace(apps: AppendageGene[], girth: number, frontR = girth, linked
       // the maw out front on the snout — the frontmost face feature, the way a muzzle reads. The
       // sampler in random.ts deliberately draws ABOVE this floor: a floor covering the whole
       // sampled range would pin every creature's mouth to one constant and kill the gene.
-      m.attachElevation = clamp(Math.max(m.attachElevation, 0.95), AP.attachElevation);
+      // (a mouth set BACK along a head of several links — a shark's, under its snout — is on the
+      // underside there by design, the snout running on ahead of it: it may aim further down)
+      const underslung = linkedHead && m.attachT < 0.7;
+      m.attachElevation = clamp(Math.max(m.attachElevation, underslung ? 0.5 : 0.95), AP.attachElevation);
     }
 }
 

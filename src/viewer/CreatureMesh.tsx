@@ -27,7 +27,7 @@ import { makeCreatureMaterial } from './creatureMaterial';
 import { bareLegsOf, footPlanOf, lastLinkOf, legWeights, toedFootGeometry, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finKindOf } from './wings';
+import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finCutOf, finKindOf, finScaleOf } from './wings';
 import { ensureSkinWeights, type RigInstance } from './rig';
 import { buildFieldPrims, fieldAt } from './bodyField';
 import { eyeClearings, eyeSeat, isSwimmer } from './eyeSeat';
@@ -1114,7 +1114,7 @@ function Fin({ f, color, lite = false, phenotype }: { f: MeshFeature; color: num
     const kind = finKindOf(aim, f.kind);
     // a caudal grows at the tail tip, where the body is thin — size it to the trunk instead
     const g = kind === 'caudal' ? Math.max(girth, trunkGirth(phenotype) * 0.8) : girth;
-    return buildFin(kind, aim, g, 0.8 + f.style * 0.6);
+    return buildFin(kind, aim, g, finScaleOf(f.style), finCutOf(f.style));
   }, [f, phenotype]);
   useEffect(() => () => build.membrane.dispose(), [build]);
   const ray = useMemo(() => new THREE.Color(color).multiplyScalar(0.6).getHex(), [color]);
@@ -1431,10 +1431,42 @@ function Ear({ f, color, skin, origin }: { f: MeshFeature; color: number; skin?:
   );
 }
 
-// Gills: a rake of dark slits on the side of the neck. Aimed sideways; +Z points outward.
+// Gills on the side of the neck, by the part's style (+Z points outward, X runs along the body):
+// a bony fish's gill COVER — one curved edge, the rear rim of the plate over its gills; a rake of dark
+// bars (what every gilled body had); or a shark's SLITS — five thin creases lying in the skin. The
+// cover and the slits lie flush: standing proud as the bars do, they broke a fish's outline like vents.
+const GILL_ARC = (() => {
+  // an arc of thin tube, open toward the head: the trailing edge of a gill cover
+  const g = new THREE.TorusGeometry(1, 0.055, 6, 20, Math.PI * 0.9);
+  g.rotateZ(Math.PI * 0.55);
+  return g;
+})();
 function Gill({ f, color }: { f: MeshFeature; color: number }) {
   const r = Math.max(f.radius, 0.06);
   const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.5).getHex(), [color]);
+  // which side of the body it is on: the cover's edge and the slits' lean both face the tail
+  const flip = phenotypeSide(f) < 0 ? -1 : 1;
+  if (f.style < 0.35) {
+    return (
+      <group quaternion={f.quat}>
+        <mesh geometry={GILL_ARC} position={[0, 0, r * 0.02]} scale={[r * 1.15 * flip, r * 1.35, r * 0.6]}>
+          <meshStandardMaterial color={dark} roughness={0.6} />
+        </mesh>
+      </group>
+    );
+  }
+  if (f.style > 0.65) {
+    return (
+      <group quaternion={f.quat}>
+        {[-0.72, -0.36, 0, 0.36, 0.72].map((off, i) => (
+          <mesh key={i} position={[off * r, 0, r * 0.01]} rotation={[0, 0, 0.16 * flip]} scale={[r * 0.07, r * (1.05 - 0.12 * Math.abs(off)), r * 0.05]}>
+            <boxGeometry args={[1, 1, 1]} />
+            <meshStandardMaterial color={dark} roughness={0.6} />
+          </mesh>
+        ))}
+      </group>
+    );
+  }
   return (
     <group quaternion={f.quat}>
       {[-0.55, -0.18, 0.18, 0.55].map((off, i) => (
@@ -1445,6 +1477,13 @@ function Gill({ f, color }: { f: MeshFeature; color: number }) {
       ))}
     </group>
   );
+}
+
+/** Which flank a feature sits on (+1 right, −1 left), from where its outward axis points. */
+function phenotypeSide(f: MeshFeature): number {
+  const q = f.quat;
+  // the local +Z axis in body space: its X component
+  return 2 * (q[0] * q[2] + q[3] * q[1]) >= 0 ? 1 : -1;
 }
 
 // A crest: a fan of thin feathered/membranous blades (songbird / basilisk).

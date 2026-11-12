@@ -89,6 +89,60 @@ describe('wings (shoulder-built, body frame)', () => {
     expect(cb.max.y - cb.min.y).toBeGreaterThan(0.6); // a tall vertical fork
     expect(cb.max.x - cb.min.x).toBeLessThan(0.15); // thin side to side
   });
+
+  it('a fin under the body on the midline is the anal fin; a pair set out to the sides, the pelvics', async () => {
+    const { finKindOf } = await import('../../src/viewer/wings');
+    expect(finKindOf(new THREE.Vector3(0, -1, -0.3).normalize(), 'fin')).toBe('anal');
+    expect(finKindOf(new THREE.Vector3(0.3, -1, -0.4).normalize(), 'fin')).toBe('pelvic');
+    expect(finKindOf(new THREE.Vector3(-0.3, -1, -0.4).normalize(), 'fin')).toBe('pelvic');
+  });
+
+  it('the cut of a fin comes from its style: the plain fin, a bony fish’s, a shark’s', async () => {
+    const { buildFin, finCutOf, finScaleOf } = await import('../../src/viewer/wings');
+    expect([0, 0.29, 0.3, 0.59, 0.6, 1].map(finCutOf)).toEqual(['plain', 'plain', 'fish', 'fish', 'shark', 'shark']);
+    // the plain fin is sized as it always was; the others run small → large across their band
+    expect(finScaleOf(0.2)).toBeCloseTo(0.8 + 0.2 * 0.6, 9);
+    expect(finScaleOf(0.31)).toBeLessThan(finScaleOf(0.58));
+    expect(finScaleOf(0.61)).toBeLessThan(finScaleOf(0.95));
+    const up = new THREE.Vector3(0, 1, 0);
+    const g = 0.5;
+    const box = (kind: 'dorsal' | 'caudal' | 'pectoral', cut: 'plain' | 'fish' | 'shark', aim = up) => {
+      const b = buildFin(kind, aim, g, 1, cut);
+      expect(finite(b.membrane), `${kind} ${cut}`).toBe(true);
+      return bbox(b.membrane);
+    };
+    // a bony fish's dorsal is a long low sail; a shark's a tall blade, taller than it is long
+    const sail = box('dorsal', 'fish');
+    const blade = box('dorsal', 'shark');
+    const plain = box('dorsal', 'plain');
+    const long = (b: THREE.Box3) => b.max.z - b.min.z;
+    const tall = (b: THREE.Box3) => b.max.y; // (above the root, which is on the skin at y = 0)
+    expect(long(sail) / tall(sail)).toBeGreaterThan(2.2);
+    expect(tall(blade) / long(blade)).toBeGreaterThan(1.05);
+    expect(tall(blade)).toBeGreaterThan(1.2 * tall(plain));
+    expect(tall(sail)).toBeLessThan(tall(plain));
+    // …and the blade rakes back: its tip hangs over the rear of its base
+    const tip = new THREE.Vector3();
+    const pos = buildFin('dorsal', up, g, 1, 'shark').membrane.getAttribute('position');
+    for (let i = 0; i < pos.count; i++) if (pos.getY(i) > tip.y) tip.fromBufferAttribute(pos, i);
+    expect(tip.z).toBeLessThan(-0.3 * g);
+    // a shark's tail: the upper lobe reaches well past the lower, and further back
+    const back = new THREE.Vector3(0, 0, -1);
+    const sharkTail = buildFin('caudal', back, g, 1, 'shark').membrane.getAttribute('position');
+    let upper = 0, lower = 0;
+    for (let i = 0; i < sharkTail.count; i++) {
+      const reach = -sharkTail.getZ(i);
+      if (sharkTail.getY(i) > 0.2 * g) upper = Math.max(upper, reach);
+      if (sharkTail.getY(i) < -0.2 * g) lower = Math.max(lower, reach);
+    }
+    expect(upper).toBeGreaterThan(1.6 * lower);
+    // a fish's fork is even, top and bottom
+    const fork = box('caudal', 'fish', back);
+    expect(Math.abs(fork.max.y + fork.min.y)).toBeLessThan(0.08);
+    // a shark's pectoral is a long plane, a fish's a short paddle
+    const side = new THREE.Vector3(1, -0.2, 0).normalize();
+    expect(box('pectoral', 'shark', side).max.x).toBeGreaterThan(1.5 * box('pectoral', 'fish', side).max.x);
+  });
 });
 
 

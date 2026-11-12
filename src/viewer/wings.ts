@@ -400,7 +400,29 @@ export function conformToSurface(
 
 // --- fins ---------------------------------------------------------------------------------------
 
-export type FinKind = 'dorsal' | 'pectoral' | 'pelvic' | 'caudal';
+export type FinKind = 'dorsal' | 'pectoral' | 'pelvic' | 'anal' | 'caudal';
+
+/**
+ * The cut of a body's fins, from the fin part's style gene:
+ *   plain — the fin every finned body had (a raked sail, a swept paddle, an even fork);
+ *   fish  — a bony fish's: a long low sail down the back, round paddles laid along the flank, a keel
+ *           of an anal fin, a deeply forked tail;
+ *   shark — a shark's: a tall raked blade, long swept planes, a tail whose upper lobe runs far past
+ *           the lower.
+ */
+export type FinCut = 'plain' | 'fish' | 'shark';
+
+export function finCutOf(style: number): FinCut {
+  return style < 0.3 ? 'plain' : style < 0.6 ? 'fish' : 'shark';
+}
+
+/** How big this cut of fin is drawn (×its usual size), from the same gene: each band runs small → large. */
+export function finScaleOf(style: number): number {
+  const cut = finCutOf(style);
+  if (cut === 'plain') return 0.8 + style * 0.6; // (as it always was)
+  const u = cut === 'fish' ? (style - 0.3) / 0.3 : (style - 0.6) / 0.4;
+  return 0.88 + 0.26 * Math.min(1, Math.max(0, u));
+}
 
 export interface FinBuild {
   membrane: THREE.BufferGeometry;
@@ -411,7 +433,8 @@ export interface FinBuild {
 export function finKindOf(aim: THREE.Vector3, partKind: string | undefined): FinKind {
   if (partKind === 'tail') return 'caudal';
   if (aim.y > 0.55) return 'dorsal';
-  if (aim.y < -0.55) return 'pelvic';
+  // under the body: one on the midline is the anal fin, a pair set out to the sides the pelvics
+  if (aim.y < -0.55) return Math.abs(aim.x) < 0.12 ? 'anal' : 'pelvic';
   return 'pectoral';
 }
 
@@ -422,7 +445,7 @@ export function finKindOf(aim: THREE.Vector3, partKind: string | undefined): Fin
  * fan, never the old billboards whose chord inherited an arbitrary axis from the growth quaternion.
  * Origin at the fin root (on the skin); the root edge tucks a little into the body.
  */
-export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 1): FinBuild {
+export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 1, cut: FinCut = 'plain'): FinBuild {
   const aim = aimIn.clone().normalize();
   const back = v3(0, 0, -1);
   // chord: the body-backward direction with the aim removed; a caudal's chord is vertical
@@ -433,27 +456,101 @@ export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 
   const normal = new THREE.Vector3().crossVectors(aim, chord).normalize();
   const k = Math.min(1.5, Math.max(0.6, gene));
   // [span, chord, sweep (how far back the tip rakes, ×chord)] per kind, × girth
-  const dims: Record<FinKind, [number, number, number]> = {
+  const PLAIN: Record<FinKind, [number, number, number]> = {
     dorsal: [1.45 * k, 1.9 * k, 0.75],
     pectoral: [1.25 * k, 1.05 * k, 0.6],
     pelvic: [0.75 * k, 0.8 * k, 0.5],
+    anal: [0.75 * k, 0.8 * k, 0.5],
     caudal: [2.0 * k, 2.6 * k, 0],
   };
-  const [H, C, sweep] = dims[kind].map((x) => x * g) as [number, number, number];
+  const FISH: Record<FinKind, [number, number, number]> = {
+    dorsal: [1.15 * k, 3.1 * k, 0.12], // a long low sail
+    pectoral: [1.05 * k, 0.72 * k, 0.3], // a round paddle
+    pelvic: [0.7 * k, 0.5 * k, 0.3],
+    anal: [0.62 * k, 1.5 * k, 0.15], // a keel under the rear of the body
+    caudal: [2.15 * k, 2.5 * k, 0],
+  };
+  const SHARK: Record<FinKind, [number, number, number]> = {
+    dorsal: [1.85 * k, 1.5 * k, 0.72], // a tall raked blade
+    pectoral: [1.85 * k, 1.05 * k, 0.85], // a long swept plane
+    pelvic: [0.72 * k, 0.75 * k, 0.6],
+    anal: [0.55 * k, 0.7 * k, 0.6],
+    caudal: [2.7 * k, 2.4 * k, 0],
+  };
+  const dims = cut === 'fish' ? FISH : cut === 'shark' ? SHARK : PLAIN;
+  const H = dims[kind][0] * g;
+  const C = dims[kind][1] * g;
+  // (the plain fin's rake has always been scaled by the girth as well as by the chord — kept, so no
+  // fin that existed changes; the new cuts rake by the stated share of their chord)
+  const sweep = dims[kind][2] * (cut === 'plain' ? g : 1);
   const P = (along: number, out: number, bulge = 0) =>
     chord.clone().multiplyScalar(along).add(aim.clone().multiplyScalar(out)).add(normal.clone().multiplyScalar(bulge));
+  const smooth = (a: number, b: number, x: number) => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
 
   // the outline, root-leading-edge → tip → trailing edge → root-trailing-edge
   const outline: THREE.Vector3[] = [];
   const N = 14;
-  if (kind === 'caudal') {
+  let hubAlong = C * 0.3;
+  if (kind === 'caudal' && cut === 'shark') {
+    // a shark's tail: the upper lobe runs up and far back, the lower is a short blade under it
+    // (`across` runs down → up the tail's depth; the notch between the lobes sits low)
+    const lo = -0.34 * C, hi = 0.66 * C;
+    const notch = -lo / (hi - lo);
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      const across = lo + (hi - lo) * t;
+      const lobe = t < notch ? (notch - t) / notch : (t - notch) / (1 - notch);
+      const reach = t < notch ? H * (0.2 + 0.26 * Math.pow(lobe, 0.8)) : H * (0.2 + 0.8 * Math.pow(lobe, 0.9));
+      outline.push(P(across, reach));
+    }
+  } else if (kind === 'caudal') {
     // a forked tail: two lobes (up and down along the chord) reaching back along the aim
+    // (a bony fish's fork is cut deeper than the plain fan's)
+    const pit = cut === 'fish' ? 0.34 : 0.45;
     for (let i = 0; i <= N; i++) {
       const t = i / N; // −C/2 … +C/2 across the fork
       const across = (t - 0.5) * C;
       const lobe = Math.abs(t - 0.5) * 2; // 0 at the fork's notch → 1 at the lobe tips
-      const reach = H * (0.45 + 0.55 * Math.pow(lobe, 0.8));
+      const reach = H * (pit + (1 - pit) * Math.pow(lobe, 0.8));
       outline.push(P(across, reach));
+    }
+  } else if (cut === 'fish' && (kind === 'dorsal' || kind === 'anal')) {
+    // a sail along the body: up steeply at its front (the spines), running back a little lower, then
+    // down to the body at its rear — its base two-fifths ahead of the node and three-fifths behind
+    const root0 = -C * 0.4;
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      // (tallest a fifth of the way along and falling away behind: level-topped it was a flag)
+      const h = H * smooth(0, 0.2, t) * (1 - 0.6 * Math.pow(t, 1.3)) * (1 - smooth(0.86, 1, t));
+      outline.push(P(root0 + C * t + sweep * C * (h / H), h));
+    }
+    hubAlong = C * 0.1;
+  } else if (cut === 'fish') {
+    // a round paddle: a half-oval from the front of its root round to the back
+    const root0 = -C * 0.2;
+    for (let i = 0; i <= N; i++) {
+      const phi = (Math.PI * i) / N;
+      const h = H * Math.pow(Math.sin(phi), 0.8);
+      outline.push(P(root0 + C * (0.5 - 0.5 * Math.cos(phi)) + sweep * C * (h / H), h));
+    }
+  } else if (cut === 'shark' && kind === 'dorsal') {
+    // a blade: a long convex leading edge raked back to a rounded tip that hangs over the rear of
+    // the base, and a hollow trailing edge down to a free corner
+    const root0 = -C * 0.25;
+    const root1 = C * 0.75;
+    const tipAlong = root0 + sweep * C;
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      if (t <= 0.55) {
+        const u = t / 0.55;
+        outline.push(P(root0 + (tipAlong - root0) * Math.pow(u, 1.5), H * Math.pow(Math.sin((u * Math.PI) / 2), 0.9)));
+      } else {
+        const u = (t - 0.55) / 0.45;
+        outline.push(P(tipAlong + (root1 - tipAlong) * u - 0.1 * C * Math.sin(Math.PI * u), H * Math.pow(1 - u, 1.4)));
+      }
     }
   } else {
     const root0 = -C * 0.15; // leading edge root (a touch forward of the node)
@@ -473,7 +570,7 @@ export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 
       }
     }
   }
-  const hub = kind === 'caudal' ? P(0, -g * 0.15) : P(C * 0.3, -g * 0.12); // tucked into the body
+  const hub = kind === 'caudal' ? P(0, -g * 0.15) : P(hubAlong, -g * 0.12); // tucked into the body
   const pos: number[] = [hub.x, hub.y, hub.z];
   for (const o of outline) pos.push(o.x, o.y, o.z);
   // a slightly cambered surface: ring of mid points between hub and outline, bowed along the normal

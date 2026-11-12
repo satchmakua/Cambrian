@@ -61,6 +61,21 @@ interface Morpho {
   dorsal?: number;
   pectoral?: number;
   anal?: number; // prob of an anal fin: a keel under the rear of a fish's body, opposite the dorsal
+  pelvic?: number; // prob of a pair of pelvic fins under the belly (a bony fish's)
+  dorsal2?: number; // prob of a small second dorsal fin toward the tail (a shark's)
+  dorsalT?: Rg; // where along the back the dorsal fin stands — default [0.3, 0.6]
+  pectoralAz?: Rg; // pectoral-fin azimuth — default [3.25, 3.6] (out from low on the flank, a shark's planes);
+  //                  nearer 3.9 they point down-and-out
+  pectoralEl?: Rg; // …and how far they sweep back (rad) — default [-0.38, -0.2]; a resting fish lays them back (≈ -0.9)
+  /** the cut of the fins (viewer/wings finCutOf): under 0.3 the plain fin every finned body had;
+   *  0.3–0.6 a bony fish's (a long low sail down the back, a forked tail, round paddles);
+   *  over 0.6 a shark's (a tall raked blade, a tail with a long upper lobe, long swept planes) */
+  finStyle?: Rg;
+  gillStyle?: number; // 0 a bony fish's gill cover (one curved edge) … 0.5 a rake of bars … 1 a shark's row of slits
+  headLinks?: number; // a plain head's link count (else the cranial archetype's): 3 runs out a long pointed snout
+  mouthT?: Rg; // where along the head the mouth sits — default the tip; a shark's is set back under its snout
+  mouthEl?: Rg; // …and how far it turns down there (rad: 1.2 looks ahead, 0.5 at the floor)
+  headLong?: Rg; // a plain head's length ×its girth (else the cranial archetype's)
   tail?: number;
   tailTerm?: readonly Terminal[];
   tailLen?: Rg; // tail segment length ×girth — default [0.7, 1.4]; birds keep a short stub under a feather fan
@@ -138,8 +153,8 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'crocodilian', cluster: 'familiar', weight: 0.5, tailTaper: [0.82, 0.88], tailAz: [4.6, 4.8], tailCurl: [0.04, 0.08], tailDroop: [-1.52, -1.4], tailLen: [0.72, 1.0], tailSegs: [5, 6], tailThick: [0.68, 0.84], eyeT: [0.1, 0.28], head: 1, girth: [0.4, 0.55], repeat: [5, 7], height: [0.55, 0.75], elong: [1.3, 1.6], legPairs: [2], posture: 'sprawling', legLen: [0.5, 0.72], legThick: [0.44, 0.58], legAz: [3.55, 3.78], legTerm: ['claw'], headShape: ['flat'], snout: [0.8, 1.0], tail: 0.95, spines: 0.7, eyeStyle: [0.4, 0.6], eyeAz: [1.0, 1.2], mouthStyle: [0.14, 0.24], covering: ['plates', 'scales'], pattern: ['mottle', 'reticulate'], hue: [0.2, 0.35], sat: [0.3, 0.6] },
   { id: 'serpent', cluster: 'familiar', weight: 0.6, tailTaper: [0.74, 0.82], tailAz: [4.71, 4.71], tailCurl: [0, 0.02], tailDroop: [-1.57, -1.53], tailThick: [0.85, 0.95], tailLen: [0.9, 1.2], tailSegs: [5, 6], rear: [-0.004, 0.004], taper: [0.985, 1.0], head: 1, girth: [0.22, 0.32], repeat: [17, 24], elong: [1.3, 1.5], headShape: ['wedge'], wind: 0.9, legPairs: [0], tail: 1, eyeStyle: [0.4, 0.6], mouthStyle: [0.14, 0.24], covering: ['scales'], pattern: ['bands', 'stripes', 'reticulate'], hue: [0.1, 0.4], sat: [0.5, 0.85] },
   { id: 'anuran', cluster: 'familiar', weight: 0.6, head: 1, eyeEl: [0.2, 0.35], snout: [0, 0.05], headSize: [0.9, 1.05], headDome: [0.5, 0.68], headWide: [1.1, 1.35], headShape: ['broad', 'flat'], eyeT: [0.35, 0.5], girth: [0.5, 0.7], repeat: [2, 2], height: [0.62, 0.78], rear: [-0.22, -0.16], legPairs: [2], posture: 'sprawling', legLen: [0.5, 0.7], hindLeg: [1.5, 1.05], hindSegs: 4, foreLeg: [0.7, 0.78], legTerm: ['claw'], tail: 0.0, eyeStyle: [0, 0.2], eyeAz: [0.8, 1.05], eyeSize: 1.45, mouthStyle: [0.07, 0.12], covering: ['skin'], pattern: ['spots', 'mottle'], sheen: [0.55, 0.85], hue: [0.25, 0.45], sat: [0.5, 0.85] },
-  { id: 'fish', cluster: 'familiar', weight: 0.7, eyeEl: [0.15, 0.35], tailAz: [4.71, 4.71], tailCurl: [-0.03, 0.02], tailDroop: [-1.57, -1.5], headShape: ['domed', 'wedge'], headSize: [1.15, 1.4], headWide: [0.78, 0.92], headDome: [1.35, 1.7], girth: [0.36, 0.5], repeat: [6, 8], height: [1.6, 2.1], elong: [0.8, 0.95], taper: [1.12, 1.15], rear: [-0.012, 0.012], legPairs: [0], dorsal: 1, pectoral: 1, anal: 0.85, tail: 1, tailTerm: ['fin'], tailLen: [0.55, 0.8], tailThick: [0.3, 0.42], tailSegs: [3, 3], gills: 0.9, head: 1, eyeStyle: [0, 0.2], eyeAz: [0.2, 0.4], mouthStyle: [0.07, 0.12], covering: ['scales'], pattern: ['plain', 'spots', 'stripes'], sheen: [0.35, 0.6], hue: [0.45, 0.65], sat: [0.4, 0.8] }, // deep and flattened side to side, the head running on from the body's depth, a slim stalk before the tail fin (a round tube read as an eel)
-  { id: 'shark', cluster: 'familiar', weight: 0.6, eyeEl: [0.15, 0.35], tailAz: [4.71, 4.71], tailCurl: [-0.03, 0.02], tailDroop: [-1.57, -1.5], headShape: ['wedge', 'tapered'], headSize: [0.85, 1.0], girth: [0.45, 0.62], repeat: [5, 7], height: [0.95, 1.2], elong: [1.4, 1.7], taper: [1.06, 1.13], legPairs: [0], dorsal: 1, pectoral: 1, tail: 1, tailTerm: ['fin'], tailLen: [0.6, 0.85], tailThick: [0.45, 0.6], tailSegs: [3, 4], gills: 0.95, head: 0.85, eyeStyle: [0.1, 0.3], eyeAz: [0.2, 0.4], mouthStyle: [0.13, 0.24], covering: ['skin'], pattern: ['plain', 'gradient'], hue: [0.55, 0.62], sat: [0.2, 0.45] },
+  { id: 'fish', cluster: 'familiar', weight: 0.7, eyeEl: [0.15, 0.35], tailAz: [4.71, 4.71], tailCurl: [-0.03, 0.02], tailDroop: [-1.57, -1.5], headShape: ['wedge'], headSize: [1.2, 1.4], headWide: [0.78, 0.92], headDome: [1.35, 1.7], girth: [0.36, 0.5], repeat: [6, 8], height: [1.6, 2.1], elong: [0.8, 0.95], taper: [1.12, 1.15], rear: [-0.012, 0.012], legPairs: [0], finStyle: [0.34, 0.56], dorsalT: [0.5, 0.64], dorsal: 1, pectoral: 1, anal: 0.85, pelvic: 0.9, pectoralAz: [3.55, 3.9], pectoralEl: [-1.0, -0.75], tail: 1, tailTerm: ['fin'], tailLen: [0.3, 0.42], tailThick: [0.58, 0.7], tailTaper: [0.72, 0.8], tailSegs: [2, 2], gills: 0.9, gillStyle: 0.1, head: 1, headLinks: 3, eyeT: [0.32, 0.48], headLong: [0.75, 0.95], eyeStyle: [0, 0.2], eyeAz: [0.2, 0.4], mouthStyle: [0.07, 0.12], covering: ['scales'], pattern: ['plain', 'spots', 'stripes'], sheen: [0.35, 0.6], hue: [0.45, 0.65], sat: [0.4, 0.8] }, // deep and flattened side to side, the head running on from the body's depth, a slim stalk before the tail fin (a round tube read as an eel)
+  { id: 'shark', cluster: 'familiar', weight: 0.6, eyeEl: [0.15, 0.35], tailAz: [4.71, 4.71], tailCurl: [-0.03, 0.02], tailDroop: [-1.57, -1.5], headShape: ['tapered'], headSize: [0.92, 1.02], girth: [0.45, 0.62], repeat: [5, 7], height: [0.95, 1.2], elong: [1.4, 1.7], taper: [1.06, 1.13], legPairs: [0], finStyle: [0.64, 0.9], dorsalT: [0.5, 0.6], dorsal: 1, pectoral: 1, dorsal2: 0.85, pelvic: 0.6, tail: 1, tailTerm: ['fin'], tailLen: [0.6, 0.85], tailThick: [0.45, 0.6], tailSegs: [3, 4], gills: 0.95, gillStyle: 0.9, head: 1, headLinks: 3, mouthT: [0.45, 0.55], eyeT: [0.3, 0.45], mouthEl: [0.55, 0.75], eyeStyle: [0.1, 0.3], eyeAz: [0.2, 0.4], mouthStyle: [0.13, 0.24], covering: ['skin'], pattern: ['plain', 'gradient'], hue: [0.55, 0.62], sat: [0.2, 0.45] },
   { id: 'bird', cluster: 'familiar', weight: 1.3, elong: [1.25, 1.45], taper: [1.12, 1.2], legAz: [4.62, 4.71], girth: [0.34, 0.5], repeat: [2, 3], height: [1.0, 1.3], neck: [0.42, 0.52], neckLinks: [2, 2], neckLift: [-0.42, -0.3], headSize: [0.5, 0.6], headShape: ['round', 'round', 'broad'], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 1.0], legThick: [0.15, 0.21], legTerm: ['claw'], wings: 0.95, tail: 0.85, tailTerm: ['fin'], tailLen: [0.22, 0.36], tailSegs: [2, 2], rear: [-0.22, -0.1], crest: 0.45, eyeStyle: [0, 0.2], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'plain', 'spots'], hue: [0.05, 0.65], sat: [0.5, 0.9] },
   { id: 'raptor', cluster: 'familiar', weight: 1.2, elong: [1.25, 1.45], taper: [1.12, 1.2], legAz: [4.62, 4.71], girth: [0.4, 0.54], repeat: [2, 3], height: [1.0, 1.25], neck: [0.45, 0.55], neckLinks: [2, 2], neckLift: [-0.4, -0.28], headSize: [0.56, 0.66], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 0.95], legThick: [0.18, 0.24], legTerm: ['claw'], wings: 1, tail: 0.85, tailTerm: ['fin'], tailLen: [0.22, 0.36], tailSegs: [2, 2], rear: [-0.2, -0.08], crest: 0.3, headShape: ['round', 'broad'], eyeStyle: [0, 0.15], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['bands', 'mottle'], hue: [0.06, 0.12] },
   { id: 'crab', cluster: 'familiar', weight: 1.2, girth: [0.5, 0.62], repeat: [1, 1], height: [0.4, 0.5], elong: [0.78, 0.92], legPairs: [4], posture: 'sprawling', legLen: [0.78, 0.98], legThick: [0.18, 0.24], legTerm: ['claw'], claws: 1, head: 0, tail: 0.0, carapace: 0.95, stalkEyes: 0.95, eyeStyle: [0, 0.3], eyeAz: [1.2, 1.4], eyeEl: [0.9, 1.1], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['mottle', 'reticulate', 'plain'], sheen: [0.3, 0.55], hue: [0.0, 0.1], sat: [0.5, 0.85] },
@@ -265,12 +280,14 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
   // wings, fins
   // wings root at the SHOULDERS — the front of the trunk (t → 1 is toward the head)
   if (chance(rng, m.wings ?? 0)) apps.push(wing(rng, range(rng, 0.68, 0.86), girth));
-  if (chance(rng, m.dorsal ?? 0)) apps.push(dorsalFin(rng, range(rng, 0.3, 0.6), girth));
+  if (chance(rng, m.dorsal ?? 0)) apps.push(dorsalFin(rng, rg(rng, m.dorsalT, [0.3, 0.6]), girth, m));
   // pectorals just behind the gill slits (the trunk runs rump 0 → head 1: at 0.25–0.45 they stuck
   // out beside the tail)
-  if (chance(rng, m.pectoral ?? 0)) apps.push(pectoralFin(rng, range(rng, 0.66, 0.8), girth));
+  if (chance(rng, m.pectoral ?? 0)) apps.push(pectoralFin(rng, range(rng, 0.66, 0.8), girth, m));
   // (no draw unless the morph has one: every other morphotype's genome stream stays as it was)
-  if (m.anal && chance(rng, m.anal)) apps.push(analFin(rng, range(rng, 0.14, 0.3), girth));
+  if (m.anal && chance(rng, m.anal)) apps.push(analFin(rng, range(rng, 0.14, 0.3), girth, m));
+  if (m.pelvic && chance(rng, m.pelvic)) apps.push(pelvicFin(rng, range(rng, 0.42, 0.56), girth, m));
+  if (m.dorsal2 && chance(rng, m.dorsal2)) apps.push({ ...dorsalFin(rng, range(rng, 0.12, 0.22), girth * 0.5, m) });
   // tail
   // a tail ends plain unless the morphotype says otherwise (a caudal FIN belongs to swimmers — the old
   // ['none','fin'] default gave bears, deer and apes a fish's tail fan)
@@ -280,7 +297,7 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
   // a collar / fanned frill near the head
   if (chance(rng, m.frill ?? 0)) apps.push(frill(rng, range(rng, 0.7, 0.95), girth));
   // gill rakes on the front body (fish / shark); a domed carapace over the mid-body (turtle / crab)
-  if (chance(rng, m.gills ?? 0)) apps.push(gill(rng, range(rng, 0.82, 0.95), girth));
+  if (chance(rng, m.gills ?? 0)) apps.push(gill(rng, range(rng, 0.82, 0.95), girth, m.gillStyle));
   if (chance(rng, m.carapace ?? 0)) apps.push(carapace(rng, girth));
 
   const body: SegmentGene = {
@@ -446,7 +463,10 @@ function headSeg(rng: Rng, bodyGirth: number, m: Morpho, eyeStyle: number): Segm
   for (let p = 0; p < Math.max(1, Math.round(eyeCount / 2)); p++) {
     apps.push(eyes(rng, rg(rng, m.eyeT, [0.7, 0.98]), false, g, { style: [eyeStyle, eyeStyle], az: m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.18, 0.5) + p * 0.3, stalk, el: m.eyeEl, size: m.eyeSize }));
   }
-  apps.push(mouth(rng, g, m.mouthStyle)); // every face has a mouth
+  const mouthGene = mouth(rng, g, m.mouthStyle); // every face has a mouth
+  if (m.mouthT) mouthGene.attachT = rg(rng, m.mouthT); // (no draw unless the morph sets it)
+  if (m.mouthEl) mouthGene.attachElevation = rg(rng, m.mouthEl);
+  apps.push(mouthGene);
   if (chance(rng, m.horns ?? 0)) apps.push(horns(rng, g));
   if (chance(rng, m.ears ?? 0)) apps.push(ear(rng, g, m.earStyle));
   if (chance(rng, m.whiskers ?? 0)) apps.push(whisker(rng, g));
@@ -464,8 +484,9 @@ function headSeg(rng: Rng, bodyGirth: number, m: Morpho, eyeStyle: number): Segm
   return {
     // a narrow (wedge/tapered) skull on a small-girth creature can dip below the size floor — clamp each
     // axis so the silhouette stays extreme but the gene stays in bounds (Pillar 1), like taper below.
-    size: [clamp(g * wide, sb), clamp(g * domed, sb), clamp(g * (rg(rng, arch.long) + snout * 1.5), sb)],
-    repeat: snout > 0.5 ? 2 : randint(rng, arch.repeat[0], arch.repeat[1]), // a snout adds a muzzle section
+    size: [clamp(g * wide, sb), clamp(g * domed, sb), clamp(g * (rg(rng, m.headLong ?? arch.long) + snout * 1.5), sb)],
+    // a snout adds a muzzle section (the draw is made whatever the morph pins, so no other gene moves)
+    repeat: ((links: number) => m.headLinks ?? links)(snout > 0.5 ? 2 : randint(rng, arch.repeat[0], arch.repeat[1])),
     taper: clamp(rg(rng, arch.taper) - snout * 0.3, GENE_BOUNDS.segment.taper), // narrows toward the face/snout
     curve: [rg(rng, arch.curve) - snout * 0.12, 0], // a long muzzle / tapered skull droops a touch
     appendages: apps,
@@ -669,7 +690,8 @@ function wing(rng: Rng, attachT: number, girth: number): AppendageGene {
 
 function tail(rng: Rng, girth: number, terminal: Terminal, m?: Morpho): AppendageGene {
   const segs = m?.tailSegs ?? [3, 6];
-  return part('tail', terminal, false, range(rng, 0, 0.4), {
+  // (a tail FIN takes the morph's cut of fin: a fish's fork, a shark's long upper lobe)
+  return part('tail', terminal, false, rg(rng, terminal === 'fin' ? m?.finStyle : undefined, [0, 0.4]), {
     attachT: range(rng, 0.0, 0.06),
     attachAzimuth: rg(rng, m?.tailAz, [4.4, 5.0]),
     attachElevation: rg(rng, m?.tailDroop, [-1.25, -0.75]),
@@ -734,8 +756,8 @@ function frill(rng: Rng, attachT: number, girth: number): AppendageGene {
   });
 }
 
-function dorsalFin(rng: Rng, attachT: number, girth: number): AppendageGene {
-  return part('fin', 'fin', false, range(rng, 0, 0.3), {
+function dorsalFin(rng: Rng, attachT: number, girth: number, m?: Morpho): AppendageGene {
+  return part('fin', 'fin', false, rg(rng, m?.finStyle, [0, 0.3]), {
     attachT,
     attachAzimuth: Math.PI / 2,
     attachElevation: range(rng, -0.15, 0.05),
@@ -748,8 +770,8 @@ function dorsalFin(rng: Rng, attachT: number, girth: number): AppendageGene {
 }
 
 /** A fish's anal fin: one blade on the belly's midline toward the tail, the dorsal's counterpart. */
-function analFin(rng: Rng, attachT: number, girth: number): AppendageGene {
-  return part('fin', 'fin', false, range(rng, 0, 0.3), {
+function analFin(rng: Rng, attachT: number, girth: number, m?: Morpho): AppendageGene {
+  return part('fin', 'fin', false, rg(rng, m?.finStyle, [0, 0.3]), {
     attachT,
     attachAzimuth: Math.PI * 1.5,
     attachElevation: range(rng, -0.35, -0.15), // raked back toward the tail
@@ -761,11 +783,25 @@ function analFin(rng: Rng, attachT: number, girth: number): AppendageGene {
   });
 }
 
-function pectoralFin(rng: Rng, attachT: number, girth: number): AppendageGene {
-  return part('fin', 'fin', true, range(rng, 0, 0.3), {
+/** A pair of pelvic fins: small paddles under the belly, pointing down and a little out and back. */
+function pelvicFin(rng: Rng, attachT: number, girth: number, m?: Morpho): AppendageGene {
+  return part('fin', 'fin', true, rg(rng, m?.finStyle, [0, 0.3]), {
     attachT,
-    attachAzimuth: range(rng, 3.25, 3.6), // low on the flank
-    attachElevation: range(rng, -0.38, -0.2), // swept back
+    attachAzimuth: range(rng, 4.3, 4.5),
+    attachElevation: range(rng, -0.6, -0.4),
+    segments: 1,
+    length: clamp(girth * range(rng, 0.14, 0.24), A.length),
+    thickness: clamp(girth * range(rng, 0.3, 0.42), A.thickness),
+    taper: range(rng, 0.9, 0.98),
+    curl: [0, 0],
+  });
+}
+
+function pectoralFin(rng: Rng, attachT: number, girth: number, m?: Morpho): AppendageGene {
+  return part('fin', 'fin', true, rg(rng, m?.finStyle, [0, 0.3]), {
+    attachT,
+    attachAzimuth: rg(rng, m?.pectoralAz, [3.25, 3.6]), // low on the flank
+    attachElevation: rg(rng, m?.pectoralEl, [-0.38, -0.2]), // swept back
     roll: range(rng, -0.4, 0.4),
     segments: 1,
     length: clamp(girth * range(rng, 0.2, 0.38), A.length),
@@ -833,8 +869,8 @@ function whisker(rng: Rng, refGirth: number): AppendageGene {
 }
 
 // Gills: a rake of slits on the side of the front body (§6.4).
-function gill(rng: Rng, attachT: number, girth: number): AppendageGene {
-  return part('gill', 'gill', true, 0.5, {
+function gill(rng: Rng, attachT: number, girth: number, style = 0.5): AppendageGene {
+  return part('gill', 'gill', true, style, {
     attachT: clamp(attachT, A.attachT),
     attachAzimuth: range(rng, 3.0, 3.6), // side, slightly down
     attachElevation: range(rng, -0.1, 0.2),
