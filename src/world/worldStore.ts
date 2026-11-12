@@ -20,25 +20,63 @@ import {
   type World, type Action, type HistorySample, type WorldEvent,
 } from '../sim/world';
 import type { Traits } from '../sim/traits';
+import { useSettings } from '../ui/settings';
+import { DEFAULT_SETUP, type Ecosystem, type GameSetup } from '../ui/saves';
 
 let WORLD: World | null = null;
 let FF_WORKER: Worker | null = null;
 let VERSION = 0; // bumps whenever the set of live creatures/corpses changes shape (re-render actors)
 
 export function getWorld(): World {
-  if (!WORLD) WORLD = resumeWorld() ?? createWorld(1);
+  if (!WORLD) WORLD = resumeWorld() ?? createWorld(SETUP.worldSeed);
   return WORLD;
 }
 
 // --- persistence: the world is kept in the browser between visits, and can be saved to a file -----
 
 const AUTOSAVE_KEY = 'cambrian.world';
+const SETUP_KEY = 'cambrian.world.setup';
+
+/** Is this a dev page opened with query parameters (the screenshot harness)? Those start from the
+ *  same fresh valley every time, whatever game the browser holds. */
+function devFresh(): boolean {
+  return import.meta.env.DEV && typeof location !== 'undefined' && !!location.search && !new URLSearchParams(location.search).has('resume');
+}
+
+function loadSetup(): GameSetup {
+  if (devFresh()) return { ...DEFAULT_SETUP };
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(SETUP_KEY) : null;
+    const v = raw ? (JSON.parse(raw) as Partial<GameSetup>) : null;
+    if (v && typeof v.worldSeed === 'number' && Number.isFinite(v.worldSeed)) {
+      return { worldSeed: v.worldSeed >>> 0, ecosystem: v.ecosystem === 'sparse' || v.ecosystem === 'empty' ? v.ecosystem : 'standard' };
+    }
+  } catch {
+    /* fall through */
+  }
+  return { ...DEFAULT_SETUP };
+}
+
+/** The valley's set-up: its seed, and the cast it starts with (a game's choice, kept with it). */
+let SETUP: GameSetup = loadSetup();
+
+export function worldSetup(): GameSetup {
+  return SETUP;
+}
+
+function keepSetup(): void {
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(SETUP_KEY, JSON.stringify(SETUP));
+  } catch {
+    /* ignore */
+  }
+}
 
 /** The world left running last visit, if there is one (and it still loads). Dev pages opened with
  *  query parameters (the screenshot harness) start fresh, so they stay reproducible — unless they
  *  ask to `resume`. */
 function resumeWorld(): World | null {
-  if (import.meta.env.DEV && typeof location !== 'undefined' && location.search && !new URLSearchParams(location.search).has('resume')) return null;
+  if (devFresh()) return null;
   try {
     const s = localStorage.getItem(AUTOSAVE_KEY);
     return s ? loadWorld(s) : null;
@@ -55,6 +93,48 @@ export function autosave(): void {
   } catch {
     // storage full or blocked — the world simply won't be there next visit
   }
+}
+
+/** Has the valley been opened (does it hold anything a save should keep)? */
+function worldStarted(): boolean {
+  return !!WORLD && (WORLD.creatures.length > 0 || WORLD.species.length > 0);
+}
+
+/** The valley as a save holds it: null where it was never opened (a save then keeps its set-up only).
+ *  A world left in the browser by an earlier visit counts — it is read back first. */
+export function worldForSave(): string | null {
+  if (!WORLD) WORLD = resumeWorld();
+  return worldStarted() ? saveWorld(WORLD!) : null;
+}
+
+/** Day, head-count and species of the valley, for a save's summary (null: never opened). */
+export function worldSummary(): { day: number; population: number; species: number } | null {
+  if (!WORLD) WORLD = resumeWorld();
+  if (!worldStarted()) return null;
+  const w = WORLD!;
+  return { day: dayNumber(w.time), population: liveCount(w), species: w.species.filter((sp) => sp.alive > 0).length };
+}
+
+/**
+ * Put a game's valley in place: the saved World where there is one, else a fresh, empty valley of
+ * its set-up (populated on the first visit, with the creature then being bred). Throws — leaving
+ * the current valley — if a saved World will not load.
+ */
+export function installWorld(setup: GameSetup, json: string | null): void {
+  const next = json !== null ? loadWorld(json) : createWorld(setup.worldSeed >>> 0);
+  WORLD = next;
+  SETUP = { ...setup };
+  keepSetup();
+  try {
+    if (json !== null) localStorage.setItem(AUTOSAVE_KEY, json);
+    else localStorage.removeItem(AUTOSAVE_KEY);
+  } catch {
+    /* storage full or blocked */
+  }
+  bumpVersion();
+  // (the epoch remounts the World screen if it is the one showing: a valley not yet visited is
+  // populated when the screen mounts, and a loaded one must not inherit the last one's camera or cast)
+  useWorldUi.setState((u) => ({ epoch: u.epoch + 1, selected: null, follow: false, chronicle: null, running: true, snapshot: worldStarted() ? snapshotOf(next, null) : null }));
 }
 
 /** Download the current world as a file. */
@@ -140,6 +220,8 @@ export interface Snapshot {
 }
 
 interface WorldUi {
+  /** counts the valleys put in place (a new game, a loaded save): the World screen starts afresh on each */
+  epoch: number;
   running: boolean;
   speed: number;
   selected: number | null;
@@ -188,8 +270,17 @@ const STARTER: [string, number][] = [
   ['felid', 2],
 ];
 
-export function populate(w: World, founder?: Genome | null): void {
-  STARTER.forEach(([kind, n], i) => release(w, genomeOfMorphotype((w.seed * 97 + i * 13) >>> 0, kind), n, undefined, kind));
+/** The cast a valley starts with, by the game's set-up: the full starter ecosystem, half of each kind
+ *  (never fewer than a pair), or nobody. Each kind keeps its place in the list, so a sparse valley
+ *  holds the same species as a standard one of its seed. */
+export function starterCast(ecosystem: Ecosystem): [string, number][] {
+  if (ecosystem === 'empty') return [];
+  if (ecosystem === 'sparse') return STARTER.map(([kind, n]) => [kind, Math.max(2, Math.round(n / 2))]);
+  return STARTER;
+}
+
+export function populate(w: World, founder?: Genome | null, ecosystem: Ecosystem = SETUP.ecosystem): void {
+  starterCast(ecosystem).forEach(([kind, n], i) => release(w, genomeOfMorphotype((w.seed * 97 + i * 13) >>> 0, kind), n, undefined, kind));
   if (founder) release(w, founder, 6);
 }
 
@@ -272,16 +363,27 @@ export function snapshotOf(w: World, selected: number | null): Snapshot {
   };
 }
 
+// The World's sound only plays while its scene is on screen (the scene says when); the options that
+// outlive a visit — sound, the voice, the mood icons — are settings, kept between sessions.
+let SCENE_LIVE = false;
+export function worldSceneLive(live: boolean): void {
+  SCENE_LIVE = live;
+  if (live && useWorldUi.getState().sound) SOUND.start();
+  if (!live) SOUND.stop();
+}
+
 export const useWorldUi = create<WorldUi>((set, get) => ({
+  epoch: 0,
   running: true,
   speed: 1,
   selected: null,
   follow: false,
-  emotes: true,
-  sound: false,
+  emotes: useSettings.getState().gameplay.moods,
+  sound: useSettings.getState().audio.sound,
   setSound: (sound) => {
-    if (sound) SOUND.start();
-    else SOUND.stop();
+    if (sound && SCENE_LIVE) SOUND.start();
+    else if (!sound) SOUND.stop();
+    if (useSettings.getState().audio.sound !== sound) useSettings.getState().setAudio({ sound });
     set({ sound });
   },
   documentary: false,
@@ -290,13 +392,17 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
     else NARRATOR.setOn(get().narration);
     set({ documentary, follow: documentary ? true : get().follow });
   },
-  narration: false,
+  narration: useSettings.getState().audio.narration,
   setNarration: (narration) => {
     NARRATOR.setOn(narration && get().documentary);
+    if (useSettings.getState().audio.narration !== narration) useSettings.getState().setAudio({ narration });
     set({ narration });
   },
   snapshot: null,
-  setEmotes: (emotes) => set({ emotes }),
+  setEmotes: (emotes) => {
+    if (useSettings.getState().gameplay.moods !== emotes) useSettings.getState().setGameplay({ moods: emotes });
+    set({ emotes });
+  },
   setRunning: (running) => set({ running }),
   setSpeed: (speed) => set({ speed }),
   select: (selected) => set({ selected, follow: selected !== null ? get().follow : false, snapshot: snapshotOf(getWorld(), selected) }),
@@ -304,6 +410,9 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
   refresh: () => set({ snapshot: snapshotOf(getWorld(), get().selected) }),
   reset: (seed, founder) => {
     WORLD = createWorld(seed >>> 0);
+    // (a new world from the World screen keeps the game's cast but takes the new seed as its own)
+    SETUP = { ...SETUP, worldSeed: seed >>> 0 };
+    keepSetup();
     populate(WORLD, founder);
     bumpVersion();
     set({ selected: null, follow: false, chronicle: null, snapshot: snapshotOf(WORLD, null) });
@@ -361,6 +470,18 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
     get().refresh();
   },
 }));
+
+// the options screen changes these too: follow the settings (volume straight to the mixers)
+SOUND.setVolume(useSettings.getState().audio.volume);
+NARRATOR.setVolume(useSettings.getState().audio.volume);
+useSettings.subscribe((s) => {
+  SOUND.setVolume(s.audio.volume);
+  NARRATOR.setVolume(s.audio.volume);
+  const ui = useWorldUi.getState();
+  if (ui.sound !== s.audio.sound) ui.setSound(s.audio.sound);
+  if (ui.narration !== s.audio.narration) ui.setNarration(s.audio.narration);
+  if (ui.emotes !== s.gameplay.moods) ui.setEmotes(s.gameplay.moods);
+});
 
 /** A random visitor for the "release a stranger" button. */
 export function strangerGenome(seed: number): Genome {

@@ -88,6 +88,34 @@ describe('mouth line (mouth overhaul)', () => {
     expect(sep).toBeGreaterThan(spec.r * 0.1); // visibly open
   });
 
+  it("a flat head's lips stay on its face — never slid under the chin", () => {
+    // (on a frog's flat head the gape slid the lower lip, and the drooping corners, round under the
+    // jaw: the mouth hung below the head as a loose hooked loop)
+    // (a long snout's mouth runs back along its jaw line, a muzzle's mandible drops by design: both
+    // are left as traced)
+    for (const kind of ['anuran', 'slime', 'dragon']) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const p = grow(genomeOfMorphotype(seed, kind));
+        const spec = firstMouth(p);
+        if (!spec || spec.muzzled || (spec.anchor.scale?.[2] ?? 1) > 1.3 || !['herbivore', 'maw', 'fanged'].includes(spec.variant)) continue;
+        const line = buildMouthLine(p, spec, [], 17, 'hybrid');
+        const q = spec.anchor.quat;
+        // the head's own forward and down axes (rotate +Z and −Y by its orientation)
+        const rot = (v: [number, number, number]) => {
+          const [x, y, z, w] = q;
+          const ix = w * v[0] + y * v[2] - z * v[1], iy = w * v[1] + z * v[0] - x * v[2], iz = w * v[2] + x * v[1] - y * v[0], iw = -x * v[0] - y * v[1] - z * v[2];
+          return [ix * w + iw * -x + iy * -z - iz * -y, iy * w + iw * -y + iz * -x - ix * -z, iz * w + iw * -z + ix * -y - iy * -x];
+        };
+        const fwd = rot([0, 0, 1]);
+        const down = rot([0, -1, 0]);
+        const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        const mid = line.lower.length >> 1;
+        expect(dot(line.lower[mid].n, fwd), `${kind} #${seed} chin`).toBeGreaterThan(0.44);
+        for (const sm of line.lower) expect(dot(sm.n, down), `${kind} #${seed} under`).toBeLessThan(0.81);
+      }
+    }
+  });
+
   it('mouth carves remove matter exactly where the maw is', () => {
     const p = grow(funnelGenome());
     const carves = mouthCarves(p);

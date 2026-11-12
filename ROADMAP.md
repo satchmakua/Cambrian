@@ -650,10 +650,64 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   the browser has `KHR_parallel_shader_compile` — behind a short "Waking the world…"; portraits wait
   for idle time and encode off the main thread. **Test:** `tests/world/keyPan.test.ts`.
 
+- [x] **M70 — Stances, frills, close-ups.** A body's legs share one stance, decided from their mean
+  splay (a third of turtles sprawled the fore and stood the hind on posts), and crocodiles and turtles
+  sit wholly in the sprawl (a third of crocodiles stood on thin columns). Frills are ribbed ruffs
+  round the neck (`frill.ts`), not a pale disc. In the World a creature near the camera wears its
+  fine skin, built one per frame behind every plain skin. **Tests:** `bodyplan.test.ts › sprawl /
+  legs agree`, `frill.test.ts`.
+
+- [x] **M71 — Snakes, fish, frogs, whole limbs.** A resting snake lies in a loose S (the rig poses it,
+  each animal its own lie; it straightens to slither). Fish are deep and flattened side to side, thin
+  steadily to a slim tail stalk, and carry an anal fin. Frogs sit up on their forelegs with long hind
+  feet folded beside them, big eyes on top, and a closed mouth that stays on the face (a flat head's
+  lips no longer slide under the chin). Thin limbs come out whole in every skin — no dashed tails or
+  legs. **Tests:** `rig.test.ts › resting snake / fish hangs straight`, `bodyplan.test.ts › fish /
+  frog sits up`, `mouthLine.test.ts › lips stay on the face`, `smoothSkin.test.ts › thin limbs whole`.
+
+- [x] **M72 — Apes, still snakes, ears, cats and dogs.** Apes knuckle-walk, arms hanging from the
+  shoulders as front legs (they lay swept out behind). The litter's and the bestiary's snakes lie in
+  the rig's resting S (`restPosed`). Ears open forward and out, so a profile shows them; cats and
+  dogs carry their heads on thicker, lower necks, stand on sturdier legs, and hold their tails back
+  and up. **Tests:** `bodyplan.test.ts › ape's arms / cat's or dog's tail`, `rig.test.ts › still
+  view S`, `ear.test.ts`.
+
+- [x] **M73 — Body waves, ape hands, octopuses.** A slitherer's and a swimmer's wave runs head to
+  tail at the body's own speed (it ran backward, a third as fast). An ape rests its hands on the floor
+  when it lies down and feeds hand to mouth, one hand at a time; arms too short to reach (a
+  theropod's) leave the head to go down to the food. Octopuses stand a tall mantle over arms rooted
+  beneath it and sprawled along the ground; every radial arm curls like its siblings. **Tests:**
+  `rig.test.ts › body wave / ape rests its hands / feeding`, `bodyplan.test.ts › octopus`.
+
+- [x] **M74 — A front door: main menu, saved games, settings.** The game opens on a main menu
+  (Continue · New game · Load game · Settings · Controls · Quit) with a creature turning behind it;
+  New game sets up a name, the first creature and the valley (seed; lively, sparse or empty). `Esc` or
+  ☰ opens the in-game menu over any screen (the screen stops drawing, the valley's clock stops). A save
+  is the lineage and the valley together, in a named IndexedDB slot, exportable to a file; whatever is
+  read is checked, and a save that will not load changes nothing. Settings (graphics level or its
+  parts, sound and volume, autosave, mood icons, hints, the turntable) are kept in the browser, and
+  the graphics options derive one `RenderQuality` object every renderer reads. **Test:** open the
+  game → New game → breed two generations → `Esc` → Save game → breed on → `Esc` → Load game → the
+  saved generation is back; reload the page → Continue and the save are still there. **Tests:**
+  `tests/ui/settings.test.ts`, `saves.test.ts`, `game.test.ts`.
+- [x] **M75 — Half the frame.** The valley was drawn twice every frame: the fish spawn's material was
+  transmissive, which makes the renderer redraw the whole opaque scene into a refraction buffer.
+  Without it the main pass halves at every level and camera (Low, overview: 1.65 M triangles and 301
+  draw calls → 0.83 M and 201). Creatures wear a skin by distance — a third, coarser one (under half
+  the triangles) past the detail bands — built in the background, the cheapest first. The valley's and
+  the Studio's code loads when they are first opened. **Tests:** `tests/world/renderCost.test.ts`
+  (no transmissive materials; the distant skin's size and bounds).
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.
 - [ ] **A lineage film.** A wild species' body changes over the generations, as a strip of portraits.
+- [ ] **More headroom, measured but not yet taken** (the dev hooks `__cambrianRender`,
+  `__cambrianBreakdown` and `__cambrianCost` in the World give the numbers): the grass and the trees
+  are single instanced meshes, drawn whole wherever the camera looks (306k and 363k triangles at
+  High) — split into cells they could be culled; the sun's shadow pass redraws every caster each
+  frame — it could refresh every other frame; the grass re-uploads all its instances twice a second
+  — only the cells that changed need it.
 
 ---
 

@@ -31,7 +31,9 @@ import { StudioEnvironment } from './StudioEnvironment';
 import { KeepPrograms } from './programs';
 import { mouthVariant, eyeVariant } from './partStyles';
 import type { SkinQuality } from './smoothSkin';
-import { createRig, poseDead, poseRig, SLEEP_DROP, type RigInstance } from './rig';
+import { createRig, poseDead, poseRig, restPosed, SLEEP_DROP, type RigInstance } from './rig';
+import { dprOf, useQuality } from '../ui/settings';
+import { framingOf, type Framing } from './framing';
 import { juvenileGenome } from '../engine/juvenile';
 import { JawContext, type JawControl } from './mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from './flight';
@@ -46,9 +48,22 @@ const DEV_JAW: number | null =
     ? Number(new URLSearchParams(location.search).get('jawopen'))
     : null;
 
+const DEV_SKINQ: SkinQuality | null = (() => {
+  if (!import.meta.env.DEV || typeof location === 'undefined') return null;
+  const v = new URLSearchParams(location.search).get('skinq');
+  return v === 'far' || v === 'low' || v === 'high' ? v : null;
+})();
+
 function devGaitPhase(): number | null {
   if (!import.meta.env.DEV || typeof location === 'undefined') return null;
   const v = new URLSearchParams(location.search).get('gaitphase');
+  return v === null ? null : Number(v);
+}
+
+/** (dev: ?rigt=SECONDS holds the rig's clock there — a feeding hand at the mouth, a tail mid-wag) */
+function devRigTime(): number | null {
+  if (!import.meta.env.DEV || typeof location === 'undefined') return null;
+  const v = new URLSearchParams(location.search).get('rigt');
   return v === null ? null : Number(v);
 }
 
@@ -60,8 +75,10 @@ function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl, flight
   const swim = traits.habitat === 'water' || traits.locomotion === 'swim';
   const invalidate = useThree((s) => s.invalidate);
   const frozen = devGaitPhase();
+  const heldT = devRigTime();
   useFrame((_, dt) => {
     if (!rig) return;
+    if (heldT !== null) rig.t = heldT;
     if (motion === 'dead') {
       // (dev: the World's carcass pose, upright so the limp legs and sagging neck can be judged)
       poseDead(rig);
@@ -76,7 +93,7 @@ function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl, flight
     flight.flap = motion === 'fly' ? wingbeat(frozen !== null ? 0 : rig.t * 7, 0.6) : 0;
     if (DEV_JAW !== null) jaw.open = DEV_JAW;
     poseRig(rig, {
-      dt: frozen !== null ? 0 : Math.min(dt, 0.05),
+      dt: frozen !== null || heldT !== null ? 0 : Math.min(dt, 0.05),
       speed,
       cruise,
       sleep: motion === 'sleep' ? 1 : 0,
@@ -90,39 +107,10 @@ function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl, flight
   return rig;
 }
 
-// --- framing ------------------------------------------------------------------------------------
+// --- framing (in ./framing: the thumbnails and the portraits frame creatures too, and must not pull
+// this whole screen in with them) ---------------------------------------------------------------
 
-export interface Framing {
-  center: [number, number, number];
-  ext: [number, number, number]; // bounds extents (x width, y height, z length)
-  size: number; // longest extent
-  groundY: number; // ground plane in centred space
-  face: { pt: [number, number, number]; r: number } | null; // face focus in centred space
-}
-
-export function framingOf(p: Phenotype): Framing {
-  const { min, max } = p.bounds;
-  const center: [number, number, number] = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
-  const ext: [number, number, number] = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
-  const size = Math.max(ext[0], ext[1], ext[2], 0.6);
-  const faceNodes = p.nodes.filter((n) => n.terminal === 'mouth' || n.terminal === 'eye');
-  let face: Framing['face'] = null;
-  if (faceNodes.length) {
-    const acc = [0, 0, 0];
-    for (const n of faceNodes) for (let a = 0; a < 3; a++) acc[a] += n.pos[a];
-    const pt: [number, number, number] = [
-      acc[0] / faceNodes.length - center[0],
-      acc[1] / faceNodes.length - center[1],
-      acc[2] / faceNodes.length - center[2],
-    ];
-    let r = 0.2;
-    for (const n of faceNodes) {
-      r = Math.max(r, Math.hypot(n.pos[0] - center[0] - pt[0], n.pos[1] - center[1] - pt[1], n.pos[2] - center[2] - pt[2]) + n.radius);
-    }
-    face = { pt, r };
-  }
-  return { center, ext, size, groundY: -ext[1] / 2, face };
-}
+export { framingOf, type Framing } from './framing';
 
 // --- one viewport's contents ---------------------------------------------------------------------
 
@@ -136,7 +124,7 @@ export function SpecimenContent({
   framing,
   skinMode,
   overlays,
-  quality = 'high',
+  quality: asked = 'high',
   background = '#0f1116',
   motion = 'still',
 }: {
@@ -148,6 +136,8 @@ export function SpecimenContent({
   background?: string;
   motion?: Motion;
 }) {
+  // (dev: ?skinq=far|low|high shows a skin quality up close — the World's distant skin, say)
+  const quality = DEV_SKINQ ?? asked;
   const { center, size, groundY } = framing;
   const jaw = useMemo<JawControl>(() => ({ open: 1 }), []);
   const flight = useMemo<FlightControl>(() => ({ spread: 0, flap: 0 }), []);
@@ -524,7 +514,8 @@ function BestiaryCard({
   ready: boolean;
   onAdopt: () => void;
 }) {
-  const phenotype = useMemo(() => grow(genome), [genome]);
+  // (a snake lies in its resting S, as it does on the main stage)
+  const phenotype = useMemo(() => restPosed(grow(genome)), [genome]);
   const framing = useMemo(() => framingOf(phenotype), [phenotype]);
   const box = useRef<HTMLButtonElement>(null);
   const d = framing.size * 2.0;
@@ -578,14 +569,17 @@ export function Studio({
   onSkinMode,
   onAdopt,
   onExit,
+  onMenu,
 }: {
   genome: Genome;
   skinMode: SkinMode;
   onSkinMode: (m: SkinMode) => void;
   onAdopt: (g: Genome) => void;
   onExit: () => void;
+  onMenu?: () => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
+  const quality = useQuality();
   const [tab, setTab] = useState<'bench' | 'bestiary'>(() =>
     typeof location !== 'undefined' && new URLSearchParams(location.search).get('bestiary') === '1' ? 'bestiary' : 'bench',
   );
@@ -627,6 +621,7 @@ export function Studio({
           {tab === 'bestiary' && <button onClick={() => setBestiarySeed((s) => s + 1)}>↻ new specimens</button>}
           <span className="sep" />
           <button onClick={onExit}>← back to breeding</button>
+          {onMenu && <button className="menu-btn" onClick={onMenu} title="menu: save, load, settings, exit (Esc)" aria-label="Menu">☰</button>}
         </div>
       </header>
       {tab === 'bench' ? (
@@ -641,7 +636,7 @@ export function Studio({
         frameloop="demand"
         eventSource={container as MutableRefObject<HTMLElement>}
         gl={{ preserveDrawingBuffer: import.meta.env.DEV, antialias: true }}
-        dpr={[1, 2]}
+        dpr={dprOf(quality, 2)}
       >
         <KeepPrograms />
         <View.Port />

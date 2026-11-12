@@ -66,6 +66,7 @@ export function grow(genome: Genome): Phenotype {
   let legPairsHere = 0; // leg pairs on the segment currently growing (hexapods+ get arthropod legs)
   let legGenesHere: AppendageGene[] = []; // …and their genes (a jumper's hind legs outreach its fore)
   let tagmaHere = false; // …and whether that segment is an arthropod's thorax (see isTagma)
+  let sprawlHere = false; // …and whether its legs sprawl (decided once for them all — see below)
 
   growSegment(dev.body, [0, 0, 0], [0, 0, 0, 1], 0, -1, null);
 
@@ -181,6 +182,9 @@ export function grow(genome: Genome): Phenotype {
     legGenesHere = seg.appendages.filter((a) => a.kind === 'leg');
     legPairsHere = legGenesHere.length;
     tagmaHere = isTagma(seg, depth);
+    // A body sprawls or it stands: decided once, from its legs' mean splay. Judged leg by leg, a turtle
+    // whose genes sat either side of the line stood on its hind legs like posts and sprawled the fore.
+    sprawlHere = legPairsHere > 0 && legGenesHere.reduce((t, a) => t + clamp((4.712 - a.attachAzimuth) * 0.62, [0.12, 1.05]), 0) / legPairsHere > 0.5;
     for (const app of seg.appendages) {
       if (atCap()) break;
       const ai = clampInt(Math.round(app.attachT * (spine.length - 1)), 0, spine.length - 1);
@@ -440,7 +444,7 @@ export function grow(genome: Genome): Phenotype {
         else for (let k = 0; k < n; k++) arch.push(norm(k === 0 ? k0 : k === n - 1 ? end : mid));
         dir = arch[0];
         startPos = [base.pos[0] + sideX * flank * 0.9, base.pos[1] + base.radius * 0.05, base.pos[2]];
-      } else if (splay > 0.5) {
+      } else if (sprawlHere) {
         // a SPRAWLER (lizard, croc, newt): the upper leg juts out sideways at hip height, the elbow /
         // knee sits out beside the body and the shin drops to a foot planted wide — the push-up stance,
         // not a mammal's column tucked under the belly. Same polyline machinery as the arthropod arch
@@ -481,13 +485,21 @@ export function grow(genome: Genome): Phenotype {
       // the mouth hugs the skin (0.12): its geometry is traced onto the true surface by the viewer's
       // mouth-line system, so a proud seat would only push the anchor off the face it draws on
       const seat = t === 'eye' ? 0.6 : t === 'mouth' ? 0.12 : t === 'ear' ? 0.5 : 0;
+      // A radial body's TENTACLES root on its underside, round the mouth, and reach out from there —
+      // an octopus's arms come from under its mantle. (Rooted where they aim, on the flank, they stuck
+      // out of the middle of the body like spokes, the mantle hanging down between them to the floor.)
+      let root = dir;
+      if (dev.symmetry === 'radial' && app.kind === 'tentacle' && dir[1] < 0.2) root = norm([dir[0], dir[1] - TENTACLE_ROOT, dir[2]]);
       // measured against the node's TRUE surface (see surfaceExtent), so a long snout or a domed skull
       // still wears its face proud rather than swallowing it.
-      const out = surfaceExtent(base, dir) + seat * app.thickness;
-      startPos = [base.pos[0] + dir[0] * out, base.pos[1] + dir[1] * out, base.pos[2] + dir[2] * out];
+      const out = surfaceExtent(base, root) + seat * app.thickness;
+      startPos = [base.pos[0] + root[0] * out, base.pos[1] + root[1] * out, base.pos[2] + root[2] * out];
     }
-    // orient +Z → aim direction, then roll about that axis (orients flat parts)
-    let quat = qMul(qFromAxisAngle(dir0, app.roll), qFromTo([0, 0, 1], dir0));
+    // orient +Z → aim direction, then roll about that axis (orients flat parts). A radial body's parts
+    // each stand in an UPRIGHT frame (turned to their heading, then tilted): the shortest turn from +Z
+    // twists as the aim nears −Z, so the one arm that pointed backward curled a different way from its
+    // siblings — an octopus with one arm in the air, a star with one ray dug into the floor.
+    let quat = qMul(qFromAxisAngle(dir0, app.roll), dev.symmetry === 'radial' ? qUpright(dir0) : qFromTo([0, 0, 1], dir0));
     let pos: Vec3 = startPos;
     let prev = parentIdx;
 
@@ -613,6 +625,8 @@ function pullLegAzimuth(az: number, coh: number): number {
 
 /** Trunk pitch per link below which a one-pair body counts as reared upright (birds lean ≥ −0.22). */
 const UPRIGHT_PITCH = -0.26;
+/** how far under the body a radial creature's tentacles take root (the pull of their seat toward −Y) */
+const TENTACLE_ROOT = 1.2;
 
 function normalizeLegs(g: Genome, coh: number): void {
   // every leg-bearing section: the trunk, or an arthropod's thorax ahead of its abdomen
@@ -811,6 +825,13 @@ function qRotate(v: Vec3, q: Quat): Vec3 {
   ];
 }
 /** Shortest-arc quaternion rotating unit vector `a` onto unit vector `b`. */
+/** The frame whose +Z is `d`, with its X axis level: a turn about the vertical to d's heading, then a
+ *  tilt to its elevation (straight up or down has no heading — the shortest turn serves there). */
+function qUpright(d: Vec3): Quat {
+  if (Math.hypot(d[0], d[2]) < 1e-6) return qFromTo([0, 0, 1], d);
+  return qMul(qFromAxisAngle([0, 1, 0], Math.atan2(d[0], d[2])), qFromAxisAngle([1, 0, 0], -Math.asin(Math.max(-1, Math.min(1, d[1])))));
+}
+
 function qFromTo(a: Vec3, b: Vec3): Quat {
   const d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   if (d > 0.999999) return [0, 0, 0, 1];

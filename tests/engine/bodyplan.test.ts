@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { grow, type Phenotype } from '../../src/engine/grow';
-import { genomeOfMorphotype } from '../../src/engine/random';
+import { genomeOfMorphotype, randomGenome } from '../../src/engine/random';
 
 const trunkOf = (p: Phenotype) => p.nodes.filter((n) => n.kind === 'spine' && n.segment === 0);
 
@@ -45,6 +45,34 @@ describe('body plans', () => {
         expect(t[0].radius, `${id} #${seed}`).toBeLessThan(t[t.length - 1].radius);
       }
     }
+  });
+
+  it('a fish is deep and flattened side to side, narrowing to a slim stalk before its tail fin', () => {
+    // (a round tube of even girth with a fin at each end read as an eel, or a sausage)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'fish'));
+      const t = trunkOf(p).sort((a, b) => a.pos[2] - b.pos[2]);
+      const depth = (n: Phenotype['nodes'][number]) => n.radius * (n.scale?.[1] ?? 1);
+      const width = (n: Phenotype['nodes'][number]) => n.radius * (n.scale?.[0] ?? 1);
+      const peak = t.reduce((b, n) => (depth(n) > depth(b) ? n : b), t[0]);
+      expect(depth(peak) / width(peak), `#${seed} compressed`).toBeGreaterThan(1.45);
+      // a spindle, not a loaf: the body thins steadily back to the rump…
+      expect(depth(t[0]) / depth(peak), `#${seed} rump`).toBeLessThan(0.6);
+      // …where a slim stalk carries the tail fin
+      const stalk = p.nodes.find((n) => n.part?.kind === 'tail');
+      expect(stalk, `#${seed} tail`).toBeDefined();
+      expect(stalk!.radius / depth(t[0]), `#${seed} stalk`).toBeLessThan(0.6);
+      // it has a head (not its face on the blunt front of the trunk), and a fish's proportions
+      expect(p.nodes.some((n) => n.kind === 'spine' && (n.segment ?? 0) > 0), `#${seed} head`).toBe(true);
+      expect((p.bounds.max[2] - p.bounds.min[2]) / (2 * depth(peak)), `#${seed} length/depth`).toBeLessThan(4);
+    }
+    // and most carry an anal fin on the belly toward the tail, opposite the dorsal
+    let anal = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const fins = genomeOfMorphotype(seed, 'fish').body.appendages.filter((a) => a.kind === 'fin' && Math.abs(a.attachAzimuth - Math.PI * 1.5) < 0.01);
+      anal += fins.length > 0 ? 1 : 0;
+    }
+    expect(anal).toBeGreaterThanOrEqual(8);
   });
 
   it('a snake is an even rope that lies flat and runs on into a tail', () => {
@@ -101,6 +129,62 @@ describe('body plans', () => {
     }
   });
 
+  it('lizards and crocodiles sprawl: the upper leg reaches out to the side, not down like a post', () => {
+    // (the sprawl starts at a splay of 0.5, and a third of crocodiles drew less: thin column legs under
+    // a long body)
+    for (const id of ['lizard', 'crocodilian']) {
+      for (let seed = 1; seed <= 12; seed++) {
+        for (const l of legChains(grow(genomeOfMorphotype(seed, id)))) {
+          const [hip, knee] = l.nodes;
+          const out = Math.abs(knee.pos[0]) - Math.abs(hip.pos[0]);
+          const len = Math.hypot(knee.pos[0] - hip.pos[0], knee.pos[1] - hip.pos[1], knee.pos[2] - hip.pos[2]);
+          expect(out / len, `${id} #${seed}`).toBeGreaterThan(0.6);
+        }
+      }
+    }
+  });
+
+  it("a body's legs agree: they all sprawl or all stand — never sprawled forelegs on post hind legs", () => {
+    let mixedBodies = 0;
+    let checked = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      const p = grow(randomGenome(seed));
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      // per trunk node: does each leg hanging from it reach out (a sprawl) or drop (a column)?
+      const bySection = new Map<number, Set<boolean>>();
+      for (const l of legChains(p)) {
+        if (l.nodes.length < 3) continue;
+        const [hip, knee] = l.nodes;
+        if (knee.pos[1] > hip.pos[1] + 0.02) continue; // an arched (arthropod) leg: neither
+        const out = Math.abs(knee.pos[0]) - Math.abs(hip.pos[0]);
+        const len = Math.hypot(knee.pos[0] - hip.pos[0], knee.pos[1] - hip.pos[1], knee.pos[2] - hip.pos[2]);
+        const base = p.nodes[parent.get(p.nodes.indexOf(hip))!];
+        const seg = base.segment ?? 0;
+        if (!bySection.has(seg)) bySection.set(seg, new Set());
+        bySection.get(seg)!.add(out / len > 0.6);
+      }
+      for (const kinds of bySection.values()) {
+        checked++;
+        if (kinds.size > 1) mixedBodies++;
+      }
+    }
+    expect(checked).toBeGreaterThan(50);
+    expect(mixedBodies).toBe(0);
+    // and one whose genes sit either side of the line (as a turtle's could): one stance for both pairs
+    const g = genomeOfMorphotype(2, 'lizard');
+    const [hind, fore] = g.body.appendages.filter((a) => a.kind === 'leg').sort((a, b) => a.attachT - b.attachT);
+    hind.attachAzimuth = 3.97; // splay ≈ 0.46
+    fore.attachAzimuth = 3.86; // splay ≈ 0.53
+    const stances = new Set(
+      legChains(grow(g)).map((l) => {
+        const [hip, knee] = l.nodes;
+        const len = Math.hypot(knee.pos[0] - hip.pos[0], knee.pos[1] - hip.pos[1], knee.pos[2] - hip.pos[2]);
+        return (Math.abs(knee.pos[0]) - Math.abs(hip.pos[0])) / len > 0.6;
+      }),
+    );
+    expect(stances.size).toBe(1);
+  });
+
   it("a quadruped's elbow sits behind its shoulder; its knee in front of its hip", () => {
     for (const id of ['felid', 'canid', 'ungulate', 'ursid']) {
       for (let seed = 1; seed <= 12; seed++) {
@@ -129,6 +213,36 @@ describe('body plans', () => {
         expect(knee.pos[2], `#${seed} knee forward`).toBeGreaterThan(hip.pos[2]);
         expect(ankle.pos[2], `#${seed} shin folds back`).toBeLessThan(knee.pos[2]);
       }
+    }
+  });
+
+  it('a frog sits up on its forelegs, its long hind feet folded forward beside it', () => {
+    // (it lay on its belly like a pillow, the hind legs swollen into round lobes at its rump)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'anuran'));
+      const t = trunkOf(p).sort((a, b) => a.pos[2] - b.pos[2]);
+      expect(t.length, `#${seed}`).toBeGreaterThanOrEqual(2);
+      // the chest rides higher than the rump
+      expect(t[t.length - 1].pos[1] - t[0].pos[1], `#${seed} chest up`).toBeGreaterThan(0.05);
+      const legs = legChains(p);
+      const hind = legs.filter((l) => l.attachT < 0.5);
+      const fore = legs.filter((l) => l.attachT >= 0.5);
+      expect(hind.length && fore.length, `#${seed}`).toBeTruthy();
+      for (const { nodes } of hind) {
+        // thigh forward, shin back, and the long foot forward again along the ground: a Z
+        expect(nodes.length, `#${seed} hind links`).toBeGreaterThanOrEqual(4);
+        const [, , ankle, toe] = nodes;
+        expect(toe.pos[2], `#${seed} foot forward`).toBeGreaterThan(ankle.pos[2]);
+        // a muscular thigh, not a lobe as big as the body
+        expect(nodes[0].radius, `#${seed} haunch`).toBeLessThan(0.85 * Math.max(...t.map((n) => n.radius)));
+      }
+      // the forelegs reach down from the raised chest to the ground
+      for (const { nodes } of fore) expect(nodes[0].pos[1] - nodes[nodes.length - 1].pos[1], `#${seed} fore reach`).toBeGreaterThan(0.25);
+      // and big eyes bulge from the top of the head
+      const head = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) > 0);
+      const headW = Math.max(...head.map((n) => n.radius * (n.scale?.[0] ?? 1)));
+      const eye = p.nodes.find((n) => n.terminal === 'eye');
+      expect(eye!.radius / headW, `#${seed} eye`).toBeGreaterThan(0.16);
     }
   });
 
@@ -241,6 +355,71 @@ describe('body plans', () => {
       const head = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 1);
       const headW = 2 * Math.max(...head.map((n) => n.radius * (n.scale?.[0] ?? 1)));
       expect(Math.abs(eyes[0].pos[0] - eyes[1].pos[0]) / headW, `#${seed} eyes close-set`).toBeLessThan(0.6);
+    }
+  });
+
+  it('an octopus: a tall mantle over arms that root beneath it and sprawl along the ground', () => {
+    // (its arms left the middle of a round body and curled up at every joint: an umbrella blown
+    // inside out, with the eyes and the beak on top)
+    for (let seed = 1; seed <= 10; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'cephalopod'));
+      const body = p.nodes.filter((n) => n.kind === 'spine');
+      expect(body.length, `#${seed}`).toBe(1);
+      const B = body[0];
+      const halfH = B.radius * (B.scale?.[1] ?? 1);
+      const halfW = B.radius * Math.max(B.scale?.[0] ?? 1, B.scale?.[2] ?? 1);
+      expect(halfH / halfW, `#${seed} mantle`).toBeGreaterThan(1.15);
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      const arms = p.nodes.filter((n) => n.part?.kind === 'tentacle');
+      const roots = arms.filter((n) => p.nodes[parent.get(p.nodes.indexOf(n))!] === B);
+      expect(roots.length, `#${seed}`).toBeGreaterThanOrEqual(6);
+      // rooted on the underside…
+      for (const r of roots) expect(r.pos[1] - B.pos[1], `#${seed} root`).toBeLessThan(-0.5 * halfH);
+      // …and lying low: no arm rises above the mantle's middle, and the tips reach well out
+      const reach = Math.max(...arms.map((n) => Math.hypot(n.pos[0] - B.pos[0], n.pos[2] - B.pos[2])));
+      for (const n of arms) expect(n.pos[1], `#${seed} arm low`).toBeLessThan(B.pos[1]);
+      expect(reach, `#${seed} sprawl`).toBeGreaterThan(1.5 * halfW);
+      // the eyes ring the mantle below its top; the beak is underneath
+      for (const e of p.nodes.filter((n) => n.terminal === 'eye')) expect(e.pos[1] - B.pos[1], `#${seed} eye`).toBeLessThan(0.6 * halfH);
+      const mouth = p.nodes.find((n) => n.terminal === 'mouth')!;
+      expect(mouth.pos[1], `#${seed} beak`).toBeLessThan(B.pos[1] - 0.5 * halfH);
+    }
+  });
+
+  it("a cat's or a dog's tail sweeps back and levels out or curves up — not a stick falling to the ground", () => {
+    // (drooped steeply with a downward curl, it ran straight to the floor: from behind, a fifth leg)
+    for (const id of ['felid', 'canid']) {
+      for (let seed = 1; seed <= 8; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const tail = p.nodes.filter((n) => n.part?.kind === 'tail').sort((a, b) => b.pos[2] - a.pos[2]); // root → tip
+        if (tail.length < 3) continue;
+        const [prev, tip] = tail.slice(-2);
+        const ground = Math.min(...p.nodes.filter((n) => n.part?.kind === 'leg' && n.kind === 'terminal').map((n) => n.pos[1]));
+        expect((tip.pos[1] - prev.pos[1]) / Math.abs(tip.pos[2] - prev.pos[2]), `${id} #${seed} tip level`).toBeGreaterThan(-0.35);
+        expect(tip.pos[1] - ground, `${id} #${seed} off the ground`).toBeGreaterThan(0.25 * (p.bounds.max[1] - ground));
+        expect(tip.pos[2], `${id} #${seed} behind`).toBeLessThan(tail[0].pos[2]);
+      }
+    }
+  });
+
+  it("an ape's arms hang down from its shoulders to the ground in front of it — not swept out behind", () => {
+    // (aimed out and back, they ran out to the sides and lay along the floor behind the shoulders: in
+    // a thumbnail the ape was a hunched lump sliding on its belly)
+    for (let seed = 1; seed <= 8; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'primate'));
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      for (let i = 0; i < p.nodes.length; i++) {
+        const h = p.nodes[i];
+        if (h.terminal !== 'hand') continue;
+        let s = i;
+        while (p.nodes[parent.get(s)!].part?.kind === 'arm') s = parent.get(s)!;
+        const S = p.nodes[s].pos;
+        const d = [h.pos[0] - S[0], h.pos[1] - S[1], h.pos[2] - S[2]];
+        const len = Math.hypot(d[0], d[1], d[2]);
+        expect(-d[1] / len, `#${seed} hangs down`).toBeGreaterThan(0.75);
+        expect(d[2], `#${seed} not behind`).toBeGreaterThan(-0.05 * len);
+        expect(Math.abs(h.pos[0]) - Math.abs(S[0]), `#${seed} not splayed`).toBeLessThan(0.5 * len);
+      }
     }
   });
 

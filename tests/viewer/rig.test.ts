@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { rigTemplate, createRig, ensureSkinWeights, poseRig, poseDead, gaitAmplitude, SLEEP_DROP } from '../../src/viewer/rig';
+import { rigTemplate, createRig, ensureSkinWeights, poseRig, poseDead, gaitAmplitude, restPosed, SLEEP_DROP } from '../../src/viewer/rig';
 import { buildSmoothGeometry } from '../../src/viewer/smoothSkin';
 
 const p = (kind: string, seed = 11) => grow(genomeOfMorphotype(seed, kind));
@@ -323,6 +323,184 @@ describe('animation rig', () => {
       // the foot ends far closer in to the body than it stood
       expect(Math.hypot(foot.x - hip.x, foot.z - hip.z)).toBeLessThan(0.5 * Math.hypot(rest[0] - restHip[0], rest[2] - restHip[2]));
     }
+  });
+
+  it('a resting snake lies in a loose S, along the way it faces — and straightens out to slither', () => {
+    // (stretched dead straight at rest, a snake read as a stick)
+    for (const seed of [1, 3, 5]) {
+      const ph = p('serpent', seed);
+      const T = rigTemplate(ph);
+      expect(T.rest, `#${seed}`).not.toBeNull();
+      const R = T.rest!;
+      const r = createRig(ph);
+      const line = [...R.tail.slice().reverse(), ...T.trunk.slice(R.tailAt)];
+      poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 0, swim: false, turn: 0 });
+      const pts = line.map((i) => footWorld(r, i));
+      const tip = pts[0];
+      const end = pts[pts.length - 1];
+      const L = pts.slice(1).reduce((t, v, i) => t + v.distanceTo(pts[i]), 0);
+      // the body runs along its facing (+Z): the chord from tail tip to head end is nearly straight ahead
+      expect(Math.abs(Math.atan2(end.x - tip.x, end.z - tip.z)), `#${seed} chord`).toBeLessThan(0.2);
+      // it never doubles back on itself…
+      pts.slice(1).forEach((v, i) => expect(Math.abs(Math.atan2(v.x - pts[i].x, v.z - pts[i].z)), `#${seed} link ${i}`).toBeLessThan(Math.PI / 2));
+      // …and it bends to both sides of that chord: an S, not a C
+      const dx = end.x - tip.x;
+      const dz = end.z - tip.z;
+      const dl = Math.hypot(dx, dz);
+      const off = pts.map((v) => ((v.x - tip.x) * dz - (v.z - tip.z) * dx) / dl);
+      expect(Math.max(...off), `#${seed} one side`).toBeGreaterThan(0.03 * L);
+      expect(Math.min(...off), `#${seed} other side`).toBeLessThan(-0.03 * L);
+      // under way, its own travelling wave takes over: the resting bends are gone
+      poseRig(r, { dt: 0, speed: 1, cruise: 1, sleep: 0, eat: 0, swim: false, turn: 0 });
+      expect(r.bones[T.trunk[0]].quaternion.angleTo(new THREE.Quaternion()), `#${seed} moving`).toBeLessThan(1e-9);
+      // asleep it coils a little tighter
+      poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 1, eat: 0, swim: false, turn: 0 });
+      const curl = (q: THREE.Quaternion) => q.angleTo(new THREE.Quaternion());
+      const sleepBend = T.trunk.reduce((t, i) => t + curl(r.bones[i].quaternion), 0);
+      poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 0, swim: false, turn: 0 });
+      const restBend = T.trunk.reduce((t, i) => t + curl(r.bones[i].quaternion), 0);
+      expect(sleepBend, `#${seed} asleep`).toBeGreaterThan(restBend);
+    }
+  });
+
+  it('a still view shows a snake in the same S the rig poses at rest (no rig there to pose it)', () => {
+    for (const seed of [1, 4]) {
+      const ph = p('serpent', seed);
+      const posed = restPosed(ph);
+      expect(posed).not.toBe(ph);
+      expect(restPosed(ph)).toBe(posed); // cached
+      const r = createRig(ph);
+      poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 0, swim: false, turn: 0 });
+      const T = rigTemplate(ph);
+      for (const i of [...T.trunk, ...T.neck]) expect(footWorld(r, i).distanceTo(new THREE.Vector3(...posed.nodes[i].pos))).toBeLessThan(1e-9);
+      // the bounds follow the curve; the body neither sinks nor rises
+      for (const n of posed.nodes) for (let k = 0; k < 3; k++) expect(n.pos[k] - n.radius).toBeGreaterThanOrEqual(posed.bounds.min[k] - 1e-9);
+      posed.nodes.forEach((n, i) => expect(n.pos[1]).toBeCloseTo(ph.nodes[i].pos[1], 9));
+    }
+    // a legged body is drawn as it grew
+    const cat = p('felid');
+    expect(restPosed(cat)).toBe(cat);
+  });
+
+  it("lying down, an ape rests its hands on the floor — its arms don't sink through it", () => {
+    // (an ape stands on its knuckles: as the body dropped to sleep, the straight arms went into the
+    // ground to the elbow)
+    for (const seed of [1, 2, 3, 5, 101]) {
+      const ph = p('primate', seed);
+      const r = createRig(ph);
+      const T = r.template;
+      expect(T.arms.length, `#${seed}`).toBe(2);
+      const ground = Math.min(...T.legs.map((l) => ph.nodes[l.nodes[l.nodes.length - 1]].pos[1] - ph.nodes[l.nodes[l.nodes.length - 1]].radius));
+      for (const sleep of [0.5, 1]) {
+        poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep, eat: 0, swim: false, turn: 0 });
+        const floor = ground + T.belly * SLEEP_DROP * sleep;
+        for (const chain of T.arms) {
+          const h = chain[chain.length - 1];
+          const clear = footWorld(r, h).y - ph.nodes[h].radius - floor;
+          expect(clear, `#${seed} sleep ${sleep}`).toBeGreaterThan(-0.02);
+          // …and a hand that stood on the ground is still on it, reaching forward
+          const stood = ph.nodes[h].pos[1] - ph.nodes[h].radius - ground < 0.05;
+          if (stood) {
+            expect(clear, `#${seed} sleep ${sleep} on the floor`).toBeLessThan(0.02);
+            expect(footWorld(r, h).z, `#${seed} forward`).toBeGreaterThan(ph.nodes[h].pos[2]);
+          }
+        }
+      }
+    }
+  });
+
+  it('feeding, an ape carries food to its mouth one hand at a time; a theropod lowers its head instead', () => {
+    for (const seed of [1, 3, 5, 14, 101]) {
+      const ph = p('primate', seed);
+      const r = createRig(ph);
+      const T = r.template;
+      const mi = ph.nodes.findIndex((n) => n.terminal === 'mouth');
+      const hands = T.arms.map((c) => c[c.length - 1]);
+      const ground = Math.min(...T.legs.map((l) => ph.nodes[l.nodes[l.nodes.length - 1]].pos[1] - ph.nodes[l.nodes[l.nodes.length - 1]].radius));
+      const closest = hands.map(() => Infinity);
+      let both = 0;
+      for (let f = 0; f < 60 * 6; f++) {
+        poseRig(r, { dt: 1 / 60, speed: 0, cruise: 1, sleep: 0, eat: 1, swim: false, turn: 0 });
+        const M = footWorld(r, mi);
+        let up = 0;
+        hands.forEach((h, k) => {
+          const H = footWorld(r, h);
+          closest[k] = Math.min(closest[k], Math.hypot(H.y - M.y, H.z - M.z));
+          expect(H.y - ph.nodes[h].radius - ground, `#${seed} hand above the ground`).toBeGreaterThan(-0.02);
+          if (H.y - ph.nodes[h].pos[1] > 0.1) up++;
+        });
+        if (up === 2) both++;
+      }
+      // each hand reaches the lips in turn (within a couple of hand-widths), never both at once
+      hands.forEach((h, k) => expect(closest[k], `#${seed} hand ${k}`).toBeLessThan(2.5 * ph.nodes[h].radius));
+      expect(both, `#${seed}`).toBe(0);
+    }
+    // little arms that can't reach: the mouth goes down to the food, the feet stay planted
+    for (const seed of [1, 2, 3]) {
+      const ph = p('biped', seed);
+      const r = createRig(ph);
+      const T = r.template;
+      expect(T.armPose.every((a) => a.feed === null), `biped #${seed}`).toBe(true);
+      const mi = ph.nodes.findIndex((n) => n.terminal === 'mouth');
+      const before = footWorld(r, mi).y;
+      poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 1, swim: false, turn: 0 });
+      const ground = Math.min(...T.legs.map((l) => ph.nodes[l.nodes[l.nodes.length - 1]].pos[1] - ph.nodes[l.nodes[l.nodes.length - 1]].radius));
+      const tall = Math.max(...T.legs.map((l) => ph.nodes[l.nodes[0]].pos[1])) - ground;
+      expect((before - footWorld(r, mi).y) / tall, `biped #${seed} head down`).toBeGreaterThan(0.45);
+      for (const l of T.legs) {
+        const ft = l.nodes[l.nodes.length - 1];
+        const w = footWorld(r, ft);
+        expect(Math.hypot(w.y - ph.nodes[ft].pos[1], w.z - ph.nodes[ft].pos[2]) / tall, `biped #${seed} foot`).toBeLessThan(0.05);
+      }
+    }
+  });
+
+  it("a slitherer's and a swimmer's body wave runs head to tail, keeping pace with the ground", () => {
+    // (it ran tail to head — a snake or a fish undulating like it was moonwalking — and a third as
+    // fast as the snake moved, so its body skated sideways)
+    const yawOf = (q: THREE.Quaternion) => new THREE.Euler().setFromQuaternion(q, 'YXZ').y;
+    for (const [kind, swim] of [['serpent', false], ['fish', true]] as const) {
+      const ph = p(kind, 2);
+      const T = rigTemplate(ph);
+      const r = createRig(ph);
+      const k = Math.floor(T.trunk.length / 2);
+      const head: number[] = [];
+      const tail: number[] = [];
+      const speed = 2;
+      for (let f = 0; f < 600; f++) {
+        poseRig(r, { dt: 1 / 60, speed, cruise: 2, sleep: 0, eat: 0, swim, turn: 0 });
+        head.push(yawOf(r.bones[T.trunk[k]].quaternion));
+        tail.push(yawOf(r.bones[T.trunk[k - 1]].quaternion));
+      }
+      // the joint nearer the tail repeats the one nearer the head after a lag
+      let best = -Infinity;
+      let lag = 0;
+      for (let L = -40; L <= 40; L++) {
+        let c = 0;
+        for (let t = 60; t < 540; t++) c += tail[t] * head[t - L];
+        if (c > best) {
+          best = c;
+          lag = L;
+        }
+      }
+      expect(lag, kind).toBeGreaterThan(0);
+      if (!swim) {
+        // …at the ground's speed: one link's length in the time the body moves that far
+        const a = ph.nodes[T.trunk[k]].pos;
+        const b = ph.nodes[T.trunk[k - 1]].pos;
+        const link = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+        const waveSpeed = link / (lag / 60);
+        expect(waveSpeed / speed, `${kind} wave speed`).toBeGreaterThan(0.75);
+        expect(waveSpeed / speed, `${kind} wave speed`).toBeLessThan(1.35);
+      }
+    }
+  });
+
+  it('a fish hangs straight in the water, and a stubby legless body has no S to lie in', () => {
+    const fish = createRig(p('fish', 2));
+    poseRig(fish, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 0, swim: true, turn: 0 });
+    expect(fish.bones[fish.template.trunk[0]].quaternion.angleTo(new THREE.Quaternion())).toBeLessThan(1e-9);
+    expect(rigTemplate(p('slime', 3)).rest).toBeNull();
   });
 
   it('a sleeper breathes: its chest rises and falls, slowly', () => {

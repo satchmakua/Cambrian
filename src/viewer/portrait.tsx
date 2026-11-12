@@ -17,7 +17,7 @@ import { encodeGenome } from '../engine/share';
 import { CreatureMesh } from './CreatureMesh';
 import { StudioEnvironment } from './StudioEnvironment';
 import { KeepPrograms } from './programs';
-import { framingOf } from './Studio';
+import { framingOf } from './framing';
 import { LidContext } from './eyelids';
 
 /** eyes open, no blink: a still must not catch the lids half shut */

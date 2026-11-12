@@ -27,6 +27,12 @@ class Narrator {
   private last = '';
   private lastAt = -1e9;
   private voice: SpeechSynthesisVoice | null = null;
+  private volume = 1;
+
+  /** master volume, 0 … 1 (a setting) */
+  setVolume(v: number): void {
+    this.volume = Math.min(1, Math.max(0, v));
+  }
 
   get available(): boolean {
     return typeof window !== 'undefined' && 'speechSynthesis' in window;
@@ -60,6 +66,7 @@ class Narrator {
     if (v) u.voice = v;
     u.rate = 0.9;
     u.pitch = 0.82;
+    u.volume = this.volume;
     synth.cancel();
     synth.speak(u);
   }

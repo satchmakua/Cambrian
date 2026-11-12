@@ -76,6 +76,11 @@ function canonicalize(value: unknown): unknown {
 
 // --- validation (reject corrupt input) --------------------------------------
 
+/** A genome from untrusted data (a parsed save file): checked field by field, or a readable error. */
+export function checkGenome(o: unknown): Genome {
+  return validateGenome(o);
+}
+
 function validateGenome(o: unknown): Genome {
   const g = obj(o, 'genome');
   if (g.version !== GENOME_VERSION) {

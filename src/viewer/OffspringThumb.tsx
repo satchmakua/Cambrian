@@ -18,12 +18,14 @@ import * as THREE from 'three';
 import { grow } from '../engine/grow';
 import { CreatureMesh } from './CreatureMesh';
 import { StudioEnvironment } from './StudioEnvironment';
-import { framingOf } from './Studio';
+import { framingOf } from './framing';
 import { scissorRect } from './scissor';
+import { restPosed } from './rig';
 import type { Genome } from '../engine/genome';
 
 export function OffspringThumb({ genome, slot, track }: { genome: Genome; slot: number; track: MutableRefObject<(HTMLElement | null)[]> }) {
-  const phenotype = useMemo(() => grow(genome), [genome]);
+  // (a snake lies in its resting S, as it does on the main stage — no rig here to pose it)
+  const phenotype = useMemo(() => restPosed(grow(genome)), [genome]);
   const framing = useMemo(() => framingOf(phenotype), [phenotype]);
   const [smooth, setSmooth] = useState(false);
   useEffect(() => {

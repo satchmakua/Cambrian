@@ -459,8 +459,9 @@ export function JawedMouth({
       <mesh geometry={built.muzzle} material={coatMat} castShadow />
       <mesh geometry={built.upperLip} material={mats.lip} castShadow />
       {/* (a mammal's mouth wears no fold: with only its canines/incisors there are no tooth roots to
-          hide, and draped under the lip line in the coat it hung below the chin as a pale band) */}
-      {!muzzled && <mesh geometry={built.upperFold} material={shut ? coatMat : mats.lip} castShadow />}
+          hide, and draped under the lip line in the coat it hung below the chin as a pale band; nor
+          does a toothless seam — a frog's, a fish's — where it jutted ahead of the snout as a hook) */}
+      {!muzzled && built.upperTeeth.length > 0 && <mesh geometry={built.upperFold} material={shut ? coatMat : mats.lip} castShadow />}
       {built.nose && <mesh geometry={built.nose} material={mats.nose} castShadow />}
       {built.nostrils && <mesh geometry={built.nostrils} material={mats.nostril} />}
       {built.upperTeeth.length > 0 && (

@@ -4,12 +4,13 @@
  * cost one draw and no per-frame CPU), and a shared WEATHER_LOOK the sky, the ground and the sound
  * read from. The weather itself is the sim's (src/sim/weather.ts) — a pure function of seed and time.
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { weatherAt } from '../sim/weather';
 import type { World } from '../sim/world';
 import { SEASON_LOOK } from './Landscape';
+import { useQuality } from '../ui/settings';
 
 /** The look of the sky right now — eased toward the sim's weather; `wet` lags behind the rain. */
 export const WEATHER_LOOK = { cloud: 0, rain: 0, snow: false, wet: 0, lastT: -1 };
@@ -32,8 +33,6 @@ export function updateWeatherLook(w: World, dt: number): void {
 
 const BOX = new THREE.Vector3(56, 30, 56);
 const PRECIP_DAY = { value: 1 };
-const N_RAIN = 9000;
-const N_SNOW = 9000;
 
 const COMMON = /* glsl */ `
 attribute vec3 aSeed;
@@ -49,7 +48,7 @@ vec3 wrapAround(vec3 s, float fall) {
 }
 `;
 
-function rainGeometry(): THREE.BufferGeometry {
+function rainGeometry(N_RAIN: number): THREE.BufferGeometry {
   const seed = new Float32Array(N_RAIN * 2 * 3);
   const end = new Float32Array(N_RAIN * 2);
   const rnd = new Float32Array(N_RAIN * 2);
@@ -70,7 +69,7 @@ function rainGeometry(): THREE.BufferGeometry {
   return g;
 }
 
-function snowGeometry(): THREE.BufferGeometry {
+function snowGeometry(N_SNOW: number): THREE.BufferGeometry {
   const seed = new Float32Array(N_SNOW * 3);
   const rnd = new Float32Array(N_SNOW);
   for (let i = 0; i < N_SNOW; i++) {
@@ -86,12 +85,14 @@ function snowGeometry(): THREE.BufferGeometry {
 
 export function Precipitation() {
   const camera = useThree((s) => s.camera);
+  // (how many streaks and flakes is a graphics option: rebuilt when it changes)
+  const n = Math.max(1, useQuality().precipitation);
   const uniforms = useMemo(
     () => ({ uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uBox: { value: BOX }, uAmt: { value: 0 }, uDay: PRECIP_DAY }),
     [],
   );
   const rain = useMemo(() => {
-    const geo = rainGeometry();
+    const geo = rainGeometry(n);
     const mat = new THREE.ShaderMaterial({
       uniforms,
       transparent: true,
@@ -119,9 +120,9 @@ export function Precipitation() {
     const obj = new THREE.LineSegments(geo, mat);
     obj.frustumCulled = false;
     return obj;
-  }, [uniforms]);
+  }, [uniforms, n]);
   const snow = useMemo(() => {
-    const geo = snowGeometry();
+    const geo = snowGeometry(n);
     const mat = new THREE.ShaderMaterial({
       uniforms,
       transparent: true,
@@ -153,7 +154,17 @@ export function Precipitation() {
     const obj = new THREE.Points(geo, mat);
     obj.frustumCulled = false;
     return obj;
-  }, [uniforms]);
+  }, [uniforms, n]);
+
+  useEffect(
+    () => () => {
+      for (const o of [rain, snow]) {
+        o.geometry.dispose();
+        (o.material as THREE.Material).dispose();
+      }
+    },
+    [rain, snow],
+  );
 
   useFrame((st) => {
     const L = WEATHER_LOOK;

@@ -22,8 +22,9 @@ import { FOLIAGE_CUT } from './foliage';
 import { Precipitation, WEATHER_LOOK, setPrecipDaylight, updateWeatherLook } from './Weather';
 import { Director } from './Director';
 import { Actor, Carcass, useSkinScheduler } from './Actors';
-import { getWorld, useWorldUi, worldVersion, bumpVersion } from './worldStore';
+import { getWorld, useWorldUi, worldVersion, bumpVersion, worldSceneLive } from './worldStore';
 import { StudioEnvironment } from '../viewer/StudioEnvironment';
+import { useQuality } from '../ui/settings';
 
 const MAX_STEPS_PER_FRAME = 90;
 
@@ -75,6 +76,7 @@ function SimDriver() {
 
 /** Sun, moon and sky from the time of day. */
 function DayNight() {
+  const q = useQuality();
   const sun = useRef<THREE.DirectionalLight>(null);
   const hemi = useRef<THREE.HemisphereLight>(null);
   const target = useMemo(() => new THREE.Object3D(), []);
@@ -132,9 +134,10 @@ function DayNight() {
   return (
     <>
       <directionalLight
+        key={q.shadowMap}
         ref={sun}
-        castShadow
-        shadow-mapSize={[2048, 2048]}
+        castShadow={q.shadows}
+        shadow-mapSize={[q.shadowMap || 512, q.shadowMap || 512]}
         shadow-camera-left={-70}
         shadow-camera-right={70}
         shadow-camera-top={70}
@@ -145,7 +148,7 @@ function DayNight() {
       />
       <hemisphereLight ref={hemi} args={['#cfe0ff', '#3a3022', 0.6]} />
       <Sky distance={4500} sunPosition={sunPos} turbidity={6 + 14 * overcast} rayleigh={(night ? 0.2 : 1.6) * (1 - 0.75 * overcast)} mieCoefficient={0.006 + 0.02 * overcast} mieDirectionalG={0.85 - 0.3 * overcast} />
-      {night && overcast < 0.4 && <Stars radius={300} depth={60} count={2500} factor={5} fade speed={0.3} />}
+      {night && overcast < 0.4 && <Stars radius={300} depth={60} count={q.stars} factor={5} fade speed={0.3} />}
     </>
   );
 }
@@ -158,8 +161,8 @@ function SoundDriver() {
   // suspend the ambience (wind and rain beds) when the World is left — it played on in the breeder —
   // and resume it on return if the sound is still switched on
   useEffect(() => {
-    if (useWorldUi.getState().sound) SOUND.start();
-    return () => SOUND.stop();
+    worldSceneLive(true);
+    return () => worldSceneLive(false);
   }, []);
   useFrame(() => {
     if (!SOUND.running) return;
@@ -337,8 +340,79 @@ export function WorldScene() {
 /** Dev/headless: ?look=river (or ?look=x,z) points the camera at a spot for inspection shots. */
 function DevLook() {
   const camera = useThree((st) => st.camera);
+  const gl = useThree((st) => st.gl);
+  const scene = useThree((st) => st.scene);
   const controls = useThree((st) => st.controls) as unknown as { target: THREE.Vector3; update: () => void } | null;
   const done = useRef(false);
+  // (dev: what the last frame cost to draw — a measuring stick for the graphics options)
+  useEffect(() => {
+    // …and where the triangles are: every visible mesh, grouped by kind and size
+    (window as unknown as { __cambrianBreakdown?: () => unknown }).__cambrianBreakdown = () => {
+      const groups = new Map<string, { meshes: number; triangles: number; shadow: number }>();
+      scene.traverseVisible((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || !m.geometry) return;
+        const g = m.geometry;
+        const per = (g.index ? g.index.count : g.getAttribute('position')?.count ?? 0) / 3;
+        const inst = (m as THREE.InstancedMesh).isInstancedMesh ? (m as THREE.InstancedMesh).count : 1;
+        const kind = (m as THREE.InstancedMesh).isInstancedMesh ? `instanced(${Math.round(per)} tris × n)` : (m as THREE.SkinnedMesh).isSkinnedMesh ? 'skinned' : per > 20000 ? `mesh(${Math.round(per / 1000)}k)` : 'mesh';
+        const e = groups.get(kind) ?? { meshes: 0, triangles: 0, shadow: 0 };
+        e.meshes += 1;
+        e.triangles += per * inst;
+        if (m.castShadow) e.shadow += per * inst;
+        groups.set(kind, e);
+      });
+      return [...groups.entries()].sort((a, b) => b[1].triangles - a[1].triangles).slice(0, 14).map(([k, v]) => `${k}: ${v.meshes} meshes, ${Math.round(v.triangles / 1000)}k tris (${Math.round(v.shadow / 1000)}k cast shadows)`);
+    };
+    // …and what each top-level part of the scene costs to DRAW (every pass): hide it, render, compare
+    (window as unknown as { __cambrianCost?: () => unknown }).__cambrianCost = () => {
+      const draw = () => {
+        gl.render(scene, camera);
+        return { tris: gl.info.render.triangles, calls: gl.info.render.calls };
+      };
+      const base = draw();
+      const rows: { what: string; tris: number; calls: number }[] = [];
+      const actors = { tris: 0, calls: 0, n: 0 };
+      for (const child of scene.children) {
+        if (!child.visible) continue;
+        child.visible = false;
+        const t = draw();
+        child.visible = true;
+        const saved = { tris: base.tris - t.tris, calls: base.calls - t.calls };
+        if (saved.tris <= 0 && saved.calls <= 0) continue;
+        let first: THREE.Mesh | null = null;
+        child.traverse((o) => {
+          if (!first && (o as THREE.Mesh).isMesh) first = o as THREE.Mesh;
+        });
+        const f = first as THREE.Mesh | null;
+        const skinned = !!f && (child as THREE.Group).isGroup;
+        if (skinned) {
+          // (creatures and carcasses: summed)
+          actors.tris += saved.tris;
+          actors.calls += saved.calls;
+          actors.n++;
+          continue;
+        }
+        const g = f?.geometry;
+        const per = g ? Math.round((g.index ? g.index.count : g.getAttribute('position')?.count ?? 0) / 3) : 0;
+        const inst = f && (f as THREE.InstancedMesh).isInstancedMesh ? (f as THREE.InstancedMesh).count : 1;
+        const mat = f ? (Array.isArray(f.material) ? f.material[0] : f.material) : null;
+        rows.push({ what: `${child.type} ${per} tris × ${inst}${mat ? ` [${mat.type}${mat.transparent ? ' transparent' : ''}${mat.side === THREE.DoubleSide ? ' double-sided' : ''}]` : ''}`, ...saved });
+      }
+      rows.push({ what: `${actors.n} groups (creatures, carcasses, nests…)`, tris: actors.tris, calls: actors.calls });
+      return { base, rows: rows.sort((a, b) => b.tris - a.tris).slice(0, 16).map((r) => `${String(Math.round(r.tris / 1000)).padStart(5)}k tris ${String(r.calls).padStart(4)} calls  ${r.what}`) };
+    };
+    (window as unknown as { __cambrianRender?: () => unknown }).__cambrianRender = () => ({
+      calls: gl.info.render.calls,
+      triangles: gl.info.render.triangles,
+      points: gl.info.render.points,
+      lines: gl.info.render.lines,
+      programs: gl.info.programs?.length ?? 0,
+      geometries: gl.info.memory.geometries,
+      textures: gl.info.memory.textures,
+      pixels: gl.domElement.width * gl.domElement.height,
+    });
+  }, [gl, scene, camera]);
   useFrame(() => {
     if (done.current || !controls) return;
     const q = new URLSearchParams(location.search).get('look');

@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M67–M69; M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M67–M75; M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -44,6 +44,82 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic; **+ gait playback** |
 
 ---
+
+## M74–M75 — A front door; half the frame · 2026-11-12
+
+- **Two stores, one game.** A game spans the breeder's lineage and the valley; `game.ts` moves both
+  together and orders a load so the step that can fail (a damaged World) comes first — the failure
+  test asserts nothing changed. The save format validates genomes with the engine's own checker
+  (now exported), so an edited file can't smuggle in a body the engine would never grow.
+- **Where saves live.** A lineage runs to megabytes; localStorage holds five. Slots are IndexedDB
+  records split into a header and a body so the list never reads a body; the browser's own autosave
+  of the game in progress stays in localStorage, because it must be written synchronously as the
+  page goes. IndexedDB can't be unit-tested in node, so the slot logic runs against an in-memory
+  store and the real one is driven in a browser (save → reload → the slot is still there).
+- **One object for quality.** Options the player sees map to `RenderQuality`, a table of concrete
+  budgets; renderers read that and nothing else. `High` is the game as it was, to the number.
+- **A menu over a busy canvas starves itself.** With the valley rendering behind the in-game menu,
+  clicks took seconds under software GL. The screens now stop drawing while the menu is up — which
+  is also simply what "paused" should mean.
+- **Measure the frame before trimming it.** The plan was to cut grass and add creature LOD. The
+  renderer's counters said the scene was drawing twice its own triangles; hiding each part in turn
+  and re-rendering showed every part costing two draw calls. One `transmission: 0.6` on the fish
+  spawn was a second pass over the whole valley. That single property was worth more than every
+  quality option combined. (Three's `info.render` resets after the shadow pass, so it counts the
+  main pass only.)
+- **And what not to touch.** Animating the whole cast: 0.7 ms a frame. Re-posing 17,000 grass tufts:
+  1.2 ms twice a second. Splitting the bundle: 7%. Written down so nobody optimises them on a hunch.
+
+## M73 — Body waves, ape hands, octopuses · 2026-11-11
+
+- **Check a motion's direction, not just its look.** A still frame of a slithering snake looked
+  right; the wave's crest, tracked over time, ran tail to head. The lag between neighbouring joints
+  (a cross-correlation) is now the test, and sets the wave's speed against the ground's.
+- **A change in one pose is a change in all of them.** Hanging the ape's arms to the ground fixed
+  its stance and broke its sleep (the body drops; the arms went through the floor). Every pose that
+  moves the body needs the new limb checked: the lie-down fold is solved per frame from the drop.
+- **Reach, then decide the behaviour.** Whether a hand can reach the mouth (a two-link solve, the
+  head nodding to meet it) now decides how an armed body feeds; before, any arm at all meant "glance
+  down", which left theropods eating air.
+- **A shortest-arc frame is not a consistent frame.** Radial parts were each oriented by the
+  shortest turn from +Z, which twists near −Z: one arm in every octopus and star curled its own way.
+  An upright frame (heading, then tilt) makes the array truly radial.
+- **A union field's inside is not a depth.** Inside two overlapping parts it reads the deeper one;
+  two mouth tests that bound a root's depth under the skin skip mouths crowded by arm roots.
+
+## M72 — Apes, still snakes, ears, cats and dogs · 2026-11-10
+
+- **Look at litters, not specimens.** Random "Any Kind" litters (what a player breeds from) showed
+  the primates as hunched lumps: their arms, aimed out and back and half again as long as the
+  shoulders are high, lay along the floor behind them. The morphotype's own Studio plates had hidden
+  it behind a front view.
+- **Pose once, not per frame.** The static views have no rig, so `restPosed` applies the rig's rest
+  bends to the nodes (all yaws: angles add down the tree) and the skin is built along the curve —
+  checked against the rig's own FK to 1e-15.
+- **An orientation can be the whole problem.** Cat and dog ears were the right size and shape, but
+  faced dead ahead: edge-on in profile they read as horns. Turned out to their side they read.
+
+## M71 — Snakes, fish, frogs, whole limbs · 2026-11-10
+
+- **Know where a shape can come from.** Growth keeps a bilateral spine on the midline (it drops the
+  yaw bend), so a snake can never be grown in an S: its resting curve lives in the rig, as one
+  heading curve over trunk and tail, centred on the facing, faded out by the travelling wave.
+- **A prior's chance can hide a body plan.** One fish in seven had no head (`head: 0.85`): its face
+  sat on the trunk's blunt front, the egg-shaped ones. And a one-node trunk can't tilt — the frog lay
+  flat until its trunk had two links for the pitch to act between.
+- **Measure the artifact, then sweep.** A dashed mouse tail became a count (separate pieces of the
+  built skin); swept over every morphotype it was 79 of 248 skins, mostly at thumbnail quality. The
+  radius floor was below half a grid cell's diagonal, so a thin tube could slip between samples.
+- **Census a geometric fix before keeping it.** The lip-on-face clamp first narrowed every mammal's
+  mouth and every croc's: an old/new diff of lip positions per morph showed it. Muzzles (the mandible
+  drops by design), long snouts (the mouth runs along the jaw line) and radial bodies are exempt.
+
+## M70 — Stances, frills, close-ups · 2026-11-10
+
+- **Look for thresholds inside prior ranges.** The crocodile bug (a sprawl threshold at splay 0.5,
+  a prior range of 0.47–0.61) suggested a sweep: every morph's leg-azimuth range against every
+  branch point in `grow`. The turtle straddled the same line — and, judged leg by leg, it could do
+  so within one animal. The fix is structural (one stance per body), the priors only tidy it.
 
 ## M68–M69 — Quick picks, the World's camera and load · 2026-11-10
 

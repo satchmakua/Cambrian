@@ -14,24 +14,52 @@ import { runGenerations, ZERO_PRESSURE, type Pressure } from '../engine/pressure
 import type { LineageNode, LineageNodes } from '../engine/lineage';
 import { archiveAll, descriptorsOf, type Menagerie } from '../viewer/archive';
 import type { Trajectory } from '../physics/fitness';
+import { DEFAULT_SETUP, cleanName, type BreederSave, type GameSetup } from './saves';
 
 const LITTER = 9;
 const STORAGE_KEY = 'cambrian.session.v2c'; // bumped for the M12 covering genes
 const SKIN_KEY = 'cambrian.skinMode.v2'; // a render preference, persisted on its own (v2: hybrid default)
+const VIEW_KEY = 'cambrian.lastView'; // the screen a game was left on (Continue returns there)
 
 /** capsules (the kit) · smooth (organic SDF, body only) · hybrid (organic SDF over every part). */
 export type SkinMode = 'capsules' | 'smooth' | 'hybrid';
 
-/** The top-level screen: breed (the Biomorphs loop) · studio (inspect one specimen) · world (ecosystem). */
-export type AppView = 'breed' | 'studio' | 'world';
+/** A screen of the game itself: breed (the Biomorphs loop) · studio (inspect one specimen) · world (ecosystem). */
+export type GameView = 'breed' | 'studio' | 'world';
+/** The top-level screen: the main menu, or one of the game's. */
+export type AppView = 'menu' | GameView;
 
+/** The game being played: the slot it was last saved to (null: never), its name, its valley's set-up. */
+export interface GameInfo {
+  id: string | null;
+  name: string;
+  setup: GameSetup;
+}
+
+const NEW_GAME: GameInfo = { id: null, name: 'Game 1', setup: DEFAULT_SETUP };
+
+/** The page opens on the main menu — except a dev page asked for a screen by URL (the screenshot
+ *  harness: ?studio=1, ?world=1, ?seed=…), which opens straight onto it as it always did. */
 function initialView(): AppView {
   try {
     if (typeof location !== 'undefined') {
       const q = new URLSearchParams(location.search);
+      if (q.get('menu') === '1') return 'menu';
       if (q.get('studio') === '1' || q.get('bestiary') === '1') return 'studio';
       if (q.get('world') === '1') return 'world';
+      if (import.meta.env.DEV && location.search.length > 1) return 'breed';
     }
+  } catch {
+    /* ignore */
+  }
+  return 'menu';
+}
+
+/** The screen the last game was left on. */
+export function lastGameView(): GameView {
+  try {
+    const v = typeof localStorage !== 'undefined' ? localStorage.getItem(VIEW_KEY) : null;
+    if (v === 'breed' || v === 'studio' || v === 'world') return v;
   } catch {
     /* ignore */
   }
@@ -62,6 +90,21 @@ interface Session {
 interface AppState extends Session {
   view: AppView;
   setView: (view: AppView) => void;
+  /** the in-game menu is up: the screens behind it stop drawing (and the valley's clock stops) */
+  menuOpen: boolean;
+  setMenuOpen: (open: boolean) => void;
+  /** the game being played (its name, its save slot, its valley's set-up) */
+  game: GameInfo;
+  /** is there a game to continue? (false on a first visit, until one is started or loaded) */
+  hasGame: boolean;
+  /** Start a fresh game: a new lineage rooted at `founder`, an empty menagerie. */
+  newGame: (founder: Genome, mode: SymmetryMode, game: GameInfo) => void;
+  /** Swap in a saved game's lineage. */
+  restore: (save: BreederSave, game: GameInfo) => void;
+  /** The lineage as a save holds it. */
+  snapshot: () => BreederSave;
+  /** Note the slot/name the game was just saved under. */
+  setGame: (patch: Partial<GameInfo>) => void;
   /** Root a fresh lineage at this exact genome (the Bestiary's "adopt", the World's "take home"). */
   adopt: (genome: Genome) => void;
   pressure: Pressure; // directed-evolution target (M4)
@@ -128,6 +171,9 @@ function rootedAt(genome: Genome, mode: SymmetryMode, menagerie: Menagerie): Ses
 
 // --- localStorage persistence ------------------------------------------------
 
+// (the game's name, slot and set-up ride along with the session: module state, written with it)
+let GAME: GameInfo = NEW_GAME;
+
 function persist(s: Session): void {
   try {
     if (typeof localStorage === 'undefined') return;
@@ -139,6 +185,7 @@ function persist(s: Session): void {
         counter: s.counter,
         symmetryMode: s.symmetryMode,
         menagerie: s.menagerie,
+        game: GAME,
       }),
     );
   } catch {
@@ -146,14 +193,28 @@ function persist(s: Session): void {
   }
 }
 
-function loadInitial(): Session {
+function readGame(v: unknown): GameInfo {
+  const g = (v && typeof v === 'object' ? v : {}) as Partial<GameInfo>;
+  const setup = (g.setup && typeof g.setup === 'object' ? g.setup : {}) as Partial<GameSetup>;
+  return {
+    id: typeof g.id === 'string' ? g.id : null,
+    name: cleanName(typeof g.name === 'string' ? g.name : '', NEW_GAME.name),
+    setup: {
+      worldSeed: typeof setup.worldSeed === 'number' && Number.isFinite(setup.worldSeed) ? setup.worldSeed >>> 0 : DEFAULT_SETUP.worldSeed,
+      ecosystem: setup.ecosystem === 'sparse' || setup.ecosystem === 'empty' ? setup.ecosystem : 'standard',
+    },
+  };
+}
+
+function loadInitial(): Session & { game: GameInfo; hasGame: boolean } {
   try {
     if (typeof localStorage !== 'undefined') {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const s = JSON.parse(raw) as Partial<Session>;
+        const s = JSON.parse(raw) as Partial<Session> & { game?: unknown };
         if (s.nodes && s.currentId && s.nodes[s.currentId] && typeof s.counter === 'number') {
-          return batch(s.nodes, s.currentId, s.counter, s.symmetryMode ?? 'auto', s.menagerie ?? {});
+          GAME = readGame(s.game);
+          return { ...batch(s.nodes, s.currentId, s.counter, s.symmetryMode ?? 'auto', s.menagerie ?? {}), game: GAME, hasGame: true };
         }
       }
     }
@@ -162,7 +223,7 @@ function loadInitial(): Session {
   }
   // a first visit starts on a creature from the library chosen to read well (a russet fox-dog); the
   // hand-built demo genome (`defaultGenome`) stays the engine's fixture
-  return rootedAt(genomeOfMorphotype(3, 'canid'), 'auto', {});
+  return { ...rootedAt(genomeOfMorphotype(3, 'canid'), 'auto', {}), game: GAME, hasGame: false };
 }
 
 // Saving is off the click's path: the lineage's JSON grows with every generation (~2 MB by the 200th,
@@ -184,6 +245,11 @@ function persistSoon(s: Session): void {
 }
 if (typeof window !== 'undefined') window.addEventListener('pagehide', flushSave);
 
+/** Write the session out now (before leaving for the menu, before a save is taken). */
+export function saveSessionNow(): void {
+  flushSave();
+}
+
 export const useStore = create<AppState>((set, get) => {
   const commit = (s: Session) => {
     persistSoon(s);
@@ -192,8 +258,45 @@ export const useStore = create<AppState>((set, get) => {
   const CLEAR_GAIT = { playback: null, playbackOn: false } as const; // for the set-callback actions
   return {
     ...loadInitial(),
+    menuOpen: false,
+    setMenuOpen: (menuOpen) => set({ menuOpen }),
     view: initialView(),
-    setView: (view) => set({ view }),
+    setView: (view) => {
+      if (view !== 'menu') {
+        try {
+          if (typeof localStorage !== 'undefined') localStorage.setItem(VIEW_KEY, view);
+        } catch {
+          /* ignore */
+        }
+        // (entering a game screen from a first visit's menu is starting to play it)
+        if (!get().hasGame) {
+          persistSoon(get());
+          set({ hasGame: true });
+        }
+      }
+      set({ view });
+    },
+    newGame: (founder, mode, game) => {
+      GAME = game;
+      commit(rootedAt(structuredClone(founder), mode, {}));
+      set({ game, hasGame: true, pressure: ZERO_PRESSURE, physicsDistance: null });
+      flushSave();
+    },
+    restore: (save, game) => {
+      GAME = game;
+      commit(batch(save.nodes, save.currentId, save.counter, save.symmetryMode, save.menagerie));
+      set({ game, hasGame: true, pressure: ZERO_PRESSURE, physicsDistance: null });
+      flushSave();
+    },
+    snapshot: () => {
+      const { nodes, currentId, counter, symmetryMode, menagerie } = get();
+      return { nodes, currentId, counter, symmetryMode, menagerie };
+    },
+    setGame: (patch) => {
+      GAME = { ...GAME, ...patch };
+      set({ game: GAME });
+      persistSoon(get());
+    },
     adopt: (genome) => commit(rootedAt(structuredClone(genome), get().symmetryMode, get().menagerie)),
     pressure: ZERO_PRESSURE,
     skinMode: loadSkinMode(),

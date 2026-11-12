@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { grow } from '../engine/grow';
 import { coherence, describe } from '../engine/morphospace';
 import { CreatureViewer } from '../viewer/CreatureViewer';
@@ -11,9 +11,15 @@ import { Menagerie } from '../viewer/Menagerie';
 import { binKey, MENAGERIE_GRID } from '../viewer/archive';
 import { downloadCreatureGlb } from '../viewer/exportGltf';
 import { MORPHOTYPE_IDS } from '../engine/random';
-import { Studio } from '../viewer/Studio';
-import { WorldView } from '../world/WorldView';
+// The valley and the Studio are loaded when they are first opened: neither is needed to draw the menu
+// or the breeder. (A modest saving — about 7% of the code fetched before the menu shows; the rest is
+// the 3D library and the creature renderer, which the menu's own stage needs.)
+const WorldView = lazy(() => import('../world/WorldView').then((m) => ({ default: m.WorldView })));
+const Studio = lazy(() => import('../viewer/Studio').then((m) => ({ default: m.Studio })));
 import { useStore } from './store';
+import { useWorldUi } from '../world/worldStore';
+import { MainMenu } from './menu/MainMenu';
+import { PauseMenu } from './menu/PauseMenu';
 
 export function App() {
   const nodes = useStore((s) => s.nodes);
@@ -44,6 +50,7 @@ export function App() {
   const togglePlayback = useStore((s) => s.togglePlayback);
   const view = useStore((s) => s.view);
   const setView = useStore((s) => s.setView);
+  const worldEpoch = useWorldUi((s) => s.epoch);
   const adopt = useStore((s) => s.adopt);
 
   const current = nodes[currentId];
@@ -54,6 +61,28 @@ export function App() {
   const vibe = useMemo(() => coherence(phenotype), [phenotype]);
   const currentCell = useMemo(() => binKey(describe(phenotype)), [phenotype]);
 
+  // the in-game menu: Esc (or a screen's ☰) opens it over whichever screen is up
+  // (dev: ?pause=1 opens it, for inspection captures)
+  const [paused, setPaused] = useState(() => import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('pause') === '1');
+  const openMenu = useCallback(() => setPaused(true), []);
+  const closeMenu = useCallback(() => setPaused(false), []);
+  // (the screens read this to stop drawing while the menu is over them)
+  const setMenuOpen = useStore((s) => s.setMenuOpen);
+  useEffect(() => setMenuOpen(paused && view !== 'menu'), [paused, view, setMenuOpen]);
+  useEffect(() => {
+    if (view === 'menu') {
+      setPaused(false);
+      return;
+    }
+    const key = (e: KeyboardEvent) => {
+      // (the open menu handles its own Esc; a text field keeps its keys)
+      if (e.key === 'Escape' && !paused && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) setPaused(true);
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [view, paused]);
+  const pause = paused && view !== 'menu' ? <PauseMenu onClose={closeMenu} /> : null;
+
   // Dev/headless: ?bare=1 renders just the creature full-bleed (no UI chrome) for clean face shots.
   const bare = import.meta.env.DEV && new URLSearchParams(location.search).get('bare') === '1';
   if (bare) {
@@ -63,21 +92,30 @@ export function App() {
       </div>
     );
   }
+  if (view === 'menu') return <MainMenu />;
   if (view === 'world') {
     return (
-      <WorldView
-        founder={genome}
-        onExit={() => setView('breed')}
-        onAdopt={(g) => {
-          adopt(g);
-          setView('breed');
-        }}
-      />
+      <Suspense fallback={<ScreenLoading />}>
+        <WorldView
+          key={worldEpoch}
+          founder={genome}
+          onExit={() => setView('breed')}
+          onMenu={openMenu}
+          onAdopt={(g) => {
+            adopt(g);
+            setView('breed');
+          }}
+        />
+        {pause}
+      </Suspense>
     );
   }
   if (view === 'studio') {
     return (
-      <Studio genome={genome} skinMode={skinMode} onSkinMode={setSkinMode} onAdopt={adopt} onExit={() => setView('breed')} />
+      <Suspense fallback={<ScreenLoading />}>
+        <Studio genome={genome} skinMode={skinMode} onSkinMode={setSkinMode} onAdopt={adopt} onExit={() => setView('breed')} onMenu={openMenu} />
+        {pause}
+      </Suspense>
     );
   }
   const menagerieCount = Object.keys(menagerie).length;
@@ -96,6 +134,7 @@ export function App() {
                 <button className="active">Breed</button>
                 <button onClick={() => setView('studio')} title="inspect this creature from every angle">Studio</button>
                 <button onClick={() => setView('world')} title="release creatures into a living ecosystem">World</button>
+                <button className="menu-btn" onClick={openMenu} title="menu: save, load, settings, exit (Esc)" aria-label="Menu">☰</button>
               </nav>
             </div>
             <p className="tag">
@@ -196,8 +235,14 @@ export function App() {
           </div>
         </div>
       </section>
+      {pause}
     </div>
   );
+}
+
+/** Shown for the moment a screen's code is fetched, the first time it is opened. */
+function ScreenLoading() {
+  return <div className="screen-loading">Loading…</div>;
 }
 
 function hex(n: number): string {

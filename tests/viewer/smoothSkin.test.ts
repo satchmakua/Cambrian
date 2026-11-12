@@ -19,7 +19,48 @@ function scan(arr: ArrayLike<number>) {
   return { finite, min, max };
 }
 
+/** The skin's separate pieces, largest first (triangles each), with vertices welded by position. */
+function pieces(geo: ReturnType<typeof buildSmoothGeometry>): number[] {
+  const pos = geo.getAttribute('position').array as ArrayLike<number>;
+  const idx = geo.getIndex()!.array as ArrayLike<number>;
+  const key = new Map<string, number>();
+  const id = new Int32Array(pos.length / 3);
+  for (let i = 0; i < id.length; i++) {
+    const k = `${Math.round(pos[i * 3] * 1e4)},${Math.round(pos[i * 3 + 1] * 1e4)},${Math.round(pos[i * 3 + 2] * 1e4)}`;
+    let v = key.get(k);
+    if (v === undefined) key.set(k, (v = key.size));
+    id[i] = v;
+  }
+  const par = Int32Array.from({ length: key.size }, (_, i) => i);
+  const find = (a: number): number => (par[a] === a ? a : (par[a] = find(par[a])));
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = find(id[idx[t]]);
+    par[find(id[idx[t + 1]])] = a;
+    par[find(id[idx[t + 2]])] = a;
+  }
+  const size = new Map<number, number>();
+  for (let t = 0; t < idx.length; t += 3) {
+    const r = find(id[idx[t]]);
+    size.set(r, (size.get(r) ?? 0) + 1);
+  }
+  return [...size.values()].sort((a, b) => b - a);
+}
+
 describe('smooth skin (M15)', () => {
+  it('thin limbs come out whole — a tail or a leg is one tube, not a row of dashes', () => {
+    // (at a radius floor of 0.6 cell a third of the thumbnail skins shed fragments: a mouse's tail,
+    // a spider's legs, a cat's tail tip)
+    const cases: [string, number][] = [['rodent', 2], ['rodent', 4], ['arachnid', 1], ['insectoid', 2], ['felid', 1], ['crab', 3], ['horror', 1], ['dragon', 2]];
+    for (const [kind, seed] of cases) {
+      const p = grow(genomeOfMorphotype(seed, kind));
+      for (const q of ['low', 'high'] as const) {
+        const ps = pieces(buildSmoothGeometry(p, true, [], q));
+        const frags = ps.slice(1).filter((n) => n < ps[0] * 0.02);
+        expect(frags, `${kind} #${seed} ${q}`).toEqual([]);
+      }
+    }
+  });
+
   it('builds a non-empty, finite surface for the default creature', () => {
     const geo = buildSmoothGeometry(grow(defaultGenome()));
     const pos = geo.getAttribute('position');

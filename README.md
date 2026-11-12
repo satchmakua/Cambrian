@@ -9,7 +9,9 @@ selected — by you (Biomorphs-style breeder) or by directed pressures — so yo
 lineage from a scurrying blob to a finned giant to a striped quadruped.
 
 **Status:** 🟢 Parts 1–2 complete (the breeder, the creature grammar, fidelity) — and **Part 3 is
-live: the creatures have a world.** Three screens:
+live: the creatures have a world.** It opens on a **main menu** — Continue, New game (name, first
+creature, the valley's seed and wildlife), Load game, Settings, Controls, Quit — and `Esc` opens the
+in-game menu (save, load, settings, exit) over any of its three screens:
 
 - **Breed** — the Biomorphs loop: nine divergent mutant offspring, click one to make it the parent;
   directed pressures, the Menagerie (MAP-Elites), lineage tree, `CAM2:` sharing, glTF export,
@@ -27,6 +29,12 @@ Creatures are smooth organic bodies (an implicit round-cone field, welded and sk
 anti-aliased procedural coverings — fur, scales, feathers, chitin, slime, plates. Full variety spec in
 [MORPHOLOGY.md](MORPHOLOGY.md); milestones in [ROADMAP.md](ROADMAP.md).
 
+**Saves and settings.** The game in progress is kept in the browser as you play (Continue returns to
+it). Named saves — the lineage and the valley together — live in the browser's IndexedDB, and can be
+exported to a `.json` file and imported back. Settings cover graphics (a Low / Medium / High level,
+or resolution, shadows, grass, weather and creature detail one by one), sound and volume, and the
+game (autosave, mood icons, hints, the turntable).
+
 ## Stack
 
 TypeScript · Vite · React 18 + react-three-fiber (Three.js) + drei · Zustand · Vitest.
@@ -43,14 +51,16 @@ npm run typecheck
 npm run build    # tsc + vite production build
 ```
 
-Open **http://localhost:5180**: an alien rotates on the left; click an offspring on the right to make it
-the next parent; the family tree along the bottom lets you revisit/branch from any ancestor.
-Copy the `CAM2:` string to share a creature, or paste one and hit Load to regrow it. The **Studio** and
-**World** tabs next to the title open the inspection bench and the ecosystem.
+Open **http://localhost:5180**: the main menu. Start or continue a game and an alien rotates on the
+left; click an offspring on the right to make it the next parent; the family tree along the bottom lets
+you revisit/branch from any ancestor. Copy the `CAM2:` string to share a creature, or paste one and
+hit Load to regrow it. The **Studio** and **World** tabs next to the title open the inspection bench
+and the ecosystem; `Esc` (or ☰) opens the menu.
 
 Headless captures (dev server running): `node scripts/shoot.mjs out/ "seed=3&morph=felid&bare=1&spin=0"`
 — see `src/main.tsx` and the Studio/World sources for the dev URL params (`?studio=1`, `?bestiary=1`,
-`?world=1&warm=120&follow=felid`, …).
+`?world=1&warm=120&follow=felid`, …). A dev page opened with parameters skips the menu; `?menu=1`
+shows it (`&screen=new|load|settings|controls`), `?pause=1` the in-game one.
 
 ## Layout
 
@@ -59,7 +69,8 @@ src/engine/   # pure, dependency-free: rng, genome, random, grow, mutate, select
 src/sim/      # pure, deterministic ecosystem: terrain, traits-from-anatomy, the world step
 src/viewer/   # R3F: creature mesh + smooth skin + rig, materials, wings, Studio, breeder UI
 src/world/    # the World screen: landscape, actors, sky/day-night, HUD
-src/ui/       # React + Zustand store (lineage tree + current + litter + view, localStorage)
+src/ui/       # React + Zustand store (lineage tree + current + litter + view, localStorage),
+              # the menus (ui/menu), saved games (saves.ts, game.ts) and settings (settings.ts)
 tests/        # engine / sim / viewer: determinism, fuzz, anatomy, rig, ecosystem behaviour
 ```
 

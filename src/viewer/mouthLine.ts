@@ -302,6 +302,13 @@ function traceCurve(
  * corners, separated in the middle by the gape. Pass the same `carves` given to the smooth skin
  * so the lower lip hugs the carved rim; pass `[]` for the capsule-kit surface.
  */
+/** how squarely a lip's skin must face the way the head does to count as the face (cos of the angle) */
+const FACE_MIN = 0.45;
+/** …and a lip on skin facing more squarely down than this lies under the head (cos of the angle) */
+const UNDERSIDE = 0.8;
+/** a head node stretched longer than this (× its radius) is a snout, its mouth along its jaw line */
+const LONG_SNOUT = 1.3;
+
 export function buildMouthLine(
   p: Phenotype,
   s: MouthSpec,
@@ -319,24 +326,49 @@ export function buildMouthLine(
   ];
 
   // the slit's resting pitch: mouths sit below the muzzle's midline, corners droop (heavy, grim)
-  const setDown = 0.1;
+  let setDown = 0.1;
+  let droop = s.droop;
   // Half-separation (radians of pitch) between the lip lines. This is the single number that
   // decides whether a mouth reads as a MOUTH or as a scratch: at 0.28·gape the lips sat ~0.1 bu
   // apart on a typical head — a hairline that swallowed its own interior and teeth. Opened up so
   // the dark throat and the tooth rows actually have room to show.
-  const gapeHalf = 0.5 * s.gape + 0.14;
+  let gapeHalf = 0.5 * s.gape + 0.14;
   // a muzzle's upper lip is part of the skull: it sits a little below the muzzle's midline and only
   // the mandible drops to open (the whole gape opens downward); everything else splits the gape
   // about the mouth line
   const upperPitch = s.muzzled
-    ? (t: number) => setDown + 0.08 + s.droop * 0.5 * Math.abs(t)
-    : (t: number) => setDown + s.droop * Math.abs(t) - gapeHalf * Math.cos((t * Math.PI) / 2);
+    ? (t: number) => setDown + 0.08 + droop * 0.5 * Math.abs(t)
+    : (t: number) => setDown + droop * Math.abs(t) - gapeHalf * Math.cos((t * Math.PI) / 2);
   const lowerPitch = s.muzzled
-    ? (t: number) => setDown + 0.08 + s.droop * 0.5 * Math.abs(t) + 2 * gapeHalf * Math.cos((t * Math.PI) / 2)
-    : (t: number) => setDown + s.droop * Math.abs(t) + gapeHalf * Math.cos((t * Math.PI) / 2);
+    ? (t: number) => setDown + 0.08 + droop * 0.5 * Math.abs(t) + 2 * gapeHalf * Math.cos((t * Math.PI) / 2)
+    : (t: number) => setDown + droop * Math.abs(t) + gapeHalf * Math.cos((t * Math.PI) / 2);
 
-  const upper = traceCurve(f, [], s, origin, samples, upperPitch);
-  const lower = traceCurve(f, carves, s, origin, samples, lowerPitch);
+  let upper = traceCurve(f, [], s, origin, samples, upperPitch);
+  let lower = traceCurve(f, carves, s, origin, samples, lowerPitch);
+  // A lip stays on the FACE. On a flat head (a frog's, a newt's) the face is a thin band round its
+  // rim, and a mouth pitched for a round head slid off it: the lower lip under the chin, the drooping
+  // corners round under the jaw — it hung below the head as a loose hooked loop. While any of it lies
+  // on the head's underside, or the lips' centres off its front, the mouth closes a little, droops
+  // less and rides higher (a round head's lips already sit on its face: nothing changes there).
+  // (Judged against the head's own axes, not the mouth's aim: a mouth aimed down a little counts the
+  // underside of the chin as facing it.) Exempt: a muzzle, whose mandible drops by design and whose
+  // lower lip rides the chin; and a long snout (a croc's, a lizard's), whose mouth runs back along
+  // its jaw line on the snout's underside edge — that is where its mouth is.
+  const mid = samples >> 1;
+  const fwd = qRotateV(s.anchor.quat, [0, 0, 1]);
+  const down = qRotateV(s.anchor.quat, [0, -1, 0]);
+  const offFace = () =>
+    dot3(upper[mid].n, fwd) < FACE_MIN || dot3(lower[mid].n, fwd) < FACE_MIN || lower.some((sm) => dot3(sm.n, down) > UNDERSIDE);
+  const snout = (s.anchor.scale?.[2] ?? 1) > LONG_SNOUT;
+  // (nor a radial body: it has no head, and its mouth is where it is — under the disc, say)
+  const headed = p.genomeRef.symmetry !== 'radial';
+  for (let k = 0; k < 5 && headed && !s.muzzled && !snout && offFace(); k++) {
+    gapeHalf *= 0.72;
+    droop *= 0.6;
+    setDown -= 0.06;
+    upper = traceCurve(f, [], s, origin, samples, upperPitch);
+    lower = traceCurve(f, carves, s, origin, samples, lowerPitch);
+  }
 
   // weld the corners exactly (shared start/end), then fix `away` signs: the top lip's `away`
   // points up-face (away from the opening), the bottom lip's points down-chin.

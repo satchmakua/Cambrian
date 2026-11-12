@@ -24,6 +24,7 @@
  */
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
+import type { Vec3 } from '../engine/genome';
 import { buildFieldPrims, roundConeDist } from './bodyField';
 
 export type Role = 'spine' | 'leg' | 'arm' | 'tail' | 'wing' | 'fin' | 'tentacle' | 'other';
@@ -71,7 +72,80 @@ export interface RigTemplate {
    *  down to the grass */
   graze: number;
   grazeDip: number;
+  /** a long legless body's resting line: at rest it lies in a loose S (see restBends) */
+  rest: RestLine | null;
+  /** how each arm (parallel to `arms`) folds as the body lies down, and how it feeds */
+  armPose: ArmPose[];
 }
+
+/**
+ * An arm's poses, measured in the sagittal plane (every joint pitches about the body's X axis).
+ *  - Lying down, the body drops toward the floor: an arm long enough to reach it (an ape's, which
+ *    stands on its knuckles) swings forward about the shoulder just far enough to rest its hand on
+ *    the floor — hanging straight, it sank through the ground to the elbow.
+ *  - Feeding, a hand that can reach the mouth carries the food up to it: the shoulder and elbow
+ *    pitches that put the hand at the lips (null when the arm is too short — a theropod's — or it
+ *    ends in a claw, not a hand).
+ */
+export interface ArmPose {
+  shoulderH: number; // the shoulder's height over the ground, less the hand's radius (∞: no ground known)
+  reach: number; // shoulder → hand
+  psi0: number; // the arm's rest angle forward of straight down (rad)
+  elbow: number; // the elbow's index in the chain
+  feed: [number, number] | null;
+}
+
+/** The shoulder pitch (rad; negative swings the hand forward) that rests a hanging arm's hand on the
+ *  floor once the body has dropped `drop` toward it; 0 while the hand still hangs clear. */
+export function armLie(a: ArmPose, drop: number): number {
+  if (!(a.reach > 1e-6) || !Number.isFinite(a.shoulderH)) return 0;
+  const c = (a.shoulderH - drop) / a.reach;
+  if (c >= Math.cos(a.psi0)) return 0;
+  return -(Math.acos(Math.max(-1, c)) - a.psi0);
+}
+
+/**
+ * Where a slitherer's body runs, for its resting S: the arc position (0 at the tail tip … 1 at the
+ * last trunk node) of the midpoint of each trunk link and of each link of its main tail.
+ */
+export interface RestLine {
+  trunkS: number[]; // link k = trunk[k] → trunk[k+1]
+  tail: number[]; // the main tail chain, root → tip (empty: no tail)
+  tailS: number[]; // link j = (j ? tail[j−1] : trunk[tailAt]) → tail[j]
+  tailAt: number; // the trunk index the tail hangs from
+  /** the bends' amplitude (rad of heading): full for a long thin body, none for a stubby one */
+  amp: number;
+  /** each animal lies its own way: the side its body swings to, and 1 (an S) … 1.5 (an S with a
+   *  hook) waves of bend from tail to head */
+  side: 1 | -1;
+  waves: number;
+}
+
+/** how fast a feeder's hand goes to its mouth and back (rad/s: one bite every ~2.4 s) */
+const FEED_RATE = 2.6;
+/** a hand-feeder's nod to meet its hand (rad at the first neck joint) */
+const FEED_NOD = 0.25;
+/** …and how far past the arm's reach the mouth may be for the arm still to feed it (× its length) */
+const FEED_STRETCH = 1.3;
+
+/** the body wave's phase step per trunk joint (rad): a slitherer's, a swimmer's */
+const SLITHER_K = 0.95;
+const SWIM_K = 1.1;
+
+/** the mean length of a chain's links */
+function meanLink(p: Phenotype, chain: number[]): number {
+  if (chain.length < 2) return 0;
+  let L = 0;
+  for (let k = 1; k < chain.length; k++) {
+    const a = p.nodes[chain[k - 1]].pos;
+    const b = p.nodes[chain[k]].pos;
+    L += Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  }
+  return L / (chain.length - 1);
+}
+
+/** the resting S's heading swing (rad): enough to read as an S, never turning the body back on itself */
+export const REST_BEND = 0.85;
 
 const TEMPLATES = new WeakMap<Phenotype, RigTemplate>();
 
@@ -127,10 +201,12 @@ const GRAZE_DIP_MAX = 0.42;
  * (The searches walk only the chains that move — the mouth's ancestry, then each leg — so a new body
  * costs a millisecond or two, not a frame.)
  */
-function solveGraze(p: Phenotype, parent: Int32Array, trunk: number[], neck: number[], legs: LegChain[], arms: number[][]): { neck: number; dip: number } {
+function solveGraze(p: Phenotype, parent: Int32Array, trunk: number[], neck: number[], legs: LegChain[], handFed: boolean): { neck: number; dip: number } {
   const DEF = { neck: 0.55, dip: 0 };
   const mouth = p.nodes.findIndex((n) => n.terminal === 'mouth');
-  if (neck.length === 0 || legs.length === 0 || trunk.length === 0 || arms.length > 0 || mouth < 0) return DEF;
+  // (a hand-feeder only nods to meet its hand — see ArmPose)
+  if (handFed) return { neck: FEED_NOD, dip: 0 };
+  if (neck.length === 0 || legs.length === 0 || trunk.length === 0 || mouth < 0) return DEF;
   const ground = Math.min(...legs.map((l) => p.nodes[l.nodes[l.nodes.length - 1]].pos[1] - p.nodes[l.nodes[l.nodes.length - 1]].radius));
   const n = p.nodes.length;
   const nT = trunk.length;
@@ -294,6 +370,247 @@ function solveSleepFold(p: Phenotype, l: LegChain, floor: number, belly: number)
   return bestErr < Infinity ? best : fallback;
 }
 
+/** Where the mouth is, in (y, z), once the head has nodded to meet a feeding hand (null: no mouth). */
+function feedingMouth(p: Phenotype, parent: Int32Array, neck: number[]): [number, number] | null {
+  const mouth = p.nodes.findIndex((n) => n.terminal === 'mouth');
+  if (mouth < 0) return null;
+  const pitch = new Float64Array(p.nodes.length);
+  neck.forEach((i, k) => (pitch[i] = k === 0 ? FEED_NOD : GRAZE_CURL));
+  const fk = planarFK(p, parent, pitch);
+  return [fk.y[mouth], fk.z[mouth]];
+}
+
+function armPoseOf(p: Phenotype, chain: number[], legs: LegChain[], mouth: [number, number] | null): ArmPose {
+  const S = p.nodes[chain[0]].pos;
+  const hand = p.nodes[chain[chain.length - 1]];
+  const H = hand.pos;
+  const dy = H[1] - S[1];
+  const dz = H[2] - S[2];
+  const ground = legs.length ? Math.min(...legs.map((l) => p.nodes[l.nodes[l.nodes.length - 1]].pos[1] - p.nodes[l.nodes[l.nodes.length - 1]].radius)) : -Infinity;
+  const elbow = Math.max(1, Math.min(chain.length - 2, Math.floor((chain.length - 1) / 2)));
+  const pose: ArmPose = { shoulderH: S[1] - ground - hand.radius, reach: Math.hypot(dy, dz), psi0: Math.atan2(dz, -dy), elbow, feed: null };
+  // feeding: two-link reach from the shoulder (upper arm to the elbow, forearm to the hand) to a point
+  // just below and in front of the lips
+  if (!mouth || hand.terminal !== 'hand' || chain.length < 3) return pose;
+  const E = p.nodes[chain[elbow]].pos;
+  const u = [E[1] - S[1], E[2] - S[2]];
+  const v = [H[1] - E[1], H[2] - E[2]];
+  const T = [mouth[0] - 0.6 * hand.radius - S[1], mouth[1] + 0.9 * hand.radius - S[2]];
+  const L1 = Math.hypot(u[0], u[1]);
+  const L2 = Math.hypot(v[0], v[1]);
+  let D = Math.hypot(T[0], T[1]);
+  // (a mouth far out of reach is no hand-feeder's; one a little out of reach is met as near as the
+  // arm goes — the hand stops at the chin)
+  if (L1 < 1e-6 || L2 < 1e-6 || D < 1e-6 || D > (L1 + L2) * FEED_STRETCH) return pose;
+  const within = Math.min(Math.max(D, Math.abs(L1 - L2) * 1.02), (L1 + L2) * 0.98);
+  T[0] *= within / D;
+  T[1] *= within / D;
+  D = within;
+  // a pitch θ turns a (y, z) vector's polar angle atan2(z, y) by +θ; bend the elbow by b so the hand
+  // is the right distance from the shoulder, then swing the whole arm by a onto the target
+  const ang = (w: number[]) => Math.atan2(w[1], w[0]);
+  const wrap = (x: number) => Math.atan2(Math.sin(x), Math.cos(x));
+  const inner = Math.acos(Math.max(-1, Math.min(1, (D * D - L1 * L1 - L2 * L2) / (2 * L1 * L2))));
+  let best: [number, number] | null = null;
+  let bestElbow = Infinity;
+  for (const sgn of [1, -1]) {
+    const b = wrap(ang(u) + sgn * inner - ang(v));
+    const w = [u[0] + v[0] * Math.cos(b) - v[1] * Math.sin(b), u[1] + v[0] * Math.sin(b) + v[1] * Math.cos(b)];
+    const a = wrap(ang(T) - ang(w));
+    // the natural fold carries the elbow low (below the line from shoulder to hand)
+    const elbowY = u[0] * Math.cos(a) - u[1] * Math.sin(a);
+    if (elbowY < bestElbow) {
+      bestElbow = elbowY;
+      best = [a, b];
+    }
+  }
+  pose.feed = best;
+  return pose;
+}
+
+/**
+ * A legless body's resting line (null when it is too short to lie in an S). The bends scale with the
+ * body's slenderness: a snake thirty times longer than it is thick lies in a full S, a slug in none.
+ */
+function restLine(p: Phenotype, parent: Int32Array, trunk: number[], tails: number[][]): RestLine | null {
+  const nT = trunk.length;
+  if (nT < 4) return null;
+  const dist = (a: number, b: number) => {
+    const A = p.nodes[a].pos;
+    const B = p.nodes[b].pos;
+    return Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]);
+  };
+  // the main tail: the longest chain hanging from the trunk's rear half
+  let tail: number[] = [];
+  let tailAt = 0;
+  let tailLen = 0;
+  for (const c of tails) {
+    const at = trunk.indexOf(parent[c[0]]);
+    if (at < 0 || at > nT / 2) continue;
+    let L = dist(trunk[at], c[0]);
+    for (let j = 1; j < c.length; j++) L += dist(c[j - 1], c[j]);
+    if (L > tailLen) {
+      tail = c;
+      tailAt = at;
+      tailLen = L;
+    }
+  }
+  // arc positions along the line tail tip → trunk[tailAt] → … → trunk[nT − 1]
+  const tailMid: number[] = []; // distance back from trunk[tailAt] to each tail link's midpoint
+  let back = 0;
+  for (let j = 0; j < tail.length; j++) {
+    const d = dist(j ? tail[j - 1] : trunk[tailAt], tail[j]);
+    tailMid.push(back + d / 2);
+    back += d;
+  }
+  const trunkMid: number[] = []; // distance from trunk[tailAt] to each trunk link's midpoint
+  let fwd = 0;
+  for (let k = 0; k < nT - 1; k++) {
+    const d = dist(trunk[k], trunk[k + 1]);
+    trunkMid.push(k < tailAt ? 0 : fwd + d / 2);
+    if (k >= tailAt) fwd += d;
+  }
+  const total = tailLen + fwd;
+  if (total <= 0) return null;
+  let girth = 0;
+  for (const i of trunk) girth += 2 * p.nodes[i].radius * Math.max(p.nodes[i].scale?.[0] ?? 1, p.nodes[i].scale?.[1] ?? 1);
+  girth /= nT;
+  const slender = total / Math.max(girth, 1e-3);
+  const amp = REST_BEND * smooth01((slender - 5) / 9);
+  if (amp < 0.02) return null;
+  // (each animal its own lie, from its seed: the same body always lies the same way)
+  const h = (Math.imul(p.genomeRef.seed >>> 0, 2654435761) >>> 0) / 4294967296;
+  return {
+    trunkS: trunkMid.map((m) => (tailLen + m) / total),
+    tail,
+    tailS: tailMid.map((m) => (tailLen - m) / total),
+    tailAt,
+    amp,
+    side: h < 0.5 ? 1 : -1,
+    waves: 1 + 0.5 * ((h * 2) % 1),
+  };
+}
+
+/** The resting S's heading at arc position s (0 tail tip … 1 head end), about the line's own axis. */
+function restCurve(R: RestLine, amp: number, s: number): number {
+  return R.side * amp * Math.cos(2 * Math.PI * R.waves * s - Math.PI * (R.waves - 1));
+}
+
+/**
+ * The resting S as joint yaws (rad): `trunk[k]` for each trunk bone (bone 0 turns the whole body so
+ * the S lies along the body's facing, the last bone sets the neck on the curve's end tangent), and
+ * `tail[j]` for each bone of the main tail. The headings come from the curve sampled at each link's
+ * midpoint; a joint's yaw is the change in heading across it.
+ */
+export function restBends(R: RestLine, amp: number, trunk: number[], tail: number[]): void {
+  // the axis from tail tip to head end, so the S is centred on the way the body faces
+  let sx = 0;
+  let sz = 0;
+  for (let i = 0; i < 16; i++) {
+    const t = restCurve(R, amp, (i + 0.5) / 16);
+    sx += Math.sin(t);
+    sz += Math.cos(t);
+  }
+  const axis = Math.atan2(sx, sz);
+  const at = (s: number) => restCurve(R, amp, s) - axis;
+  const nL = R.trunkS.length;
+  // links behind the tail's root (a rump stub under the tail) ride along with it
+  const rootHeading = at(R.trunkS[Math.min(R.tailAt, nL - 1)]);
+  let prev = 0;
+  for (let k = 0; k < nL; k++) {
+    const want = k <= R.tailAt ? rootHeading : at(R.trunkS[k]);
+    trunk[k] = want - prev;
+    prev = want;
+  }
+  trunk[nL] = at(1) - prev;
+  // the tail's first link turns with the trunk link it hangs from; each joint after bends to the curve
+  let tprev = rootHeading;
+  for (let j = 0; j < R.tail.length; j++) {
+    if (j + 1 < R.tail.length) {
+      const want = at(R.tailS[j + 1]);
+      tail[j] = want - tprev;
+      tprev = want;
+    } else tail[j] = 0;
+  }
+}
+
+const POSED = new WeakMap<Phenotype, Phenotype>();
+
+/**
+ * The phenotype lying in its resting S, for the views that draw a creature without a rig (the
+ * litter's thumbnails, the bestiary): there a snake lay as straight as a stick. The rig's resting
+ * bends are applied to the nodes themselves — positions and frames, down the tree — so its skin is
+ * built along the curve at no extra cost. Every bend is a yaw, so the rotations compose by adding
+ * angles. Returns the phenotype itself when it has no S to lie in. (Pure; cached per phenotype.)
+ */
+export function restPosed(p: Phenotype): Phenotype {
+  const hit = POSED.get(p);
+  if (hit) return hit;
+  // (only a legless body lies in an S: a legged one skips the rig template altogether)
+  if (p.nodes.some((n) => n.part?.kind === 'leg')) return p;
+  const T = rigTemplate(p);
+  const R = T.rest;
+  if (!R) {
+    POSED.set(p, p);
+    return p;
+  }
+  const trunkYaw: number[] = [];
+  const tailYaw: number[] = [];
+  restBends(R, R.amp, trunkYaw, tailYaw);
+  const yaw = new Float64Array(p.nodes.length);
+  T.trunk.forEach((i, k) => (yaw[i] = trunkYaw[k] ?? 0));
+  R.tail.forEach((i, j) => (yaw[i] = tailYaw[j] ?? 0));
+  // parents before children: the tree's edges in breadth-first order from the roots
+  const kids: number[][] = p.nodes.map(() => []);
+  for (const [a, b] of p.edges) kids[a].push(b);
+  const order: number[] = [];
+  for (let i = 0; i < p.nodes.length; i++) if (T.parent[i] < 0) order.push(i);
+  for (let h = 0; h < order.length; h++) order.push(...kids[order[h]]);
+  const heading = new Float64Array(p.nodes.length); // each bone's world yaw (its own included)
+  const nodes = p.nodes.map((n) => ({ ...n, pos: [...n.pos] as Vec3, quat: [...n.quat] as Quat4 }));
+  for (const i of order) {
+    const par = T.parent[i];
+    const base = par >= 0 ? heading[par] : 0;
+    heading[i] = base + yaw[i];
+    if (par >= 0) {
+      // the offset from the parent, turned by the parent's heading
+      const o = p.nodes[i].pos;
+      const q = p.nodes[par].pos;
+      const dx = o[0] - q[0];
+      const dz = o[2] - q[2];
+      const c = Math.cos(base);
+      const sn = Math.sin(base);
+      const P = nodes[par].pos;
+      nodes[i].pos = [P[0] + c * dx + sn * dz, P[1] + (o[1] - q[1]), P[2] - sn * dx + c * dz];
+    }
+    // the node's own frame turns halfway into its bend (a cross-section across the curve)
+    const a = (base + 0.5 * yaw[i]) / 2;
+    const ry: Quat4 = [0, Math.sin(a), 0, Math.cos(a)];
+    nodes[i].quat = quatMul(ry, p.nodes[i].quat);
+  }
+  const min: Vec3 = [Infinity, Infinity, Infinity];
+  const max: Vec3 = [-Infinity, -Infinity, -Infinity];
+  for (const n of nodes) {
+    for (let k = 0; k < 3; k++) {
+      min[k] = Math.min(min[k], n.pos[k] - n.radius);
+      max[k] = Math.max(max[k], n.pos[k] + n.radius);
+    }
+  }
+  const out: Phenotype = { nodes, edges: p.edges, bounds: { min, max }, genomeRef: p.genomeRef };
+  POSED.set(p, out);
+  return out;
+}
+
+type Quat4 = [number, number, number, number];
+function quatMul(a: Quat4, b: Quat4): Quat4 {
+  return [
+    a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+    a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+    a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+    a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+  ];
+}
+
 export function rigTemplate(p: Phenotype): RigTemplate {
   const hit = TEMPLATES.get(p);
   if (hit) return hit;
@@ -400,17 +717,27 @@ export function rigTemplate(p: Phenotype): RigTemplate {
     legs,
     arms,
     others,
-    stride: legs.length ? Math.max(0.6, meanLeg * 1.6) : Math.max(0.8, trunk.length * 0.5),
+    // (a legless body's stride is its body wave's length: the wave then runs back along the body
+    // exactly as fast as the body moves forward, so every part follows the head's path — at half the
+    // trunk's length it ran a third as fast, and the body skated sideways over the ground)
+    stride: legs.length ? Math.max(0.6, meanLeg * 1.6) : Math.max(0.8, ((2 * Math.PI) / SLITHER_K) * meanLink(p, trunk)),
     sprawl: legs.length >= 6 ? 1 : archedFrac > 0.5 ? 0.9 : 0.25,
     legless: legs.length === 0,
     gallops: legs.length === 4 && zs.length === 2 && archedFrac === 0,
     belly,
     graze: 0,
     grazeDip: 0,
+    rest: null,
+    armPose: [],
   };
-  const g = solveGraze(p, parent, trunk, neck, legs, arms);
+
+  // a hand that reaches the mouth feeds it; anything else — a theropod on its little arms — brings
+  // its mouth down to the food
+  tmpl.armPose = arms.map((chain) => armPoseOf(p, chain, legs, feedingMouth(p, parent, neck)));
+  const g = solveGraze(p, parent, trunk, neck, legs, tmpl.armPose.some((a) => a.feed !== null));
   tmpl.graze = g.neck;
   tmpl.grazeDip = g.dip;
+  if (tmpl.legless) tmpl.rest = restLine(p, parent, trunk, tails);
   TEMPLATES.set(p, tmpl);
   return tmpl;
 }
@@ -429,6 +756,9 @@ export interface RigInstance {
   trunkYaw: number[];
   /** the tail's wag phase (accumulated, so its frequency can ramp without the tail jumping) */
   wag: number;
+  /** scratch: this pose's resting-S joint yaws (trunk bones, main tail bones) */
+  restT: number[];
+  restTail: number[];
 }
 
 export function createRig(p: Phenotype): RigInstance {
@@ -450,7 +780,7 @@ export function createRig(p: Phenotype): RigInstance {
   });
   root.updateMatrixWorld(true);
   const skeleton = new THREE.Skeleton([root, ...bones]);
-  return { template, bones, root, skeleton, rest, phase: 0, t: 0, wag: 0, trunkYaw: [] };
+  return { template, bones, root, skeleton, rest, phase: 0, t: 0, wag: 0, trunkYaw: [], restT: [], restTail: [] };
 }
 
 // --- skin weights --------------------------------------------------------------------------------
@@ -706,16 +1036,26 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
   // trunk: lateral undulation (sprawlers sway, slitherers/swimmers send a wave down the body)
   const nT = T.trunk.length;
   const wave = T.legless || inp.swim;
+  // At rest a slitherer lies in a loose S (stretched dead straight it read as a stick); the bends
+  // fade as it sets off and its travelling wave takes over, and asleep it coils a little tighter.
+  // (Not a swimmer: a fish hangs in the water straight.)
+  const R = inp.swim ? null : T.rest;
+  const restAmp = R ? R.amp * (1 - moving) * (1 + 0.25 * inp.sleep) * grounded : 0;
+  if (R && restAmp > 1e-3) restBends(R, restAmp, r.restT, r.restTail);
+  const restOn = R !== null && restAmp > 1e-3;
+  if (restOn) setRot(r.bones[T.trunk[0]], 0, r.restT[0], 0);
   // the trunk's accumulated yaw at each of its nodes: the legs undo it at their hips, so a swaying
   // sprawler's planted feet hold the ground while the body wiggles between them
   if (r.trunkYaw.length !== nT) r.trunkYaw = new Array(nT).fill(0);
-  r.trunkYaw[0] = 0;
+  r.trunkYaw[0] = restOn ? r.restT[0] : 0;
   for (let k = 1; k < nT; k++) {
     const u = k / Math.max(1, nT - 1);
     let yaw = 0;
     // a slitherer throws big S-curves down its whole length; a swimmer's wave grows toward the tail
-    if (T.legless && !inp.swim) yaw = 0.42 * moving * Math.sin(P - k * 0.95);
-    else if (wave) yaw = 0.24 * moving * Math.sin(P - k * 1.1) * (0.35 + 0.65 * (1 - u));
+    // (both waves run BACK along the body, head to tail — the push that drives it forward; run the
+    // other way, a snake or a fish undulated like it was moonwalking)
+    if (T.legless && !inp.swim) yaw = 0.42 * moving * Math.sin(P + k * SLITHER_K);
+    else if (wave) yaw = 0.24 * moving * Math.sin(P + k * SWIM_K) * (0.35 + 0.65 * (1 - u));
     else yaw = 0.05 * T.sprawl * moving * Math.sin(P - k * 0.8);
     yaw -= inp.turn * 0.06 * awake; // lean into turns
     // galloping, the back coils as the legs gather under the body and stretches as they reach out
@@ -723,8 +1063,9 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
     // feeding, a long-legged grazer tips its chest down toward the grass (spread over the trunk's
     // joints, so the back curves rather than kinking at one; the legs fold to keep their feet planted)
     const dip = (T.grazeDip * inp.eat * awake) / Math.max(1, nT - 1);
-    setRot(r.bones[T.trunk[k]], flex * awake + dip, yaw * awake, 0);
-    r.trunkYaw[k] = r.trunkYaw[k - 1] + yaw * awake;
+    const lie = restOn ? r.restT[k] : 0;
+    setRot(r.bones[T.trunk[k]], flex * awake + dip, yaw * awake + lie, 0);
+    r.trunkYaw[k] = r.trunkYaw[k - 1] + yaw * awake + lie;
   }
   // idle: a slow look around (two incommensurate waves, so the glances never settle into a loop),
   // a breath that lifts the chest, and a lazy weight shift
@@ -814,18 +1155,34 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
       }
     }
   }
-  // arms swing opposite the legs
-  r.template.arms.forEach((chain) => {
+  // arms swing opposite the legs; lying down, an arm that reaches the floor swings forward to rest
+  // its hand on it; feeding, one hand at a time carries the food up to the mouth and goes back for more
+  const drop = T.belly * SLEEP_DROP * inp.sleep;
+  const feeding = inp.eat * awake * (1 - moving);
+  const bite = (r.t * FEED_RATE) / (2 * Math.PI);
+  const lift = feeding > 0 ? feeding * (0.5 - 0.5 * Math.cos(r.t * FEED_RATE)) : 0;
+  r.template.arms.forEach((chain, n) => {
     const side = r.bones[chain[0]].position.x >= 0 ? 1 : -1;
-    setRot(r.bones[chain[0]], -0.3 * moving * Math.sin(P + (side > 0 ? 0 : Math.PI)) * awake, 0, 0);
+    const A = T.armPose[n];
+    const feed = lift > 0 && A.feed && (Math.floor(bite) + n) % 2 === 0 ? A.feed : null;
+    setRot(r.bones[chain[0]], -0.3 * moving * Math.sin(P + (side > 0 ? 0 : Math.PI)) * awake + armLie(A, drop) + (feed ? feed[0] * lift : 0), 0, 0);
+    if (feed) setRot(r.bones[chain[A.elbow]], feed[1] * lift, 0, 0);
   });
-  // tails sway (a slow wag; a swimmer's tail drives the stroke)
+  // tails sway (a slow wag; a swimmer's tail drives the stroke). A resting slitherer's tail carries
+  // on its S, lying still but for the tip's idle flick.
   for (const chain of T.tails) {
+    const lying = restOn && chain === R!.tail;
+    const still = lying ? restAmp / Math.max(R!.amp, 1e-3) : 0;
     for (let j = 0; j < chain.length; j++) {
       const amp = ((inp.swim || T.legless ? 0.28 * (0.4 + moving) : 0.08 + 0.1 * moving) * (1 - 0.7 * fly) + 0.22 * show) * (1 - 0.8 * stalk);
-      const yaw = amp * Math.sin((inp.swim ? P : r.wag + P * 0.5) - j * 0.8);
+      const u = j / Math.max(1, chain.length - 1);
+      const flick = lying ? 1 - Math.min(1, still) * (1 - 0.3 * u * u) : 1;
+      // a swimmer's or a slitherer's tail carries the body wave on toward its tip; any other tail wags
+      // on its own clock
+      const waveK = inp.swim ? SWIM_K : SLITHER_K;
+      const yaw = amp * flick * Math.sin(inp.swim || T.legless ? P - (j + 1) * waveK : r.wag + P * 0.5 - j * 0.8);
       // a displaying tail is raised (−pitch lifts it), each link a little more — a flag, not a droop
-      setRot(r.bones[chain[j]], -0.08 * inp.sleep - 0.1 * fly - 0.32 * show, yaw * awake, 0);
+      setRot(r.bones[chain[j]], -0.08 * inp.sleep - 0.1 * fly - 0.32 * show, yaw * awake + (lying ? r.restTail[j] : 0), 0);
     }
   }
   // fins, tentacles and antennae drift
