@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -49,10 +49,42 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Cells | `src/world/cells.ts`, `Flora.tsx`, `Landscape.tsx` | ✅ grass, crowns and bushes as one instanced mesh a square, each culled on its own; far grass thinned; a square re-posed only when its grass changes |
 | Quills | `src/viewer/quills.ts`, `src/engine/grow.ts` (`QUILL_STYLE`) | ✅ an urchin's spines as one smooth cone each, root to point, all one mesh, kept out of the skin |
 | Ape limbs and brow | `src/viewer/apeLimbs.ts`, `face.ts`, `src/engine/grow.ts` (`knuckleArm`, `armWalker`) | ✅ shoulders, knuckle-walking fists, flat feet, a brow ridge traced on the skull |
+| Webs | `src/viewer/bodyField.ts` (`webPanels`), `feet.ts` (`isHindFoot`, toe webs) | ✅ a webbed ring of arms (the `web` gene) joined by flat panels of skin in the field; a frog's hind toes joined by thin two-sided webs |
 | Room | `src/sim/world.ts` (`keepRoom`, `footprintGap`) | ✅ bodies on the ground keep their room: trunk footprints eased apart, the lighter giving way; a hunter at its prey and a courting pair let be (tested) |
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M87 — Octopuses, webbed feet, bears · 2026-11-13
+
+- **One gene copied round a ring is a starburst.** A radial body grows every part once per sector:
+  an octopus with eight arms got eight eyes, a ring of glowing discs round its mantle, over eight
+  identical straight arcs (from above, a spider's legs). A part can now grow on a radial body as a
+  pair mirrored either side of the front (`radialPair`). The octopus has two eyes, low on its head
+  just above the arms: gold, under a heavy lid, with a short flat bar of a pupil (on a radial body
+  the slit eye's pupil lies flat and short; a sliver from rim to rim, laid flat, was sunglasses).
+  Each of a radial body's arms bends its own way, a little to one side, some lifting their tips. The
+  bend is hashed from the seed and the arm, so no draw in the stream moves. The horror's tentacles
+  writhe too, and the urchin's two-link tube feet are left as they were.
+- **Arms that leave the head as one.** An octopus's arm is now broad where it leaves the head (its
+  neighbours' roots meet its own) and drawn out to a fine tip over five or six links. A web of skin
+  joins the arms near their roots (`web`, a share of their length): in the skin field, one flat
+  ellipsoid between each arm and the next, half an arm thick. The rig binds its skin to the arms on
+  either side of it, so it moves with them. Both genes are optional, and an older share string
+  decodes as it always did.
+- **A web that can't be seen is not a web.** A frog's hind foot was its hand again: short
+  pad-tipped toes splayed on bare ground. The first web was right in the geometry and invisible on
+  screen. At a hand's length the toes nearly touched for half their run, so a web stopping halfway
+  out lay under them, and every gap the eye saw was beyond its margin. A frog's hind toes (the legs
+  rooted furthest back: `isHindFoot`) are now 30% longer and fanned a little wider, and their webs
+  reach nearly to the pads.
+- **A sign is a carriage.** The bear stood level from rump to shoulders, its muzzle hung from the
+  brow at the default droop: a tapir. Its trunk now pitches gently up toward the front, the
+  highest point over its shoulders, and its muzzle is held out level. A positive pitch, tried first,
+  is the weasel's arch, which grow levels so that its hump sits mid-back: it humped the middle.
+- **The coat runs onto the paw.** A paw is drawn in the skin's base coat, but the fur shells covered
+  only the body, so the coat stopped at the ankle in a ring over a bare shiny paw (a sock and a
+  slipper). The shells now run on over the paw: a bear's, a fox's and a cat's feet are furred.
 
 ## M86 — A third look by eye, and bodies that keep their room · 2026-11-13
 

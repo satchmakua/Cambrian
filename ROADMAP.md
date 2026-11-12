@@ -775,10 +775,16 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   way, a hunter at its prey and a courting pair let be. **Tests:** `tests/engine/plans/slime.test.ts`,
   `wyvern.test.ts`, `ratite.test.ts`, `tests/sim/world.test.ts › room`.
 
+- [x] **M87 — Octopuses, webbed feet, bears.** An octopus with two eyes, arms broad at the head and
+  fine at the tips, each bending its own way, joined by a web; frogs on webbed hind feet; bears with
+  the hump over their shoulders and a level muzzle; the coat running on over every furred paw.
+  **Tests:** `tests/engine/plans/cephalopod.test.ts`, `tests/viewer/feet.test.ts › webbed`,
+  `tests/engine/plans/ursid.test.ts › hump`.
+
 ### Next up (unchecked — pick from here)
 
-- [ ] **A fourth look by eye.** What the third look left: the octopus's thin arms, a bear's shoulder
-  hump and the step at its paws, a mouth line on a closed muzzle, webbed feet for a frog.
+- [ ] **A fourth look by eye.** Render all 31 plans again and find what stands out now; what is known:
+  a mouth line on a closed muzzle.
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.
 - [ ] **A lineage film.** A wild species' body changes over the generations, as a strip of portraits.

@@ -136,6 +136,11 @@ export interface PartGene {
   curl: [number, number];       // per-segment bend (joints)
   pair: boolean;                // mirror across X=0
   terminal: Terminal;           // tip cap (claw/talon/pincer/hoof/foot/fin/none/…)
+  // (as built, optional — absent on every older genome, which grows as it always did:)
+  radialPair?: boolean;         // on a RADIAL body, one mirrored pair either side of the front instead
+                                //   of one per sector (an octopus's two eyes, not a ring of eight)
+  web?: number;                 // a web of skin joining this ring of parts out to this share of their
+                                //   length (0..0.6; an octopus's arms) — a flat panel between each and the next
 }
 
 export type PartKind =
