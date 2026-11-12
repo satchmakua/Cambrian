@@ -55,7 +55,7 @@ export type PartKind =
 export type Vec3 = [number, number, number];
 
 /** What the skin is *made of* — drives surface relief (bump) + material (MORPHOLOGY §7.2). */
-export type CoveringType = 'skin' | 'scales' | 'fur' | 'feathers' | 'chitin' | 'slime' | 'plates';
+export type CoveringType = 'skin' | 'scales' | 'fur' | 'feathers' | 'chitin' | 'slime' | 'plates' | 'crystal';
 /** The color field painted over the skin (MORPHOLOGY §7.1). */
 export type PatternType =
   | 'plain'

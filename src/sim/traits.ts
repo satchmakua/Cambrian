@@ -185,7 +185,7 @@ export function traitsOf(p: Phenotype): Traits {
   const attack = weapon * 6 * Math.pow(mass, 0.66);
   const armour =
     (shell ? 0.4 : 0) +
-    (cov === 'plates' ? 0.25 : cov === 'chitin' ? 0.18 : cov === 'scales' ? 0.1 : 0) +
+    (cov === 'crystal' ? 0.3 : cov === 'plates' ? 0.25 : cov === 'chitin' ? 0.18 : cov === 'scales' ? 0.1 : 0) +
     Math.min(spines, 4) * 0.06 +
     Math.min(horns, 2) * 0.03;
   const defense = Math.min(0.8, armour);

@@ -309,7 +309,7 @@ const KINDS: readonly PartKind[] = [
 /** Kinds a free/changed appendage may become — everything but `leg` (legs are bauplan-managed, M24). */
 const DECOR_KINDS: readonly PartKind[] = KINDS.filter((k) => k !== 'leg');
 const COH_BOUND: readonly [number, number] = [0, 1];
-const COVERING_TYPES: readonly CoveringType[] = ['skin', 'scales', 'fur', 'feathers', 'chitin', 'slime', 'plates'];
+const COVERING_TYPES: readonly CoveringType[] = ['skin', 'scales', 'fur', 'feathers', 'chitin', 'slime', 'plates', 'crystal'];
 const PATTERN_TYPES: readonly PatternType[] = [
   'plain', 'stripes', 'bands', 'spots', 'ocelli', 'reticulate', 'mottle', 'gradient',
 ];

@@ -20,7 +20,7 @@ const AXES: { key: NumAxis; label: string; lo: string; hi: string }[] = [
   { key: 'novelty', label: 'Novelty', lo: 'familiar', hi: 'weird' },
 ];
 
-const COVERINGS: CoveringType[] = ['skin', 'scales', 'fur', 'feathers', 'chitin', 'slime', 'plates'];
+const COVERINGS: CoveringType[] = ['skin', 'scales', 'fur', 'feathers', 'chitin', 'slime', 'plates', 'crystal'];
 
 export function PressurePanel({
   pressure,

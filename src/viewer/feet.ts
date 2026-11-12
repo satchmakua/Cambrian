@@ -21,7 +21,7 @@ export type FootPlan = 'bird' | 'reptile' | 'frog';
 export function footPlanOf(p: Phenotype): FootPlan | null {
   const t = p.genomeRef.covering.type;
   if (t === 'feathers') return 'bird';
-  if (t === 'scales' || t === 'plates') return 'reptile';
+  if (t === 'scales' || t === 'plates' || t === 'crystal') return 'reptile';
   if (t === 'skin') return 'frog';
   return null;
 }

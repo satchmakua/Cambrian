@@ -34,6 +34,7 @@ import { BROW_TILT, eyeClearings, eyeSeat, eyeTilt, isSwimmer } from './eyeSeat'
 import { coatDark, coatFin, coatMain, coatPattern } from './palette';
 import { faceMaskOf, isApe } from './face';
 import { clawGeometry } from './claw';
+import { shardGeometry } from './shards';
 import { frillGeometry, frillPlan } from './frill';
 import { getGeometry, retainGeometry, releaseGeometry, hasGeometry } from './geometryCache';
 import { mouthCarves, surfacePrims } from './mouthLine';
@@ -474,7 +475,7 @@ export function CreatureMesh({
   }, [rig, shellGeo, phenotype]);
 
   const featureNodes = data.features.map((f, k) => {
-    if (detail !== 'full' && !keepAt(detail, f)) return null;
+    if (detail !== 'full' && !keepAt(detail, f, cov.type === 'crystal')) return null;
     if (DEV_HIDE.has(f.type)) return null;
     const el = detail === 'lite' && f.type === 'eye' ? (
       <LiteEye f={f} iris={irisColor} />
@@ -573,8 +574,9 @@ export function CreatureMesh({
 /** Which features survive a reduced level of detail: the silhouette parts always (a wing, a fin, a
  *  horn reads from across the meadow); at 'lite' also the eyes (simplified), ears, pincers and tail
  *  weapons. Teeth/lips, toes, whiskers and gill slits are sub-pixel at a distance — dropped. */
-function keepAt(detail: Detail, f: MeshFeature): boolean {
-  const silhouette = f.type === 'fin' || f.type === 'crest' || (f.type === 'claw' && f.kind === 'horn');
+function keepAt(detail: Detail, f: MeshFeature, crystal = false): boolean {
+  // (a crystal body's back spines are its shards: as much its outline as a horn is)
+  const silhouette = f.type === 'fin' || f.type === 'crest' || (f.type === 'claw' && (f.kind === 'horn' || (crystal && f.kind === 'spine')));
   if (detail === 'none') return silhouette;
   return silhouette || f.type === 'eye' || f.type === 'ear' || f.type === 'pincer' || f.type === 'club' || f.type === 'barb';
 }
@@ -642,6 +644,10 @@ function Feature({
         <Fin f={f} color={finColor} lite={lite} phenotype={phenotype} surface={surface} />
       );
     case 'claw': {
+      // a crystal body's horns and back spines are clusters of shards (shards.ts)
+      if ((f.kind === 'horn' || f.kind === 'spine') && phenotype.genomeRef.covering.type === 'crystal') {
+        return <Shards f={f} palette={phenotype.genomeRef.palette} seed={phenotype.genomeRef.seed} />;
+      }
       if (f.kind === 'horn') return <Horn f={f} color={footColor} />;
       const plan = f.kind === 'leg' ? footPlanOf(phenotype) : null;
       return plan ? <ToedFoot f={f} plan={plan} skin={skin} phenotype={phenotype} /> : <Claw f={f} color={footColor} />;
@@ -1112,6 +1118,22 @@ function Horn({ f, color }: { f: MeshFeature; color: number }) {
       <mesh position={[0, 0, r * 1.8]} rotation={[Math.PI / 2, 0, 0]} castShadow>
         <coneGeometry args={[r * 0.9, r * 3.6, 10]} />
         <meshStandardMaterial color={keratin} roughness={0.5} metalness={0.05} />
+      </mesh>
+    </group>
+  );
+}
+
+// Crystal shards: a cluster of pointed six-sided prisms in the body's own colour, lighter and lit from
+// within — glassy, never see-through enough to need the scene drawn twice behind them.
+function Shards({ f, palette, seed }: { f: MeshFeature; palette: Phenotype['genomeRef']['palette']; seed: number }) {
+  const r = Math.max(f.radius, 0.06);
+  const geo = useMemo(() => shardGeometry(r, (seed ^ Math.imul(f.idx + 1, 0x9e3779b1)) >>> 0), [r, seed, f.idx]);
+  useEffect(() => () => geo.dispose(), [geo]);
+  const tint = useMemo(() => coatMain(palette).lerp(new THREE.Color(0xffffff), 0.3), [palette]);
+  return (
+    <group quaternion={f.quat}>
+      <mesh geometry={geo} castShadow>
+        <meshPhysicalMaterial color={tint} roughness={0.08} metalness={0} clearcoat={1} clearcoatRoughness={0.04} emissive={tint} emissiveIntensity={0.42} transparent opacity={0.9} flatShading />
       </mesh>
     </group>
   );

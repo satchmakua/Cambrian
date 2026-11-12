@@ -37,7 +37,7 @@ const KINDS: readonly PartKind[] = [
   'leg', 'arm', 'wing', 'fin', 'tail', 'horn', 'spine', 'frill', 'antenna', 'tentacle', 'eyestalk', 'maw',
   'plate', 'ear', 'gill', 'crest', 'whisker',
 ];
-const COVERING_TYPES: readonly CoveringType[] = ['skin', 'scales', 'fur', 'feathers', 'chitin', 'slime', 'plates'];
+const COVERING_TYPES: readonly CoveringType[] = ['skin', 'scales', 'fur', 'feathers', 'chitin', 'slime', 'plates', 'crystal'];
 const PATTERN_TYPES: readonly PatternType[] = [
   'plain', 'stripes', 'bands', 'spots', 'ocelli', 'reticulate', 'mottle', 'gradient',
 ];

@@ -145,6 +145,8 @@ interface Morpho {
   eyeTilt?: number; // rolls each eye about its gaze (rad), so its lids slant down toward the bill: a hawk's scowl
   hindSegs?: number; // the hind pair's link count (a frog's thigh, shin and long foot fold in a Z)
   legSegs?: number; // every leg's link count (a crab's merus, carpus and pointed dactyl: on two links its legs were table legs)
+  spineCount?: number; // how many spines stand along the back (a crystal beast's row of shards)
+  spineSize?: Rg; // × a back spine's usual length and girth
   mouthStyle?: Rg; // bands (viewer/partStyles mouthVariant): <0.06 herbivore · <0.125 maw · <0.25 fanged · <0.375 beak ·
   //                   <0.5 mandibles · <0.625 sucker · <0.75 lamprey · <0.85 baleen · <0.93 proboscis · else trunk
   covering?: readonly CoveringType[]; // skin material (MORPHOLOGY §7); default ['skin']
@@ -212,7 +214,7 @@ const MORPHOTYPES: readonly Morpho[] = [
   // wrong-arthropod: ten-plus sprawled legs, clustered compound/glowing eyes, multi-mandible, iridescent chitin
   { id: 'arthro-alien', cluster: 'uncanny', weight: 1.0, girth: [0.34, 0.5], repeat: [3, 5], height: [0.7, 0.95], elong: [1.1, 1.4], legPairs: [5], posture: 'sprawling', legLen: [0.55, 0.85], legAz: [3.6, 4.0], legTerm: ['claw'], spines: 0.7, antennae: 0.6, gills: 0.3, eyeStyle: [0.6, 0.85], eyeCount: [4, 6], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['bands', 'reticulate'], sheen: [0.6, 0.95], hue: [0.15, 0.7], sat: [0.6, 0.9] },
   // crystalline: angular rigid limbs, a spike ridge, glowing facet "eyes" (the core), hard plated/metallic gradient skin
-  { id: 'crystalline', cluster: 'uncanny', weight: 0.5, girth: [0.42, 0.6], repeat: [2, 3], height: [0.85, 1.1], elong: [1.0, 1.25], legPairs: [2], posture: 'upright', legLen: [0.5, 0.75], legThick: [0.3, 0.45], legTerm: ['claw'], spines: 1, horns: 0.6, eyeStyle: [0.85, 1], eyeCount: [2, 3], mouthStyle: [0.07, 0.12], covering: ['plates'], pattern: ['gradient'], sheen: [0.7, 1.0], hue: [0.55, 0.75], sat: [0.5, 0.85], light: [0.5, 0.7] },
+  { id: 'crystalline', cluster: 'uncanny', weight: 0.5, girth: [0.46, 0.62], repeat: [3, 4], height: [0.85, 1.05], elong: [0.95, 1.15], taper: [1.0, 1.06], head: 1, headSize: [0.6, 0.72], headShape: ['blocky', 'wedge'], legPairs: [2], posture: 'upright', legLen: [0.62, 0.84], legThick: [0.36, 0.5], legTerm: ['claw'], spines: 1, spineCount: 5, spineSize: [1.25, 1.75], horns: 0.7, tail: 0.0, eyeStyle: [0.85, 1], eyeCount: [2], mouthStyle: [0.07, 0.12], covering: ['crystal'], pattern: ['gradient', 'plain'], sheen: [0.75, 1.0], hue: [0.5, 0.82], sat: [0.5, 0.85], light: [0.5, 0.68] }, // a beast of cut stone: faceted hide, a row of crystal shards down its back, lit from within
 ];
 
 const GENERIC_SIZE = GENE_BOUNDS.segment.size;
@@ -318,7 +320,19 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
   // ['none','fin'] default gave bears, deer and apes a fish's tail fan)
   if (chance(rng, m.tail ?? 0.5)) apps.push(tail(rng, girth, pick(rng, m.tailTerm ?? (['none'] as const)), m));
   // dorsal spine ridge
-  if (chance(rng, m.spines ?? 0)) for (let i = 0; i < 3; i++) apps.push(spine(rng, 0.2 + i * 0.25, girth));
+  if (chance(rng, m.spines ?? 0)) {
+    // (three along the back, as ever, unless the plan asks for its own row: no draw is added for the rest)
+    const n = m.spineCount ?? 3;
+    for (let i = 0; i < n; i++) {
+      const s = spine(rng, m.spineCount ? 0.14 + (0.74 * i) / Math.max(1, n - 1) : 0.2 + i * 0.25, girth);
+      if (m.spineSize) {
+        const k = rg(rng, m.spineSize);
+        s.length = clamp(s.length * k, A.length);
+        s.thickness = clamp(s.thickness * k, A.thickness);
+      }
+      apps.push(s);
+    }
+  }
   // a collar / fanned frill near the head
   if (chance(rng, m.frill ?? 0)) apps.push(frill(rng, range(rng, 0.7, 0.95), girth));
   // gill rakes on the front body (fish / shark); a domed carapace over the mid-body (turtle / crab)
@@ -621,6 +635,7 @@ const SHEEN_BASE: Record<CoveringType, number> = {
   chitin: 0.55,
   slime: 0.85,
   plates: 0.25,
+  crystal: 0.8,
 };
 
 function covering(rng: Rng, m: Morpho): Genome['covering'] {

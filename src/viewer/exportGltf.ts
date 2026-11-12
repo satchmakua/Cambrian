@@ -27,6 +27,7 @@ const ROUGH: Record<Covering['type'], { rough: number; metal: number }> = {
   chitin: { rough: 0.35, metal: 0.15 },
   slime: { rough: 0.16, metal: 0 },
   plates: { rough: 0.6, metal: 0 },
+  crystal: { rough: 0.12, metal: 0 },
 };
 
 /** A static THREE.Group of the creature in base pose (capsule-union or smooth) + its features. */

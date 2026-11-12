@@ -29,6 +29,7 @@ const COVERING_INDEX: Record<CoveringType, number> = {
   chitin: 4,
   slime: 5,
   plates: 6,
+  crystal: 7,
 };
 const PATTERN_INDEX: Record<PatternType, number> = {
   plain: 0,
@@ -64,6 +65,8 @@ const PRESET: Record<CoveringType, Preset> = {
   chitin: { rough: 0.38, metal: 0.1, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 0.7, coatRough: 0.12, irid: 0.85 },
   slime: { rough: 0.3, metal: 0.0, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 1.0, coatRough: 0.04, irid: 0.25 },
   plates: { rough: 0.58, metal: 0.02, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 0.15, coatRough: 0.35, irid: 0.2 },
+  // a cut stone: glassy under a hard polish, a thin-film shimmer on its faces
+  crystal: { rough: 0.2, metal: 0.0, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 1.0, coatRough: 0.05, irid: 0.7 },
 };
 
 /** Dev-only shading channel (`?dbg=N`): 1 pattern · 2 relief · 3 musculature · 4 AO · 5 pixel footprint.
@@ -250,6 +253,8 @@ export function makeCreatureMaterial(
           skin = mix(skin, uPattern2, smoothstep(0.55, 0.95, pat) * uContrast * 0.4);
           // low-frequency tonal break-up so the surface never reads as flat plastic
           skin *= 0.92 + 0.16 * fbmA(bp * 2.2, 2.2);
+          // a crystal's faces each take the light their own way: lighter and darker cuts of one stone
+          if (uCover == 7) skin *= (0.7 + 0.58 * gFacet) * (1.0 + 0.18 * gSeam);
           // a beetle's wing-cases meet in a dark seam down the middle of the back
           if (uSeam > 0.0) skin = mix(skin, uPattern2 * 0.3, (1.0 - smoothstep(uSeam * 0.35, uSeam, abs(vBodyPos.x))) * smoothstep(0.45, 0.75, up));
           // a bare face (an ape's): the coat gives way to skin round the eyes and the muzzle, and the
@@ -363,6 +368,16 @@ export function makeCreatureMaterial(
           normal = normalize(abs(det) * normal - uBump * grad);
         }`,
       )
+      // a crystal's polish IS its faces: the clear coat takes each facet's tilt and mirrors the sky its
+      // own way, face by face. (On any other hide the coat is a wet film lying over the relief, and
+      // stays as smooth as the body under it.)
+      .replace(
+        '#include <clearcoat_normal_fragment_begin>',
+        `#include <clearcoat_normal_fragment_begin>
+        #ifdef USE_CLEARCOAT
+          if (uCover == 7) clearcoatNormal = normal;
+        #endif`,
+      )
       // rim + cheap translucency (use the geometric vNormal for a clean silhouette glow)
       .replace(
         '#include <emissivemap_fragment>',
@@ -379,6 +394,8 @@ export function makeCreatureMaterial(
           // — a soft blood-tinted wrap at grazing angles, strongest on soft coverings
           float soft = (uCover == 0 || uCover == 5) ? 1.0 : (uCover == 2 || uCover == 3) ? 0.5 : 0.2;
           totalEmissiveRadiance += uBlood * pow(1.0 - ndv, 2.5) * 0.09 * soft * noMouth * vAO;
+          // a crystal holds light: a glow of its own colour from within, brightest at its edges
+          if (uCover == 7) totalEmissiveRadiance += uMain * ((0.1 + 0.3 * pow(1.0 - ndv, 2.0)) * (0.55 + 0.9 * gFacet) + 0.1 * gSeam) * noMouth;
         }`,
       );
   };
@@ -415,6 +432,8 @@ float gM = 0.0;   // musculature relief
 float gDhx = 0.0; // the relief's physical height one pixel across, less its height here …
 float gDhy = 0.0; // … and one pixel down (see the colour stage)
 float gFine = 0.0; // 1 where those are measured (else the bump takes the derivative of the height)
+float gFacet = 0.5; // a crystal's facet under this pixel: its own shade, 0..1 (see surfaceHeight)
+float gSeam = 0.0;  // … and how near this pixel is to that facet's cut edge, 0..1
 
 // ANTI-ALIASING. A procedural texture aliases into "TV static" once its detail is finer than a pixel:
 // the old fur relief ran at 26 cycles/bu × 5 octaves, i.e. sub-pixel for any creature not filling
@@ -562,6 +581,29 @@ float patternField(vec3 p0, int type, float scale) {
   return smoothstep(-1.6, 1.6, p0.z * 0.9 + (fbm3(p0 * 0.6) - 0.5));
 }
 
+// --- a cut stone's faces -------------------------------------------------------
+// Space divided into tetrahedra (a simplex grid): every corner of the grid takes a height of its own,
+// and the height inside a tetrahedron is the flat blend of its four corners. So the height is FLAT
+// across each face a surface cuts through a tetrahedron (one slope: the face catches the light as
+// one plane), CONTINUOUS everywhere (no step for a bump to draw as a line) and creased where faces
+// meet. Also gives the tetrahedron's own shade (id, 0..1) and how near the point is to its nearest
+// wall (0 on the wall; in the tetrahedron's barycentric units).
+float facets(vec3 q, out float id, out float wall) {
+  vec3 qs = q + dot(q, vec3(1.0 / 3.0));                        // (skewed: the grid's cubes)
+  vec3 s = floor(qs);
+  vec3 u = qs - s;
+  vec3 e = step(u.yzx, u);
+  vec3 i1 = e * (1.0 - e.zxy);                                  // the largest of u's three …
+  vec3 i2 = 1.0 - e.zxy * (1.0 - e);                            // … and its two largest
+  float ua = dot(u, i1);
+  float uc = dot(u, 1.0 - i2);
+  float ub = u.x + u.y + u.z - ua - uc;
+  vec4 wt = vec4(1.0 - ua, ua - ub, ub - uc, uc);               // weights of the tetrahedron's corners
+  id = hash13(s * 1.7 + i1 * 3.1 + i2 * 5.3 + 0.37);
+  wall = min(min(wt.x, wt.y), min(wt.z, wt.w));
+  return dot(wt, vec4(hash13(s), hash13(s + i1), hash13(s + i2), hash13(s + 1.0)));
+}
+
 // --- surface relief per covering (MORPHOLOGY §7.2) ----------------------------
 // Returns the relief normalized to [0,1] (grime + roughness read it) and writes gHb, the same relief
 // as a PHYSICAL height in body units. The bump must use a physical height: a scale ~1/8 bu across is
@@ -637,6 +679,28 @@ float surfaceHeight(vec3 p, int cover) {
     float h = mix(0.75, smoothstep(0.0, 0.13 + gFw * 2.2, F.y - F.x), aaW(2.2));
     gHb = h * 0.03;
     return h;
+  }
+  if (cover == 7) {                                             // crystal — cut facets
+    // A cut stone: flat faces, each tilted its own way, meeting in sharp edges — see facets(). One
+    // grid alone is a regular net of triangles (a wire mesh drawn over the body); so the stone is cut
+    // TWICE, at two angles and two sizes, and the higher cut shows. The higher of two reliefs that are
+    // each flat-faced and continuous is flat-faced and continuous too, and where one cut passes under
+    // the other is a new edge at an angle of its own: faces of every shape and size.
+    // (Cells with a plane each, tilted at random, cannot meet their neighbours: bevelled down to a
+    // common floor they were a mosaic of rounded pebbles, each in a dark gutter.)
+    float idA, idB, wallA, wallB;
+    float hA = facets(p * 1.9, idA, wallA);
+    vec3 pr = vec3(dot(p, vec3(0.36, 0.48, -0.8)), dot(p, vec3(-0.8, 0.6, 0.0)), dot(p, vec3(0.48, 0.64, 0.6)));
+    float hB = facets(pr * 2.7 + 11.3, idB, wallB);
+    float top = step(hB, hA);
+    gFacet = mix(idB, idA, top);
+    float w = aaW(6.5);
+    // the cut edge (in body units, near enough): the nearest wall of the face's own tetrahedron, or
+    // the line where the two cuts cross
+    float d = min(mix(wallB / 5.4, wallA / 3.8, top), abs(hA - hB) * 0.4);
+    gSeam = (1.0 - smoothstep(0.0, 0.006 + gFw, d)) * w;
+    gHb = max(hA, hB) * 0.11 * w;
+    return 0.3;                                                 // (no grime: a crystal has no recesses)
   }
   // skin — fine wrinkle-and-pore relief
   float pores = fbmA(p * 6.0, 6.0);

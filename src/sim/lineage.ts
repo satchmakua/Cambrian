@@ -7,7 +7,7 @@ import type { Genome } from '../engine/genome';
 import { describe } from '../engine/morphospace';
 import { bodyOf } from './world';
 
-const COAT: Record<string, string> = { skin: 'bare skin', scales: 'scales', fur: 'fur', feathers: 'feathers', chitin: 'chitin', slime: 'slime', plates: 'plates' };
+const COAT: Record<string, string> = { skin: 'bare skin', scales: 'scales', fur: 'fur', feathers: 'feathers', chitin: 'chitin', slime: 'slime', plates: 'plates', crystal: 'crystal' };
 
 /** Up to `max` short phrases ("bigger", "six legs, not four", "scales instead of fur"…); [] when it
  *  is, to the eye, the same animal. */

@@ -115,10 +115,10 @@ describe('morphotype library (M22 — full catalogue §4)', () => {
       const chim = grow(genomeOfMorphotype(s * 11 + 3, 'chimera'));
       expect(hasPart(chim, 'wing')).toBe(true);
       expect(hasPart(chim, 'tail')).toBe(true);
-      // crystalline — a spiked, glowing-eyed plated thing
+      // crystalline — a spiked, glowing-eyed thing of cut stone
       const crys = grow(genomeOfMorphotype(s * 11 + 3, 'crystalline'));
       expect(hasPart(crys, 'spine')).toBe(true);
-      expect(crys.genomeRef.covering.type).toBe('plates');
+      expect(crys.genomeRef.covering.type).toBe('crystal');
     }
   });
 
