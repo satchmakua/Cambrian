@@ -113,7 +113,21 @@ export interface AppendageGene {
   curl: [number, number]; // [pitchPerSeg, yawPerSeg] radians — joints / bend
   terminal: Terminal;
   pair: boolean; // mirror across X=0 (bilateral)
+  /**
+   * On a RADIAL body: grow this part once as a pair mirrored either side of the front, its azimuth then
+   * the angle off the front (+Z), instead of once per sector. An octopus has two eyes, not a ring of
+   * eight round its mantle. Absent: once per sector, as before.
+   */
+  radialPair?: boolean;
+  /**
+   * A web of skin joining this part to its neighbours round a radial body, out to this share of the
+   * part's length (0..WEB_MAX): an octopus's arms are webbed near their roots. Absent: none.
+   */
+  web?: number;
 }
+
+/** the furthest out along its arms a web can reach (a share of their length) */
+export const WEB_MAX = 0.6;
 
 /**
  * The procedural skin (MORPHOLOGY §7). `type` picks the surface relief + material

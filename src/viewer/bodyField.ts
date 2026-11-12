@@ -255,12 +255,14 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     if (interior && n.scale[2] <= 1.15) continue;
     shaped.push(n);
   }
-  const ne = shaped.length;
+  // …and the webs between a ring of webbed arms (an octopus's), each panel an ellipsoid too
+  const webs = edges ? webPanels(p, include) : [];
+  const ne = shaped.length + webs.length;
   const ec = new Float64Array(ne * 3);
   const eq = new Float64Array(ne * 4);
   const er = new Float64Array(ne * 3);
   let excess = 0;
-  for (let i = 0; i < ne; i++) {
+  for (let i = 0; i < shaped.length; i++) {
     const n = shaped[i];
     const s = n.scale as Vec3;
     ec[i * 3] = n.pos[0]; ec[i * 3 + 1] = n.pos[1]; ec[i * 3 + 2] = n.pos[2];
@@ -268,6 +270,13 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     er[i * 3] = n.radius * s[0]; er[i * 3 + 1] = n.radius * s[1]; er[i * 3 + 2] = n.radius * s[2];
     excess = Math.max(excess, n.radius * (Math.max(s[0], s[1], s[2]) - 1));
   }
+  // (a panel lies between its two arms, inside the bounds their nodes already pad: no excess)
+  webs.forEach((w, j) => {
+    const i = shaped.length + j;
+    ec.set(w.c, i * 3);
+    eq.set(w.q, i * 4);
+    er.set(w.r, i * 3);
+  });
   const cx = new Float64Array(nc), cy = new Float64Array(nc), cz = new Float64Array(nc), hl = new Float64Array(nc);
   for (let i = 0; i < nc; i++) {
     cx[i] = (ax[i] + bx[i]) / 2;
@@ -467,6 +476,129 @@ function ellipticConeDist(f: FieldPrims, m: number, x: number, y: number, z: num
 
 /** the blend between cones of one chain, as a fraction of their own (see FieldPrims.ch) */
 const CHAIN_BLEND = 0.15;
+
+// --- webs ----------------------------------------------------------------------------------------
+
+/** a web panel's thickness, as a share of its arms' radius where it meets them (the arms stand on it
+ *  as ridges), and how far into each arm its sides reach (×that radius), so the two blend */
+const WEB_THICK = 0.45;
+const WEB_SINK = 0.35;
+/** how far out a panel runs toward its arms' web points (it stops short of their chord, so between
+ *  two arms the web's margin falls back toward the body) */
+const WEB_OUT = 0.85;
+
+/** a point `s` of the way along a chain of nodes (by length), and the chain's radius there */
+function alongChain(p: Phenotype, chain: number[], s: number): { at: Vec3; r: number } {
+  let total = 0;
+  for (let k = 1; k < chain.length; k++) total += dist3(p.nodes[chain[k - 1]].pos, p.nodes[chain[k]].pos);
+  let left = s * total;
+  for (let k = 1; k < chain.length; k++) {
+    const a = p.nodes[chain[k - 1]], b = p.nodes[chain[k]];
+    const l = dist3(a.pos, b.pos);
+    if (left <= l || k === chain.length - 1) {
+      const t = l > 1e-9 ? Math.min(1, left / l) : 0;
+      return { at: [a.pos[0] + (b.pos[0] - a.pos[0]) * t, a.pos[1] + (b.pos[1] - a.pos[1]) * t, a.pos[2] + (b.pos[2] - a.pos[2]) * t], r: a.radius + (b.radius - a.radius) * t };
+    }
+    left -= l;
+  }
+  const n = p.nodes[chain[0]];
+  return { at: [...n.pos] as Vec3, r: n.radius };
+}
+
+function dist3(a: Vec3, b: Vec3): number {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+/** a rotation taking the local axes to the orthonormal columns X, Y, Z */
+function quatOfBasis(X: Vec3, Y: Vec3, Z: Vec3): [number, number, number, number] {
+  const m00 = X[0], m11 = Y[1], m22 = Z[2];
+  const tr = m00 + m11 + m22;
+  if (tr > 0) {
+    const s = 0.5 / Math.sqrt(tr + 1);
+    return [(Y[2] - Z[1]) * s, (Z[0] - X[2]) * s, (X[1] - Y[0]) * s, 0.25 / s];
+  }
+  if (m00 > m11 && m00 > m22) {
+    const s = 2 * Math.sqrt(1 + m00 - m11 - m22);
+    return [0.25 * s, (Y[0] + X[1]) / s, (Z[0] + X[2]) / s, (Y[2] - Z[1]) / s];
+  }
+  if (m11 > m22) {
+    const s = 2 * Math.sqrt(1 + m11 - m00 - m22);
+    return [(Y[0] + X[1]) / s, 0.25 * s, (Z[1] + Y[2]) / s, (Z[0] - X[2]) / s];
+  }
+  const s = 2 * Math.sqrt(1 + m22 - m00 - m11);
+  return [(Z[0] + X[2]) / s, (Z[1] + Y[2]) / s, 0.25 * s, (X[1] - Y[0]) / s];
+}
+
+/**
+ * The WEB between a ring of webbed arms (an octopus's): round each body node, its webbed arms sorted
+ * by their angle about the vertical, and between each arm and the next a flat panel of skin — an
+ * ellipsoid from their roots out toward the point `web` of the way along each, as wide as the gap
+ * between them (and a little into each), half as thick as they are. Without it the arms left the
+ * mantle as separate rods, a spider's legs; with it they spread from one skirt.
+ */
+export function webPanels(p: Phenotype, include: (n: BodyNode) => boolean): { c: Vec3; q: [number, number, number, number]; r: Vec3 }[] {
+  const out: { c: Vec3; q: [number, number, number, number]; r: Vec3 }[] = [];
+  const kids: number[][] = p.nodes.map(() => []);
+  for (const [a, b] of p.edges) kids[a].push(b);
+  // each webbed arm's chain, root first, grouped by the body node it grows from
+  const rings = new Map<number, { chain: number[]; web: number; ang: number }[]>();
+  p.edges.forEach(([a, b]) => {
+    const n = p.nodes[b];
+    const web = n.part?.web ?? 0;
+    if (web <= 0 || p.nodes[a].kind !== 'spine' || !include(n)) return;
+    const chain = [b];
+    for (let cur = b; ; ) {
+      const next = kids[cur].find((k) => p.nodes[k].part?.kind === n.part?.kind);
+      if (next === undefined) break;
+      chain.push(next);
+      cur = next;
+    }
+    if (chain.length < 2) return;
+    const c = p.nodes[a].pos;
+    const ang = Math.atan2(n.pos[0] - c[0], n.pos[2] - c[2]);
+    let ring = rings.get(a);
+    if (!ring) rings.set(a, (ring = []));
+    ring.push({ chain, web, ang });
+  });
+  for (const ring of rings.values()) {
+    if (ring.length < 3) continue;
+    ring.sort((u, v) => u.ang - v.ang);
+    for (let k = 0; k < ring.length; k++) {
+      const A = ring[k], B = ring[(k + 1) % ring.length];
+      // (a ring with a gap — an arm lost — is not webbed across it)
+      const gap = (B.ang - A.ang + Math.PI * 2) % (Math.PI * 2);
+      if (gap > (Math.PI * 2) / ring.length * 1.6) continue;
+      const a0 = p.nodes[A.chain[0]], b0 = p.nodes[B.chain[0]];
+      const wa = alongChain(p, A.chain, Math.min(A.web, B.web));
+      const wb = alongChain(p, B.chain, Math.min(A.web, B.web));
+      const ma = alongChain(p, A.chain, Math.min(A.web, B.web) * 0.5);
+      const mb = alongChain(p, B.chain, Math.min(A.web, B.web) * 0.5);
+      const Q: Vec3 = [(a0.pos[0] + b0.pos[0]) / 2, (a0.pos[1] + b0.pos[1]) / 2, (a0.pos[2] + b0.pos[2]) / 2];
+      const P: Vec3 = [(wa.at[0] + wb.at[0]) / 2, (wa.at[1] + wb.at[1]) / 2, (wa.at[2] + wb.at[2]) / 2];
+      let Z: Vec3 = [P[0] - Q[0], P[1] - Q[1], P[2] - Q[2]];
+      const len = Math.hypot(Z[0], Z[1], Z[2]);
+      if (len < 1e-6) continue;
+      Z = [Z[0] / len, Z[1] / len, Z[2] / len];
+      // across: from one arm to the other at the panel's middle, square to its run
+      let X: Vec3 = [mb.at[0] - ma.at[0], mb.at[1] - ma.at[1], mb.at[2] - ma.at[2]];
+      const span = Math.hypot(X[0], X[1], X[2]);
+      const xz = X[0] * Z[0] + X[1] * Z[1] + X[2] * Z[2];
+      X = [X[0] - Z[0] * xz, X[1] - Z[1] * xz, X[2] - Z[2] * xz];
+      const xl = Math.hypot(X[0], X[1], X[2]);
+      if (xl < 1e-6) continue;
+      X = [X[0] / xl, X[1] / xl, X[2] / xl];
+      const Y: Vec3 = [Z[1] * X[2] - Z[2] * X[1], Z[2] * X[0] - Z[0] * X[2], Z[0] * X[1] - Z[1] * X[0]];
+      const rArm = (ma.r + mb.r) / 2;
+      const half = (len * WEB_OUT) / 2;
+      out.push({
+        c: [Q[0] + Z[0] * half, Q[1] + Z[1] * half, Q[2] + Z[2] * half],
+        q: quatOfBasis(X, Y, Z),
+        r: [span / 2 + rArm * WEB_SINK, rArm * WEB_THICK, half],
+      });
+    }
+  }
+  return out;
+}
 
 /** The body field: < 0 inside the creature, 0 on the skin, > 0 outside. */
 export function fieldAt(f: FieldPrims, x: number, y: number, z: number): number {

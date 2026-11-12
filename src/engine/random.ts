@@ -274,7 +274,10 @@ const MORPHOTYPES: readonly Morpho[] = [
   // --- uncanny ---
   { id: 'dragon', cluster: 'uncanny', weight: 0.9, eyeEl: [0.7, 0.85], muzzleDrop: [0.12, 0.24], snout: [0.5, 0.75], muzzle: [0.52, 0.62], tailTaper: [0.78, 0.84], tailCurl: [-0.1, -0.03], tailSegs: [5, 6], tailThick: [0.5, 0.62], tailDroop: [-1.5, -1.3], taper: [1.05, 1.1], girth: [0.5, 0.66], repeat: [3, 4], elong: [1.15, 1.35], neck: [0.46, 0.54], neckLinks: [3, 3], neckLift: [-0.42, -0.34], headSize: [0.6, 0.75], legPairs: [2], posture: 'digitigrade', legLen: [0.9, 1.15], legThick: [0.5, 0.62], legTerm: ['claw'], wings: 0.85, wingSize: [1.5, 1.8], tail: 0.95, tailTerm: ['none', 'barb', 'club'], headShape: ['flat', 'wedge'], horns: 0.9, spines: 0.8, crest: 0.3, eyeStyle: [0.4, 0.9], mouthStyle: [0.14, 0.24], covering: ['scales', 'plates'], pattern: ['reticulate', 'bands', 'mottle'], sheen: [0.35, 0.8], hue: [0.0, 0.95], sat: [0.5, 0.9] },
   { id: 'wyvern', cluster: 'uncanny', weight: 0.85, headShape: ['flat', 'wedge'], headWide: [0.86, 1.0], headDome: [0.72, 0.84], eyeEl: [0.7, 0.85], muzzleDrop: [0.12, 0.24], snout: [0.5, 0.75], muzzle: [0.52, 0.62], tailTaper: [0.78, 0.84], tailSegs: [5, 6], tailThick: [0.5, 0.6], tailDroop: [-1.5, -1.3], rear: [-0.22, -0.15], girth: [0.42, 0.56], repeat: [3, 4], elong: [1.2, 1.5], neck: [0.44, 0.52], neckLinks: [3, 4], neckLift: [-0.3, -0.2], headSize: [0.62, 0.78], legPairs: [1], posture: 'digitigrade', legLen: [1.1, 1.4], legThick: [0.5, 0.64], legTerm: ['claw'], wings: 1, wingSize: [1.7, 2.0], tail: 0.95, tailTerm: ['barb'], horns: 0.8, spines: 0.6, eyeStyle: [0.4, 0.9], mouthStyle: [0.14, 0.24], covering: ['scales'], pattern: ['bands', 'reticulate'], sheen: [0.3, 0.7], hue: [0.0, 0.95], sat: [0.5, 0.9] },
-  { id: 'cephalopod', cluster: 'uncanny', weight: 1.2, symmetry: 'radial', radialCount: [6, 10], girth: [0.5, 0.78], height: [1.3, 1.65], repeat: [1, 1], eyeEl: [0.12, 0.3], eyeSize: 1.5, eyeStyle: [0.8, 1], mouthStyle: [0.26, 0.37], covering: ['slime'], pattern: ['spots', 'ocelli', 'gradient'], sheen: [0.7, 1.0], hue: [0.6, 0.95], sat: [0.4, 0.85] },
+  // an octopus: a tall mantle over a crown of arms, thick where they leave it and drawn out to fine
+  // tips; TWO eyes, low on the head just above the arms, with a bar of a pupil (one eye per arm — a
+  // ring of eight glowing discs round the mantle — read as a googly-eyed egg on a spider's legs)
+  { id: 'cephalopod', cluster: 'uncanny', weight: 1.2, symmetry: 'radial', radialCount: [6, 10], girth: [0.5, 0.78], height: [1.3, 1.65], repeat: [1, 1], eyeEl: [-0.22, -0.1], eyeSize: 2.6, eyeStyle: [0.42, 0.58], mouthStyle: [0.26, 0.37], covering: ['slime'], pattern: ['spots', 'ocelli', 'gradient'], sheen: [0.7, 1.0], hue: [0.6, 0.95], sat: [0.4, 0.85] },
   { id: 'horror', cluster: 'uncanny', weight: 1.0, symmetry: 'radial', radialCount: [5, 8], girth: [0.45, 0.75], repeat: [1, 1], height: [1.25, 1.6], eyeEl: [0.3, 0.55], eyeSize: 0.8, mouthSize: [1.3, 1.6], eyeStyle: [0.7, 1], mouthStyle: [0.5, 0.74], covering: ['skin', 'slime'], pattern: ['ocelli', 'mottle'], sheen: [0.4, 0.8], hue: [0.7, 1.0], sat: [0.3, 0.7] },
   { id: 'slime', cluster: 'uncanny', weight: 0.7, girth: [0.42, 0.6], repeat: [4, 5], height: [0.5, 0.62], elong: [0.95, 1.1], rear: [-0.07, -0.03], taper: [1.1, 1.14], legPairs: [0], stalkEyes: 1, stalkLen: [0.4, 0.5], eyeEl: [0.6, 0.75], eyeAz: [1.22, 1.38], mouthStyle: [0.01, 0.05], mouthSize: [0.45, 0.55], tail: 0.0, head: 0.0, eyeStyle: [0.05, 0.25], covering: ['slime'], pattern: ['gradient', 'mottle'], sheen: [0.8, 1.0], hue: [0.25, 0.7], sat: [0.5, 0.9], light: [0.45, 0.7] },
   { id: 'urchin', cluster: 'uncanny', weight: 0.6, symmetry: 'radial', radialCount: [8, 12], girth: [0.45, 0.7], repeat: [1, 1], height: [0.9, 1.1], eyeSize: 0.45, eyeEl: [-1.3, -1.15], eyeStyle: [0.22, 0.36], mouthStyle: [0.07, 0.12], covering: ['chitin'], pattern: ['mottle', 'bands'], hue: [0.6, 0.95], sat: [0.4, 0.8] },
@@ -524,6 +527,12 @@ function compileArthropod(rng: Rng, seed: number, m: Morpho, girth: number): Gen
   return scaffold(rng, seed, 'bilateral', 4, abdomen, m);
 }
 
+/** how far round from the front an octopus's eyes sit, each side (rad): on the sides of its head,
+ *  looking out and a little forward */
+const OCTOPUS_EYE_AZ = 0.85;
+/** how far out along an octopus's arms their web reaches (a share of their length) */
+const OCTOPUS_WEB = 0.3;
+
 function compileRadial(rng: Rng, seed: number, m: Morpho, girth: number): Genome {
   const n = randint(rng, ...(m.radialCount ?? ([4, 8] as const)));
   const height = rg(rng, m.height, [0.7, 1.1]);
@@ -538,7 +547,10 @@ function compileRadial(rng: Rng, seed: number, m: Morpho, girth: number): Genome
   // sea star's or an urchin's small and underneath, round the rim of its disc or its test (neither
   // has a face on top: a crown of eyes there, with a maw among them, was a face pasted on a star; on
   // an urchin, a fleshy ring of a mouth with teeth standing out of it made its top an open bowl)
-  apps.push(eyes(rng, range(rng, 0.6, 0.95), false, girth, { style: m.eyeStyle, az: 1.5, el: m.eyeEl, size: m.eyeSize }));
+  // (an octopus's are a pair, either side of the front of its head: see radialPair)
+  const ring = eyes(rng, range(rng, 0.6, 0.95), false, girth, { style: m.eyeStyle, az: m.id === 'cephalopod' ? OCTOPUS_EYE_AZ : 1.5, el: m.eyeEl, size: m.eyeSize });
+  if (m.id === 'cephalopod') ring.radialPair = true;
+  apps.push(ring);
   // a central maw: elevation ≈ ±90° so grow's radial array collapses it onto the axis — on the crown,
   // or (an octopus's beak, a sea star's mouth) underneath, in the middle of its arms
   const mo = mouth(rng, girth, m.mouthStyle);
@@ -1106,21 +1118,30 @@ function arm(rng: Rng, girth: number, attachT: number, m: Morpho, spiky = false)
     // draws, so the stream is unchanged)
     m.id === 'urchin' ? 'claw' : m.id === 'cephalopod' ? pick(rng, ['none', 'none'] as const) : spiky ? pick(rng, ['claw', 'fin'] as const) : pick(rng, ['claw', 'fin', 'none'] as const);
   const long = m.id === 'cephalopod' || m.id === 'horror';
-  return part(long ? 'tentacle' : 'spine', term, false, range(rng, 0, long ? 1 : QUILL_STYLE - 0.01), {
+  const octo = m.id === 'cephalopod';
+  // An octopus's arm is broad where it leaves the head — its neighbours' roots meet its own — and drawn
+  // out to a fine tip, in more, shorter links that bend smoothly. (Four or five links tapering only to
+  // half their root, a fifth of the mantle across, its arms were the even sticks of a spider's legs.)
+  // (every draw below is made in the same order as before, octopus or not)
+  const a = part(long ? 'tentacle' : 'spine', term, false, range(rng, 0, long ? 1 : QUILL_STYLE - 0.01), {
     attachT: clamp(attachT, A.attachT),
     attachAzimuth: range(rng, 0, 0.4),
     // (an octopus sprawls its arms out along the ground rather than standing on them like stilts:
     // they leave the mantle angled down, level off along the floor and lift a little at the tips)
-    attachElevation: m.id === 'cephalopod' ? range(rng, -0.36, -0.24) : long ? range(rng, -0.6, -0.1) : range(rng, -0.3, 0.3),
-    segments: spiky ? randint(rng, 1, 2) : long ? randint(rng, 3, 5) : randint(rng, 2, 4),
-    length: clamp(girth * range(rng, spiky ? 0.4 : long ? 0.9 : 0.6, spiky ? 0.8 : long ? 1.8 : 1.4), A.length),
-    // an octopus's arms are thick at the mantle, taper and curl; the rest keep slender spines
-    thickness: clamp(girth * (m.id === 'cephalopod' ? range(rng, 0.26, 0.36) : range(rng, 0.12, 0.3)), A.thickness),
-    taper: m.id === 'cephalopod' ? range(rng, 0.7, 0.8) : range(rng, 0.6, 0.88),
+    attachElevation: octo ? range(rng, -0.36, -0.24) : long ? range(rng, -0.6, -0.1) : range(rng, -0.3, 0.3),
+    segments: spiky ? randint(rng, 1, 2) : long ? randint(rng, octo ? 5 : 3, octo ? 6 : 5) : randint(rng, 2, 4),
+    // (the same reach over its more links)
+    length: clamp(girth * range(rng, spiky ? 0.4 : long ? 0.9 : 0.6, spiky ? 0.8 : long ? 1.8 : 1.4) * (octo ? 0.78 : 1), A.length),
+    thickness: clamp(girth * (octo ? range(rng, 0.42, 0.5) : range(rng, 0.12, 0.3)), A.thickness),
+    taper: octo ? range(rng, 0.64, 0.7) : range(rng, 0.6, 0.88),
     // (curled up hard at every joint, the arms rose over the body like an umbrella blown inside out;
-    // an octopus's arms also all sweep round the same way — a slow pinwheel)
-    curl: m.id === 'cephalopod' ? [range(rng, -0.14, -0.08), swirl(range(rng, -0.1, 0.1))] : [range(rng, -0.3, 0.4), range(rng, -0.1, 0.1)],
+    // an octopus's arms also all sweep round the same way — a slow pinwheel; on more links, each bends
+    // less, so the whole arm bends as much)
+    curl: octo ? [range(rng, -0.14, -0.08) * 0.75, swirl(range(rng, -0.1, 0.1)) * 0.75] : [range(rng, -0.3, 0.4), range(rng, -0.1, 0.1)],
   });
+  // an octopus's arms are joined by a web of skin near their roots (not its second ring of spines)
+  if (octo && !spiky) a.web = OCTOPUS_WEB;
+  return a;
 }
 
 /**

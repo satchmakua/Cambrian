@@ -10,7 +10,7 @@
  * The engine stays dependency-free — these few lines of vec/quat math keep three.js
  * out of the headless core so it runs in a plain Node test.
  */
-import { mulberry32 } from './rng';
+import { mulberry32, unitHash } from './rng';
 import { R_MIN, NODE_MAX, DEPTH_MAX, GENE_BOUNDS, clamp } from './bounds';
 import type { Genome, SegmentGene, AppendageGene, Terminal, PartKind, Vec3 } from './genome';
 
@@ -163,7 +163,7 @@ export interface BodyNode {
   scale?: Vec3; // local-frame ellipsoid multipliers on `radius` (width/height/length); round if absent
   kind: 'spine' | 'limb' | 'terminal';
   terminal?: Terminal;
-  part?: { kind: PartKind; style: number }; // which genome part grew this node (for render variants)
+  part?: { kind: PartKind; style: number; web?: number }; // which genome part grew this node (for render variants; `web`: see AppendageGene)
   segment?: number; // spine nodes: which body section (0 = the trunk, 1 = the next child, …)
 }
 
@@ -507,7 +507,26 @@ export function grow(genome: Genome): Phenotype {
       // sits on its arms, the crown of eyes and the maw look up. (Arrayed about the forward axis, every
       // radial creature stood on its rim like a wheel.)
       const up = (a: number): Vec3 => norm([ce * Math.cos(a), se, ce * Math.sin(a)]);
-      for (let k = 0; k < dev.radialCount; k++) growLimb(app, base, up(az + (k * Math.PI * 2) / dev.radialCount), attachIdx);
+      // a part grown as a PAIR (an octopus's eyes): once, its azimuth off the front (+Z, at π/2), then
+      // mirrored across X=0 — not once per arm, which ringed an octopus's mantle with eight eyes
+      if (app.radialPair) {
+        const nStart = nodes.length;
+        const eStart = edges.length;
+        growLimb(app, base, up(Math.PI / 2 - az), attachIdx);
+        mirrorAcrossX(nStart, eStart, attachIdx);
+        return;
+      }
+      for (let k = 0; k < dev.radialCount; k++) {
+        // a radial body's TENTACLES each bend their own way, a little to one side and some lifting their
+        // tips: the ring copies one gene, and eight identical arcs made a starburst from above, a
+        // pinwheel. (Hashed from the seed and the arm, not drawn: every later draw stays where it was.
+        // A stub too short to show a bend — an urchin's tube feet — grows as it did.)
+        const own =
+          app.kind === 'tentacle' && app.segments >= 3
+            ? { ...app, curl: [app.curl[0] - ARM_LIFT * unitHash(dev.seed, 0x7e0 + k), app.curl[1] + ARM_SWAY * (unitHash(dev.seed, 0x7f0 + k) - 0.5)] as [number, number] }
+            : app;
+        growLimb(own, base, up(az + (k * Math.PI * 2) / dev.radialCount), attachIdx);
+      }
       return;
     }
     // bilateral / none: grow one limb…
@@ -906,7 +925,8 @@ export function grow(genome: Genome): Phenotype {
       if (last && app.terminal === 'eye') r = Math.max(r, EYE_R_MIN);
       if (arch) quat = qFromTo([0, 0, 1], arch[Math.min(j, arch.length - 1)]);
       const idx = addNode(pos, quat, r, last ? 'terminal' : 'limb', last ? app.terminal : undefined);
-      nodes[idx].part = { kind: app.kind, style: app.style };
+      // (a webbed ring's arms carry their web's reach, for the skin to stretch it between them)
+      nodes[idx].part = app.web ? { kind: app.kind, style: app.style, web: app.web } : { kind: app.kind, style: app.style };
       // a SCULLING tail leaves the rump round and turns into a blade: its width falls away faster than
       // its depth, so from the side it stays tall to near the tip and from above it runs to a thin
       // line. (Round all the way down, a crocodile's tail was a cone — a rat's, scaled up.)
@@ -1051,6 +1071,10 @@ export function bipedSlot(pitch: number): number {
 }
 /** how far under the body a radial creature's tentacles take root (the pull of their seat toward −Y) */
 const TENTACLE_ROOT = 1.2;
+/** each of a radial body's tentacles bends to one side by up to half this a link, and lifts its tip by
+ *  up to this a link (rad; a negative pitch curls a sprawled arm up — none is bent down into the floor) */
+const ARM_SWAY = 0.24;
+const ARM_LIFT = 0.06;
 
 function normalizeLegs(g: Genome, coh: number): void {
   // every leg-bearing section: the trunk, or an arthropod's thorax ahead of its abdomen

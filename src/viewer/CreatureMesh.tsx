@@ -978,13 +978,20 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
         </>
       ) : v === 'slit' ? (
         // slit — a reptile vertical-pupil eye sunk under a brow; the whole visible ball is iris, so it
-        // takes a reptile's colours (gold, amber, olive, copper, stone) — a blue marble read as a toy
+        // takes a reptile's colours (gold, amber, olive, copper, stone) — a blue marble read as a toy.
+        // On a radial body the slit lies flat and short: an octopus's pupil is a rounded bar across the
+        // middle of its eye (a sliver from rim to rim, laid flat, was a pair of sunglasses).
         <>
           <mesh position={[0, 0, -r * 0.02]}>
             <sphereGeometry args={[r * 0.9, 18, 14]} />
             <meshStandardMaterial color={slitIris} roughness={0.28} metalness={0.22} />
           </mesh>
-          <mesh position={[0, 0, -r * 0.02]} scale={r * 0.9 * 1.014} geometry={capGeometry(0.66, false, 0.16)}>
+          <mesh
+            position={[0, 0, -r * 0.02]}
+            rotation-z={phenotype?.genomeRef.symmetry === 'radial' ? Math.PI / 2 : 0}
+            scale={r * 0.9 * 1.014}
+            geometry={phenotype?.genomeRef.symmetry === 'radial' ? capGeometry(0.44, false, 0.38) : capGeometry(0.66, false, 0.16)}
+          >
             <meshStandardMaterial color={0x040406} roughness={0.06} polygonOffset polygonOffsetFactor={-2} />
           </mesh>
           <mesh position={[r * 0.12, r * 0.24, r * 0.78]}>

@@ -16,6 +16,7 @@
 import { DEPTH_MAX, GENE_BOUNDS, clamp } from './bounds';
 import {
   GENOME_VERSION,
+  WEB_MAX,
   type Genome,
   type SegmentGene,
   type AppendageGene,
@@ -155,7 +156,7 @@ function validateSegment(o: unknown, depth: number): SegmentGene {
 function validateAppendage(o: unknown): AppendageGene {
   const a = obj(o, 'appendage');
   const curl = vec2(a.curl, 'curl');
-  return {
+  const out: AppendageGene = {
     kind: oneOf(a.kind, KINDS, 'kind'),
     style: within(a.style, A.style, 'style'),
     attachT: within(a.attachT, A.attachT, 'attachT'),
@@ -170,6 +171,13 @@ function validateAppendage(o: unknown): AppendageGene {
     terminal: oneOf(a.terminal, TERMINALS, 'terminal'),
     pair: bool(a.pair, 'pair'),
   };
+  // (optional: only a part that has it carries it, so every older string decodes as it always did)
+  if (a.radialPair !== undefined && bool(a.radialPair, 'radialPair')) out.radialPair = true;
+  if (a.web !== undefined) {
+    const w = within(a.web, [0, WEB_MAX], 'web');
+    if (w > 0) out.web = w;
+  }
+  return out;
 }
 
 // --- small validators --------------------------------------------------------
