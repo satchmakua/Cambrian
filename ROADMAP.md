@@ -679,10 +679,35 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   beneath it and sprawled along the ground; every radial arm curls like its siblings. **Tests:**
   `rig.test.ts › body wave / ape rests its hands / feeding`, `bodyplan.test.ts › octopus`.
 
+- [x] **M74 — A front door: main menu, saved games, settings.** The game opens on a main menu
+  (Continue · New game · Load game · Settings · Controls · Quit) with a creature turning behind it;
+  New game sets up a name, the first creature and the valley (seed; lively, sparse or empty). `Esc` or
+  ☰ opens the in-game menu over any screen (the screen stops drawing, the valley's clock stops). A save
+  is the lineage and the valley together, in a named IndexedDB slot, exportable to a file; whatever is
+  read is checked, and a save that will not load changes nothing. Settings (graphics level or its
+  parts, sound and volume, autosave, mood icons, hints, the turntable) are kept in the browser, and
+  the graphics options derive one `RenderQuality` object every renderer reads. **Test:** open the
+  game → New game → breed two generations → `Esc` → Save game → breed on → `Esc` → Load game → the
+  saved generation is back; reload the page → Continue and the save are still there. **Tests:**
+  `tests/ui/settings.test.ts`, `saves.test.ts`, `game.test.ts`.
+- [x] **M75 — Half the frame.** The valley was drawn twice every frame: the fish spawn's material was
+  transmissive, which makes the renderer redraw the whole opaque scene into a refraction buffer.
+  Without it the main pass halves at every level and camera (Low, overview: 1.65 M triangles and 301
+  draw calls → 0.83 M and 201). Creatures wear a skin by distance — a third, coarser one (under half
+  the triangles) past the detail bands — built in the background, the cheapest first. The valley's and
+  the Studio's code loads when they are first opened. **Tests:** `tests/world/renderCost.test.ts`
+  (no transmissive materials; the distant skin's size and bounds).
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.
 - [ ] **A lineage film.** A wild species' body changes over the generations, as a strip of portraits.
+- [ ] **More headroom, measured but not yet taken** (the dev hooks `__cambrianRender`,
+  `__cambrianBreakdown` and `__cambrianCost` in the World give the numbers): the grass and the trees
+  are single instanced meshes, drawn whole wherever the camera looks (306k and 363k triangles at
+  High) — split into cells they could be culled; the sun's shadow pass redraws every caster each
+  frame — it could refresh every other frame; the grass re-uploads all its instances twice a second
+  — only the cells that changed need it.
 
 ---
 

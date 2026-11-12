@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M67–M73; M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M67–M75; M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -44,6 +44,31 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic; **+ gait playback** |
 
 ---
+
+## M74–M75 — A front door; half the frame · 2026-11-12
+
+- **Two stores, one game.** A game spans the breeder's lineage and the valley; `game.ts` moves both
+  together and orders a load so the step that can fail (a damaged World) comes first — the failure
+  test asserts nothing changed. The save format validates genomes with the engine's own checker
+  (now exported), so an edited file can't smuggle in a body the engine would never grow.
+- **Where saves live.** A lineage runs to megabytes; localStorage holds five. Slots are IndexedDB
+  records split into a header and a body so the list never reads a body; the browser's own autosave
+  of the game in progress stays in localStorage, because it must be written synchronously as the
+  page goes. IndexedDB can't be unit-tested in node, so the slot logic runs against an in-memory
+  store and the real one is driven in a browser (save → reload → the slot is still there).
+- **One object for quality.** Options the player sees map to `RenderQuality`, a table of concrete
+  budgets; renderers read that and nothing else. `High` is the game as it was, to the number.
+- **A menu over a busy canvas starves itself.** With the valley rendering behind the in-game menu,
+  clicks took seconds under software GL. The screens now stop drawing while the menu is up — which
+  is also simply what "paused" should mean.
+- **Measure the frame before trimming it.** The plan was to cut grass and add creature LOD. The
+  renderer's counters said the scene was drawing twice its own triangles; hiding each part in turn
+  and re-rendering showed every part costing two draw calls. One `transmission: 0.6` on the fish
+  spawn was a second pass over the whole valley. That single property was worth more than every
+  quality option combined. (Three's `info.render` resets after the shadow pass, so it counts the
+  main pass only.)
+- **And what not to touch.** Animating the whole cast: 0.7 ms a frame. Re-posing 17,000 grass tufts:
+  1.2 ms twice a second. Splitting the bundle: 7%. Written down so nobody optimises them on a hunch.
 
 ## M73 — Body waves, ape hands, octopuses · 2026-11-11
 
