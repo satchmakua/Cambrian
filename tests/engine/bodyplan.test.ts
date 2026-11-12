@@ -287,6 +287,67 @@ describe('body plans', () => {
     }
   });
 
+  it('a crocodile has long near-parallel jaws, its eyes on the skull behind them, and a tail to a point', () => {
+    // (a blunt oval barely longer than wide — a toad's face — a mouth like a lip plate under the very
+    // tip, and a tail that ended in a stub)
+    for (let seed = 1; seed <= 12; seed++) {
+      const g = genomeOfMorphotype(seed, 'crocodilian');
+      const p = grow(g);
+      const head = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 1).sort((a, b) => a.pos[2] - b.pos[2]);
+      expect(head.length, `#${seed} head links`).toBe(4);
+      const rx = (n: (typeof head)[number]) => n.radius * (n.scale?.[0] ?? 1);
+      const length = head[3].pos[2] + head[3].radius * (head[3].scale?.[2] ?? 1) - (head[0].pos[2] - head[0].radius * (head[0].scale?.[2] ?? 1));
+      expect(length / (2 * rx(head[0])), `#${seed} long`).toBeGreaterThan(2);
+      // near parallel: the snout's tip still over half the skull's width
+      expect(rx(head[3]) / rx(head[0]), `#${seed} jaws`).toBeGreaterThan(0.5);
+      const eye = p.nodes.find((n) => n.terminal === 'eye')!;
+      const mouth = p.nodes.find((n) => n.terminal === 'mouth')!;
+      expect(eye.pos[2], `#${seed} eyes behind the jaws`).toBeLessThan(head[2].pos[2]);
+      // the mouth sits along the snout (its line then runs back down the jaws), looking straight ahead
+      const gene = g.body.child!.appendages.find((a) => a.terminal === 'mouth')!;
+      expect(gene.attachT, `#${seed}`).toBeLessThan(0.7);
+      expect(gene.attachElevation, `#${seed}`).toBeGreaterThan(1.4);
+      expect(mouth.pos[2], `#${seed}`).toBeGreaterThan(head[2].pos[2]);
+      const tail = p.nodes.filter((n) => n.part?.kind === 'tail');
+      expect(tail[tail.length - 1].radius / tail[0].radius, `#${seed} tail to a point`).toBeLessThan(0.36);
+      const t = trunkOf(p).sort((a, b) => a.pos[2] - b.pos[2]);
+      expect((t[0].pos[2] - tail[tail.length - 1].pos[2]) / (t[t.length - 1].pos[2] - t[0].pos[2] + 1e-6), `#${seed} tail as long as the trunk`).toBeGreaterThan(0.75);
+    }
+  });
+
+  it('a lizard holds its head up on a short neck and trails a long whip of a tail', () => {
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'lizard'));
+      const spine = p.nodes.filter((n) => n.kind === 'spine');
+      const last = Math.max(...spine.map((n) => n.segment ?? 0));
+      expect(last, `#${seed} a neck and a head`).toBe(2);
+      const t = trunkOf(p).sort((a, b) => a.pos[2] - b.pos[2]);
+      const skull = spine.filter((n) => n.segment === last)[0];
+      expect(skull.pos[1], `#${seed} head up`).toBeGreaterThan(t[t.length - 1].pos[1]);
+      const tail = p.nodes.filter((n) => n.part?.kind === 'tail');
+      expect(tail.length, `#${seed} tail links`).toBe(6);
+      const tr = trunkOf(p).sort((a, b) => a.pos[2] - b.pos[2]);
+      expect((tr[0].pos[2] - tail[tail.length - 1].pos[2]) / (tr[tr.length - 1].pos[2] - tr[0].pos[2]), `#${seed} tail as long as the trunk`).toBeGreaterThan(0.75);
+      expect(tail[tail.length - 1].radius / tail[0].radius, `#${seed} whip`).toBeLessThan(0.4);
+    }
+  });
+
+  it('a weasel is a slim tube barely wider than its short blunt head, with a tail thinner than its body', () => {
+    // (a fat sausage three times the width of a rat's face, carried on into a body-thick nub)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'mustelid'));
+      const spine = p.nodes.filter((n) => n.kind === 'spine');
+      const last = Math.max(...spine.map((n) => n.segment ?? 0));
+      const head = spine.filter((n) => n.segment === last);
+      const t = trunkOf(p);
+      const girth = Math.max(...t.map((n) => n.radius));
+      expect(head.length, `#${seed} short head`).toBe(2);
+      expect(girth / head[0].radius, `#${seed} body vs head`).toBeLessThan(1.9);
+      const tail = p.nodes.filter((n) => n.part?.kind === 'tail');
+      if (tail.length) expect(tail[0].radius / girth, `#${seed} tail`).toBeLessThan(0.45);
+    }
+  });
+
   it('an urchin is a ball of spines: dozens, straight, standing out all over it', () => {
     // (it had one ring of jointed arms curled under it as legs: a ball on a spider's legs)
     for (let seed = 1; seed <= 12; seed++) {
