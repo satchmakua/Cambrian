@@ -12,7 +12,11 @@ const SPAWN = new THREE.SphereGeometry(1, 8, 6);
 const TWIG = new THREE.TorusGeometry(1, 0.3, 6, 18);
 const STICK = new THREE.CylinderGeometry(1, 0.7, 1, 5);
 const TWIG_MAT = new THREE.MeshStandardMaterial({ color: 0x5e4630, roughness: 0.95 });
-const SPAWN_MAT = new THREE.MeshPhysicalMaterial({ color: 0xd8e6dc, roughness: 0.05, transmission: 0.6, transparent: true, opacity: 0.7, thickness: 0.2 });
+// Glassy spawn: translucent, with a sharp clear-coat highlight. (NOT `transmission`: one transmissive
+// material anywhere in view makes the renderer draw the whole opaque scene a second time, into a
+// buffer for it to refract — every frame the valley held a fish's eggs, which was nearly always, the
+// trees, the grass, the terrain and every creature were drawn twice over for a few pea-sized beads.)
+const SPAWN_MAT = new THREE.MeshPhysicalMaterial({ color: 0xd8e6dc, roughness: 0.05, transparent: true, opacity: 0.55, clearcoat: 1, clearcoatRoughness: 0.05 });
 const SHELL = new Map<string, THREE.MeshStandardMaterial>();
 
 function shellMaterial(e: Egg): THREE.MeshStandardMaterial {

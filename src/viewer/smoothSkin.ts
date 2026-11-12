@@ -25,7 +25,7 @@ import { polygonize, gridCells } from './polygonize';
 
 // Grid resolution, in cells along the creature's longest padded extent. The grid is sampled as a
 // NARROW BAND (exact field only near the skin — see polygonize) so resolution costs surface area.
-export const SKIN_RES = { high: 84, low: 44 } as const;
+export const SKIN_RES = { high: 84, low: 44, far: 26 } as const;
 export type SkinQuality = keyof typeof SKIN_RES;
 
 function meanRadius(prims: FieldPrims): number {

@@ -47,6 +47,12 @@ const DEV_JAW: number | null =
     ? Number(new URLSearchParams(location.search).get('jawopen'))
     : null;
 
+const DEV_SKINQ: SkinQuality | null = (() => {
+  if (!import.meta.env.DEV || typeof location === 'undefined') return null;
+  const v = new URLSearchParams(location.search).get('skinq');
+  return v === 'far' || v === 'low' || v === 'high' ? v : null;
+})();
+
 function devGaitPhase(): number | null {
   if (!import.meta.env.DEV || typeof location === 'undefined') return null;
   const v = new URLSearchParams(location.search).get('gaitphase');
@@ -146,7 +152,7 @@ export function SpecimenContent({
   framing,
   skinMode,
   overlays,
-  quality = 'high',
+  quality: asked = 'high',
   background = '#0f1116',
   motion = 'still',
 }: {
@@ -158,6 +164,8 @@ export function SpecimenContent({
   background?: string;
   motion?: Motion;
 }) {
+  // (dev: ?skinq=far|low|high shows a skin quality up close — the World's distant skin, say)
+  const quality = DEV_SKINQ ?? asked;
   const { center, size, groundY } = framing;
   const jaw = useMemo<JawControl>(() => ({ open: 1 }), []);
   const flight = useMemo<FlightControl>(() => ({ spread: 0, flap: 0 }), []);
