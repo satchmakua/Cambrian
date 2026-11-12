@@ -275,7 +275,10 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'horror', cluster: 'uncanny', weight: 1.0, symmetry: 'radial', radialCount: [5, 8], girth: [0.45, 0.75], repeat: [1, 1], height: [1.25, 1.6], eyeEl: [0.3, 0.55], eyeSize: 0.8, mouthSize: [1.3, 1.6], eyeStyle: [0.7, 1], mouthStyle: [0.5, 0.74], covering: ['skin', 'slime'], pattern: ['ocelli', 'mottle'], sheen: [0.4, 0.8], hue: [0.7, 1.0], sat: [0.3, 0.7] },
   { id: 'slime', cluster: 'uncanny', weight: 0.7, girth: [0.42, 0.6], repeat: [4, 5], height: [0.5, 0.62], elong: [0.95, 1.1], rear: [-0.07, -0.03], taper: [1.1, 1.14], legPairs: [0], stalkEyes: 1, stalkLen: [0.4, 0.5], eyeEl: [0.6, 0.75], eyeAz: [1.22, 1.38], mouthStyle: [0.5, 0.6], tail: 0.0, head: 0.0, eyeStyle: [0.05, 0.25], covering: ['slime'], pattern: ['gradient', 'mottle'], sheen: [0.8, 1.0], hue: [0.25, 0.7], sat: [0.5, 0.9], light: [0.45, 0.7] },
   { id: 'urchin', cluster: 'uncanny', weight: 0.6, symmetry: 'radial', radialCount: [8, 12], girth: [0.45, 0.7], repeat: [1, 1], height: [0.9, 1.1], eyeSize: 0.62, covering: ['chitin'], pattern: ['mottle', 'bands'], hue: [0.6, 0.95], sat: [0.4, 0.8] },
-  { id: 'starfish', cluster: 'uncanny', weight: 0.6, symmetry: 'radial', radialCount: [4, 6], girth: [0.4, 0.6], repeat: [1, 1], height: [0.4, 0.6], covering: ['plates', 'chitin'], pattern: ['reticulate', 'spots'], hue: [0.02, 0.15], sat: [0.5, 0.85] },
+  // a sea star: a flat disc and five plump arms tapering to round tips; no face on top — its small
+  // eyes look down from the rim of the disc and its mouth is underneath (on four arms it was a throwing
+  // star; a crown of eyes on the disc, with a maw and a feeding tube among them, a face pasted on it)
+  { id: 'starfish', cluster: 'uncanny', weight: 0.6, symmetry: 'radial', radialCount: [5, 5], eyeEl: [-1.5, -1.42], eyeSize: 0.55, eyeStyle: [0.22, 0.36], mouthStyle: [0.07, 0.12], girth: [0.4, 0.6], repeat: [1, 1], height: [0.4, 0.6], covering: ['plates'], pattern: ['plain', 'mottle', 'spots'], soberMarks: true, hue: [0.0, 0.1], sat: [0.5, 0.85] },
   // griffin/manticore mishmash: a winged horned tailed quadruped wearing a spliced back sail + a clashing skin.
   // It stands on stout legs under its body (splayed like a lizard's, on thin shanks, it was a heavy trunk
   // on an A-frame of sticks), carries its tail clear of the ground, and wears its ruff round its head.
@@ -525,13 +528,17 @@ function compileRadial(rng: Rng, seed: number, m: Morpho, girth: number): Genome
   // tentacles; no other body's draws change)
   const own = m.id === 'urchin' ? urchinCoat(rng, girth, n) : m.id === 'horror' ? horrorArms(rng, girth, n) : null;
   const apps: AppendageGene[] = own ?? [arm(rng, girth, range(rng, 0.3, 0.6), m)];
-  if (!own && chance(rng, 0.4)) apps.push(arm(rng, girth * 0.6, range(rng, 0.45, 0.75), m, true)); // a second ring
-  // a crown of eyes (always — a face reads); an octopus's ring the mantle lower down, looking out
+  // a second ring (not a sea star's: its five arms are all of it — a ring of spines between them was
+  // a pile of sticks on its disc)
+  if (!own && m.id !== 'starfish' && chance(rng, 0.4)) apps.push(arm(rng, girth * 0.6, range(rng, 0.45, 0.75), m, true));
+  // a crown of eyes (always — a face reads); an octopus's ring the mantle lower down, looking out; a
+  // sea star's small and underneath, round the rim of its disc (it has no face on top: a crown of
+  // eyes there, with a maw among them, was a face pasted on a star)
   apps.push(eyes(rng, range(rng, 0.6, 0.95), false, girth, { style: m.eyeStyle, az: 1.5, el: m.eyeEl, size: m.eyeSize }));
   // a central maw: elevation ≈ ±90° so grow's radial array collapses it onto the axis — on the crown,
-  // or (an octopus's beak) underneath, in the middle of its arms
+  // or (an octopus's beak, a sea star's mouth) underneath, in the middle of its arms
   const mo = mouth(rng, girth, m.mouthStyle);
-  mo.attachElevation = m.id === 'cephalopod' ? -1.35 : 1.35;
+  mo.attachElevation = m.id === 'cephalopod' || m.id === 'starfish' ? -1.35 : 1.35;
   if (m.mouthSize) mo.thickness = clamp(mo.thickness * rg(rng, m.mouthSize), A.thickness); // (no draw unless set)
   apps.push(mo);
 
@@ -1076,15 +1083,16 @@ function mouth(rng: Rng, refGirth: number, style?: Rg): AppendageGene {
 // A radial arm; grow arrays it `radialCount` times around the body axis.
 function arm(rng: Rng, girth: number, attachT: number, m: Morpho, spiky = false): AppendageGene {
   if (m.id === 'starfish' && !spiky) {
-    // a sea star's arms: thick at the disc, tapering, laid flat on the ground
+    // a sea star's arms: thick at the disc, tapering to blunt round tips, laid flat on the ground
+    // (tapered harder, on four links they were drawn out to needle points: a throwing star)
     return part('spine', 'none', false, range(rng, 0, 1), {
       attachT: clamp(attachT, A.attachT),
       attachAzimuth: range(rng, 0, 0.4),
       attachElevation: range(rng, -0.14, 0.02),
       segments: randint(rng, 3, 4),
-      length: clamp(girth * range(rng, 0.62, 0.95), A.length),
-      thickness: clamp(girth * range(rng, 0.34, 0.46), A.thickness),
-      taper: range(rng, 0.68, 0.8),
+      length: clamp(girth * range(rng, 0.62, 0.9), A.length),
+      thickness: clamp(girth * range(rng, 0.38, 0.48), A.thickness),
+      taper: range(rng, 0.76, 0.84),
       curl: [range(rng, -0.04, 0.06), range(rng, -0.05, 0.05)],
     });
   }

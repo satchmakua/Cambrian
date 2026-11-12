@@ -67,6 +67,9 @@ function devRigTime(): number | null {
   return v === null ? null : Number(v);
 }
 
+/** how many frames a held dev pose is drawn (see useMotion) */
+const HELD_FRAMES = 6;
+
 /** Animate a rig in place for the Studio preview (the canvas renders on demand, so keep asking). */
 function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl, flight: FlightControl): RigInstance | null {
   const rig = useMemo(() => (motion === 'still' ? null : createRig(phenotype)), [phenotype, motion]);
@@ -76,6 +79,12 @@ function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl, flight
   const invalidate = useThree((s) => s.invalidate);
   const frozen = devGaitPhase();
   const heldT = devRigTime();
+  // (a pose held by those dev params is drawn a few times and then left alone: drawn again every
+  // frame, a heavy furred body under software GL kept the page too busy for a screenshot to be taken)
+  const heldFrames = useRef(0);
+  useEffect(() => {
+    heldFrames.current = 0;
+  }, [rig]);
   // (the preview holds still while the game menu is over it, and picks up when the menu closes)
   const menuOpen = useStore((s) => s.menuOpen);
   useEffect(() => {
@@ -107,7 +116,7 @@ function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl, flight
       swim,
       turn: 0,
     });
-    invalidate();
+    if ((frozen === null && heldT === null) || heldFrames.current++ < HELD_FRAMES) invalidate();
   });
   return rig;
 }
