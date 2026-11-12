@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { earGeometry } from '../../src/viewer/ear';
+import { buildFieldPrims } from '../../src/viewer/bodyField';
+import { grow } from '../../src/engine/grow';
+import { genomeOfMorphotype } from '../../src/engine/random';
 
 /** the mean outward normal of a surface (area-weighted) */
 function meanNormal(g: THREE.BufferGeometry): THREE.Vector3 {
@@ -19,6 +22,32 @@ function meanNormal(g: THREE.BufferGeometry): THREE.Vector3 {
 }
 
 describe('ears', () => {
+  it('an ear is drawn whole, never meshed into the skin as a lump under itself', () => {
+    // (the ear's one-node stub is as thick as the ear is wide: in the skin it was a ball half the size
+    // of the skull under each ear — the "two-lobed" cranium with a cleft down the middle)
+    for (const id of ['felid', 'canid', 'rodent', 'ursid']) {
+      for (let seed = 1; seed <= 8; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const prims = buildFieldPrims(p, 'hybrid');
+        for (let m = 0; m < prims.nc; m++) {
+          expect(p.nodes[prims.ia[m]].terminal, `${id} #${seed}`).not.toBe('ear');
+          expect(p.nodes[prims.ib[m]].terminal, `${id} #${seed}`).not.toBe('ear');
+        }
+      }
+    }
+  });
+
+  it('an ear’s root goes well into the head, so a wide ear shows no seam where the skull curves away', () => {
+    const up = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0));
+    for (const v of ['pointed', 'round', 'leaf'] as const) {
+      const g = earGeometry(v, 1, [up.x, up.y, up.z, up.w]).outer;
+      g.computeBoundingBox();
+      expect(g.boundingBox!.min.y, v).toBeLessThan(-0.4); // (in units of the ear's size, below its root)
+      expect(g.boundingBox!.max.y, v).toBeGreaterThan(1.5);
+    }
+  });
+
+
   it("an ear opens forward and out to its own side — not dead ahead, seen edge-on from the side", () => {
     // an ear rising up-and-out from the right (+X) of the skull
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0.35, 1, 0).normalize());

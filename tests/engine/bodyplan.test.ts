@@ -89,12 +89,91 @@ describe('body plans', () => {
   });
 
   it('a front-heavy taper moves the bulk forward without adding any', () => {
+    const peak = (p: Phenotype) => Math.max(...trunkOf(p).map((n) => n.radius));
+    // a legless body (a fish): the deepest link is exactly what an untapered chain's would be
+    const f = genomeOfMorphotype(1, 'fish');
+    const flatFish = grow({ ...f, body: { ...f.body, taper: 1 } });
+    const heavyFish = grow({ ...f, body: { ...f.body, taper: 1.15 } });
+    expect(peak(heavyFish)).toBeCloseTo(peak(flatFish), 6);
+    expect(trunkOf(heavyFish)[0].radius).toBeLessThan(trunkOf(flatFish)[0].radius);
+    // a four-legged runner: never more than that — and leaner, the middle's swell given up for a wedge
     const g = genomeOfMorphotype(1, 'felid');
     const flat = grow({ ...g, body: { ...g.body, taper: 1 } });
     const heavy = grow({ ...g, body: { ...g.body, taper: 1.15 } });
-    const peak = (p: Phenotype) => Math.max(...trunkOf(p).map((n) => n.radius));
-    expect(peak(heavy)).toBeCloseTo(peak(flat), 6);
+    expect(peak(heavy)).toBeLessThan(peak(flat));
+    expect(peak(heavy)).toBeGreaterThan(0.75 * peak(flat));
     expect(trunkOf(heavy)[0].radius).toBeLessThan(trunkOf(flat)[0].radius);
+  });
+
+  it('a cat or a dog is a wedge, not a bean: deepest at the chest, drawn up behind it, no hump', () => {
+    // (the trunk's middle link was its deepest and highest — a third fatter than chest or hips — so
+    // every cat and dog stood hunched over a pot belly, the head hung off the front like a grazing fawn)
+    for (const id of ['felid', 'canid']) {
+      for (let seed = 1; seed <= 16; seed++) {
+        const t = trunkOf(grow(genomeOfMorphotype(seed, id))).sort((a, b) => a.pos[2] - b.pos[2]);
+        const depth = t.map((n) => n.radius * (n.scale?.[1] ?? 1));
+        const chest = depth[depth.length - 1];
+        // the chest (the front link, where the shoulders are) is the deepest part, or within a hair of it
+        expect(Math.max(...depth) / chest, `${id} #${seed} chest deepest`).toBeLessThan(1.04);
+        // …and the hips are shallower than the chest
+        expect(depth[0] / chest, `${id} #${seed} hips`).toBeLessThan(0.95);
+        // the back: no link's top stands above the line from hips to withers by more than a little
+        const top = t.map((n, i) => n.pos[1] + depth[i]);
+        for (let i = 1; i < t.length - 1; i++) {
+          const u = (t[i].pos[2] - t[0].pos[2]) / (t[t.length - 1].pos[2] - t[0].pos[2]);
+          const line = top[0] + (top[top.length - 1] - top[0]) * u;
+          expect((top[i] - line) / (2 * chest), `${id} #${seed} hump at link ${i}`).toBeLessThan(0.08);
+        }
+      }
+    }
+  });
+
+  it('a cat’s head is big and round on a thick neck, a dog’s carried above its back — not a fawn’s', () => {
+    for (const [id, cranium, neckMin] of [['felid', 0.52, 0.6], ['canid', 0.46, 0.52]] as const) {
+      for (let seed = 1; seed <= 16; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const spine = p.nodes.filter((n) => n.kind === 'spine');
+        const last = Math.max(...spine.map((n) => n.segment ?? 0));
+        const ry = (n: (typeof spine)[number]) => n.radius * (n.scale?.[1] ?? 1);
+        const t = trunkOf(p);
+        const D = 2 * Math.max(...t.map(ry));
+        const skull = spine.filter((n) => n.segment === last)[0];
+        const neck = spine.filter((n) => (n.segment ?? 0) > 0 && (n.segment ?? 0) < last);
+        // (the skull was 0.38–0.51 of the chest's depth, the neck under half of it)
+        expect((2 * ry(skull)) / D, `${id} #${seed} skull`).toBeGreaterThan(cranium);
+        expect((2 * Math.min(...neck.map(ry))) / D, `${id} #${seed} neck`).toBeGreaterThan(neckMin);
+        // the crown rides above the line of the back
+        const back = Math.max(...t.map((n) => n.pos[1] + ry(n)));
+        expect(skull.pos[1] + ry(skull), `${id} #${seed} crown`).toBeGreaterThan(back);
+      }
+    }
+  });
+
+  it('ears are flaps on the skull, not lumps in it: rooted on its surface, set apart on its upper corners', () => {
+    for (const id of ['felid', 'canid', 'ursid', 'rodent', 'mustelid', 'ungulate']) {
+      let seen = 0;
+      for (let seed = 1; seed <= 16; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const ears = p.nodes.filter((n) => n.terminal === 'ear');
+        if (ears.length === 0) continue;
+        seen++;
+        expect(ears.length, `${id} #${seed}`).toBe(2);
+        const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+        const skull = p.nodes[parent.get(p.nodes.indexOf(ears[0]))!];
+        const rx = skull.radius * (skull.scale?.[0] ?? 1);
+        for (const e of ears) {
+          // on the surface: its root is within a fraction of its own size of the skull's skin (it stood
+          // half its width proud, on a ball of skin meshed in to hide the gap — two lobes on every cat)
+          const d = Math.hypot(e.pos[0] - skull.pos[0], e.pos[1] - skull.pos[1], e.pos[2] - skull.pos[2]);
+          expect(d, `${id} #${seed} proud`).toBeLessThan(skull.radius * 1.25 + 0.2 * e.radius);
+          // set apart: each well to its own side of the midline, and on the upper half of the skull
+          expect(Math.abs(e.pos[0]) / rx, `${id} #${seed} apart`).toBeGreaterThan(0.3);
+          expect(e.pos[1], `${id} #${seed} up`).toBeGreaterThan(skull.pos[1]);
+        }
+        expect(ears[0].pos[0] * ears[1].pos[0], `${id} #${seed} one each side`).toBeLessThan(0);
+      }
+      expect(seen, `${id} has ears`).toBeGreaterThan(8);
+    }
   });
 
   it('cats, dogs and deer stand on their legs, well clear of the ground', () => {

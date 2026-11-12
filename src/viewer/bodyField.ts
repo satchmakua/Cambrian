@@ -87,7 +87,9 @@ export function isBodyNode(n: BodyNode): boolean {
 // as solids — best of both: an organic surface like smooth, but nothing drops out like capsules keep.
 // parts whose features draw themselves completely — meshing their 1-node stub into the skin only
 // raised a lump under the feature (a fish's fins and gills studded its flanks with bumps)
-const FEATURE_ONLY_KINDS = new Set(['wing', 'fin', 'gill', 'frill', 'crest', 'whisker']);
+// (an ear's stub is as thick as the ear is wide: meshed into the skin it stood on the skull as a ball
+// half the skull's own size, one under each ear — a cranium in two lobes with a cleft down the middle)
+const FEATURE_ONLY_KINDS = new Set(['wing', 'fin', 'gill', 'frill', 'crest', 'whisker', 'ear']);
 export function isHybridNode(n: BodyNode): boolean {
   // the carapace stub is drawn as a conforming shell of its own (smoothSkin.buildShellGeometry)
   // wings are drawn whole from the shoulder (wings.ts); fins from their root (buildFin)

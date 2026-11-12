@@ -37,7 +37,9 @@ export function earGeometry(v: ReturnType<typeof earVariant>, r: number, quat: r
       : v === 'round'
         ? 1.08 * Math.sqrt(Math.max(0, 1 - ((t - 0.42) / 0.58) ** 2))
         : 0.8 * Math.pow(Math.sin(Math.PI * (0.08 + 0.92 * t)), 0.75);
-  const base = -0.25; // the base sits sunk into the head (×r), so no seam shows
+  // the base sits sunk into the head (×r): deep enough that the corners of a wide ear are still under
+  // the skin where the skull curves away beneath them, so no seam shows
+  const base = -0.5;
   const NU = 14, NV = 14;
   // the ear's surfaces at (u across −1…1, t up 0…1): the front pushed back into a hollow (deepest low
   // in the ear), the back bowed out behind it, thick at the base and thin at the rim and the tip

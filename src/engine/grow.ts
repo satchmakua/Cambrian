@@ -18,6 +18,9 @@ export type Quat = [number, number, number, number]; // [x, y, z, w]
 
 /** Fusiform bulge: how much fatter the middle of a body chain is than its ends. */
 const BODY_BULGE = 0.35;
+/** …and how fast a four-legged runner's deepening chest takes that swell away (per unit of taper
+ *  above 1: at a taper of 1.1 a third of it is left). */
+const RUNNER_TUCK = 6.5;
 
 /** An arthropod's tagma joint (pedicel / petiole / neck): the waist's radius ×the thinner section's. */
 const TAGMA_WAIST = 0.36;
@@ -123,7 +126,13 @@ export function grow(genome: Genome): Phenotype {
     // …and a REARED trunk (pitched up off its hips: an ape's) is a torso — chest over a narrower waist
     // and hips — not a belly swelling mid-way between them (a fusiform upright trunk was a pear)
     const reared = depth === 0 && seg.curve[0] < UPRIGHT_PITCH;
-    const bulge = reared || (depth > 0 && (!seg.child || seg.appendages.length === 0)) ? 0 : BODY_BULGE;
+    // …and a four-legged RUNNER's trunk (it deepens toward the chest — taper above 1) is a wedge: deep
+    // at the brisket, drawn up to the waist, the back near level. With the full swell on top of that
+    // its middle was the deepest and highest part — a bean with a hump, a head hung off the front of
+    // it — and every cat and dog stood hunched like a grazing fawn. The swell fades as the taper grows.
+    const runner = depth === 0 && seg.taper > 1 && seg.appendages.filter((a) => a.kind === 'leg').length >= 2;
+    const swell = runner ? BODY_BULGE * clamp(1 - RUNNER_TUCK * (seg.taper - 1), [0.3, 1]) : BODY_BULGE;
+    const bulge = reared || (depth > 0 && (!seg.child || seg.appendages.length === 0)) ? 0 : swell;
     const profileAt = (i: number) => 1 + bulge * Math.sin(Math.PI * (seg.repeat > 1 ? i / (seg.repeat - 1) : 0.5));
     // A taper above 1 grows the chain toward its front (a chest deeper than the hips, a fish deepest
     // behind its head) — it moves the bulk forward, it doesn't add any: the peak link is held to the
@@ -484,7 +493,9 @@ export function grow(genome: Genome): Phenotype {
       const t = app.terminal;
       // the mouth hugs the skin (0.12): its geometry is traced onto the true surface by the viewer's
       // mouth-line system, so a proud seat would only push the anchor off the face it draws on
-      const seat = t === 'eye' ? 0.6 : t === 'mouth' ? 0.12 : t === 'ear' ? 0.5 : 0;
+      // …and so does an ear: it is a flap drawn from its root, and the root belongs in the skull (set
+      // half its width proud, the flap stood on air, or on a lump of skin put there to hide the gap)
+      const seat = t === 'eye' ? 0.6 : t === 'mouth' ? 0.12 : t === 'ear' ? 0.1 : 0;
       // A radial body's TENTACLES root on its underside, round the mouth, and reach out from there —
       // an octopus's arms come from under its mantle. (Rooted where they aim, on the flank, they stuck
       // out of the middle of the body like spokes, the mantle hanging down between them to the floor.)
