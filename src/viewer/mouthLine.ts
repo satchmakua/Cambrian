@@ -96,12 +96,7 @@ export function surfacePrims(p: Phenotype, surface: SkinSurface): FieldPrims {
   if (hit) return hit;
 
   const prims = buildFieldPrims(p, surface === 'hybrid' ? 'hybrid' : 'body');
-  if (surface !== 'kit') {
-    let meanR = 0;
-    for (let i = 0; i < prims.nc; i++) meanR += prims.pr[i];
-    meanR = meanR / Math.max(prims.nc, 1);
-    prims.k = (surface === 'hybrid' ? 0.34 : 0.5) * meanR; // mirror smoothSkin's blend exactly
-  }
+  if (surface !== 'kit') prims.k = (surface === 'hybrid' ? 0.34 : 0.5) * prims.meanR; // mirror smoothSkin's blend exactly
   per.set(surface, prims);
   return prims;
 }

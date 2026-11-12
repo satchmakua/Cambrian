@@ -29,9 +29,7 @@ export const SKIN_RES = { high: 84, low: 44, far: 26 } as const;
 export type SkinQuality = keyof typeof SKIN_RES;
 
 function meanRadius(prims: FieldPrims): number {
-  let meanR = 0;
-  for (let i = 0; i < prims.nc; i++) meanR += prims.pr[i];
-  return meanR / Math.max(prims.nc, 1);
+  return prims.meanR;
 }
 
 /** Floor every cone radius at a little over half a grid cell's diagonal, so a thin limb (a leg, a

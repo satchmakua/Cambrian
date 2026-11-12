@@ -65,6 +65,10 @@ export interface FieldPrims {
   k: number;
   /** how far an ellipsoid can overshoot its node's scalar radius (grid padding must cover this) */
   excess: number;
+  /** the mean radius of the skeleton's EDGES — what a blend radius is measured against. (Not of the
+   *  cones: a smoothed chain is several cones to an edge, and counting each would weigh a body's mean
+   *  girth toward its trunk.) */
+  meanR: number;
 }
 
 /** A subtractive ellipsoid cavity (a mouth, a funnel, an eye socket) smooth-MAXed out of the body. */
@@ -101,6 +105,17 @@ export function isHybridNode(n: BodyNode): boolean {
  * part); the same fallbacks as the original smoothSkin keep the field non-empty on any topology.
  * `k` starts at 0 (hard union) — smoothSkin assigns its blend radius after measuring mean girth.
  */
+/** how many cones each link of a smoothed chain is cut into */
+export const CHAIN_CUTS = 3;
+/** limb chains that are smooth curves (a spine's are too); a leg's or an arm's links meet at joints */
+const SMOOTH_LIMBS = new Set(['tail', 'tentacle']);
+
+/** Catmull–Rom through p1 → p2 (p0 and p3 the neighbours), at t in [0, 1]. */
+function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): number {
+  const t2 = t * t;
+  return 0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (3 * p1 - p0 - 3 * p2 + p3) * t2 * t);
+}
+
 export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'): FieldPrims {
   const include = mode === 'hybrid' ? isHybridNode : isBodyNode;
   // an eyestalk's last link runs INTO the eyeball (which draws itself): mesh it as a thin cone ending
@@ -109,25 +124,53 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   let bodyEdges = p.edges.filter(([a, b]) => include(p.nodes[a]) && (include(p.nodes[b]) || stalkTip(p.nodes[a], p.nodes[b])));
   if (bodyEdges.length === 0) bodyEdges = p.edges;
   const edges = bodyEdges.length > 0 ? bodyEdges : null;
-  const nc = edges ? edges.length : p.nodes.length;
-  const ax = new Float64Array(nc), ay = new Float64Array(nc), az = new Float64Array(nc);
-  const bx = new Float64Array(nc), by = new Float64Array(nc), bz = new Float64Array(nc);
-  const pr = new Float64Array(nc);
-  const ra = new Float64Array(nc);
-  const rb = new Float64Array(nc);
-  const ia = new Int32Array(nc);
-  const ib = new Int32Array(nc);
+
+  // A CHAIN IS A CURVE. A trunk, a neck, a tail is a row of nodes, and a straight cone from each to
+  // the next meets its neighbour at an angle wherever the girth or the heading changes: a crease ring
+  // round the body at every node. The light picked each one out — a weasel's chest, seen from the
+  // front, was a stack of bands like a grub's; a shark's belly was terraced. So each link of such a
+  // chain is cut into CHAIN_CUTS cones along a spline through its nodes (their places and their
+  // radii): the same body, without the corners. (A leg's links stay straight: those are joints.)
+  const sameChain = (a: BodyNode, b: BodyNode): boolean =>
+    a.kind === 'spine' && b.kind === 'spine'
+      ? (a.segment ?? 0) === (b.segment ?? 0)
+      : a.kind !== 'spine' && b.kind !== 'spine' && a.part != null && a.part.kind === b.part?.kind && SMOOTH_LIMBS.has(a.part.kind);
+  const up = new Int32Array(p.nodes.length).fill(-1); // a node's neighbour up its chain, among the meshed edges
+  const down = new Int32Array(p.nodes.length).fill(-1); // …and down it (−2: it forks)
+  if (edges) {
+    for (const [ia, ib] of edges) {
+      if (!sameChain(p.nodes[ia], p.nodes[ib])) continue;
+      up[ib] = ia;
+      down[ia] = down[ia] === -1 ? ib : -2;
+    }
+  }
+
+  const ax: number[] = [], ay: number[] = [], az: number[] = [];
+  const bx: number[] = [], by: number[] = [], bz: number[] = [];
+  const ra: number[] = [], rb: number[] = [];
+  const ia: number[] = [], ib: number[] = [];
+  const anL: number[] = [], aqL: number[] = [];
+  const sx0: number[] = [], sy0: number[] = [], sx1: number[] = [], sy1: number[] = [];
+  const edgeOf: number[] = []; // which edge each cone was cut from
   const included = new Set<BodyNode>();
-  const an = new Uint8Array(nc);
-  const aq = new Float64Array(nc * 4);
-  const sx0 = new Float64Array(nc).fill(1), sy0 = new Float64Array(nc).fill(1);
-  const sx1 = new Float64Array(nc).fill(1), sy1 = new Float64Array(nc).fill(1);
+  let girth = 0; // the edges' mean radius, summed
+  const cone = (e: number, i0: number, i1: number, A: Vec3, B: Vec3, rA: number, rB: number, ell: BodyNode | null, s0: [number, number], s1: [number, number]) => {
+    ax.push(A[0]); ay.push(A[1]); az.push(A[2]);
+    bx.push(B[0]); by.push(B[1]); bz.push(B[2]);
+    ra.push(rA); rb.push(rB);
+    ia.push(i0); ib.push(i1);
+    anL.push(ell ? 1 : 0);
+    const q = ell ? ell.quat : [0, 0, 0, 1];
+    aqL.push(q[0], q[1], q[2], q[3]);
+    sx0.push(s0[0]); sy0.push(s0[1]); sx1.push(s1[0]); sy1.push(s1[1]);
+    edgeOf.push(e);
+  };
   // spine-chain degree (spine neighbours among the meshed edges): an interior spine node's shape is
   // carried by its elliptical cones, so only chain ENDS keep a node ellipsoid (rump, snout tip)
   const spineDeg = new Map<BodyNode, number>();
   if (edges) {
-    for (const [ia, ib] of edges) {
-      const a = p.nodes[ia], b = p.nodes[ib];
+    for (const [i0, i1] of edges) {
+      const a = p.nodes[i0], b = p.nodes[i1];
       if (a.kind === 'spine' && b.kind === 'spine') {
         spineDeg.set(a, (spineDeg.get(a) ?? 0) + 1);
         spineDeg.set(b, (spineDeg.get(b) ?? 0) + 1);
@@ -136,38 +179,59 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   }
   if (edges) {
     for (let i = 0; i < edges.length; i++) {
-      const a = p.nodes[edges[i][0]];
-      const b = p.nodes[edges[i][1]];
-      if (a.kind === 'spine' && b.kind === 'spine' && (a.scale || b.scale)) {
-        an[i] = 1;
-        aq[i * 4] = a.quat[0]; aq[i * 4 + 1] = a.quat[1]; aq[i * 4 + 2] = a.quat[2]; aq[i * 4 + 3] = a.quat[3];
-        sx0[i] = a.scale?.[0] ?? 1; sy0[i] = a.scale?.[1] ?? 1;
-        sx1[i] = b.scale?.[0] ?? 1; sy1[i] = b.scale?.[1] ?? 1;
-      }
-      ia[i] = edges[i][0];
-      ib[i] = edges[i][1];
-      ax[i] = a.pos[0]; ay[i] = a.pos[1]; az[i] = a.pos[2];
-      bx[i] = b.pos[0]; by[i] = b.pos[1]; bz[i] = b.pos[2];
+      const i0 = edges[i][0], i1 = edges[i][1];
+      const a = p.nodes[i0];
+      const b = p.nodes[i1];
+      const ell = a.kind === 'spine' && b.kind === 'spine' && (a.scale || b.scale) ? a : null;
+      const sa: [number, number] = ell ? [a.scale?.[0] ?? 1, a.scale?.[1] ?? 1] : [1, 1];
+      const sb: [number, number] = ell ? [b.scale?.[0] ?? 1, b.scale?.[1] ?? 1] : [1, 1];
       const rB = stalkTip(a, b) ? Math.min(a.radius * 0.8, b.radius * 0.45) : b.radius;
       // a limb's root cone starts INSIDE a shaped body node: at the node's scalar radius its base
       // sphere stood proud of a flattened body — a crab's eight leg roots swelled its flat carapace
       // into a ball — so it starts at the node's narrowest cross-section instead
       const rA = a.kind === 'spine' && b.kind !== 'spine' && a.scale ? a.radius * Math.min(a.scale[0], a.scale[1], 1) : a.radius;
-      pr[i] = (rA + rB) * 0.5;
-      ra[i] = rA;
-      rb[i] = rB;
+      girth += (rA + rB) * 0.5;
       included.add(a);
       included.add(b);
+      if (!sameChain(a, b)) {
+        cone(i, i0, i1, a.pos, b.pos, rA, rB, ell, sa, sb);
+        continue;
+      }
+      // the neighbours either side (a chain's end runs on straight: the neighbour mirrored)
+      const pv = up[i0] >= 0 ? p.nodes[up[i0]] : null;
+      const nx = down[i1] >= 0 ? p.nodes[down[i1]] : null;
+      const at = (t: number): { P: Vec3; r: number } => {
+        const P: Vec3 = [0, 0, 0];
+        for (let k = 0; k < 3; k++) {
+          P[k] = catmullRom(pv ? pv.pos[k] : 2 * a.pos[k] - b.pos[k], a.pos[k], b.pos[k], nx ? nx.pos[k] : 2 * b.pos[k] - a.pos[k], t);
+        }
+        const r = catmullRom(pv ? pv.radius : 2 * rA - rB, rA, rB, nx ? nx.radius : 2 * rB - rA, t);
+        // (never past the link's own two girths by much: a spline overshoots where a girth steps)
+        const lo = Math.min(rA, rB), hi = Math.max(rA, rB);
+        return { P, r: Math.min(hi * 1.06, Math.max(lo * 0.94, r)) };
+      };
+      let A = { P: a.pos, r: rA };
+      for (let c = 1; c <= CHAIN_CUTS; c++) {
+        const t = c / CHAIN_CUTS;
+        const B = c === CHAIN_CUTS ? { P: b.pos, r: rB } : at(t);
+        const t0 = (c - 1) / CHAIN_CUTS;
+        cone(i, i0, i1, A.P, B.P, A.r, B.r, ell, [sa[0] + (sb[0] - sa[0]) * t0, sa[1] + (sb[1] - sa[1]) * t0], [sa[0] + (sb[0] - sa[0]) * t, sa[1] + (sb[1] - sa[1]) * t]);
+        A = B;
+      }
     }
   } else {
     for (let i = 0; i < p.nodes.length; i++) {
       const n = p.nodes[i];
-      ax[i] = bx[i] = n.pos[0]; ay[i] = by[i] = n.pos[1]; az[i] = bz[i] = n.pos[2];
-      pr[i] = ra[i] = rb[i] = n.radius;
-      ia[i] = ib[i] = i;
+      cone(i, i, i, n.pos, n.pos, n.radius, n.radius, null, [1, 1], [1, 1]);
+      girth += n.radius;
       included.add(n);
     }
   }
+  const nc = ax.length;
+  const pr = new Float64Array(nc);
+  for (let i = 0; i < nc; i++) pr[i] = (ra[i] + rb[i]) * 0.5;
+  const an = Uint8Array.from(anL);
+  const aq = Float64Array.from(aqL);
 
   // anisotropic nodes carry their shape as an ellipsoid primitive — except interior spine nodes, whose
   // cross-section the elliptical cones on both sides already carry (see `an`)
@@ -220,7 +284,7 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
       }
     };
     for (let i = 0; i < nc; i++) {
-      const b = edges[i][1];
+      const b = ib[i];
       const nb = p.nodes[b];
       ch[i] = nb.kind === 'spine' ? -1 - (nb.segment ?? 0) : rootOf(b);
     }
@@ -228,7 +292,13 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     for (let i = 0; i < nc; i++) ch[i] = i;
   }
   const ord = Int32Array.from({ length: nc }, (_, i) => i).sort((a, b) => ch[a] - ch[b] || a - b);
-  return { ax, ay, az, bx, by, bz, pr, ra, rb, cx, cy, cz, hl, an, aq, sx0, sy0, sx1, sy1, nc, ia, ib, ch, ord, ec, eq, er, ne, k: 0, excess };
+  const f64 = (v: number[]) => Float64Array.from(v);
+  return {
+    ax: f64(ax), ay: f64(ay), az: f64(az), bx: f64(bx), by: f64(by), bz: f64(bz), pr, ra: f64(ra), rb: f64(rb), cx, cy, cz, hl,
+    an, aq, sx0: f64(sx0), sy0: f64(sy0), sx1: f64(sx1), sy1: f64(sy1), nc, ia: Int32Array.from(ia), ib: Int32Array.from(ib),
+    ch, ord, ec, eq, er, ne, k: 0, excess,
+    meanR: girth / Math.max(edges ? edges.length : p.nodes.length, 1),
+  };
 }
 
 // rotate v by the CONJUGATE of q (world → the prim's local frame), inlined, no allocation of q'

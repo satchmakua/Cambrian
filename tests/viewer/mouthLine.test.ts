@@ -184,9 +184,7 @@ describe('mouth line (mouth overhaul)', () => {
       const line = buildMouthLine(p, spec, [], 17, 'smooth');
       // the exact field smoothSkin polygonizes in smooth mode: body prims, k = 0.5·meanR
       const f = buildFieldPrims(p, 'body');
-      let meanR = 0;
-      for (let i = 0; i < f.nc; i++) meanR += f.pr[i];
-      f.k = 0.5 * (meanR / Math.max(f.nc, 1));
+      f.k = 0.5 * f.meanR;
       for (const sm of [...line.upper, ...line.lower]) {
         expect(Math.abs(fieldAt(f, sm.p[0], sm.p[1], sm.p[2]))).toBeLessThan(ON_SURFACE);
       }

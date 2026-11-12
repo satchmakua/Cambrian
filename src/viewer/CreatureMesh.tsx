@@ -29,7 +29,7 @@ import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
 import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finKindOf, finScaleOf, type FinBuild } from './wings';
 import { ensureSkinWeights, type RigInstance } from './rig';
-import { buildFieldPrims, fieldAt, projectToSurface } from './bodyField';
+import { fieldAt, projectToSurface } from './bodyField';
 import { eyeClearings, eyeSeat, isSwimmer } from './eyeSeat';
 import { coatDark, coatFin, coatMain, coatPattern } from './palette';
 import { faceMaskOf, isApe } from './face';
@@ -1282,10 +1282,7 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
     const off: [number, number, number] = [anchor[0] - tip[0], anchor[1] - tip[1], anchor[2] - tip[2]];
     if (feathered) {
       // wrap the folded wing around the flank (the same field the hybrid skin is meshed from)
-      const prims = buildFieldPrims(phenotype, 'hybrid');
-      let meanR = 0;
-      for (let i = 0; i < prims.nc; i++) meanR += prims.pr[i];
-      prims.k = 0.34 * (meanR / Math.max(prims.nc, 1));
+      const prims = surfacePrims(phenotype, 'hybrid');
       conformToSurface(w.surface, (x, y, z) => fieldAt(prims, x, y, z), anchor, girth * 0.04, w.lift);
     }
     const bones = w.bones.map((b) => {
