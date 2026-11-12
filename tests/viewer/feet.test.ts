@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { bareLegsOf, footPlanOf, legWeights, toedFootGeometry } from '../../src/viewer/feet';
+import { bareLegsOf, footPlanOf, isHindFoot, legWeights, toedFootGeometry } from '../../src/viewer/feet';
 import { buildSmoothGeometry } from '../../src/viewer/smoothSkin';
 import { randomGenome } from '../../src/engine/random';
 
@@ -76,5 +76,51 @@ describe('feet', () => {
     }
     expect(checked).toBeGreaterThan(0);
   });
-});
 
+  it('a frog\'s hind feet are its hind feet, its hands are not; a bird has none', () => {
+    for (const seed of [1, 4, 11]) {
+      const p = grow(genomeOfMorphotype(seed, 'anuran'));
+      const feet = p.nodes.map((n, i) => ({ n, i })).filter(({ n }) => n.kind === 'terminal' && n.part?.kind === 'leg');
+      const hind = feet.filter(({ i }) => isHindFoot(p, i));
+      expect(hind.length, `#${seed}`).toBe(2);
+      // the hind pair is the one rooted further back
+      const z = (i: number) => p.nodes[i].pos[2];
+      for (const h of hind) for (const f of feet.filter((x) => !hind.includes(x))) expect(z(h.i), `#${seed}`).toBeLessThan(z(f.i) + 0.5);
+    }
+    const bird = grow(genomeOfMorphotype(3, 'bird'));
+    bird.nodes.forEach((n, i) => {
+      if (n.kind === 'terminal' && n.part?.kind === 'leg') expect(isHindFoot(bird, i)).toBe(false);
+    });
+  });
+
+  it("a frog's hind foot is webbed between its toes, out most of their length; its hand is not", () => {
+    // (pad-tipped toes splayed on bare ground: a tree frog's hand on the end of a swimmer's leg)
+    const r = 0.12, link = 0.5;
+    const covered = (g: ReturnType<typeof toedFootGeometry>['toes'], x: number, z: number) => {
+      const pos = g.getAttribute('position');
+      const idx = g.getIndex();
+      const n = idx ? idx.count : pos.count;
+      const at = (k: number) => (idx ? idx.getX(k) : k);
+      for (let t = 0; t < n; t += 3) {
+        const [a, b, c] = [at(t), at(t + 1), at(t + 2)];
+        const ax = pos.getX(a), az = pos.getZ(a), bx = pos.getX(b), bz = pos.getZ(b), cx = pos.getX(c), cz = pos.getZ(c);
+        const d1 = (x - bx) * (az - bz) - (ax - bx) * (z - bz);
+        const d2 = (x - cx) * (bz - cz) - (bx - cx) * (z - cz);
+        const d3 = (x - ax) * (cz - az) - (cx - ax) * (z - az);
+        const neg = d1 < 0 || d2 < 0 || d3 < 0, pos3 = d1 > 0 || d2 > 0 || d3 > 0;
+        if (!(neg && pos3)) return true;
+      }
+      return false;
+    };
+    // midway between the middle toe and the next, at three-fifths of their length
+    const probe = (webbed: boolean) => {
+      const g = toedFootGeometry('frog', r, link, false, webbed).toes;
+      const L = Math.max(r * 2.8, link * 0.42) * (webbed ? 1.3 : 1);
+      const az = 0.55 * (webbed ? 1.12 : 1) * 0.5;
+      const s = 0.6 * L * 0.94;
+      return covered(g, Math.sin(az) * s, Math.cos(az) * s);
+    };
+    expect(probe(true)).toBe(true);
+    expect(probe(false)).toBe(false);
+  });
+});

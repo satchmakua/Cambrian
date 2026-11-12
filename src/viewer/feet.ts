@@ -139,16 +139,92 @@ export function lastLinkOf(p: Phenotype, idx: number): number {
   return p.nodes[idx].radius * 3;
 }
 
+/**
+ * Is this foot on one of the HINDMOST legs? Its leg roots furthest back of all the legs (a body with
+ * every leg rooted level has no hind feet).
+ */
+export function isHindFoot(p: Phenotype, idx: number): boolean {
+  const chains = legChains(p);
+  const mine = chains.find((c) => c[c.length - 1] === idx);
+  if (!mine || chains.length < 2) return false;
+  const zs = chains.map((c) => p.nodes[c[0]].pos[2]);
+  const back = Math.min(...zs), front = Math.max(...zs);
+  if (front - back < 1e-3) return false;
+  return p.nodes[mine[0]].pos[2] - back < (front - back) * 0.25;
+}
+
 interface ToeSpec {
   az: number; // heading off body-forward (rad, about +Y)
   len: number;
   r0: number; // root radius
 }
 
+/** how far out along a frog's toes its web reaches (a share of each toe's length), how far its margin
+ *  falls back between two toes (a share of that reach), and how thick it is (×a toe's root radius) */
+const WEB_REACH = 0.96;
+const WEB_DIP = 0.26;
+const WEB_THICK = 0.16;
+/** a webbed (hind) foot's toes are this much longer than a hand's fingers, and spread this much wider:
+ *  a frog swims with long hind toes fanned out (at a hand's length, its toes nearly touched along
+ *  most of their run and a web between them lay hidden under them) */
+const WEBBED_LONG = 1.3;
+const WEBBED_SPREAD = 1.12;
+
+/** the point `s` of the way along a polyline, by length */
+function alongLine(pts: THREE.Vector3[], s: number): THREE.Vector3 {
+  let total = 0;
+  for (let k = 1; k < pts.length; k++) total += pts[k].distanceTo(pts[k - 1]);
+  let left = Math.max(0, Math.min(1, s)) * total;
+  for (let k = 1; k < pts.length; k++) {
+    const l = pts[k].distanceTo(pts[k - 1]);
+    if (left <= l || k === pts.length - 1) return pts[k - 1].clone().lerp(pts[k], l > 1e-9 ? Math.min(1, left / l) : 0);
+    left -= l;
+  }
+  return pts[0].clone();
+}
+
+/**
+ * The WEB between two neighbouring toes (a frog's hind foot): a thin sheet from where they leave the
+ * foot out most of their length, its free margin falling back in a curve between them. Built as two
+ * faces (it is seen from above and below) a hair apart; its sides run inside the toes it joins.
+ */
+function toeWebGeometry(a: THREE.Vector3[], b: THREE.Vector3[], r0: number): THREE.BufferGeometry {
+  const NU = 6, NV = 5;
+  const h = r0 * WEB_THICK * 0.5;
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const idx: number[] = [];
+  for (const side of [1, -1]) {
+    const base = pos.length / 3;
+    for (let v = 0; v <= NV; v++)
+      for (let u = 0; u <= NU; u++) {
+        const fu = u / NU;
+        const reach = WEB_REACH * (1 - WEB_DIP * Math.sin(Math.PI * fu));
+        const sv = (v / NV) * reach;
+        // (a little below the toes' centre lines: it joins them along their undersides, as a web does)
+        const p = alongLine(a, sv).lerp(alongLine(b, sv), fu);
+        pos.push(p.x, p.y - r0 * 0.25 + side * h, p.z);
+        uv.push(fu, v / NV);
+      }
+    for (let v = 0; v < NV; v++)
+      for (let u = 0; u < NU; u++) {
+        const i0 = base + v * (NU + 1) + u, i1 = i0 + 1, i2 = i0 + NU + 1, i3 = i2 + 1;
+        if (side > 0) idx.push(i0, i2, i1, i1, i2, i3);
+        else idx.push(i0, i1, i2, i1, i3, i2);
+      }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
 /** A leg part's style gene at or over this ends a bird's leg in a bird of prey's foot. */
 export const TALONED = 0.6;
 
-function toesOf(plan: FootPlan, r: number, link: number, taloned = false): ToeSpec[] {
+function toesOf(plan: FootPlan, r: number, link: number, taloned = false, webbed = false): ToeSpec[] {
   if (plan === 'bird' && taloned) {
     // a bird of prey's foot is its weapon: thick, widely spread toes, the hind one nearly as long as
     // the front three (it closes the grip). (On a songbird's thin perching toes a hawk stood on wire.)
@@ -192,9 +268,11 @@ function toesOf(plan: FootPlan, r: number, link: number, taloned = false): ToeSp
   if (plan === 'frog') {
     // long, widely splayed toes — slim, but fingers, not sticks (at a fourteenth of their length
     // thick, with a ball on each tip, every foot was a little star of pins)
-    const L = Math.max(r * 2.8, link * 0.42);
-    const t = Math.max(r * 0.32, L * 0.1);
-    return [-1.15, -0.55, 0, 0.55, 1.15].map((az, i) => ({ az, len: L * (i === 0 || i === 4 ? 0.7 : i === 2 ? 1 : 0.88), r0: t }));
+    const L0 = Math.max(r * 2.8, link * 0.42);
+    const t = Math.max(r * 0.32, L0 * 0.1);
+    const L = L0 * (webbed ? WEBBED_LONG : 1);
+    const fan = webbed ? WEBBED_SPREAD : 1;
+    return [-1.15, -0.55, 0, 0.55, 1.15].map((az, i) => ({ az: az * fan, len: L * (i === 0 || i === 4 ? 0.7 : i === 2 ? 1 : 0.88), r0: t }));
   }
   const L = Math.max(r * 2.2, link * 0.32);
   const t = Math.max(r * 0.36, L * 0.13);
@@ -250,8 +328,10 @@ const TALON_ROOT = 0.72;
 
 /** The toes (skin) and claws (dark keratin) of one foot, in the body frame about the foot node.
  *  `taloned` is the cut of a bird of prey's foot (a bird's only): stout toes ending in long hooks. */
-export function toedFootGeometry(plan: FootPlan, r: number, link: number, taloned = false): { toes: THREE.BufferGeometry; claws: THREE.BufferGeometry } {
+export function toedFootGeometry(plan: FootPlan, r: number, link: number, taloned = false, webbed = false): { toes: THREE.BufferGeometry; claws: THREE.BufferGeometry } {
   const hooked = taloned && plan === 'bird';
+  // each toe's centre line, for the webs between them (a frog's hind foot)
+  const lines: { pts: THREE.Vector3[]; r0: number }[] = [];
   const toes: THREE.BufferGeometry[] = [];
   const claws: THREE.BufferGeometry[] = [];
   const floor = -r; // the foot node's underside sits on the ground (levelFeet)
@@ -263,7 +343,7 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number, talone
   const sole = plan === 'stump' ? 1.35 : 1.08;
   pad.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(0, floor + r * 0.62, 0), new THREE.Quaternion(), new THREE.Vector3(r * sole, r * 0.72, r * sole)));
   toes.push(pad);
-  for (const t of toesOf(plan, r, link, hooked)) {
+  for (const t of toesOf(plan, r, link, hooked, webbed && plan === 'frog')) {
     const dir = new THREE.Vector3(Math.sin(t.az), 0, Math.cos(t.az));
     // two phalanges: up over a knuckle and down to the claw, so the toe grips rather than lies flat
     const y0 = floor + t.r0 * 1.1;
@@ -272,6 +352,7 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number, talone
     // meets the ground instead of stabbing through it)
     const tip = dir.clone().multiplyScalar(t.len).setY(floor + t.r0 * (hooked ? TALON_LEN * TALON_DROP : 0.75));
     const pts = [new THREE.Vector3(0, y0, 0), knuckle, tip];
+    lines.push({ pts, r0: t.r0 });
     for (let k = 0; k < 2; k++) {
       const a = pts[k], b = pts[k + 1];
       const ra = t.r0 * (k === 0 ? 1 : 0.82), rb = t.r0 * (k === 0 ? 0.82 : 0.6);
@@ -304,6 +385,10 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number, talone
     );
     claws.push(claw);
   }
+  // a frog's hind toes are joined by webs, one between each toe and the next (the toes run in order
+  // round the foot; bare-tipped splayed toes on a hind foot read as a tree frog's hand)
+  if (webbed && plan === 'frog')
+    for (let k = 0; k + 1 < lines.length; k++) toes.push(toeWebGeometry(lines[k].pts, lines[k + 1].pts, Math.min(lines[k].r0, lines[k + 1].r0)));
   const merge = (gs: THREE.BufferGeometry[]) => {
     const m = mergeGeometries(gs.map((g) => (g.index ? g.toNonIndexed() : g)), false) ?? gs[0];
     for (const g of gs) if (g !== m) g.dispose();

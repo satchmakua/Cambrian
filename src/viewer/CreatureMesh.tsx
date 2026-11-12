@@ -25,7 +25,7 @@ import { Mouth } from './mouths';
 import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
-import { bareLegsOf, clawedHandGeometry, footPlanOf, isTheropod, lastLinkOf, legWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
+import { bareLegsOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, legWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
 import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, longWingFold, trunkGirth, wingCarriage, LONG_WING, type FinBuild } from './wings';
@@ -1206,13 +1206,15 @@ function ToedFoot({ f, plan, skin, phenotype }: { f: MeshFeature; plan: FootPlan
   const r = Math.max(f.radius, 0.04);
   const origin = phenotype.nodes[f.idx].pos;
   const link = useMemo(() => lastLinkOf(phenotype, f.idx), [phenotype, f.idx]);
+  // (a frog's hind feet are webbed; its hands are not)
+  const webbed = useMemo(() => plan === 'frog' && isHindFoot(phenotype, f.idx), [plan, phenotype, f.idx]);
   const geo = useMemo(() => {
-    const g = toedFootGeometry(plan, r, link, f.style >= TALONED);
+    const g = toedFootGeometry(plan, r, link, f.style >= TALONED, webbed);
     const toes = bakeSkin(g.toes, origin);
     // the toes are all leg (a bird's are bare keratin to the claw)
     toes.setAttribute('aLeg', new THREE.BufferAttribute(new Float32Array(toes.getAttribute('position').count).fill(1), 1));
     return { toes, claws: g.claws };
-  }, [plan, r, link, origin, f.style]);
+  }, [plan, r, link, origin, f.style, webbed]);
   useEffect(() => () => {
     geo.toes.dispose();
     geo.claws.dispose();
