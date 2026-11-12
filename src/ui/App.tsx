@@ -17,6 +17,7 @@ import { MORPHOTYPE_IDS } from '../engine/random';
 const WorldView = lazy(() => import('../world/WorldView').then((m) => ({ default: m.WorldView })));
 const Studio = lazy(() => import('../viewer/Studio').then((m) => ({ default: m.Studio })));
 import { useStore } from './store';
+import { useWorldUi } from '../world/worldStore';
 import { MainMenu } from './menu/MainMenu';
 import { PauseMenu } from './menu/PauseMenu';
 
@@ -49,6 +50,7 @@ export function App() {
   const togglePlayback = useStore((s) => s.togglePlayback);
   const view = useStore((s) => s.view);
   const setView = useStore((s) => s.setView);
+  const worldEpoch = useWorldUi((s) => s.epoch);
   const adopt = useStore((s) => s.adopt);
 
   const current = nodes[currentId];
@@ -95,6 +97,7 @@ export function App() {
     return (
       <Suspense fallback={<ScreenLoading />}>
         <WorldView
+          key={worldEpoch}
           founder={genome}
           onExit={() => setView('breed')}
           onMenu={openMenu}

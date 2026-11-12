@@ -99,3 +99,21 @@ describe('a game, start to finish', () => {
     await expect(importSave(store, '{"format":"cambrian-world"}')).rejects.toThrow(/saved World on its own/);
   });
 });
+
+describe('the valley put in place by a game', () => {
+  it('each new game and each load is a new epoch (the World screen starts afresh on it)', async () => {
+    const { useWorldUi } = await import('../../src/world/worldStore');
+    const store = memoryStore();
+    fresh('Epochs', 11);
+    const e0 = useWorldUi.getState().epoch;
+    const saved = await saveGame(store, 'Epochs', null, 1);
+    expect(useWorldUi.getState().epoch).toBe(e0); // saving changes nothing
+    await loadGame(store, saved.id);
+    expect(useWorldUi.getState().epoch).toBe(e0 + 1);
+    fresh('Epochs 2', 12);
+    expect(useWorldUi.getState().epoch).toBe(e0 + 2);
+    // a load that fails leaves the epoch (and the valley) alone
+    await expect(Promise.resolve().then(() => playSave({ ...captureGame('x', 'y', 2), world: 'nonsense' }))).rejects.toThrow();
+    expect(useWorldUi.getState().epoch).toBe(e0 + 2);
+  });
+});

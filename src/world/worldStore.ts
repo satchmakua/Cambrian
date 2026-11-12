@@ -132,7 +132,9 @@ export function installWorld(setup: GameSetup, json: string | null): void {
     /* storage full or blocked */
   }
   bumpVersion();
-  useWorldUi.setState({ selected: null, follow: false, chronicle: null, running: true, snapshot: worldStarted() ? snapshotOf(next, null) : null });
+  // (the epoch remounts the World screen if it is the one showing: a valley not yet visited is
+  // populated when the screen mounts, and a loaded one must not inherit the last one's camera or cast)
+  useWorldUi.setState((u) => ({ epoch: u.epoch + 1, selected: null, follow: false, chronicle: null, running: true, snapshot: worldStarted() ? snapshotOf(next, null) : null }));
 }
 
 /** Download the current world as a file. */
@@ -218,6 +220,8 @@ export interface Snapshot {
 }
 
 interface WorldUi {
+  /** counts the valleys put in place (a new game, a loaded save): the World screen starts afresh on each */
+  epoch: number;
   running: boolean;
   speed: number;
   selected: number | null;
@@ -369,6 +373,7 @@ export function worldSceneLive(live: boolean): void {
 }
 
 export const useWorldUi = create<WorldUi>((set, get) => ({
+  epoch: 0,
   running: true,
   speed: 1,
   selected: null,
