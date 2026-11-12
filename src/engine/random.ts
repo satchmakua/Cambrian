@@ -55,6 +55,9 @@ interface Morpho {
   legAz?: Rg; // sprawl azimuth (4.7 ≈ straight down) — overrides the posture's default
   posture?: Posture; // leg stance (§6.1): sprawling / digitigrade / plantigrade / hooved / upright
   legTerm?: readonly Terminal[];
+  /** the cut of a feathered leg's clawed foot (viewer/feet TALONED): under 0.6 the thin perching toes
+   *  every bird had; over it a bird of prey's — stout spread toes ending in long hooked talons */
+  legStyle?: Rg;
   wings?: number;
   arms?: number; // prob of a forward-reaching grasping arm pair (primate)
   claws?: number; // prob of a pair of CHELIPEDS — a crab's big claws, held out in front (see cheliped)
@@ -77,6 +80,11 @@ interface Morpho {
   mouthEl?: Rg; // …and how far it turns down there (rad: 1.2 looks ahead, 0.5 at the floor)
   mouthSize?: Rg; // × the mouth's usual size (a bird of prey's bill is a big part of its face)
   wingSize?: Rg; // × the wing's usual size (a dragon's are sails, not the fins on a flying fish)
+  /** the cut of a folded feathered wing (viewer/wings LONG_WING): under 0.6 the short leaf every bird
+   *  had, laid level along the flank; over it a bird of prey's long wing, from the top of the
+   *  shoulders down the line of the back to the tail */
+  wingStyle?: Rg;
+  wingSegs?: number; // the wing arm's link count (else 1–2): a long wing's upper arm, forearm and hand
   stalkLen?: Rg; // × an eye stalk's usual length (a slug's are short feelers, not a pair of antlers)
   headLong?: Rg; // a plain head's length ×its girth (else the cranial archetype's)
   headTaper?: Rg; // a plain head's link-to-link taper (else the archetype's, less its snout's): near 0.85
@@ -134,6 +142,7 @@ interface Morpho {
   eyeEl?: Rg; // forward tilt of the eyes: ~1.1 forward (cat, ape) … ~0.6 lateral (deer, mouse) … ~0.25 a fish's
   eyeT?: Rg; // where along a plain head the eyes sit — default [0.7, 0.98] (front); a croc's ride far back
   eyeSize?: number; // × the eye's usual size (a frog's bulge from the top of its head)
+  eyeTilt?: number; // rolls each eye about its gaze (rad), so its lids slant down toward the bill: a hawk's scowl
   hindSegs?: number; // the hind pair's link count (a frog's thigh, shin and long foot fold in a Z)
   legSegs?: number; // every leg's link count (a crab's merus, carpus and pointed dactyl: on two links its legs were table legs)
   mouthStyle?: Rg; // bands (viewer/partStyles mouthVariant): <0.06 herbivore · <0.125 maw · <0.25 fanged · <0.375 beak ·
@@ -145,6 +154,10 @@ interface Morpho {
   hue?: Rg;
   sat?: Rg;
   light?: Rg;
+  /** markings keep to the body's own hue or a dark umber, like a pelt's, whatever the covering (a
+   *  hawk's barring is its own brown, darker: let loose like a songbird's flash of colour, every
+   *  other hawk wore a violet hood or green bars and read as a parrot) */
+  soberMarks?: boolean;
 }
 
 // Terse priors. Unspecified fields fall back to sensible defaults in `compile`.
@@ -162,7 +175,7 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'fish', cluster: 'familiar', weight: 0.7, eyeEl: [0.15, 0.35], tailAz: [4.71, 4.71], tailCurl: [-0.03, 0.02], tailDroop: [-1.57, -1.5], headShape: ['wedge'], headSize: [1.2, 1.4], headWide: [0.78, 0.92], headDome: [1.35, 1.7], girth: [0.36, 0.5], repeat: [6, 8], height: [1.6, 2.1], elong: [0.8, 0.95], taper: [1.12, 1.15], rear: [-0.012, 0.012], legPairs: [0], finStyle: [0.34, 0.56], dorsalT: [0.5, 0.64], dorsal: 1, pectoral: 1, anal: 0.85, pelvic: 0.9, pectoralAz: [3.55, 3.9], pectoralEl: [-1.0, -0.75], tail: 1, tailTerm: ['fin'], tailLen: [0.3, 0.42], tailThick: [0.58, 0.7], tailTaper: [0.72, 0.8], tailSegs: [2, 2], gills: 0.9, gillStyle: 0.1, head: 1, headLinks: 3, eyeT: [0.32, 0.48], headLong: [0.75, 0.95], eyeStyle: [0, 0.2], eyeAz: [0.2, 0.4], mouthStyle: [0.07, 0.12], covering: ['scales'], pattern: ['plain', 'spots', 'stripes'], sheen: [0.35, 0.6], hue: [0.45, 0.65], sat: [0.4, 0.8] }, // deep and flattened side to side, the head running on from the body's depth, a slim stalk before the tail fin (a round tube read as an eel)
   { id: 'shark', cluster: 'familiar', weight: 0.6, eyeEl: [0.15, 0.35], tailAz: [4.71, 4.71], tailCurl: [-0.03, 0.02], tailDroop: [-1.57, -1.5], headShape: ['tapered'], headSize: [0.92, 1.02], girth: [0.45, 0.62], repeat: [5, 7], height: [0.95, 1.2], elong: [1.4, 1.7], taper: [1.06, 1.13], legPairs: [0], finStyle: [0.64, 0.9], dorsalT: [0.5, 0.6], dorsal: 1, pectoral: 1, dorsal2: 0.85, pelvic: 0.6, tail: 1, tailTerm: ['fin'], tailLen: [0.6, 0.85], tailThick: [0.45, 0.6], tailSegs: [3, 4], gills: 0.95, gillStyle: 0.9, head: 1, headLinks: 3, mouthT: [0.45, 0.55], eyeT: [0.3, 0.45], mouthEl: [0.55, 0.75], eyeStyle: [0.1, 0.3], eyeAz: [0.2, 0.4], mouthStyle: [0.13, 0.24], covering: ['skin'], pattern: ['plain', 'gradient'], hue: [0.55, 0.62], sat: [0.2, 0.45] },
   { id: 'bird', cluster: 'familiar', weight: 1.3, elong: [1.25, 1.45], taper: [1.12, 1.2], legAz: [4.62, 4.71], girth: [0.34, 0.5], repeat: [2, 3], height: [1.0, 1.3], neck: [0.42, 0.52], neckLinks: [2, 2], neckLift: [-0.48, -0.38], headSize: [0.5, 0.6], headShape: ['round', 'round', 'broad'], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 1.0], legThick: [0.15, 0.21], legTerm: ['claw'], wings: 0.95, tail: 0.85, tailTerm: ['fin'], tailLen: [0.22, 0.36], tailDroop: [-1.5, -1.4], tailAz: [1.57, 1.57], tailSegs: [2, 2], rear: [-0.25, -0.17], crest: 0.45, eyeStyle: [0, 0.2], mouthStyle: [0.31, 0.372], covering: ['feathers'], pattern: ['bands', 'plain', 'spots'], hue: [0.05, 0.65], sat: [0.5, 0.9] },
-  { id: 'raptor', cluster: 'familiar', weight: 1.2, elong: [1.25, 1.45], taper: [1.12, 1.2], legAz: [4.62, 4.71], girth: [0.44, 0.58], repeat: [2, 3], height: [1.0, 1.25], neck: [0.6, 0.7], neckLinks: [1, 1], neckLift: [-0.5, -0.4], headSize: [0.6, 0.7], legPairs: [1], posture: 'digitigrade', legLen: [0.7, 0.95], legThick: [0.26, 0.34], legTerm: ['claw'], wings: 1, tail: 0.85, tailTerm: ['fin'], tailLen: [0.3, 0.44], tailDroop: [-1.5, -1.4], tailAz: [1.57, 1.57], tailSegs: [2, 2], rear: [-0.255, -0.21], crest: 0.3, headShape: ['round'], mouthSize: [1.25, 1.45], eyeStyle: [0, 0.15], mouthStyle: [0.252, 0.285], covering: ['feathers'], pattern: ['bands', 'mottle'], hue: [0.06, 0.12] },
+  { id: 'raptor', cluster: 'familiar', weight: 1.2, elong: [0.78, 0.9], taper: [1.12, 1.15], legAz: [4.62, 4.71], girth: [0.44, 0.58], repeat: [4, 4], height: [0.92, 1.02], neck: [0.7, 0.8], neckLinks: [1, 1], neckLift: [-0.3, -0.2], headSize: [0.64, 0.74], legPairs: [1], posture: 'digitigrade', legLen: [0.66, 0.82], legThick: [0.42, 0.52], legTerm: ['claw'], legStyle: [0.7, 0.9], wings: 1, wingStyle: [0.7, 0.9], wingSegs: 3, tail: 1, tailTerm: ['fin'], tailLen: [0.3, 0.44], tailDroop: [-1.5, -1.4], tailAz: [1.57, 1.57], tailSegs: [2, 2], rear: [-0.3, -0.285], headShape: ['flat'], headWide: [1.0, 1.12], headDome: [0.8, 0.88], headLong: [0.75, 0.8], headTaper: [0.78, 0.84], mouthSize: [1.32, 1.46], eyeStyle: [0, 0.15], mouthStyle: [0.252, 0.285], eyeAz: [0.4, 0.52], eyeEl: [0.45, 0.6], eyeTilt: 0.5, covering: ['feathers'], pattern: ['bands', 'mottle'], sheen: [0.03, 0.1], hue: [0.05, 0.11], sat: [0.3, 0.6], light: [0.28, 0.5], soberMarks: true }, // stands tall on a short curved trunk, chest out, the head carried over the feet: a flat crown sloping to a deep hooked bill, a scowl, long wings down the back, stout taloned feet (leaning forward on a level body, round-headed, it was the songbird in brown)
   { id: 'crab', cluster: 'familiar', weight: 1.2, girth: [0.5, 0.62], repeat: [1, 1], height: [0.33, 0.4], elong: [0.78, 0.92], legPairs: [4], legSegs: 4, posture: 'sprawling', legLen: [0.72, 0.9], legThick: [0.28, 0.36], legTerm: ['claw'], claws: 1, head: 0, tail: 0.0, carapace: 0.95, stalkEyes: 1, stalkLen: [0.32, 0.42], eyeStyle: [0, 0.3], eyeAz: [0.42, 0.58], eyeEl: [1.05, 1.15], mouthStyle: [0.38, 0.49], mouthSize: [0.5, 0.6], covering: ['chitin'], pattern: ['mottle', 'reticulate', 'plain'], sheen: [0.3, 0.55], hue: [0.0, 0.1], sat: [0.5, 0.85] },
   { id: 'insectoid', cluster: 'familiar', weight: 1.2, tagmata: 'insect', carapace: 0.4, girth: [0.32, 0.44], repeat: [3, 3], height: [0.8, 0.92], elong: [0.75, 0.92], taper: [1.08, 1.15], thorax: [0.62, 0.74], thoraxLong: [1.15, 1.4], legPairs: [3], posture: 'sprawling', legLen: [0.85, 1.05], legThick: [0.26, 0.34], hindLeg: [1.25, 1.1], foreLeg: [0.85, 1.0], legTerm: ['claw'], headSize: [0.82, 0.98], headShape: ['round', 'broad'], antennae: 0.95, eyeStyle: [0.6, 0.8], eyeCount: [2], eyeAz: [0.2, 0.45], eyeEl: [0.5, 0.75], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['bands', 'spots', 'plain', 'reticulate'], sheen: [0.6, 0.95], hue: [0.0, 0.6], sat: [0.5, 0.9] },
   { id: 'arachnid', cluster: 'familiar', weight: 0.9, tagmata: 'spider', girth: [0.42, 0.56], repeat: [1, 1], height: [0.85, 1.0], elong: [1.3, 1.7], thorax: [0.6, 0.7], thoraxLong: [1.1, 1.25], legPairs: [4], posture: 'sprawling', legLen: [1.4, 1.75], legThick: [0.22, 0.3], foreLeg: [1.1, 1.0], legTerm: ['claw'], eyeStyle: [0.2, 0.4], eyeCount: [6, 8], mouthStyle: [0.38, 0.49], covering: ['fur', 'chitin'], pattern: ['mottle', 'bands'], hue: [0.02, 0.09], sat: [0.3, 0.6] },
@@ -176,8 +189,12 @@ const MORPHOTYPES: readonly Morpho[] = [
   // counterweigh a big-jawed head on an S-curved neck, small arms (as an upright walker it read as a
   // blob — a cartoon dinosaur, a penguin)
   { id: 'biped', cluster: 'familiar', weight: 1.0, legAz: [4.6, 4.71], girth: [0.34, 0.42], repeat: [3, 3], height: [0.95, 1.05], elong: [1.05, 1.25], taper: [1.04, 1.1], rear: [-0.1, -0.03], neck: [0.52, 0.62], neckLinks: [2, 2], neckLift: [-0.32, -0.22], legPairs: [1], posture: 'digitigrade', legLen: [1.65, 2.0], legThick: [0.46, 0.6], legTerm: ['claw'], arms: 1, armLen: [0.32, 0.45], armThick: [0.14, 0.2], armT: [0.86, 0.96], armAz: [3.9, 4.2], armEl: [0.3, 0.55], tail: 1.0, tailSegs: [5, 6], tailLen: [0.8, 1.0], tailThick: [0.62, 0.78], tailTaper: [0.78, 0.86], tailDroop: [-1.5, -1.38], tailCurl: [-0.06, 0.02], tailTerm: ['none'], head: 1.0, headSize: [0.78, 0.92], headShape: ['wedge', 'tapered', 'blocky'], snout: [0.45, 0.7], eyeStyle: [0, 0.3], eyeEl: [0.7, 0.9], mouthStyle: [0.13, 0.24], covering: ['scales', 'skin', 'feathers'], pattern: ['stripes', 'mottle', 'plain', 'bands'], hue: [0.04, 0.4], sat: [0.35, 0.65] },
-  // weasel/otter: long tube body on short legs, small head, a long tail
-  { id: 'mustelid', cluster: 'familiar', weight: 0.5, earSize: [0.55, 0.7], tailCurl: [0.02, 0.07], tailDroop: [-1.45, -1.25], tailTaper: [0.8, 0.88], tailSegs: [3, 4], tailLen: [0.62, 0.82], tailThick: [0.3, 0.4], taper: [0.99, 1.02], eyeEl: [0.85, 1.0], girth: [0.26, 0.36], repeat: [6, 9], height: [0.8, 1.0], elong: [1.0, 1.2], headSize: [0.82, 0.96], muzzle: [0.6, 0.68], muzzleDrop: [0.2, 0.3], legPairs: [2], posture: 'plantigrade', legLen: [0.28, 0.52], legThick: [0.3, 0.42], headWide: [1.05, 1.2], headDome: [0.78, 0.9], snout: [0.15, 0.35], tail: 0.9, ears: 0.7, earStyle: [0.7, 1], whiskers: 0.7, head: 0.7, eyeStyle: [0, 0.2], mouthStyle: [0.07, 0.12], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.04, 0.1], sat: [0.4, 0.7] },
+  // weasel/otter: a long low body with an arched back (`rear` above zero bends the trunk down toward
+  // the head; grow stands the hump mid-back), deeper at the chest than the loin, on four short stout
+  // legs tucked under it; a small flat wedge of a head on a neck as thick as the skull, small round ears
+  // low on its sides, dark bead eyes; a long thick tail tapering to a point. (It was a straight salami
+  // on four thin posts, a hamster's block of a head on its front with no neck, a spike of a tail.)
+  { id: 'mustelid', cluster: 'familiar', weight: 0.5, girth: [0.28, 0.36], repeat: [7, 9], height: [0.88, 1.0], elong: [1.0, 1.15], taper: [1.03, 1.05], rear: [0.08, 0.105], neck: [0.94, 1.04], neckLinks: [3, 3], neckLift: [-0.42, -0.34], headSize: [0.84, 0.92], headWide: [1.0, 1.08], headDome: [0.72, 0.82], muzzle: [0.6, 0.66], muzzleDrop: [0.12, 0.2], snout: [0.3, 0.42], legPairs: [2], posture: 'plantigrade', legAz: [4.45, 4.62], legLen: [0.8, 0.95], legThick: [0.5, 0.62], legSegs: 3, legTerm: ['paw'], tail: 1, tailSegs: [5, 6], tailLen: [0.7, 0.85], tailThick: [0.44, 0.52], tailTaper: [0.78, 0.84], tailDroop: [-1.45, -1.25], tailCurl: [0.02, 0.07], ears: 1, earStyle: [0.7, 1], earSize: [0.4, 0.5], earAz: [0.4, 0.56], whiskers: 0.9, eyeStyle: [0.22, 0.36], eyeAz: [0.6, 0.8], eyeEl: [0.95, 1.08], mouthStyle: [0.07, 0.12], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.05, 0.09], sat: [0.4, 0.65], light: [0.24, 0.42] },
   // turtle/tortoise: a deep domed body, short stumpy sprawled legs, a small beaked head, plated net skin
   { id: 'chelonian', cluster: 'familiar', weight: 1.0, tailSegs: [2, 2], tailThick: [0.3, 0.4], girth: [0.6, 0.8], repeat: [1, 2], height: [0.66, 0.82], elong: [0.95, 1.15], neck: [0.3, 0.36], neckLinks: [2, 2], neckLift: [-0.2, -0.05], headSize: [0.38, 0.46], headShape: ['round'], legPairs: [2], posture: 'sprawling', legLen: [0.3, 0.44], legThick: [0.34, 0.5], legAz: [3.55, 3.8], legTerm: ['claw'], tail: 0.35, tailTerm: ['none'], carapace: 1, head: 1, eyeStyle: [0, 0.2], mouthStyle: [0.26, 0.37], covering: ['scales', 'skin'], sheen: [0.1, 0.3], pattern: ['reticulate', 'mottle'], hue: [0.18, 0.35], sat: [0.35, 0.6] },
   // ostrich/emu: tall, heavy, two long stilt legs, a small beaked head, shaggy feathers (the neck is M24)
@@ -278,6 +295,7 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
     }
     if (m.hindSegs && lp >= 2 && i === 0) g.segments = m.hindSegs;
     if (m.legSegs) g.segments = m.legSegs;
+    if (m.legStyle) g.style = rg(rng, m.legStyle); // (no draw unless the morph sets it)
     apps.push(g);
   }
   // a forward-reaching grasping arm pair (primate) near the shoulders
@@ -473,6 +491,7 @@ function headSeg(rng: Rng, bodyGirth: number, m: Morpho, eyeStyle: number): Segm
   const eyeCount = pick(rng, m.eyeCount ?? ([2] as const));
   for (let p = 0; p < Math.max(1, Math.round(eyeCount / 2)); p++) {
     apps.push(eyes(rng, rg(rng, m.eyeT, [0.7, 0.98]), false, g, { style: [eyeStyle, eyeStyle], az: m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.18, 0.5) + p * 0.3, stalk, el: m.eyeEl, size: m.eyeSize }));
+    if (m.eyeTilt) apps[apps.length - 1].roll = m.eyeTilt; // (a constant: no draw)
   }
   const mouthGene = mouth(rng, g, m.mouthStyle); // every face has a mouth
   if (m.mouthT) mouthGene.attachT = rg(rng, m.mouthT); // (no draw unless the morph sets it)
@@ -570,7 +589,7 @@ function scaffold(rng: Rng, seed: number, symmetry: Symmetry, radialCount: numbe
   const hueA = exotic ? rng() : rg(rng, m.hue, [0, 1]);
   const sat = exotic ? range(rng, 0.7, 0.95) : rg(rng, m.sat, [0.32, 0.9]);
   const light = rg(rng, m.light, [0.3, 0.7]);
-  const hueB = markingHue(hueA, rng(), cov.type, exotic || m.cluster === 'uncanny');
+  const hueB = markingHue(hueA, rng(), m.soberMarks ? 'fur' : cov.type, exotic || m.cluster === 'uncanny');
   return { version: GENOME_VERSION, seed, symmetry, radialCount, coherence, covering: cov, palette: { hueA, hueB, sat, light }, body };
 }
 
@@ -704,6 +723,8 @@ function wing(rng: Rng, attachT: number, girth: number, m?: Morpho): AppendageGe
   });
   // (the wing is drawn to the size of its tip node: no draw unless the morph sets it)
   if (m?.wingSize) g.thickness = clamp(g.thickness * rg(rng, m.wingSize), A.thickness);
+  if (m?.wingStyle) g.style = rg(rng, m.wingStyle);
+  if (m?.wingSegs) g.segments = m.wingSegs; // (a constant: no draw)
   return g;
 }
 

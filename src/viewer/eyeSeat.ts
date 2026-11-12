@@ -68,6 +68,23 @@ export function eyeSeat(p: Phenotype, idx: number, quat0: readonly number[], r: 
   return seat;
 }
 
+/** An eye rolled about its own gaze by more than this (rad) wears a BROW along its upper lid. */
+export const BROW_TILT = 0.25;
+
+/**
+ * How far an eye is rolled about its own gaze (rad, unsigned): 0 as every eye grows, more when its
+ * gene tilts it. A tilted eye's lids slant down toward the bill, and a ridge of brow is drawn over
+ * the upper one — a hawk's scowl. (Round and wide open under a bare forehead, a bird of prey's eye
+ * was a dove's.)
+ */
+export function eyeTilt(quat: readonly number[]): number {
+  const aim = qRotateV(quat, [0, 0, 1]);
+  const plain = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(aim[0], aim[1], aim[2]));
+  const d = new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3]).multiply(plain.invert());
+  const a = Math.abs(2 * Math.atan2(d.x * aim[0] + d.y * aim[1] + d.z * aim[2], d.w));
+  return a > Math.PI ? 2 * Math.PI - a : a;
+}
+
 /** A swimmer: fins and no legs (a fish, a shark) — its eyes are lidless and lie flush with the head. */
 export function isSwimmer(p: Phenotype): boolean {
   let fins = false;

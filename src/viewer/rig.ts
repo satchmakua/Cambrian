@@ -80,6 +80,9 @@ export interface RigTemplate {
   /** a two-legged feeder tips as ONE piece, about its rump (the shift then holds its hips in place):
    *  bent joint by joint like a grazer's, its back curled under and its folded wings stood off it */
   grazeRigid: boolean;
+  /** how far the whole body pitches forward on the wing (rad, at its root): an upright body lies
+   *  along its line of flight; 0 for a level one (see flightLevel) */
+  flyLevel: number;
   /** a long legless body's resting line: at rest it lies in a loose S (see restBends) */
   rest: RestLine | null;
   /** how each arm (parallel to `arms`) folds as the body lies down, and how it feeds */
@@ -211,6 +214,36 @@ const GRAZE_DIP_MAX = 0.55;
  *  its chest stands high (and higher the more upright it stands), and no neck of its own reaches the
  *  ground from there. */
 const GRAZE_DIP_BIPED = 1.0;
+/** …and a body that stands UPRIGHT (a hawk's: rump to shoulders, its trunk rises more than this off
+ *  the level) has all of that rise to come down through before it has tipped at all: held to the
+ *  dip of a level bird, a hawk bowed to the horizontal and tore at the air half its own height above
+ *  its kill. Past the band it may dip by its own rise as well. (By degrees, so a bird bred a little
+ *  more upright does not suddenly feed differently; no level or leaning body is inside it.) */
+const GRAZE_UPRIGHT_FROM = 0.5;
+const GRAZE_UPRIGHT_FULL = 0.58;
+/** how nose-up an upright body still flies, once it has levelled out (rad) */
+const FLY_NOSE_UP = 0.15;
+
+/** How far a body's trunk rises off the level, rump to shoulders (rad), and how UPRIGHT that makes
+ *  it: 0 a level or a leaning body (every songbird, every theropod) … 1 a hawk's. */
+export function trunkRise(p: Phenotype): { rise: number; upright: number } {
+  const trunk = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0);
+  if (trunk.length < 2) return { rise: 0, upright: 0 };
+  const rump = trunk[0].pos, chest = trunk[trunk.length - 1].pos;
+  const rise = Math.atan2(chest[1] - rump[1], chest[2] - rump[2]);
+  return { rise, upright: smooth01((rise - GRAZE_UPRIGHT_FROM) / (GRAZE_UPRIGHT_FULL - GRAZE_UPRIGHT_FROM)) };
+}
+
+/**
+ * How far an upright body pitches forward to fly (rad): a hawk stands tall but flies flat, its back
+ * along its line of flight. (Carried through the air as it stood, it flew like a rocket — chest
+ * first, tail hanging, its spread wings a pair of oars at its neck.) 0 for any level or leaning body.
+ * The spread wing is built tilted back by as much (see the viewer's Wing), so it comes out level.
+ */
+export function flightLevel(p: Phenotype): number {
+  const { rise, upright } = trunkRise(p);
+  return upright * Math.max(0, rise - FLY_NOSE_UP);
+}
 
 /**
  * How a feeder reaches the ground. Feeding used to pitch the first neck joint by one fixed 0.55 rad:
@@ -293,7 +326,8 @@ function solveGraze(p: Phenotype, parent: Int32Array, trunk: number[], neck: num
   // (a body on ARCHED legs — a frog's, a crab's, a lizard's splayed out to its sides — keeps its
   // trunk still: those legs are not refolded to follow a dipping chest, so a dip dragged every foot
   // across the ground — a feeding frog's slid 0.4 of its height. Its head is near the ground anyway.)
-  const dipMax = legs.some((l) => l.arched) ? 0 : biped ? GRAZE_DIP_BIPED : nT > 1 ? GRAZE_DIP_MAX : 0;
+  const { rise, upright } = trunkRise(p);
+  const dipMax = legs.some((l) => l.arched) ? 0 : biped ? GRAZE_DIP_BIPED + upright * rise : nT > 1 ? GRAZE_DIP_MAX : 0;
   for (let dip = 0; dip <= dipMax + 1e-9; dip += 0.03) {
     const shift = shiftOf(dip);
     // (the usual small curl first; a long neck may arch further where that buys reach)
@@ -793,6 +827,8 @@ export function rigTemplate(p: Phenotype): RigTemplate {
     grazeCurl: neck.map(() => GRAZE_CURL),
     grazeShift: [0, 0],
     grazeRigid: false,
+    // (only a winged body is ever on the wing: an ape stands as upright as a hawk)
+    flyLevel: legs.length <= 2 && roles.includes('wing') ? flightLevel(p) : 0,
     rest: null,
     armPose: [],
   };
@@ -1123,7 +1159,7 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
     const home = r.rest[T.trunk[0]];
     const tip = inp.eat * awake;
     rootBone.position.set(home.x, home.y + T.grazeShift[0] * tip, home.z + T.grazeShift[1] * tip);
-    if (!restOn) setRot(rootBone, T.grazeRigid ? T.grazeDip * tip : 0, 0, 0);
+    if (!restOn) setRot(rootBone, (T.grazeRigid ? T.grazeDip * tip : 0) + T.flyLevel * fly, 0, 0);
   }
   for (let k = 1; k < nT; k++) {
     const u = k / Math.max(1, nT - 1);

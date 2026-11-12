@@ -17,6 +17,7 @@
  * shoulder, so posture is controlled directly instead of inheriting whatever aim the part grew with.
  */
 import * as THREE from 'three';
+import type { Phenotype } from '../engine/grow';
 
 export type WingKind = 'feathered' | 'membrane';
 
@@ -256,12 +257,13 @@ function sheet(nA: number, nB: number, at: (a: number, b: number, p: THREE.Vecto
  * shoulder at the origin. `base` is the plumage colour; `accent` tints the speculum band. The sheet
  * is a teardrop leaf, domed a little away from the body (thickest at the shoulder); its trailing edge
  * is scalloped by the secondaries' tips and stepped where the primaries stack to the point.
+ * `axis` lays the leaf along a line of its own (shoulder → wingtips) instead of level down the flank.
  */
-export function buildFeatheredWing(side: number, S: number, base: THREE.Color, accent: THREE.Color): WingBuild {
+export function buildFeatheredWing(side: number, S: number, base: THREE.Color, accent: THREE.Color, axis?: THREE.Vector3): WingBuild {
   const s = side >= 0 ? 1 : -1;
   // the folded wing lies along the flank: its long axis runs back and a little down, its plane
   // faces outward (normal ≈ +side X), tucked a touch toward the body at the tips
-  const back = v3(-0.12 * s, -0.12, -1).normalize();
+  const back = axis ? axis.clone().normalize() : v3(-0.12 * s, -0.12, -1).normalize();
   const normal = v3(s, 0.1, -0.05).normalize();
   // in-plane "down": world down with its normal and long-axis components removed (Gram–Schmidt)
   const down = v3(0, -1, 0);
@@ -290,6 +292,58 @@ export function buildFeatheredWing(side: number, S: number, base: THREE.Color, a
     (a, b, c) => plumageAt(t, a, b, HAND, 7, 9, 7, c),
   );
   return { surface: geo, bones: [], wrist: null, lift };
+}
+
+/** A wing part's style gene at or over this is the LONG cut of folded wing: a bird of prey's. */
+export const LONG_WING = 0.6;
+
+export interface WingFold {
+  anchor: [number, number, number]; // the shoulder, body space
+  axis: THREE.Vector3; // shoulder → wingtips
+  S: number; // the leaf's length (buildFeatheredWing)
+}
+
+/**
+ * Where a LONG folded wing lies: a bird of prey stands tall, and its wings run from the top of the
+ * shoulders down the line of the back, their tips crossing over the tail. (A songbird's short leaf,
+ * laid level along the flank from the middle of the trunk, stuck out behind an upright hawk like a
+ * shelf, a hand's breadth above the tail it should have covered.) The leaf is rooted high on the
+ * foremost trunk node and aimed at a point part-way down the tail fan — or just past the rump, on a
+ * bird that has lost its tail. Null when there is no trunk to lie on.
+ */
+export function longWingFold(p: Phenotype, side: number): WingFold | null {
+  const s = side >= 0 ? 1 : -1;
+  const trunk = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0);
+  if (trunk.length === 0) return null;
+  const rump = trunk[0];
+  const chest = trunk[trunk.length - 1];
+  let girth = 0.3;
+  let z0 = Infinity, z1 = -Infinity;
+  for (const n of trunk) {
+    girth = Math.max(girth, n.radius);
+    z0 = Math.min(z0, n.pos[2] - n.radius);
+    z1 = Math.max(z1, n.pos[2] + n.radius);
+  }
+  const rx = chest.radius * (chest.scale?.[0] ?? 1);
+  const anchor: [number, number, number] = [chest.pos[0] + s * rx * 0.8, chest.pos[1] + chest.radius * 0.5, chest.pos[2] + chest.radius * 0.1];
+  // the tips: 0.3 of the way down the tail fan (sized and drooped as TailFan draws it), tucked in
+  // toward the midline so the two wings all but meet over it
+  const fan = p.nodes.find((n) => n.kind === 'terminal' && n.part?.kind === 'tail');
+  const tip = v3(s * rump.radius * 0.32, 0, 0);
+  if (fan) {
+    const droop = 0.2 + (p.genomeRef.seed % 5) * 0.06;
+    const reach = 0.3 * Math.max((z1 - z0) * 0.55, girth * 1.6);
+    const back = v3(0, -droop, -1).normalize();
+    tip.y = fan.pos[1] + back.y * reach + rump.radius * 0.12;
+    tip.z = fan.pos[2] + back.z * reach;
+  } else {
+    tip.y = rump.pos[1];
+    tip.z = rump.pos[2] - rump.radius * 1.5;
+  }
+  const axis = tip.sub(v3(anchor[0], anchor[1], anchor[2]));
+  const len = axis.length();
+  if (len < 1e-4) return null;
+  return { anchor, axis: axis.divideScalar(len), S: len / 1.05 };
 }
 
 /**

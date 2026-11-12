@@ -33,6 +33,13 @@ const STALK_RISE = 0.78;
 /** How far up the chest a fully raised neck roots (×the chest's half-depth above its axis). */
 const NECK_ROOT = 0.4;
 
+/** Trunk pitch per link (bending DOWN toward the head) at which a body's back begins to arch, and at
+ *  which the arch is whole (no plan but the long-bodied weasels bends its trunk this way). */
+const ARCH_FROM = 0.03;
+const ARCH_FULL = 0.06;
+/** …and the most an arched trunk tilts up off its hips (rad): past this a body is a hoop either way. */
+const ARCH_TILT_MAX = 1.2;
+
 /** A leg's root link (haunch, shoulder) is at most this ×the radius of the body it roots on. */
 const HIP_MAX = 0.68;
 
@@ -133,6 +140,15 @@ export function grow(genome: Genome): Phenotype {
       const up = qRotate([0, 1, 0], startQuat);
       const rise = NECK_ROOT * P.radius * (P.scale?.[1] ?? 1) * clamp(-seg.curve[0] / 0.3, [0, 1]);
       pos = [pos[0] + up[0] * rise, pos[1] + up[1] * rise, pos[2] + up[2] * rise];
+    }
+    // An ARCHED back: a trunk whose links bend DOWN toward the head (a weasel's, a ferret's) starts
+    // tilted up off its hips by half its whole bend, so the hump stands mid-back with hips and
+    // shoulders level under it. (Begun level, all the bend ran one way — the rump was the highest
+    // point and the chest ploughed into the ground.) By degrees over a band of pitch, so a bend
+    // that drifts across the line never snaps the body from one carriage to the other.
+    if (depth === 0 && dev.symmetry === 'bilateral' && seg.curve[0] > ARCH_FROM) {
+      const u = clamp((seg.curve[0] - ARCH_FROM) / (ARCH_FULL - ARCH_FROM), [0, 1]);
+      quat = qMul(quat, qFromAxisAngle([1, 0, 0], -Math.min(ARCH_TILT_MAX, u * u * (3 - 2 * u) * seg.curve[0] * seg.repeat * 0.5)));
     }
     // Head carriage: the last segment of the chain (the head) is held near level whatever the neck
     // does — a raised neck lifts the head, it doesn't aim the face at the sky. In bilateral mode the
@@ -681,7 +697,8 @@ function pullLegAzimuth(az: number, coh: number): number {
 }
 
 /** Trunk pitch per link at which a body begins to count as reared upright, and at which it wholly is
- *  (the most upright hawk leans −0.255; an ape −0.34 or more). */
+ *  (a songbird leans −0.25 at most; a hawk stands a little way into the band, −0.285 to −0.3 — its
+ *  legs a third of the way up its body; an ape −0.34 or more). */
 const UPRIGHT_FROM = -0.27;
 const UPRIGHT_FULL = -0.34;
 

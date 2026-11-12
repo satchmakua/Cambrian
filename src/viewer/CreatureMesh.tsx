@@ -24,13 +24,13 @@ import { Mouth } from './mouths';
 import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
-import { bareLegsOf, footPlanOf, lastLinkOf, legWeights, toedFootGeometry, type FootPlan } from './feet';
+import { bareLegsOf, footPlanOf, lastLinkOf, legWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finKindOf, finScaleOf, type FinBuild } from './wings';
-import { ensureSkinWeights, type RigInstance } from './rig';
+import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finKindOf, finScaleOf, longWingFold, LONG_WING, type FinBuild } from './wings';
+import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface } from './bodyField';
-import { eyeClearings, eyeSeat, isSwimmer } from './eyeSeat';
+import { BROW_TILT, eyeClearings, eyeSeat, eyeTilt, isSwimmer } from './eyeSeat';
 import { coatDark, coatFin, coatMain, coatPattern } from './palette';
 import { faceMaskOf, isApe } from './face';
 import { clawGeometry } from './claw';
@@ -749,6 +749,32 @@ function lidGeometry(base: THREE.BufferGeometry, scale: number, openX: number, s
   return g;
 }
 
+/** A brow: a low ridge of the body's own covering lying across the top of a tilted eye's opening,
+ *  overhanging it a little (baked like the lids, so the coat runs over it). */
+function browGeometry(r: number, sink: number, quat: readonly number[], origin: readonly number[]): THREE.BufferGeometry {
+  const g = new THREE.SphereGeometry(1, 16, 10);
+  g.scale(r * 1.35, r * 0.32, r * 0.38);
+  // (the skin lies ~0.42r ahead of the sunk ball's centre: the ridge sits on it, over the lid's rim)
+  g.translate(0, r * 0.74, r * 0.3);
+  g.computeVertexNormals();
+  const m = new THREE.Matrix4()
+    .compose(new THREE.Vector3(origin[0], origin[1], origin[2]), new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3]), new THREE.Vector3(1, 1, 1))
+    .multiply(new THREE.Matrix4().makeTranslation(0, 0, -sink));
+  const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  const body = new Float32Array(pos.count * 3);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).applyMatrix4(m);
+    body[i * 3] = v.x;
+    body[i * 3 + 1] = v.y;
+    body[i * 3 + 2] = v.z;
+  }
+  g.setAttribute('aBodyPos', new THREE.BufferAttribute(body, 3));
+  g.setAttribute('aFlesh', new THREE.BufferAttribute(new Float32Array(pos.count), 1));
+  g.setAttribute('aAO', new THREE.BufferAttribute(new Float32Array(pos.count).fill(0.7), 1));
+  return g;
+}
+
 function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; socket: number; iris: number; lid: number; seed: number; skin?: THREE.Material; phenotype?: Phenotype }) {
   const r = Math.max(f.radius, 0.06);
   const v = eyeVariant(f.style);
@@ -788,6 +814,12 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
     lidGeo?.upper.dispose();
     lidGeo?.lower.dispose();
   }, [lidGeo]);
+  // a tilted eye (a bird of prey's) scowls from under a brow
+  const browGeo = useMemo(() => {
+    if (!lidded || !onFace || !skin || !origin || phenotype?.genomeRef.symmetry !== 'bilateral' || eyeTilt(f.quat) < BROW_TILT) return null;
+    return browGeometry(r, sink, seat.quat, origin);
+  }, [lidded, onFace, skin, origin, phenotype, f.quat, r, sink, seat.quat]);
+  useEffect(() => () => browGeo?.dispose(), [browGeo]);
   const lids = useContext(LidContext);
   const upper = useRef<THREE.Mesh>(null);
   const lower = useRef<THREE.Mesh>(null);
@@ -808,6 +840,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
           {/* (geometry pre-scaled; the open rotation is baked into aBodyPos only — the mesh rotates) */}
           <mesh ref={upper} geometry={lidGeo.upper} material={skin} rotation-x={LID_OPEN.upper} />
           <mesh ref={lower} geometry={lidGeo.lower} material={skin} rotation-x={LID_OPEN.lower} />
+          {browGeo && <mesh geometry={browGeo} material={skin} castShadow />}
         </>
       ) : lidded ? (
         <>
@@ -1037,12 +1070,12 @@ function ToedFoot({ f, plan, skin, phenotype }: { f: MeshFeature; plan: FootPlan
   const origin = phenotype.nodes[f.idx].pos;
   const link = useMemo(() => lastLinkOf(phenotype, f.idx), [phenotype, f.idx]);
   const geo = useMemo(() => {
-    const g = toedFootGeometry(plan, r, link);
+    const g = toedFootGeometry(plan, r, link, f.style >= TALONED);
     const toes = bakeSkin(g.toes, origin);
     // the toes are all leg (a bird's are bare keratin to the claw)
     toes.setAttribute('aLeg', new THREE.BufferAttribute(new Float32Array(toes.getAttribute('position').count).fill(1), 1));
     return { toes, claws: g.claws };
-  }, [plan, r, link, origin]);
+  }, [plan, r, link, origin, f.style]);
   useEffect(() => () => {
     geo.toes.dispose();
     geo.claws.dispose();
@@ -1257,14 +1290,20 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
     const pal = g.palette;
     const plumage = coatMain(pal);
     const accent = coatPattern(pal);
-    const foldS = (trunkLen * 1.05 + girth * 0.9) * (0.85 + gene * 0.3);
+    // (a bird of prey's long wing lies down the line of its back, to its tail — see longWingFold)
+    const long = feathered && f.style >= LONG_WING ? longWingFold(phenotype, side) : null;
+    const foldS = long ? long.S : (trunkLen * 1.05 + girth * 0.9) * (0.85 + gene * 0.3);
     const w = feathered
-      ? buildFeatheredWing(side, foldS, plumage, accent)
+      ? buildFeatheredWing(side, foldS, plumage, accent, long?.axis)
       : // (the wing's own gene counts for more than it did — the same at a typical 0.4, half again
         // at 0.9 — so a body bred or built for big wings gets them)
         buildMembraneWing(side, Math.max(trunkLen * 1.15, girth * 3) * (0.55 + gene), 0.55 + 0.3 * (g.seed % 7) / 7);
     // the flight posture: the same plumage opened out — a wing reaches further spread than folded
     const spread = feathered ? buildSpreadFeatheredWing(side, foldS * 1.35, plumage, accent).surface : null;
+    // (an upright body pitches forward to fly: its spread wings are built tilted back by as much, so
+    // they come out level — see flightLevel)
+    const level = spread ? flightLevel(phenotype) : 0;
+    if (spread && level > 0) spread.rotateX(-level);
     // a folded wing tucks against the UPPER FLANK (a bird's wing lies along its side, not on its
     // spine): anchor it on the trunk node nearest the shoulder, out at its side and a little above
     // the midline, slightly forward — rather than at the dorsal attach point the gene aimed for.
@@ -1279,6 +1318,7 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
         ? [near.pos[0] + side * rx * 0.86, near.pos[1] + near.radius * 0.28, near.pos[2] + near.radius * 0.35]
         : [near.pos[0] + side * rx * 0.55, near.pos[1] + near.radius * 0.5, near.pos[2] + near.radius * 0.2];
     }
+    if (long) anchor = long.anchor;
     const off: [number, number, number] = [anchor[0] - tip[0], anchor[1] - tip[1], anchor[2] - tip[2]];
     if (feathered) {
       // wrap the folded wing around the flank (the same field the hybrid skin is meshed from)
@@ -1293,7 +1333,7 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
       return { pos: [mid.x, mid.y, mid.z] as [number, number, number], quat: [q.x, q.y, q.z, q.w] as [number, number, number, number], len, r0: b.r0, r1: b.r1 };
     });
     return { w, off, bones, side, spread };
-  }, [phenotype, f.idx, f.radius, feathered, g]);
+  }, [phenotype, f.idx, f.radius, f.style, feathered, g]);
   useEffect(() => () => {
     build.w.surface.dispose();
     build.spread?.dispose();

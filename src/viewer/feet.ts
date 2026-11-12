@@ -123,7 +123,22 @@ interface ToeSpec {
   r0: number; // root radius
 }
 
-function toesOf(plan: FootPlan, r: number, link: number): ToeSpec[] {
+/** A leg part's style gene at or over this ends a bird's leg in a bird of prey's foot. */
+export const TALONED = 0.6;
+
+function toesOf(plan: FootPlan, r: number, link: number, taloned = false): ToeSpec[] {
+  if (plan === 'bird' && taloned) {
+    // a bird of prey's foot is its weapon: thick, widely spread toes, the hind one nearly as long as
+    // the front three (it closes the grip). (On a songbird's thin perching toes a hawk stood on wire.)
+    const L = Math.max(r * 4.6, link * 0.7);
+    const t = Math.max(r * 0.52, L * 0.115);
+    return [
+      { az: -0.62, len: L * 0.9, r0: t },
+      { az: 0, len: L, r0: t * 1.05 },
+      { az: 0.62, len: L * 0.9, r0: t },
+      { az: Math.PI, len: L * 0.7, r0: t * 1.05 }, // the hallux
+    ];
+  }
   if (plan === 'bird') {
     const L = Math.max(r * 3.4, link * 0.55);
     const t = Math.max(r * 0.34, L * 0.075);
@@ -145,8 +160,57 @@ function toesOf(plan: FootPlan, r: number, link: number): ToeSpec[] {
   return [-0.95, -0.48, 0, 0.48, 0.95].map((az, i) => ({ az, len: L * (i === 0 || i === 4 ? 0.62 : i === 2 ? 1 : 0.86), r0: t }));
 }
 
-/** The toes (skin) and claws (dark keratin) of one foot, in the body frame about the foot node. */
-export function toedFootGeometry(plan: FootPlan, r: number, link: number): { toes: THREE.BufferGeometry; claws: THREE.BufferGeometry } {
+/**
+ * A talon: a horn hook that leaves the toe tip rising a little, curls over and comes down to a
+ * point — `len` along its arc, `r0` thick at the root, `dir` the toe's heading along the ground.
+ */
+function talonGeometry(root: THREE.Vector3, dir: THREE.Vector3, len: number, r0: number): THREE.BufferGeometry {
+  const N = 7, M = 8;
+  const up = new THREE.Vector3(0, 1, 0);
+  const side = new THREE.Vector3().crossVectors(up, dir).normalize();
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const idx: number[] = [];
+  const p = root.clone();
+  for (let i = 0; i <= N; i++) {
+    const u = i / N;
+    const phi = TALON_RISE - TALON_CURL * u; // the arc's heading above the ground
+    const tan = dir.clone().multiplyScalar(Math.cos(phi)).addScaledVector(up, Math.sin(phi));
+    const nrm = up.clone().multiplyScalar(Math.cos(phi)).addScaledVector(dir, -Math.sin(phi));
+    const rad = Math.max(r0 * 0.05, r0 * Math.pow(1 - u, 0.85));
+    for (let k = 0; k < M; k++) {
+      const a = (k / M) * Math.PI * 2;
+      // (a little deeper than wide: a blade of horn, not a peg)
+      pos.push(p.x + nrm.x * Math.cos(a) * rad + side.x * Math.sin(a) * rad * 0.8, p.y + nrm.y * Math.cos(a) * rad + side.y * Math.sin(a) * rad * 0.8, p.z + nrm.z * Math.cos(a) * rad + side.z * Math.sin(a) * rad * 0.8);
+      uv.push(k / M, u);
+    }
+    p.addScaledVector(tan, len / N);
+  }
+  for (let i = 0; i < N; i++)
+    for (let k = 0; k < M; k++) {
+      const a = i * M + k, b = i * M + ((k + 1) % M), c = a + M, d = b + M;
+      idx.push(a, b, c, b, d, c);
+    }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+/** a talon's heading as it leaves the toe (rad above the ground) and how far it turns over its length */
+const TALON_RISE = 0.35;
+const TALON_CURL = 1.55;
+/** …so its point comes down this much of its length below its root */
+export const TALON_DROP = (Math.cos(TALON_RISE - TALON_CURL) - Math.cos(TALON_RISE)) / -TALON_CURL;
+/** a talon's length and root thickness, in toe-root radii */
+const TALON_LEN = 3.6;
+const TALON_ROOT = 0.72;
+
+/** The toes (skin) and claws (dark keratin) of one foot, in the body frame about the foot node.
+ *  `taloned` is the cut of a bird of prey's foot (a bird's only): stout toes ending in long hooks. */
+export function toedFootGeometry(plan: FootPlan, r: number, link: number, taloned = false): { toes: THREE.BufferGeometry; claws: THREE.BufferGeometry } {
+  const hooked = taloned && plan === 'bird';
   const toes: THREE.BufferGeometry[] = [];
   const claws: THREE.BufferGeometry[] = [];
   const floor = -r; // the foot node's underside sits on the ground (levelFeet)
@@ -156,12 +220,14 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number): { toe
   // (tall enough to swallow the end of the leg tube above it)
   pad.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(0, floor + r * 0.62, 0), new THREE.Quaternion(), new THREE.Vector3(r * 1.08, r * 0.72, r * 1.08)));
   toes.push(pad);
-  for (const t of toesOf(plan, r, link)) {
+  for (const t of toesOf(plan, r, link, hooked)) {
     const dir = new THREE.Vector3(Math.sin(t.az), 0, Math.cos(t.az));
     // two phalanges: up over a knuckle and down to the claw, so the toe grips rather than lies flat
     const y0 = floor + t.r0 * 1.1;
     const knuckle = dir.clone().multiplyScalar(t.len * 0.5).setY(floor + t.r0 * 1.45);
-    const tip = dir.clone().multiplyScalar(t.len).setY(floor + t.r0 * 0.75);
+    // (a hooked talon needs room to come down: the toe's end rides high enough that its point just
+    // meets the ground instead of stabbing through it)
+    const tip = dir.clone().multiplyScalar(t.len).setY(floor + t.r0 * (hooked ? TALON_LEN * TALON_DROP : 0.75));
     const pts = [new THREE.Vector3(0, y0, 0), knuckle, tip];
     for (let k = 0; k < 2; k++) {
       const a = pts[k], b = pts[k + 1];
@@ -180,6 +246,10 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number): { toe
       const pad = new THREE.SphereGeometry(t.r0 * 1.45, 10, 8);
       pad.applyMatrix4(new THREE.Matrix4().compose(tip.clone().setY(floor + t.r0 * 0.9), new THREE.Quaternion(), new THREE.Vector3(1, 0.6, 1)));
       toes.push(pad);
+      continue;
+    }
+    if (hooked) {
+      claws.push(talonGeometry(tip.clone().addScaledVector(dir, -t.r0 * 0.3), dir, t.r0 * TALON_LEN, t.r0 * TALON_ROOT));
       continue;
     }
     // the claw: a curved-down cone off the tip
