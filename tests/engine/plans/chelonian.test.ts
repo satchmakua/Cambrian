@@ -84,13 +84,15 @@ describe('chelonian', () => {
     }
   });
 
-  it('a shelled body grows its legs as columns; a body without a shell keeps its haunches', () => {
+  it('a shelled body grows its legs as columns; the same body without a shell walks on a lizard’s limbs', () => {
     const g = genomeOfMorphotype(3, 'chelonian');
     const bare = { ...g, body: { ...g.body, appendages: g.body.appendages.filter((a) => a.terminal !== 'carapace') } };
     const shelled = legsOf(grow(g))[0];
     const naked = legsOf(grow(bare))[0];
     expect(shelled[0].radius / shelled[1].radius).toBeLessThan(1.25);
-    expect(naked[0].radius / naked[1].radius).toBeGreaterThan(1.5);
+    // (its knee no higher than its hip under the shell; held up beside the body without it)
+    expect(shelled[1].pos[1] - shelled[0].pos[1]).toBeLessThan(0.08 * shelled[0].radius);
+    expect(naked[1].pos[1] - naked[0].pos[1]).toBeGreaterThan(0.08 * naked[0].radius);
     // (a crab's or a beetle's chitin shell is not a horn one: its legs are an arthropod's)
     const crab = grow(genomeOfMorphotype(3, 'crab'));
     expect(footPlanOf(crab)).toBeNull();

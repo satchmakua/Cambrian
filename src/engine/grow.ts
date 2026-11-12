@@ -650,6 +650,7 @@ export function grow(genome: Genome): Phenotype {
     let startPos: Vec3;
     let arch: Vec3[] | null = null; // an explicit leg polyline (segment directions): arthropod or sprawler
     let sprawl = false; // the polyline is a vertebrate sprawler's (thick, normal-length segments)
+    let lizardLeg = false; // …a walking sprawler's (a lizard's, a crocodile's, a frog's arm): see below
     const brush = isBrushTail(app, app.terminal) && dev.symmetry === 'bilateral';
     if (app.kind === 'leg' && dev.symmetry !== 'radial') {
       // Legs attach at the shoulder/hip — the body's *side*, a touch above the belly — not the
@@ -763,7 +764,19 @@ export function grow(genome: Genome): Phenotype {
           arch.push(norm([sideX * 0.3, -0.3, -1]));
           for (let k = 2; k < n; k++) arch.push(norm([sideX * 0.15, -0.16, 1]));
         } else if (n <= 1) arch.push(norm([sideX * 0.8, -0.6, zf * 0.3]));
-        else
+        else if (!shelled) {
+          // a walking sprawler's limb (a lizard's, a crocodile's, a frog's arm): the upper limb rises a
+          // little out of the flank to an elbow or a knee held up beside the body, and the lower limb
+          // angles down and out to a foot planted wide of it. (Run level out of the flank and straight
+          // down, under a haunch that swallowed the upper limb, each was a stub on a table leg: a
+          // push-up stance with no elbow or knee to be seen.)
+          lizardLeg = true;
+          for (let k = 0; k < n; k++) {
+            if (k === 0) arch.push(norm([sideX, 0.32, zf * 0.4]));
+            else if (k === n - 1) arch.push(norm([sideX * 0.42, -1, zf * 0.5]));
+            else arch.push(norm([sideX * 0.48, -1, zf * 0.25]));
+          }
+        } else
           for (let k = 0; k < n; k++) {
             if (k === 0) arch.push(norm([sideX, 0.06, zf * 0.4]));
             else if (k === n - 1) arch.push(norm([sideX * 0.12, -1, zf * 0.5]));
@@ -854,7 +867,8 @@ export function grow(genome: Genome): Phenotype {
         // …and a SHELLED body's legs (a tortoise's) are columns out of the openings of its shell, their
         // roots inside it: swollen at the hip like a lizard's, each thigh stood out under the rim as a
         // ball as big as the head — a frog wearing a shell
-        r *= shelled ? 0.95 - 0.15 * t : arch && !sprawl ? 0.62 - 0.22 * t : 0.7 + 0.8 * (1 - t) * (1 - t);
+        // (a walking sprawler's upper limb is a limb, not a haunch: it shows, from the flank to the elbow)
+        r *= shelled ? 0.95 - 0.15 * t : lizardLeg ? 1.05 - 0.2 * t : arch && !sprawl ? 0.62 - 0.22 * t : 0.7 + 0.8 * (1 - t) * (1 - t);
         // …but a haunch is part of the body it hangs from, never a second body beside it: on a
         // thick-limbed animal (a bear) the swollen hips stood out of the flanks as four balls, the
         // trunk a peanut between them. The limb below keeps its girth.
