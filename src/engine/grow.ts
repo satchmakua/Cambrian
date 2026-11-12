@@ -25,6 +25,9 @@ const RUNNER_TUCK = 6.5;
 /** An arthropod's tagma joint (pedicel / petiole / neck): the waist's radius ×the thinner section's. */
 const TAGMA_WAIST = 0.36;
 
+/** An eye stalk's links, ×the radius the eye's gene gives them. */
+const STALK_SLIM = 0.5;
+
 /** How far up the chest a fully raised neck roots (×the chest's half-depth above its axis). */
 const NECK_ROOT = 0.4;
 
@@ -555,6 +558,9 @@ export function grow(genome: Genome): Phenotype {
         // trunk a peanut between them. The limb below keeps its girth.
         if (j === 0 && !arch) r = Math.min(r, HIP_MAX * base.radius);
       }
+      // an eye STALK is a stalk: slimmer than the eye it carries. (Its links were as thick as the
+      // eyeball — a snail's feelers and a crab's eyes stood on chimneys.)
+      if (!last && app.terminal === 'eye') r *= STALK_SLIM;
       // the eye is the emotional anchor — floor the grown bulb so even a tapered/stalked eye on a
       // small head always reads (M19/M24), regardless of how the gene tapered down its tip.
       if (last && app.terminal === 'eye') r = Math.max(r, EYE_R_MIN);

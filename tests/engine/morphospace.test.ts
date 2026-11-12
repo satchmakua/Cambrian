@@ -64,11 +64,11 @@ group('descriptor dims (M26 — §11.1)', () => {
   });
 
   it('headedness separates necked bodies from undifferentiated blobs', () => {
-    // a blob has no forward constriction at all…
-    for (const id of ['slime', 'urchin']) {
-      for (let s = 0; s < 6; s++) {
-        expect(describe(grow(genomeOfMorphotype(s * 41 + 3, id)))[HEADED]).toBeLessThan(0.12);
-      }
+    // a blob has no forward constriction to speak of (an urchin none at all; a slug's long body is
+    // only a little slimmer at its head end than at its middle)…
+    for (let s = 0; s < 6; s++) {
+      expect(describe(grow(genomeOfMorphotype(s * 41 + 3, 'urchin')))[HEADED]).toBeLessThan(0.02);
+      expect(describe(grow(genomeOfMorphotype(s * 41 + 3, 'slime')))[HEADED]).toBeLessThan(0.2);
     }
     // …while a chain-bodied creature pinches toward its head
     const mean = (id: string) => {
@@ -78,7 +78,7 @@ group('descriptor dims (M26 — §11.1)', () => {
     };
     expect(mean('serpent')).toBeGreaterThan(0.25);
     expect(mean('ungulate')).toBeGreaterThan(0.25);
-    expect(mean('slime')).toBeLessThan(0.1);
+    expect(mean('slime')).toBeLessThan(0.16);
   });
 
   it('sheen reports the creature’s actual surface gene', () => {

@@ -239,6 +239,93 @@ describe('body plans', () => {
     }
   });
 
+  it('an urchin is a ball of spines: dozens, straight, standing out all over it', () => {
+    // (it had one ring of jointed arms curled under it as legs: a ball on a spider's legs)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'urchin'));
+      const body = trunkOf(p)[0];
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      const tips = p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'spine');
+      expect(tips.length, `#${seed} spines`).toBeGreaterThanOrEqual(40);
+      let up = 0, down = 0;
+      for (const tip of tips) {
+        const root = p.nodes[parent.get(p.nodes.indexOf(tip))!];
+        // straight out from the body: root → tip runs along the line from the body's centre
+        const out = [root.pos[0] - body.pos[0], root.pos[1] - body.pos[1], root.pos[2] - body.pos[2]];
+        const along = [tip.pos[0] - root.pos[0], tip.pos[1] - root.pos[1], tip.pos[2] - root.pos[2]];
+        const dot = (out[0] * along[0] + out[1] * along[1] + out[2] * along[2]) / (Math.hypot(...out) * Math.hypot(...along));
+        expect(dot, `#${seed} spine stands out`).toBeGreaterThan(0.9);
+        // long and thin: several times the tip's width, a fair share of the body's radius
+        expect(Math.hypot(...along) / body.radius, `#${seed} spine length`).toBeGreaterThan(0.6);
+        expect(tip.radius / body.radius, `#${seed} spine thin`).toBeLessThan(0.12);
+        if (tip.pos[1] > body.pos[1] + 0.3 * body.radius) up++;
+        if (tip.pos[1] < body.pos[1] - 0.3 * body.radius) down++;
+      }
+      // all over it: above and below its middle alike
+      expect(up, `#${seed} upper spines`).toBeGreaterThanOrEqual(12);
+      expect(down, `#${seed} lower spines`).toBeGreaterThanOrEqual(8);
+    }
+  });
+
+  it('a horror is its own thing: coiling tentacles low, feelers round a big maw, eyes round its flank', () => {
+    for (let seed = 1; seed <= 12; seed++) {
+      const g = genomeOfMorphotype(seed, 'horror');
+      const p = grow(g);
+      const body = trunkOf(p)[0];
+      const arms = g.body.appendages.filter((a) => a.kind === 'tentacle');
+      expect(arms.length, `#${seed} rings`).toBe(2);
+      const [low, high] = arms;
+      // the lower ring: thick, long, leaving the body below its middle and curling up along its length
+      expect(low.attachElevation, `#${seed}`).toBeLessThan(-0.3);
+      expect(low.thickness / high.thickness, `#${seed} uneven`).toBeGreaterThan(1.8);
+      expect(low.segments * low.length, `#${seed} uneven`).toBeGreaterThan(1.8 * high.segments * high.length);
+      expect(Math.abs(low.curl[0]) * low.segments, `#${seed} coils`).toBeGreaterThan(1.1);
+      expect(Math.abs(low.curl[1]), `#${seed} swirls`).toBeGreaterThan(0.12);
+      // (they were dead-straight rods a twentieth of the body's width)
+      const roots = p.nodes.filter((n, i) => n.part?.kind === 'tentacle' && p.edges.some(([a, b]) => b === i && p.nodes[a].kind === 'spine'));
+      expect(Math.max(...roots.map((n) => n.radius)) / body.radius, `#${seed} thick at the root`).toBeGreaterThan(0.17);
+      // the eyes ring the flank, each on its own (not a knot on the crown), below the maw
+      const eyes = p.nodes.filter((n) => n.terminal === 'eye');
+      const mouth = p.nodes.find((n) => n.terminal === 'mouth')!;
+      expect(eyes.length, `#${seed} eyes`).toBe(g.radialCount);
+      for (const e of eyes) expect(e.pos[1], `#${seed} eye below the maw`).toBeLessThan(mouth.pos[1] - 0.2 * body.radius);
+      for (let i = 0; i < eyes.length; i++) {
+        for (let j = i + 1; j < eyes.length; j++) {
+          const d = Math.hypot(eyes[i].pos[0] - eyes[j].pos[0], eyes[i].pos[1] - eyes[j].pos[1], eyes[i].pos[2] - eyes[j].pos[2]);
+          expect(d, `#${seed} eyes apart`).toBeGreaterThan(1.2 * (eyes[i].radius + eyes[j].radius));
+        }
+      }
+      // a ring mouth, on the crown
+      const style = g.body.appendages.find((a) => a.terminal === 'mouth')!.style;
+      expect(style, `#${seed} ring mouth`).toBeGreaterThanOrEqual(0.5);
+      expect(style, `#${seed} ring mouth`).toBeLessThan(0.75);
+    }
+  });
+
+  it('a slug is long and low with short slender eye stalks at its head end', () => {
+    // (a two-link bean; stalks as long as the body and as thick as the eyes on them, or none at all)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'slime'));
+      const t = trunkOf(p).sort((a, b) => a.pos[2] - b.pos[2]);
+      const ry = (n: (typeof t)[number]) => n.radius * (n.scale?.[1] ?? 1);
+      const length = t[t.length - 1].pos[2] + t[t.length - 1].radius - (t[0].pos[2] - t[0].radius);
+      expect(length / (2 * Math.max(...t.map(ry))), `#${seed} long and low`).toBeGreaterThan(3);
+      // tapering to the tail
+      expect(t[0].radius / Math.max(...t.map((n) => n.radius)), `#${seed} tail`).toBeLessThan(0.75);
+      const eyes = p.nodes.filter((n) => n.terminal === 'eye');
+      expect(eyes.length, `#${seed} eyes`).toBe(2);
+      const stalk = p.nodes.filter((n) => n.part?.kind === 'eyestalk' && n.kind === 'limb');
+      expect(stalk.length, `#${seed} stalks`).toBeGreaterThanOrEqual(2);
+      // slender: the stalk is thinner than the eye it carries
+      for (const n of stalk) expect(n.radius, `#${seed} stalk`).toBeLessThan(0.75 * eyes[0].radius);
+      // short: the eye stands up no more than a third of the body's length from where its stalk roots
+      const root = stalk.reduce((a, b) => (b.pos[1] < a.pos[1] ? b : a));
+      expect(Math.hypot(eyes[0].pos[0] - root.pos[0], eyes[0].pos[1] - root.pos[1], eyes[0].pos[2] - root.pos[2]) / length, `#${seed} stalk length`).toBeLessThan(0.34);
+      // at the head end
+      expect((eyes[0].pos[2] - t[0].pos[2]) / length, `#${seed} head end`).toBeGreaterThan(0.6);
+    }
+  });
+
   it('a shark has a long pointed snout with its mouth set back beneath it', () => {
     // (a blunt melon with a grin on its very tip, and no snout at all, read as a porpoise)
     for (let seed = 1; seed <= 16; seed++) {

@@ -77,6 +77,7 @@ interface Morpho {
   mouthEl?: Rg; // …and how far it turns down there (rad: 1.2 looks ahead, 0.5 at the floor)
   mouthSize?: Rg; // × the mouth's usual size (a bird of prey's bill is a big part of its face)
   wingSize?: Rg; // × the wing's usual size (a dragon's are sails, not the fins on a flying fish)
+  stalkLen?: Rg; // × an eye stalk's usual length (a slug's are short feelers, not a pair of antlers)
   headLong?: Rg; // a plain head's length ×its girth (else the cranial archetype's)
   tail?: number;
   tailTerm?: readonly Terminal[];
@@ -182,9 +183,9 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'dragon', cluster: 'uncanny', weight: 0.9, eyeEl: [0.7, 0.85], muzzleDrop: [0.12, 0.24], snout: [0.5, 0.75], muzzle: [0.52, 0.62], tailTaper: [0.78, 0.84], tailCurl: [-0.1, -0.03], tailSegs: [5, 6], tailThick: [0.5, 0.62], tailDroop: [-1.5, -1.3], taper: [1.05, 1.1], girth: [0.5, 0.66], repeat: [3, 4], elong: [1.15, 1.35], neck: [0.46, 0.54], neckLinks: [3, 3], neckLift: [-0.42, -0.34], headSize: [0.6, 0.75], legPairs: [2], posture: 'digitigrade', legLen: [0.9, 1.15], legThick: [0.5, 0.62], legTerm: ['claw'], wings: 0.85, wingSize: [1.5, 1.8], tail: 0.95, tailTerm: ['none', 'barb', 'club'], headShape: ['flat', 'wedge'], horns: 0.9, spines: 0.8, crest: 0.3, eyeStyle: [0.4, 0.9], mouthStyle: [0.14, 0.24], covering: ['scales', 'plates'], pattern: ['reticulate', 'bands', 'mottle'], sheen: [0.35, 0.8], hue: [0.0, 0.95], sat: [0.5, 0.9] },
   { id: 'wyvern', cluster: 'uncanny', weight: 0.85, headShape: ['flat', 'wedge'], eyeEl: [0.7, 0.85], muzzleDrop: [0.12, 0.24], snout: [0.5, 0.75], muzzle: [0.52, 0.62], tailTaper: [0.78, 0.84], tailSegs: [5, 6], tailThick: [0.5, 0.6], tailDroop: [-1.5, -1.3], rear: [-0.22, -0.15], girth: [0.42, 0.56], repeat: [3, 4], elong: [1.2, 1.5], neck: [0.44, 0.52], neckLinks: [3, 4], neckLift: [-0.3, -0.2], headSize: [0.62, 0.78], legPairs: [1], posture: 'digitigrade', legLen: [1.1, 1.4], legThick: [0.5, 0.64], legTerm: ['claw'], wings: 1, wingSize: [1.7, 2.0], tail: 0.95, tailTerm: ['barb'], horns: 0.8, spines: 0.6, eyeStyle: [0.4, 0.9], mouthStyle: [0.14, 0.24], covering: ['scales'], pattern: ['bands', 'reticulate'], sheen: [0.3, 0.7], hue: [0.0, 0.95], sat: [0.5, 0.9] },
   { id: 'cephalopod', cluster: 'uncanny', weight: 1.2, symmetry: 'radial', radialCount: [6, 10], girth: [0.5, 0.78], height: [1.3, 1.65], repeat: [1, 1], eyeEl: [0.12, 0.3], eyeSize: 1.5, eyeStyle: [0.8, 1], mouthStyle: [0.26, 0.37], covering: ['slime'], pattern: ['spots', 'ocelli', 'gradient'], sheen: [0.7, 1.0], hue: [0.6, 0.95], sat: [0.4, 0.85] },
-  { id: 'horror', cluster: 'uncanny', weight: 1.0, symmetry: 'radial', radialCount: [5, 9], girth: [0.45, 0.75], repeat: [1, 2], eyeStyle: [0.7, 1], mouthStyle: [0.5, 0.78], covering: ['skin', 'slime'], pattern: ['ocelli', 'mottle'], sheen: [0.4, 0.8], hue: [0.7, 1.0], sat: [0.3, 0.7] },
-  { id: 'slime', cluster: 'uncanny', weight: 0.7, girth: [0.5, 0.72], repeat: [2, 2], height: [0.55, 0.72], elong: [0.9, 1.1], taper: [0.84, 0.94], legPairs: [0], stalkEyes: 0.85, eyeAz: [1.0, 1.3], mouthStyle: [0.07, 0.12], tail: 0.0, head: 0.0, eyeStyle: [0.7, 1], covering: ['slime'], pattern: ['gradient', 'mottle'], sheen: [0.8, 1.0], hue: [0.25, 0.7], sat: [0.5, 0.9], light: [0.45, 0.7] },
-  { id: 'urchin', cluster: 'uncanny', weight: 0.6, symmetry: 'radial', radialCount: [8, 12], girth: [0.45, 0.7], repeat: [1, 1], height: [0.9, 1.1], covering: ['chitin'], pattern: ['mottle', 'bands'], hue: [0.6, 0.95], sat: [0.4, 0.8] },
+  { id: 'horror', cluster: 'uncanny', weight: 1.0, symmetry: 'radial', radialCount: [5, 8], girth: [0.45, 0.75], repeat: [1, 1], height: [1.25, 1.6], eyeEl: [0.3, 0.55], eyeSize: 0.8, mouthSize: [1.3, 1.6], eyeStyle: [0.7, 1], mouthStyle: [0.5, 0.74], covering: ['skin', 'slime'], pattern: ['ocelli', 'mottle'], sheen: [0.4, 0.8], hue: [0.7, 1.0], sat: [0.3, 0.7] },
+  { id: 'slime', cluster: 'uncanny', weight: 0.7, girth: [0.42, 0.6], repeat: [4, 5], height: [0.5, 0.62], elong: [0.95, 1.1], rear: [-0.07, -0.03], taper: [1.1, 1.14], legPairs: [0], stalkEyes: 1, stalkLen: [0.4, 0.5], eyeEl: [0.6, 0.75], eyeAz: [1.22, 1.38], mouthStyle: [0.5, 0.6], tail: 0.0, head: 0.0, eyeStyle: [0.05, 0.25], covering: ['slime'], pattern: ['gradient', 'mottle'], sheen: [0.8, 1.0], hue: [0.25, 0.7], sat: [0.5, 0.9], light: [0.45, 0.7] },
+  { id: 'urchin', cluster: 'uncanny', weight: 0.6, symmetry: 'radial', radialCount: [8, 12], girth: [0.45, 0.7], repeat: [1, 1], height: [0.9, 1.1], eyeSize: 0.62, covering: ['chitin'], pattern: ['mottle', 'bands'], hue: [0.6, 0.95], sat: [0.4, 0.8] },
   { id: 'starfish', cluster: 'uncanny', weight: 0.6, symmetry: 'radial', radialCount: [4, 6], girth: [0.4, 0.6], repeat: [1, 1], height: [0.4, 0.6], covering: ['plates', 'chitin'], pattern: ['reticulate', 'spots'], hue: [0.02, 0.15], sat: [0.5, 0.85] },
   // griffin/manticore mishmash: a winged horned tailed quadruped wearing spliced fins + a clashing skin
   { id: 'chimera', cluster: 'uncanny', weight: 0.9, girth: [0.45, 0.65], repeat: [3, 5], elong: [1.1, 1.4], legPairs: [2], posture: 'sprawling', legLen: [0.45, 0.7], legTerm: ['claw', 'foot', 'pincer'], wings: 1, dorsal: 0.85, pectoral: 0.6, tail: 1, tailTerm: ['fin', 'claw', 'none'], horns: 0.8, frill: 0.4, spines: 0.4, eyeStyle: [0, 1], eyeCount: [2, 3], mouthStyle: [0, 1], covering: ['skin', 'scales', 'fur', 'feathers', 'chitin', 'plates'], pattern: ['stripes', 'bands', 'spots', 'ocelli', 'reticulate', 'gradient'], sheen: [0.2, 0.9], hue: [0, 1], sat: [0.5, 0.9] },
@@ -398,14 +399,18 @@ function compileArthropod(rng: Rng, seed: number, m: Morpho, girth: number): Gen
 function compileRadial(rng: Rng, seed: number, m: Morpho, girth: number): Genome {
   const n = randint(rng, ...(m.radialCount ?? ([4, 8] as const)));
   const height = rg(rng, m.height, [0.7, 1.1]);
-  const apps: AppendageGene[] = [arm(rng, girth, range(rng, 0.3, 0.6), m)];
-  if (chance(rng, 0.4)) apps.push(arm(rng, girth * 0.6, range(rng, 0.45, 0.75), m, true)); // a second ring
+  // (an urchin wears a coat of spines instead of a ring of arms, a horror its own two rings of
+  // tentacles; no other body's draws change)
+  const own = m.id === 'urchin' ? urchinCoat(rng, girth, n) : m.id === 'horror' ? horrorArms(rng, girth, n) : null;
+  const apps: AppendageGene[] = own ?? [arm(rng, girth, range(rng, 0.3, 0.6), m)];
+  if (!own && chance(rng, 0.4)) apps.push(arm(rng, girth * 0.6, range(rng, 0.45, 0.75), m, true)); // a second ring
   // a crown of eyes (always — a face reads); an octopus's ring the mantle lower down, looking out
   apps.push(eyes(rng, range(rng, 0.6, 0.95), false, girth, { style: m.eyeStyle, az: 1.5, el: m.eyeEl, size: m.eyeSize }));
   // a central maw: elevation ≈ ±90° so grow's radial array collapses it onto the axis — on the crown,
   // or (an octopus's beak) underneath, in the middle of its arms
   const mo = mouth(rng, girth, m.mouthStyle);
   mo.attachElevation = m.id === 'cephalopod' ? -1.35 : 1.35;
+  if (m.mouthSize) mo.thickness = clamp(mo.thickness * rg(rng, m.mouthSize), A.thickness); // (no draw unless set)
   apps.push(mo);
 
   const body: SegmentGene = {
@@ -544,7 +549,9 @@ function muzzleHead(rng: Rng, g: number, m: Morpho, eyeStyle: number): SegmentGe
 
 function faceOnBody(rng: Rng, apps: AppendageGene[], girth: number, m: Morpho, eyeStyle: number): void {
   const stalk = chance(rng, m.stalkEyes ?? 0);
-  apps.push(eyes(rng, range(rng, 0.85, 0.98), false, girth, { style: [eyeStyle, eyeStyle], az: m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.2, 0.5), stalk, el: m.eyeEl }));
+  const e = eyes(rng, range(rng, 0.85, 0.98), false, girth, { style: [eyeStyle, eyeStyle], az: m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.2, 0.5), stalk, el: m.eyeEl });
+  if (stalk && m.stalkLen) e.length = clamp(e.length * rg(rng, m.stalkLen), A.length); // (no draw unless set)
+  apps.push(e);
   apps.push(mouth(rng, girth, m.mouthStyle)); // every face has a mouth
 }
 
@@ -967,6 +974,79 @@ function arm(rng: Rng, girth: number, attachT: number, m: Morpho, spiky = false)
     // an octopus's arms also all sweep round the same way — a slow pinwheel)
     curl: m.id === 'cephalopod' ? [range(rng, -0.14, -0.08), swirl(range(rng, -0.1, 0.1))] : [range(rng, -0.3, 0.4), range(rng, -0.1, 0.1)],
   });
+}
+
+/**
+ * A horror's limbs: a ring of thick tentacles that leave the body low, sprawl outward and coil up
+ * and round at their tips, and a second ring of thin feelers reaching up about its maw, curling out
+ * over it — turned half a step from the ring below. (It had one ring of straight thin rods: a ball
+ * on a camera stand, told from an octopus or an urchin only by its label.)
+ */
+function horrorArms(rng: Rng, girth: number, n: number): AppendageGene[] {
+  const side = chance(rng, 0.5) ? 1 : -1; // they all coil round the same way
+  return [
+    part('tentacle', 'none', false, range(rng, 0, 1), {
+      attachT: 0.3,
+      attachAzimuth: range(rng, 0, 0.4),
+      attachElevation: range(rng, -0.55, -0.35),
+      segments: randint(rng, 5, 6),
+      length: clamp(girth * range(rng, 0.7, 0.95), A.length),
+      thickness: clamp(girth * range(rng, 0.3, 0.4), A.thickness),
+      taper: range(rng, 0.74, 0.8),
+      curl: [range(rng, -0.34, -0.24), side * range(rng, 0.14, 0.26)],
+    }),
+    part('tentacle', 'none', false, range(rng, 0, 1), {
+      attachT: 0.7,
+      attachAzimuth: Math.PI / n + range(rng, 0, 0.1),
+      attachElevation: range(rng, 0.62, 0.86),
+      segments: randint(rng, 4, 5),
+      length: clamp(girth * range(rng, 0.36, 0.5), A.length),
+      thickness: clamp(girth * range(rng, 0.11, 0.15), A.thickness),
+      taper: range(rng, 0.78, 0.86),
+      curl: [range(rng, 0.26, 0.4), -side * range(rng, 0.1, 0.2)],
+    }),
+  ];
+}
+
+/**
+ * An urchin's coat: rings of long straight spines standing out all over the test — the lowest
+ * leaning down to the ground, the highest up round the crown — each ring turned half a step from the
+ * one below, so its spines stand between the others'; and under it all a ring of short tube feet.
+ * (It had one ring of jointed arms, curled under it as legs: a ball on a spider's legs, no urchin.)
+ * Each gene is one spine; the body's radial count arrays it round the test.
+ */
+function urchinCoat(rng: Rng, girth: number, n: number): AppendageGene[] {
+  const apps: AppendageGene[] = [];
+  const rings = [-0.62, -0.22, 0.2, 0.62, 1.02];
+  rings.forEach((el, i) => {
+    apps.push(
+      part('spine', 'claw', false, range(rng, 0, 0.4), {
+        attachT: 0.5,
+        attachAzimuth: (i % 2) * (Math.PI / n) + range(rng, 0, 0.08),
+        attachElevation: el + range(rng, -0.06, 0.06),
+        segments: 2,
+        // (the ones round the middle are the longest: the outline is a ball of spines, not a star)
+        length: clamp(girth * range(rng, 1.5, 1.9) * (1 - 0.18 * Math.abs(el - 0.2)), A.length),
+        thickness: clamp(girth * range(rng, 0.075, 0.1), A.thickness),
+        taper: range(rng, 0.5, 0.6),
+        curl: [0, 0],
+      }),
+    );
+  });
+  // tube feet: short, soft, out of sight under the spines
+  apps.push(
+    part('tentacle', 'none', false, range(rng, 0, 1), {
+      attachT: 0.5,
+      attachAzimuth: range(rng, 0, 0.3),
+      attachElevation: range(rng, -1.25, -1.1),
+      segments: 2,
+      length: clamp(girth * range(rng, 0.26, 0.36), A.length),
+      thickness: clamp(girth * range(rng, 0.1, 0.14), A.thickness),
+      taper: range(rng, 0.7, 0.8),
+      curl: [0, 0],
+    }),
+  );
+  return apps;
 }
 
 /** a sideways curl of 0.1–0.24 rad per joint, to the side the draw fell on */
