@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -46,10 +46,52 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Marks on the skin | `src/viewer/gills.ts`, `wings.ts` (`buildFin` root), `eyeSeat.ts` | ✅ gill covers / slits and midline fin bases traced over the drawn surface |
 | Cut stone | `src/viewer/creatureMaterial.ts` (`facets`), `shards.ts` | ✅ the crystal covering: flat faces meeting in sharp edges (a tetrahedral grid, cut twice), a coat that mirrors face by face, shard clusters for horns and back spines |
 | Imbricated coats | `src/viewer/creatureMaterial.ts` (`scallops`) | ✅ feathers and scales as overlapping scallops laid along a direction field on the skin (rest normal), relief sloped per pixel |
+| Cells | `src/world/cells.ts`, `Flora.tsx`, `Landscape.tsx` | ✅ grass, crowns and bushes as one instanced mesh a square, each culled on its own; far grass thinned; a square re-posed only when its grass changes |
+| Quills | `src/viewer/quills.ts`, `src/engine/grow.ts` (`QUILL_STYLE`) | ✅ an urchin's spines as one smooth cone each, root to point, all one mesh, kept out of the skin |
 | Ape limbs and brow | `src/viewer/apeLimbs.ts`, `face.ts`, `src/engine/grow.ts` (`knuckleArm`, `armWalker`) | ✅ shoulders, knuckle-walking fists, flat feet, a brow ridge traced on the skull |
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M83–M85 — The valley by the square, the last parallel plans, a second wave · 2026-11-13
+
+- **Measure the frame, then cut what is out of it.** One instanced mesh for all the grass, all the
+  crowns, all the bushes had the whole valley for its bounds: drawn whole, in the main pass and
+  again from the sun, wherever the camera looked. Sorted into squares with spheres of their own,
+  the renderer's frustum test drops what is out of view (938k → 567k triangles a frame up close at
+  High). Where nothing is out of view — looking the length of the valley — the far squares of grass
+  are drawn thinner. A square of grass is re-posed only when its grass changed; berries that are
+  not on a bush are not drawn (an instance scaled to nothing still sent its triangles); the sun's
+  shadow map is redrawn every other frame.
+- **Two right fixes can be wrong together, again.** The fox's fixer gave a plain tail's style gene a
+  brush from 0.6; the crocodile's, a sculling blade from 0.7 — each without the other, with rows that
+  overlapped. One cut to a band now (rod, brush, blade), and a test grows both. The fox's forehead
+  step was withheld from heads "set on the shoulders"; the crocodile's fixer gave it a neck. The
+  reason a crocodile has no stop is a flat skull with no brow to step from: the rule now reads that.
+- **A merge is also a cleanup.** The fixers had independently added the same knobs under different
+  names — sober markings twice, a level head twice, a leg taper three times, an arm's link count
+  twice. One of each is kept. A worker that died mid-run left complete work in its checkout (renders,
+  a test file): its patch was rescued, read in full, merged and checked like the others.
+- **What a part is drawn as can be the fix.** An urchin's spines were chains of skinned links ending
+  in claws: beaded rods capped with dark discs, a pincushion. Quills are now one cone each, root to
+  point, kept out of the skin; all of a body's quills are one mesh. A sea star's face was a crown of
+  eyes and a maw on its disc; its eyes now look down from under the rim and its mouth is underneath.
+- **A rule keyed on the wrong thing breaks quietly.** A tortoise's legs grew a lizard's haunch, which
+  stood out under the shell rim as a ball; its shell's skirt was cut by a fixed share of the radius,
+  above a belly that hung below it. A shelled body now grows its legs as columns and its skirt is cut
+  from the trunk's depth. A deer's legs, on the slots every quadruped shares, were bunched under its
+  middle: a hooved leg now roots on toward the end of the trunk it carries.
+- **The second wave.** Sea stars (five plump arms, no face on top), tortoises (a shell that encloses
+  them, columns of legs on round stumps, a beak), urchins (quills; mouth and eyes underneath),
+  lizards on bent limbs with a low wedge of a head (the crocodile's legs and the frog's arms bend at
+  the elbow too), snakes (a flat spade of a head, eyes halfway back, a tail that runs out to a point),
+  deer (legs that frame the body, straight down; a tail at the croup), frogs (a short wide head set on
+  the body), bears (the fox's stop). Spots are solid soft-edged blotches for every coat, fading down
+  the legs. And scales and feathers lie up and back over a forehead instead of whirling into a
+  rosette there.
+- **Don't edit under a running gate.** One commit's `git add -A` ran after its tests and swept in an
+  edit made while they were running: committed untested, under a message that said only the snake
+  changed. The next commit's run covered it and its message says so. Edits now wait for the gate.
 
 ## M79–M82 — A re-audit by eye, surfaces that read, plans reworked in parallel · 2026-11-12
 

@@ -755,22 +755,31 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   that no other plan's founders moved. **Tests:** `tests/engine/plans/mustelid.test.ts`,
   `raptor.test.ts`, `primate.test.ts`, `chimera.test.ts`, `bodyplan.test.ts › an ape's hips`.
 
+- [x] **M83 — The valley by the square.** Grass, crowns and bushes are drawn a square at a time, each
+  culled on its own in the main pass and the shadow pass; far grass is thinned; a square of grass is
+  re-posed only when it changes; empty berry slots are not drawn; the sun's shadows are redrawn every
+  other frame. **Tests:** `tests/world/cells.test.ts`.
+- [x] **M84 — The last of the parallel plans.** Foxes (a stop, paws, a brush), crocodiles (scutes, a
+  bladed tail, a skull narrower than the body), theropods (a wedge of a skull, clawed hands, three
+  toes), and the many-legged alien as a myriapod of armoured rings. **Tests:**
+  `tests/engine/plans/canid.test.ts`, `crocodilian.test.ts`, `biped.test.ts`, `arthro-alien.test.ts`,
+  `bodyplan.test.ts › a plain tail's style gene has one cut to a band`.
+- [x] **M85 — A second wave of plans.** Sea stars, tortoises, urchins (quills), lizards and every
+  walking sprawler's limb, snakes, deer, frogs, bears; solid spots; scales over the brow. **Tests:**
+  `tests/engine/plans/starfish.test.ts`, `chelonian.test.ts`, `urchin.test.ts`, `lizard.test.ts`,
+  `serpent.test.ts`, `ungulate.test.ts`, `anuran.test.ts`, `ursid.test.ts`.
+
 ### Next up (unchecked — pick from here)
 
-- [ ] **The plans the audit still marks down.** Foxes and wolves, crocodiles, theropods and the
-  many-legged alien (being reworked); starfish (a face piled on the disc, four arms), lizards (post
-  legs, a helmet head), plain snakes, turtles (shoulders outside the shell), urchins (buried eyes),
-  frogs (a loaf of a head, forelegs with no elbows), bears (a capybara's muzzle) and deer (splayed
-  legs, a peg tail).
+- [ ] **A third look by eye.** Every plan has now been reworked once against the re-audit: render the
+  sheets again and have them judged before and after, as before — and find what the rework missed
+  (the slime's mouth, the wyvern's and the ratite's heads, the octopus's thin arms, a bear's shoulder
+  hump and its slipper feet, a mouth line on a closed muzzle, webbed feet for a frog).
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.
 - [ ] **A lineage film.** A wild species' body changes over the generations, as a strip of portraits.
-- [ ] **More headroom, measured but not yet taken** (the dev hooks `__cambrianRender`,
-  `__cambrianBreakdown` and `__cambrianCost` in the World give the numbers): the grass and the trees
-  are single instanced meshes, drawn whole wherever the camera looks (306k and 363k triangles at
-  High) — split into cells they could be culled; the sun's shadow pass redraws every caster each
-  frame — it could refresh every other frame; the grass re-uploads all its instances twice a second
-  — only the cells that changed need it.
+- [ ] **More headroom.** Skin builds off the main thread (a worker for the marching tetrahedra); the
+  flowers as cells like the grass; level-of-detail crowns for far trees.
 
 ---
 
