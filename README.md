@@ -22,7 +22,8 @@ in-game menu (save, load, settings, exit) over any of its three screens:
 - **World** — release creatures into a living ecosystem: a lake, meadows that yellow where herds
   graze, fruit-bearing woods, day and night. Every creature's diet, speed, senses, weapons and armour
   are read off its anatomy; it eats, sleeps, flees, hunts, breeds (offspring mutate — new species
-  branch off on screen) and dies. Bodies walk with a procedural skinned gait. A census, a creature
+  branch off on screen) and dies. Bodies walk with a procedural skinned gait and keep their room (a
+  herd stands shoulder to shoulder, never inside itself; the lighter animal gives way). A census, a creature
   card with follow-cam, and a field journal narrate it; take any wild creature home to breed.
 
 Creatures are smooth organic bodies (an implicit round-cone field, welded and skinned) with

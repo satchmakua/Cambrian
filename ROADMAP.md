@@ -769,12 +769,16 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   `tests/engine/plans/starfish.test.ts`, `chelonian.test.ts`, `urchin.test.ts`, `lizard.test.ts`,
   `serpent.test.ts`, `ungulate.test.ts`, `anuran.test.ts`, `ursid.test.ts`.
 
+- [x] **M86 — A third look by eye, and bodies that keep their room.** Slugs with a small soft mouth,
+  wyverns with a dragon's skull, ratites with a small head and no straw of a tail fan; the new meshes
+  checked in the World; animals on the ground no longer stand inside each other, the lighter giving
+  way, a hunter at its prey and a courting pair let be. **Tests:** `tests/engine/plans/slime.test.ts`,
+  `wyvern.test.ts`, `ratite.test.ts`, `tests/sim/world.test.ts › room`.
+
 ### Next up (unchecked — pick from here)
 
-- [ ] **A third look by eye.** Every plan has now been reworked once against the re-audit: render the
-  sheets again and have them judged before and after, as before — and find what the rework missed
-  (the slime's mouth, the wyvern's and the ratite's heads, the octopus's thin arms, a bear's shoulder
-  hump and its slipper feet, a mouth line on a closed muzzle, webbed feet for a frog).
+- [ ] **A fourth look by eye.** What the third look left: the octopus's thin arms, a bear's shoulder
+  hump and the step at its paws, a mouth line on a closed muzzle, webbed feet for a frog.
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.
 - [ ] **A lineage film.** A wild species' body changes over the generations, as a strip of portraits.

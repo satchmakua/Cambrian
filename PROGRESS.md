@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -49,9 +49,47 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Cells | `src/world/cells.ts`, `Flora.tsx`, `Landscape.tsx` | ✅ grass, crowns and bushes as one instanced mesh a square, each culled on its own; far grass thinned; a square re-posed only when its grass changes |
 | Quills | `src/viewer/quills.ts`, `src/engine/grow.ts` (`QUILL_STYLE`) | ✅ an urchin's spines as one smooth cone each, root to point, all one mesh, kept out of the skin |
 | Ape limbs and brow | `src/viewer/apeLimbs.ts`, `face.ts`, `src/engine/grow.ts` (`knuckleArm`, `armWalker`) | ✅ shoulders, knuckle-walking fists, flat feet, a brow ridge traced on the skull |
+| Room | `src/sim/world.ts` (`keepRoom`, `footprintGap`) | ✅ bodies on the ground keep their room: trunk footprints eased apart, the lighter giving way; a hunter at its prey and a courting pair let be (tested) |
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M86 — A third look by eye, and bodies that keep their room · 2026-11-13
+
+- **Look again after the rework.** All 31 plans were rendered to one sheet at the same seed and read
+  by eye. Three still read as something else. The slug's mouth fell in the sucker band: a dark
+  ringed hole a third of its body wide, blades standing inside it. It is now a small soft grazing
+  mouth, a seam across the front of the foot or out of sight beneath it. The wyvern's skull came out
+  either flat (twice as wide as tall, overhanging a thin neck: a mushroom cap on a pole) or a narrow
+  wedge, with nothing between; its breadth and depth are now pinned between the two. The ratite drew
+  any skull, a domed one in a third of its heads (an emu's head is about a quarter of its body's
+  depth), and a feathered tail fan, which seen edge-on was a straw stuck in the rump. It now has a
+  small tapered, wedge or round head and a short plain stub of a tail.
+- **A dropped draw moves every draw after it.** Taking the ratite's tail away shifted the random
+  stream under the neck and the legs: half the birds could no longer bring their beaks to the
+  ground (the rig's test of reach for a tall bird failed). The tail is still drawn, only plain, and
+  the founders' bodies are as they were. Each fix proves with the plan fingerprint that no other
+  plan's founders moved.
+- **See it where it lives.** The new meshes (an urchin's quills, a centipede's pointed legs, a
+  crocodile's scutes) are built at the World's lower detail and on its rigs, which the Studio does not
+  exercise. Each was released into a World with `?morph=…&follow=…` and looked at up close: all three
+  draw, with no errors.
+- **Bodies keep their room.** That look found herds standing inside one another: two crocodiles
+  crossed like scissors, centipedes running through centipedes. The sim never kept bodies apart.
+  Each body on the ground now has a footprint, a capsule over its trunk down its heading. Any pair
+  whose footprints overlap eases apart along the line between their nearest points, a share of the
+  overlap per second, and the lighter animal gives way the more (a mouse steps round a bear). A
+  hunter at its prey and a courting pair are exempt: a snake's footprint runs metres down its back,
+  and held off its prey its jaws, measured from its middle, would never close. Fliers aloft and fish
+  against waders are skipped, and no push carries a body where it can't stand. Measured on thirty
+  animals released in heaps: deep overlaps fell from 11–15 to 0–1.
+- **Profile before optimizing.** The pass first made a year of fast-forward 40% slower. Sweep and
+  prune didn't help, because the broad phase wasn't the cost. A counter showed two terrain samples
+  per push (fractal noise and the river's course), a comparator sort, and a population 6% larger
+  (herds spread out graze and breed a little better). The sort now runs natively over numeric keys
+  that pack each body's index under its west edge. The pass runs every other step, over both
+  steps' time. The shore is sampled only for a body whose own ground height puts it near the
+  water. A year runs in 8.7 s, against 8.9 s before the pass.
 
 ## M83–M85 — The valley by the square, the last parallel plans, a second wave · 2026-11-13
 
