@@ -25,6 +25,9 @@ const RUNNER_TUCK = 6.5;
 /** An arthropod's tagma joint (pedicel / petiole / neck): the waist's radius ×the thinner section's. */
 const TAGMA_WAIST = 0.36;
 
+/** A leg's root link (haunch, shoulder) is at most this ×the radius of the body it roots on. */
+const HIP_MAX = 0.68;
+
 /** Minimum grown radius for an eye bulb (bu) — the face must always read (M19/M24). */
 const EYE_R_MIN = 0.06;
 
@@ -533,6 +536,10 @@ export function grow(genome: Genome): Phenotype {
         // vertebrate legs are a muscular haunch that falls away fast to a slim shin: ~1.5× at the hip,
         // ~1.05× by the knee, ~0.7× at the ankle (a straight taper read as a noodle)
         r *= arch && !sprawl ? 0.62 - 0.22 * t : 0.7 + 0.8 * (1 - t) * (1 - t);
+        // …but a haunch is part of the body it hangs from, never a second body beside it: on a
+        // thick-limbed animal (a bear) the swollen hips stood out of the flanks as four balls, the
+        // trunk a peanut between them. The limb below keeps its girth.
+        if (j === 0 && !arch) r = Math.min(r, HIP_MAX * base.radius);
       }
       // the eye is the emotional anchor — floor the grown bulb so even a tapered/stalked eye on a
       // small head always reads (M19/M24), regardless of how the gene tapered down its tip.

@@ -353,6 +353,25 @@ function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
+/**
+ * How likely a nose is to be pink rather than near-black: about even on a mouse, less on a cat,
+ * rare at the end of a long muzzle (a dog's, a deer's), and never on anything the size of a bear.
+ * Judged from the body itself — its girth, and whether its head runs to a third link, a long snout.
+ */
+export function pinkNoseChance(p: Phenotype): number {
+  let girth = 0;
+  let headSegment = 0;
+  for (const n of p.nodes) {
+    if (n.kind !== 'spine') continue;
+    if ((n.segment ?? 0) === 0) girth = Math.max(girth, n.radius);
+    headSegment = Math.max(headSegment, n.segment ?? 0);
+  }
+  const headLinks = headSegment > 0 ? p.nodes.filter((n) => n.kind === 'spine' && n.segment === headSegment).length : 0;
+  const small = Math.min(1, Math.max(0, (0.66 - girth) / 0.2));
+  // (a small animal's long snout is a shrew's or a rat's: pink as often as not)
+  return 0.7 * small * (headLinks >= 3 && girth > 0.5 ? 0.15 : 1);
+}
+
 export function JawedMouth({
   f,
   phenotype,
@@ -378,16 +397,17 @@ export function JawedMouth({
   );
   const pal = phenotype.genomeRef.palette;
   const coat = useMemo(() => coatMain(pal).getHex(), [pal]);
-  // a wet nose: mostly near-black, sometimes the dusky pink of a cat's or a pig's
+  // a wet nose: near-black, or on a small animal as often the dusky pink of a mouse's or a kitten's
+  // (a pink nose on a bear or a wolf made a giant rodent of it — the bigger the body, the rarer)
   // (an ape has no wet rhinarium: its nose is the bare face's own skin, a shade darker)
   const ape = useMemo(() => faceMaskOf(phenotype), [phenotype]);
   const noseColor = useMemo(
     () =>
       ape
         ? new THREE.Color(ape.color).multiplyScalar(0.7).getHex()
-        : hash01(phenotype.genomeRef.seed, 0x4e05) < 0.62
-          ? 0x1c1416
-          : new THREE.Color().setHSL(0.98, 0.32, 0.42).getHex(),
+        : hash01(phenotype.genomeRef.seed, 0x4e05) < pinkNoseChance(phenotype)
+          ? new THREE.Color().setHSL(0.98, 0.32, 0.42).getHex()
+          : 0x1c1416,
     [phenotype, ape],
   );
 

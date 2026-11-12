@@ -149,6 +149,58 @@ describe('body plans', () => {
     }
   });
 
+  it('a haunch is part of the body it hangs from, never a second body beside it', () => {
+    // (a bear's hips were 0.9 of its chest's depth across: four balls, the trunk a peanut between them)
+    for (const id of ['ursid', 'felid', 'canid', 'ungulate', 'rodent', 'mustelid']) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+        const girth = Math.max(...trunkOf(p).map((n) => n.radius));
+        p.nodes.forEach((n, i) => {
+          const par = p.nodes[parent.get(i) ?? -1];
+          if (n.part?.kind !== 'leg' || !par || par.kind !== 'spine') return; // a leg's root link
+          expect(n.radius / girth, `${id} #${seed}`).toBeLessThan(0.7);
+        });
+      }
+    }
+  });
+
+  it('a mouse is a sleek teardrop on thin legs: widest at the haunch, not a barrel on columns', () => {
+    for (let seed = 1; seed <= 16; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'rodent'));
+      const t = trunkOf(p).sort((a, b) => a.pos[2] - b.pos[2]);
+      expect(t.length, `#${seed}`).toBe(3);
+      // narrower at the shoulders than behind them (the dorsal outline was a knobbly barrel)
+      expect(t[2].radius, `#${seed} shoulders`).toBeLessThan(Math.max(t[0].radius, t[1].radius));
+      // legs a fraction of the body's girth (the hips were two-thirds of it: shoulder and haunch lobes)
+      const girth = Math.max(...t.map((n) => n.radius));
+      const legs = p.nodes.filter((n) => n.part?.kind === 'leg' && n.kind === 'limb');
+      expect(Math.max(...legs.map((n) => n.radius)) / girth, `#${seed} legs`).toBeLessThan(0.5);
+      // …and the body is longer than a ball: at least 1.6 depths from rump to chest
+      expect((t[2].pos[2] + t[2].radius - (t[0].pos[2] - t[0].radius)) / (2 * girth), `#${seed} length`).toBeGreaterThan(1.6);
+    }
+  });
+
+  it('a bear has a broad skull and a short blunt muzzle on short thick limbs — not a capybara’s cone', () => {
+    for (let seed = 1; seed <= 16; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'ursid'));
+      const spine = p.nodes.filter((n) => n.kind === 'spine');
+      const last = Math.max(...spine.map((n) => n.segment ?? 0));
+      const head = spine.filter((n) => n.segment === last);
+      // a cranium and one muzzle link (three links tapered evenly from brow to nose: a rodent's snout)
+      expect(head.length, `#${seed}`).toBe(2);
+      const ry = (n: (typeof spine)[number]) => n.radius * (n.scale?.[1] ?? 1);
+      const tip = head[1];
+      const len = tip.pos[2] + tip.radius * (tip.scale?.[2] ?? 1) - (head[0].pos[2] - head[0].radius);
+      expect(len / (2 * ry(head[0])), `#${seed} head length`).toBeLessThan(1.8);
+      // the limb below the haunch stays thick: the thinnest link over a fifth of the chest's depth
+      const t = trunkOf(p);
+      const D = 2 * Math.max(...t.map(ry));
+      const legs = p.nodes.filter((n) => n.part?.kind === 'leg' && n.kind === 'limb');
+      expect((2 * Math.min(...legs.map((n) => n.radius))) / D, `#${seed} shank`).toBeGreaterThan(0.2);
+    }
+  });
+
   it('ears are flaps on the skull, not lumps in it: rooted on its surface, set apart on its upper corners', () => {
     for (const id of ['felid', 'canid', 'ursid', 'rodent', 'mustelid', 'ungulate']) {
       let seen = 0;

@@ -485,8 +485,13 @@ function Inspector({ genome, phenotype, framing }: { genome: Genome; phenotype: 
 const DEV_JUVENILE = import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('juvenile') === '1';
 
 function Bench({ genome, skinMode, overlays, motion }: { genome: Genome; skinMode: SkinMode; overlays: Overlays; motion: Motion }) {
-  const phenotype = useMemo(() => grow(DEV_JUVENILE ? juvenileGenome(genome) : genome), [genome]);
-  const framing = useMemo(() => framingOf(phenotype), [phenotype]);
+  const grown = useMemo(() => grow(DEV_JUVENILE ? juvenileGenome(genome) : genome), [genome]);
+  const measured = useMemo(() => framingOf(grown), [grown]);
+  // At rest the specimen lies as it does everywhere else — a snake in its S, not laid out like a ruler
+  // (the bench drew the body exactly as grown: dead straight). A motion's rig bends the body itself,
+  // so it starts from the body as grown; and the inspector measures that body, not its pose.
+  const phenotype = useMemo(() => (motion === 'still' ? restPosed(grown) : grown), [grown, motion]);
+  const framing = useMemo(() => (phenotype === grown ? measured : framingOf(phenotype)), [phenotype, grown, measured]);
   return (
     <div className="bench">
       <div className="bench-views">
@@ -497,7 +502,7 @@ function Bench({ genome, skinMode, overlays, motion }: { genome: Genome; skinMod
           ))}
         </div>
       </div>
-      <Inspector genome={genome} phenotype={phenotype} framing={framing} />
+      <Inspector genome={genome} phenotype={grown} framing={measured} />
     </div>
   );
 }
