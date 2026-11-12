@@ -63,6 +63,10 @@ interface Morpho {
   claws?: number; // prob of a pair of CHELIPEDS — a crab's big claws, held out in front (see cheliped)
   dorsal?: number;
   pectoral?: number;
+  /** false: the pectoral pair is drawn and then left off (so no other gene of the plan moves). On a body
+   *  that stands on four legs under a pair of wings, a fin on each flank was a pale shard stuck to the
+   *  ribs, its rays a row of needles out of the side. */
+  flankFins?: false;
   anal?: number; // prob of an anal fin: a keel under the rear of a fish's body, opposite the dorsal
   pelvic?: number; // prob of a pair of pelvic fins under the belly (a bony fish's)
   dorsal2?: number; // prob of a small second dorsal fin toward the tail (a shark's)
@@ -104,6 +108,7 @@ interface Morpho {
   neck?: Rg; // a neck between trunk and head: its girth ×body girth (absent ⇒ the head sits on the shoulders)
   neckLinks?: readonly [number, number]; // neck length in links (default [1, 1])
   neckLift?: Rg; // per-link upward bend of the neck (rad, negative = up) — default [-0.15, -0.05]
+  neckLong?: number; // a neck link's length ×its girth — default 1.25; an ape's is a short thick nape, the head close on the shoulders
   headSize?: Rg; // head girth ×body girth — default [0.7, 1.05]; a mammal's skull is far narrower than its chest
   muzzle?: Rg; // a mammal skull: a round cranium + a narrower, dropped muzzle (muzzle girth ×cranium, ≥ 0.6)
   muzzleDrop?: Rg; // how far the muzzle hangs below the brow (pitch, rad) — default [0.3, 0.42]
@@ -117,9 +122,21 @@ interface Morpho {
   armThick?: Rg; // grasping-arm root radius ×girth — default [0.18, 0.28]
   armTaper?: Rg; // default [0.7, 0.85]
   armCurl?: Rg; // the elbow's bend (rad per joint) — default [0.35, 0.55]; an ape's long arms hang near straight
+  armSegs?: number; // the arm's link count (an ape's is a shoulder, an elbow and a fist: on four the forearm broke again above the wrist)
   horns?: number;
+  /** where along a plain head the horns root (0 = the cranium) — default mid-head, which on a head of
+   *  two links is its SNOUT: a pair of horns stood on the tip of the nose like a stalk. A constant: no draw. */
+  hornT?: number;
+  /** the horns' azimuth round the skull (π/2 = straight up) — default [1.0, 1.7], which reaches the
+   *  midline and past it: on a narrow skull the pair merged into one forked stub. Nearer 1.0 they stand
+   *  apart on the upper corners of the head. */
+  hornAz?: Rg;
   spines?: number;
   frill?: number;
+  /** 'head': the frill fans out from the back of the SKULL (a frilled lizard's ruff, a lion's mane)
+   *  instead of round the trunk, where on a long four-legged body it stood across the middle of the
+   *  back like a tutu and cut the animal in two. The part is moved once the head exists: no draw. */
+  frillAt?: 'head';
   antennae?: number;
   ears?: number; // prob of a pair of ears (M23)
   earStyle?: Rg; // 0 pointed … 0.5 leaf … 1 round
@@ -143,7 +160,7 @@ interface Morpho {
   eyeAz?: Rg; // placement (1.0 up-fwd, ~0.3 side, ~1.6 top — but a PAIR near 1.57 merges on the midline)
   eyeEl?: Rg; // forward tilt of the eyes: ~1.1 forward (cat, ape) … ~0.6 lateral (deer, mouse) … ~0.25 a fish's
   eyeT?: Rg; // where along a plain head the eyes sit — default [0.7, 0.98] (front); a croc's ride far back
-  eyeSize?: number; // × the eye's usual size (a frog's bulge from the top of its head)
+  eyeSize?: number; // × the eye's usual size (a frog's bulge from the top of its head; an ape's are small under its brow)
   eyeTilt?: number; // rolls each eye about its gaze (rad), so its lids slant down toward the bill: a hawk's scowl
   hindSegs?: number; // the hind pair's link count (a frog's thigh, shin and long foot fold in a Z)
   legSegs?: number; // every leg's link count (a crab's merus, carpus and pointed dactyl: on two links its legs were table legs)
@@ -183,9 +200,12 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'crab', cluster: 'familiar', weight: 1.2, girth: [0.5, 0.62], repeat: [1, 1], height: [0.33, 0.4], elong: [0.78, 0.92], legPairs: [4], legSegs: 4, posture: 'sprawling', legLen: [0.72, 0.9], legThick: [0.28, 0.36], legTerm: ['claw'], claws: 1, head: 0, tail: 0.0, carapace: 0.95, stalkEyes: 1, stalkLen: [0.32, 0.42], eyeStyle: [0, 0.3], eyeAz: [0.42, 0.58], eyeEl: [1.05, 1.15], mouthStyle: [0.38, 0.49], mouthSize: [0.5, 0.6], covering: ['chitin'], pattern: ['mottle', 'reticulate', 'plain'], sheen: [0.3, 0.55], hue: [0.0, 0.1], sat: [0.5, 0.85] },
   { id: 'insectoid', cluster: 'familiar', weight: 1.2, tagmata: 'insect', carapace: 0.4, girth: [0.32, 0.44], repeat: [3, 3], height: [0.8, 0.92], elong: [0.75, 0.92], taper: [1.08, 1.15], thorax: [0.62, 0.74], thoraxLong: [1.15, 1.4], legPairs: [3], posture: 'sprawling', legLen: [0.85, 1.05], legThick: [0.26, 0.34], hindLeg: [1.25, 1.1], foreLeg: [0.85, 1.0], legTerm: ['claw'], headSize: [0.82, 0.98], headShape: ['round', 'broad'], antennae: 0.95, eyeStyle: [0.6, 0.8], eyeCount: [2], eyeAz: [0.2, 0.45], eyeEl: [0.5, 0.75], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['bands', 'spots', 'plain', 'reticulate'], sheen: [0.6, 0.95], hue: [0.0, 0.6], sat: [0.5, 0.9] },
   { id: 'arachnid', cluster: 'familiar', weight: 0.9, tagmata: 'spider', girth: [0.42, 0.56], repeat: [1, 1], height: [0.85, 1.0], elong: [1.3, 1.7], thorax: [0.6, 0.7], thoraxLong: [1.1, 1.25], legPairs: [4], posture: 'sprawling', legLen: [1.4, 1.75], legThick: [0.22, 0.3], foreLeg: [1.1, 1.0], legTerm: ['claw'], eyeStyle: [0.2, 0.4], eyeCount: [6, 8], mouthStyle: [0.38, 0.49], covering: ['fur', 'chitin'], pattern: ['mottle', 'bands'], hue: [0.02, 0.09], sat: [0.3, 0.6] },
-  // upright grasping ape/monkey: long limbs, deep chest, flat forward-eyed face, expressive head
-  // upright ape: a biped (long legs) with forward-reaching grasping arms, a tall domed-skulled flat face
-  { id: 'primate', cluster: 'familiar', weight: 1.0, eyeAz: [0.5, 0.65], eyeEl: [1.08, 1.15], girth: [0.28, 0.34], repeat: [3, 3], height: [0.72, 0.8], taper: [1.12, 1.15], elong: [1.2, 1.35], rear: [-0.46, -0.34], headSize: [0.8, 0.92], muzzle: [0.66, 0.74], muzzleDrop: [0.3, 0.4], legPairs: [1], posture: 'upright', legLen: [1.05, 1.4], legThick: [0.38, 0.48], legTerm: ['foot'], arms: 1, armLen: [1.25, 1.45], armCurl: [0.12, 0.22], armThick: [0.36, 0.44], armTaper: [0.84, 0.92], armAz: [4.34, 4.48], armEl: [0.26, 0.4], armT: [0.84, 0.94], tail: 0.4, tailSegs: [3, 5], tailLen: [0.5, 0.8], tailThick: [0.14, 0.22], tailAz: [1.45, 1.7], tailDroop: [-1.0, -0.8], tailCurl: [-0.32, -0.18], ears: 0.7, earStyle: [0.7, 1], earAz: [0.3, 0.5], earSize: [0.62, 0.78], head: 1.0, headShape: ['domed'], headWide: [1.12, 1.28], headDome: [0.88, 1.0], snout: [0.08, 0.18], eyeStyle: [0, 0.15], mouthStyle: [0.07, 0.12], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.04, 0.1], sat: [0.3, 0.6] },
+  // ape: a knuckle-walker. A broad chest reared up off narrow hips; long arms hung from the shoulders
+  // (the widest part of it) to fists on the ground; short flexed hind legs; a head well under the
+  // chest's width close on a short thick nape, with a brow, forward eyes and a muzzle set below them.
+  // (With a skull as wide as the trunk, the arms rooted under the chest like forelegs and long hind
+  // legs it was a hooded thumb on four posts — and the four in ten that drew a tail were not apes.)
+  { id: 'primate', cluster: 'familiar', weight: 1.0, eyeAz: [0.7, 0.82], eyeEl: [1.08, 1.15], girth: [0.52, 0.6], repeat: [3, 3], height: [0.76, 0.84], taper: [1.14, 1.15], elong: [0.88, 0.96], rear: [-0.37, -0.34], headSize: [0.56, 0.62], muzzle: [0.6, 0.66], muzzleDrop: [0.46, 0.5], legPairs: [1], posture: 'upright', legLen: [0.78, 0.94], legThick: [0.38, 0.46], legTerm: ['foot'], arms: 1, armLen: [1.2, 1.3], armCurl: [-0.26, -0.22], armThick: [0.3, 0.36], armTaper: [0.8, 0.86], armAz: [4.66, 4.76], armEl: [-0.36, -0.32], armT: [0.84, 0.94], tail: 0, tailSegs: [3, 5], tailLen: [0.5, 0.8], tailThick: [0.14, 0.22], tailAz: [1.45, 1.7], tailDroop: [-1.0, -0.8], tailCurl: [-0.32, -0.18], ears: 1, earStyle: [0.7, 1], earAz: [0.08, 0.24], earSize: [0.5, 0.62], head: 1.0, headShape: ['domed'], headWide: [0.98, 1.08], headDome: [1.02, 1.14], snout: [0.0, 0.08], eyeStyle: [0, 0.15], mouthStyle: [0.07, 0.12], armSegs: 3, neck: [0.6, 0.68], neckLift: [0.42, 0.5], neckLong: 0.8, light: [0.2, 0.36], legSegs: 3, eyeSize: 0.8, covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.04, 0.1], sat: [0.3, 0.6] },
   // biped: an upright two-legged walker (theropod / kangaroo / humanoid). Long strong striding legs,
   // grasping arms, a heavy balancing tail, a proper head. Wide covering/mouth range so it spans a
   // furred kangaroo, a scaled raptor-thing, a feathered strider — a whole basin of two-legged forms.
@@ -211,8 +231,10 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'slime', cluster: 'uncanny', weight: 0.7, girth: [0.42, 0.6], repeat: [4, 5], height: [0.5, 0.62], elong: [0.95, 1.1], rear: [-0.07, -0.03], taper: [1.1, 1.14], legPairs: [0], stalkEyes: 1, stalkLen: [0.4, 0.5], eyeEl: [0.6, 0.75], eyeAz: [1.22, 1.38], mouthStyle: [0.5, 0.6], tail: 0.0, head: 0.0, eyeStyle: [0.05, 0.25], covering: ['slime'], pattern: ['gradient', 'mottle'], sheen: [0.8, 1.0], hue: [0.25, 0.7], sat: [0.5, 0.9], light: [0.45, 0.7] },
   { id: 'urchin', cluster: 'uncanny', weight: 0.6, symmetry: 'radial', radialCount: [8, 12], girth: [0.45, 0.7], repeat: [1, 1], height: [0.9, 1.1], eyeSize: 0.62, covering: ['chitin'], pattern: ['mottle', 'bands'], hue: [0.6, 0.95], sat: [0.4, 0.8] },
   { id: 'starfish', cluster: 'uncanny', weight: 0.6, symmetry: 'radial', radialCount: [4, 6], girth: [0.4, 0.6], repeat: [1, 1], height: [0.4, 0.6], covering: ['plates', 'chitin'], pattern: ['reticulate', 'spots'], hue: [0.02, 0.15], sat: [0.5, 0.85] },
-  // griffin/manticore mishmash: a winged horned tailed quadruped wearing spliced fins + a clashing skin
-  { id: 'chimera', cluster: 'uncanny', weight: 0.9, girth: [0.45, 0.65], repeat: [3, 4], elong: [1.1, 1.4], taper: [1.04, 1.1], legThick: [0.42, 0.56], neck: [0.5, 0.6], neckLinks: [2, 3], neckLift: [-0.36, -0.26], headSize: [0.56, 0.7], headShape: ['wedge', 'tapered', 'blocky', 'round'], legPairs: [2], posture: 'digitigrade', legLen: [0.8, 1.1], legTerm: ['claw', 'foot', 'pincer'], wings: 1, dorsal: 0.85, pectoral: 0.6, tail: 1, tailTerm: ['fin', 'claw', 'none'], wingSize: [1.3, 1.6], tailThick: [0.4, 0.54], tailTaper: [0.78, 0.86], horns: 0.8, frill: 0.4, spines: 0.4, eyeStyle: [0, 1], eyeCount: [2, 3], mouthStyle: [0.07, 0.49], covering: ['skin', 'scales', 'fur', 'feathers', 'chitin', 'plates'], pattern: ['stripes', 'bands', 'spots', 'ocelli', 'reticulate', 'gradient'], sheen: [0.2, 0.9], hue: [0, 1], sat: [0.5, 0.9] },
+  // griffin/manticore mishmash: a winged horned tailed quadruped wearing a spliced back sail + a clashing skin.
+  // It stands on stout legs under its body (splayed like a lizard's, on thin shanks, it was a heavy trunk
+  // on an A-frame of sticks), carries its tail clear of the ground, and wears its ruff round its head.
+  { id: 'chimera', cluster: 'uncanny', weight: 0.9, girth: [0.45, 0.65], repeat: [3, 4], elong: [1.1, 1.4], taper: [1.04, 1.1], legThick: [0.5, 0.62], neck: [0.5, 0.6], neckLinks: [2, 3], neckLift: [-0.36, -0.26], headSize: [0.56, 0.7], headShape: ['wedge', 'tapered', 'blocky', 'round'], legPairs: [2], posture: 'digitigrade', legAz: [4.38, 4.56], legLen: [0.8, 1.1], legTerm: ['claw', 'foot', 'pincer'], wings: 1, dorsal: 0.85, pectoral: 0.6, flankFins: false, tail: 1, tailTerm: ['fin', 'claw', 'none'], wingSize: [1.3, 1.6], tailThick: [0.4, 0.54], tailTaper: [0.78, 0.86], tailDroop: [-1.45, -1.15], horns: 0.8, hornT: 0, hornAz: [0.85, 1.25], frill: 0.4, frillAt: 'head', spines: 0.4, eyeStyle: [0, 1], eyeCount: [2, 3], mouthStyle: [0.07, 0.49], covering: ['skin', 'scales', 'fur', 'feathers', 'chitin', 'plates'], pattern: ['stripes', 'bands', 'spots', 'ocelli', 'reticulate', 'gradient'], sheen: [0.2, 0.9], hue: [0, 1], sat: [0.5, 0.9] },
   // wrong-arthropod: ten-plus sprawled legs, clustered compound/glowing eyes, multi-mandible, iridescent chitin
   { id: 'arthro-alien', cluster: 'uncanny', weight: 1.0, girth: [0.34, 0.5], repeat: [3, 5], height: [0.7, 0.95], elong: [1.1, 1.4], legPairs: [5], posture: 'sprawling', legLen: [0.55, 0.85], legAz: [3.6, 4.0], legTerm: ['claw'], spines: 0.7, antennae: 0.6, gills: 0.3, eyeStyle: [0.6, 0.85], eyeCount: [4, 6], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['bands', 'reticulate'], sheen: [0.6, 0.95], hue: [0.15, 0.7], sat: [0.6, 0.9] },
   // crystalline: angular rigid limbs, a spike ridge, glowing facet "eyes" (the core), hard plated/metallic gradient skin
@@ -303,7 +325,11 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
     apps.push(g);
   }
   // a forward-reaching grasping arm pair (primate) near the shoulders
-  if (chance(rng, m.arms ?? 0)) apps.push(graspArm(rng, rg(rng, m.armT, [0.62, 0.78]), girth, m));
+  if (chance(rng, m.arms ?? 0)) {
+    const arm = graspArm(rng, rg(rng, m.armT, [0.62, 0.78]), girth, m);
+    if (m.armSegs) arm.segments = m.armSegs; // (no draw: every other morphotype's genome stream stays as it was)
+    apps.push(arm);
+  }
   // (no draw unless the morph has claws: every other morphotype's genome stream stays as it was)
   if (m.claws && chance(rng, m.claws)) apps.push(cheliped(rng, girth));
   // wings, fins
@@ -312,7 +338,10 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
   if (chance(rng, m.dorsal ?? 0)) apps.push(dorsalFin(rng, rg(rng, m.dorsalT, [0.3, 0.6]), girth, m));
   // pectorals just behind the gill slits (the trunk runs rump 0 → head 1: at 0.25–0.45 they stuck
   // out beside the tail)
-  if (chance(rng, m.pectoral ?? 0)) apps.push(pectoralFin(rng, rg(rng, m.pectoralT, [0.66, 0.8]), girth, m));
+  if (chance(rng, m.pectoral ?? 0)) {
+    const fin = pectoralFin(rng, rg(rng, m.pectoralT, [0.66, 0.8]), girth, m);
+    if (m.flankFins !== false) apps.push(fin);
+  }
   // (no draw unless the morph has one: every other morphotype's genome stream stays as it was)
   if (m.anal && chance(rng, m.anal)) apps.push(analFin(rng, range(rng, 0.14, 0.3), girth, m));
   if (m.pelvic && chance(rng, m.pelvic)) apps.push(pelvicFin(rng, range(rng, 0.42, 0.56), girth, m));
@@ -355,13 +384,18 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
   // generic plans may wear their face on the trunk
   if (chance(rng, m.neck || m.muzzle ? 1 : m.head ?? 0.9)) {
     const head = headSeg(rng, girth, m, eyeStyle);
+    // (no draw: the frill already generated moves from the trunk to the back of the skull)
+    if (m.frillAt === 'head') {
+      const i = apps.findIndex((a) => a.kind === 'frill');
+      if (i >= 0) head.appendages.push({ ...apps.splice(i, 1)[0], attachT: 0 });
+    }
     if (m.neck) {
       // a neck sets the head apart from the shoulders: a narrower section, lifting the head a touch
       const nf = rg(rng, m.neck);
       const links = randint(rng, ...(m.neckLinks ?? ([1, 1] as const)));
       const sb = GENERIC_SIZE;
       body.child = {
-        size: [clamp(girth * nf, sb), clamp(girth * nf * 1.08, sb), clamp(girth * nf * 1.25, sb)],
+        size: [clamp(girth * nf, sb), clamp(girth * nf * 1.08, sb), clamp(girth * nf * (m.neckLong ?? 1.25), sb)],
         repeat: links,
         taper: 0.96,
         curve: [clamp(rg(rng, m.neckLift, [-0.15, -0.05]), GENE_BOUNDS.segment.curvePitch), 0],
@@ -514,7 +548,7 @@ function headSeg(rng: Rng, bodyGirth: number, m: Morpho, eyeStyle: number): Segm
   if (m.mouthEl) mouthGene.attachElevation = rg(rng, m.mouthEl);
   if (m.mouthSize) mouthGene.thickness = clamp(mouthGene.thickness * rg(rng, m.mouthSize), A.thickness);
   apps.push(mouthGene);
-  if (chance(rng, m.horns ?? 0)) apps.push(horns(rng, g));
+  if (chance(rng, m.horns ?? 0)) apps.push({ ...horns(rng, g, m), ...(m.hornT !== undefined ? { attachT: m.hornT } : {}) });
   if (chance(rng, m.ears ?? 0)) apps.push(ear(rng, g, m.earStyle));
   if (chance(rng, m.whiskers ?? 0)) apps.push(whisker(rng, g));
   if (chance(rng, m.crest ?? 0)) apps.push(crest(rng, g));
@@ -555,12 +589,12 @@ function muzzleHead(rng: Rng, g: number, m: Morpho, eyeStyle: number): SegmentGe
   for (let p = 0; p < Math.max(1, Math.round(eyeCount / 2)); p++) {
     // (sized against more than the skull's girth: at true scale a mammal's eye, half sunk into the
     // skull, all but vanished — a lively face needs a readable eye)
-    apps.push(eyes(rng, range(rng, 0.05, 0.22), false, g * 1.12, { style: [eyeStyle, eyeStyle], az: (m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.45, 0.7)) + p * 0.3, el: m.eyeEl }));
+    apps.push(eyes(rng, range(rng, 0.05, 0.22), false, g * 1.12, { style: [eyeStyle, eyeStyle], az: (m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.45, 0.7)) + p * 0.3, el: m.eyeEl, size: m.eyeSize }));
   }
   const mouthGene = mouth(rng, mg * 1.05, m.mouthStyle);
   mouthGene.attachT = 1; // the muzzle carries the mouth
   apps.push(mouthGene);
-  if (chance(rng, m.horns ?? 0)) apps.push({ ...horns(rng, g), attachT: range(rng, 0.0, 0.2) });
+  if (chance(rng, m.horns ?? 0)) apps.push({ ...horns(rng, g, m), attachT: range(rng, 0.0, 0.2) });
   if (chance(rng, m.ears ?? 0)) apps.push({ ...ear(rng, g * rg(rng, m.earSize, [1, 1]), m.earStyle, m.earAz), attachT: range(rng, 0.0, 0.2) });
   // whiskers fan out sideways from the muzzle's flanks (the generic whisker hangs off a snout's underside)
   if (chance(rng, m.whiskers ?? 0)) apps.push({ ...whisker(rng, mg), attachT: 1, attachAzimuth: range(rng, 5.75, 6.05), attachElevation: range(rng, 0.15, 0.4) });
@@ -760,9 +794,9 @@ function tail(rng: Rng, girth: number, terminal: Terminal, m?: Morpho): Appendag
   });
 }
 
-function horns(rng: Rng, refGirth: number): AppendageGene {
+function horns(rng: Rng, refGirth: number, m?: Morpho): AppendageGene {
   return part('horn', 'claw', true, range(rng, 0, 0.6), {
-    attachAzimuth: range(rng, 1.0, 1.7),
+    attachAzimuth: rg(rng, m?.hornAz, [1.0, 1.7]),
     attachElevation: range(rng, 0.3, 0.7),
     segments: randint(rng, 1, 2),
     length: clamp(refGirth * range(rng, 0.5, 1.0), A.length),

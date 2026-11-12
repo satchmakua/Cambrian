@@ -15,7 +15,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { FlightContext } from './flight';
 import { blinkAt, LidContext } from './eyelids';
-import type { Phenotype } from '../engine/grow';
+import { legBearer, type Phenotype } from '../engine/grow';
 import { unitHash } from '../engine/rng';
 import { buildMeshData, type MeshFeature } from './meshData';
 import { eyeVariant, earVariant } from './partStyles';
@@ -27,12 +27,13 @@ import { makeCreatureMaterial } from './creatureMaterial';
 import { bareLegsOf, footPlanOf, lastLinkOf, legWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, longWingFold, trunkGirth, LONG_WING, type FinBuild } from './wings';
+import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, longWingFold, trunkGirth, wingCarriage, LONG_WING, type FinBuild } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface } from './bodyField';
 import { BROW_TILT, eyeClearings, eyeSeat, eyeTilt, isSwimmer } from './eyeSeat';
 import { coatDark, coatFin, coatMain, coatPattern } from './palette';
-import { faceMaskOf, isApe } from './face';
+import { browRidgeGeometry, faceMaskOf, isApe } from './face';
+import { apeFootGeometry, fistGeometry } from './apeLimbs';
 import { clawGeometry } from './claw';
 import { shardGeometry } from './shards';
 import { frillGeometry, frillPlan } from './frill';
@@ -287,7 +288,7 @@ export function CreatureMesh({
   // colors dominate; striking blues/reds/violets appear as a minority, so eye colour is a real point
   // of variety without every creature reading as a clown.
   // (an ape's eyes are a warm dark brown — the curated palette's yellow-greens read as a cat's)
-  const irisColor = useMemo(() => (isApe(phenotype) ? new THREE.Color().setHSL(0.07 + 0.03 * unitHash(seed, 0xa9e), 0.55, 0.22).getHex() : irisFor(seed)), [seed, phenotype]);
+  const irisColor = useMemo(() => (isApe(phenotype) ? new THREE.Color().setHSL(0.07 + 0.03 * unitHash(seed, 0xa9e), 0.55, 0.12).getHex() : irisFor(seed)), [seed, phenotype]);
 
   // scratch buffer the trajectory sampler writes each played-back frame into
   const animScratch = useMemo(() => new Float32Array(data.nodes.length * 3), [data]);
@@ -671,9 +672,9 @@ function Feature({
     case 'hoof':
       return <Hoof f={f} color={footColor} />;
     case 'hand':
-      return <Hand f={f} color={footColor} />;
+      return isApe(phenotype) ? <ApeLimb f={f} skin={skin} phenotype={phenotype} fist /> : <Hand f={f} color={footColor} />;
     default:
-      return <Foot f={f} color={footColor} />;
+      return f.kind === 'leg' && isApe(phenotype) ? <ApeLimb f={f} skin={skin} phenotype={phenotype} /> : <Foot f={f} color={footColor} />;
   }
 }
 
@@ -826,6 +827,13 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
     return browGeometry(r, sink, seat.quat, origin);
   }, [lidded, onFace, skin, origin, phenotype, f.quat, r, sink, seat.quat]);
   useEffect(() => () => browGeo?.dispose(), [browGeo]);
+  // an ape's brow ridge over the eye (face.ts) — skin, in the body frame (it does not turn with the ball)
+  const brow = useMemo(() => {
+    if (!lidded || !skin || !origin || !phenotype) return null;
+    const g = browRidgeGeometry(phenotype, f.idx);
+    return g ? bakeSkin(g, origin) : null;
+  }, [lidded, skin, origin, phenotype, f.idx]);
+  useEffect(() => () => brow?.dispose(), [brow]);
   const lids = useContext(LidContext);
   const upper = useRef<THREE.Mesh>(null);
   const lower = useRef<THREE.Mesh>(null);
@@ -839,6 +847,8 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
     lower.current.rotation.x = LID_OPEN.lower + close * (LID_SHUT.lower - LID_OPEN.lower);
   });
   return (
+    <>
+    {brow && skin && <mesh geometry={brow} material={skin} castShadow />}
     <group quaternion={seat.quat as [number, number, number, number]}>
       <group position={[0, 0, -sink]}>
       {lidded && lidGeo && skin ? (
@@ -948,6 +958,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
       )}
       </group>
     </group>
+    </>
   );
 }
 
@@ -1064,6 +1075,40 @@ function Hand({ f, color }: { f: MeshFeature; color: number }) {
       <mesh position={[-r * 0.6, 0, r * 0.3]} rotation={[Math.PI / 2, 0, 0.7]} scale={[r * 0.13, r * 0.13, r * 0.6]} castShadow>
         <cylinderGeometry args={[1, 0.8, 1, 6]} />
         <meshStandardMaterial color={color} roughness={0.72} />
+      </mesh>
+    </group>
+  );
+}
+
+// An ape's knuckle-walking fist or its long-toed hind foot (apeLimbs.ts): the back of the hand and the
+// top of the foot in the body's own coat, the fingers and toes in the bare skin of its face.
+function ApeLimb({ f, skin, phenotype, fist = false }: { f: MeshFeature; skin: THREE.Material; phenotype: Phenotype; fist?: boolean }) {
+  const r = Math.max(f.radius, 0.06);
+  const node = phenotype.nodes[f.idx];
+  const geo = useMemo(() => {
+    const side = node.pos[0] >= 0 ? 1 : -1;
+    let g;
+    if (fist) {
+      // the floor is where the feet stand; a fist reaches down to it (but no further than a hand's length)
+      let floor = Infinity;
+      for (const n of phenotype.nodes) if (n.kind === 'terminal' && n.part?.kind === 'leg') floor = Math.min(floor, n.pos[1] - n.radius);
+      g = fistGeometry(r, Math.min(Math.max(node.pos[1] - floor, 0.8 * r), 2.2 * r), side);
+    } else g = apeFootGeometry(r, side);
+    bakeSkin(g.fur, node.pos);
+    // (it has no pile of its own: shaded like the furred limb above it, not a pale cuff under it)
+    (g.fur.getAttribute('aAO').array as Float32Array).fill(0.45);
+    return g;
+  }, [r, node, phenotype, fist]);
+  useEffect(() => () => {
+    geo.fur.dispose();
+    geo.bare.dispose();
+  }, [geo]);
+  const bare = useMemo(() => new THREE.Color(faceMaskOf(phenotype)?.color ?? 0x3a2a22).multiplyScalar(0.5).getHex(), [phenotype]);
+  return (
+    <group>
+      <mesh geometry={geo.fur} material={skin} castShadow />
+      <mesh geometry={geo.bare} castShadow>
+        <meshStandardMaterial color={bare} roughness={0.8} />
       </mesh>
     </group>
   );
@@ -1272,11 +1317,13 @@ function Frill({ f, color, phenotype }: { f: MeshFeature; color: number; phenoty
 }
 
 // A wing, built from the SHOULDER in the body frame (see wings.ts): a folded feathered wing for a
-// feathered creature, a spread membrane (arm + finger bones + scalloped billowing skin) otherwise.
+// feathered creature on two legs, the same plumage held raised and open on four (a griffin's), a
+// spread membrane (arm + finger bones + scalloped billowing skin) otherwise.
 // The feature group sits at the wing's tip node, so the build is offset back to the shoulder.
 function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: number; phenotype: Phenotype; lite?: boolean }) {
   const g = phenotype.genomeRef;
   const feathered = g.covering.type === 'feathers';
+  const raised = wingCarriage(feathered, legBearer(g).appendages.filter((a) => a.kind === 'leg').length) === 'raised';
   const build = useMemo(() => {
     // walk back from the tip to the shoulder (the first wing node off the body)
     const parent = new Int32Array(phenotype.nodes.length).fill(-1);
@@ -1300,15 +1347,20 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
     const plumage = coatMain(pal);
     const accent = coatPattern(pal);
     // (a bird of prey's long wing lies down the line of its back, to its tail — see longWingFold)
-    const long = feathered && f.style >= LONG_WING ? longWingFold(phenotype, side) : null;
+    const long = feathered && !raised && f.style >= LONG_WING ? longWingFold(phenotype, side) : null;
     const foldS = long ? long.S : (trunkLen * 1.05 + girth * 0.9) * (0.85 + gene * 0.3);
-    const w = feathered
-      ? buildFeatheredWing(side, foldS, plumage, accent, long?.axis)
-      : // (the wing's own gene counts for more than it did — the same at a typical 0.4, half again
-        // at 0.9 — so a body bred or built for big wings gets them)
-        buildMembraneWing(side, Math.max(trunkLen * 1.15, girth * 3) * (0.55 + gene), 0.55 + 0.3 * (g.seed % 7) / 7);
+    // (the wing's own gene counts for more than it did — the same at a typical 0.4, half again
+    // at 0.9 — so a body bred or built for big wings gets them)
+    const openS = Math.max(trunkLen * 1.15, girth * 3) * (0.55 + gene);
+    // a feathered wing on a four-legged body is held up and half open, to the span a membrane wing
+    // on the same body would have (wings.ts wingCarriage)
+    const w = raised
+      ? buildSpreadFeatheredWing(side, openS, plumage, accent, 0.62 + 0.2 * (g.seed % 7) / 7)
+      : feathered
+        ? buildFeatheredWing(side, foldS, plumage, accent, long?.axis)
+        : buildMembraneWing(side, openS, 0.55 + 0.3 * (g.seed % 7) / 7);
     // the flight posture: the same plumage opened out — a wing reaches further spread than folded
-    const spread = feathered ? buildSpreadFeatheredWing(side, foldS * 1.35, plumage, accent).surface : null;
+    const spread = feathered ? buildSpreadFeatheredWing(side, raised ? openS * 1.1 : foldS * 1.35, plumage, accent).surface : null;
     // (an upright body pitches forward to fly: its spread wings are built tilted back by as much, so
     // they come out level — see flightLevel)
     const level = spread ? flightLevel(phenotype) : 0;
@@ -1323,13 +1375,13 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
       const rx = near.radius * (near.scale?.[0] ?? 1);
       // (a membrane wing's arm roots at the upper corner of the shoulder, its humerus buried in the
       // body — from the dorsal attach point it stuck out of the spine like a broom handle)
-      anchor = feathered
+      anchor = feathered && !raised
         ? [near.pos[0] + side * rx * 0.86, near.pos[1] + near.radius * 0.28, near.pos[2] + near.radius * 0.35]
         : [near.pos[0] + side * rx * 0.55, near.pos[1] + near.radius * 0.5, near.pos[2] + near.radius * 0.2];
     }
     if (long) anchor = long.anchor;
     const off: [number, number, number] = [anchor[0] - tip[0], anchor[1] - tip[1], anchor[2] - tip[2]];
-    if (feathered) {
+    if (feathered && !raised) {
       // wrap the folded wing around the flank (the same field the hybrid skin is meshed from)
       const prims = surfacePrims(phenotype, 'hybrid');
       conformToSurface(w.surface, (x, y, z) => fieldAt(prims, x, y, z), anchor, girth * 0.04, w.lift);
@@ -1342,7 +1394,7 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
       return { pos: [mid.x, mid.y, mid.z] as [number, number, number], quat: [q.x, q.y, q.z, q.w] as [number, number, number, number], len, r0: b.r0, r1: b.r1 };
     });
     return { w, off, bones, side, spread };
-  }, [phenotype, f.idx, f.radius, f.style, feathered, g]);
+  }, [phenotype, f.idx, f.radius, f.style, feathered, raised, g]);
   useEffect(() => () => {
     build.w.surface.dispose();
     build.spread?.dispose();

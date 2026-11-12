@@ -4,10 +4,11 @@
  * The old wing was one flat triangle fan drawn outward from the wing's TIP node: a kite. Real wings
  * are built from the shoulder and come in two very different constructions:
  *
- *   - FEATHERED (birds, feathered chimeras): at rest the wing is FOLDED along the flank — one domed
- *     leaf painted in feather tiers: shingled coverts over the shoulder, secondaries along the lower
- *     edge (with a contrasting speculum band), and dark primaries stacked to the tip, reaching back
- *     past the hip. Spread, the same tiers open into an aerofoil with fingered primary tips.
+ *   - FEATHERED (birds, feathered chimeras): at rest a bird's wing is FOLDED along the flank — one
+ *     domed leaf painted in feather tiers: shingled coverts over the shoulder, secondaries along the
+ *     lower edge (with a contrasting speculum band), and dark primaries stacked to the tip, reaching
+ *     back past the hip. Spread, the same tiers open into an aerofoil with fingered primary tips —
+ *     level in flight, and held RAISED at rest by a four-legged body (see wingCarriage).
  *   - MEMBRANE (dragons, wyverns, bats): spread and raised — a stout arm bone to the wrist, four
  *     finger bones fanning from it, and skin panels stretched between the fingers whose trailing
  *     edges sag in scallops between the tips and billow slightly out of plane, plus the hind panel
@@ -353,11 +354,16 @@ export function longWingFold(p: Phenotype, side: number): WingFold | null {
  * edge along the arm (the speculum band among them), and dark primaries at the hand opening into
  * separated finger tips. Cambered a little, like a real aerofoil. The flap is a rotation of the
  * whole build about the body axis at the shoulder.
+ *
+ * `raise` (0..1) lifts the wing from that level glide to the one a standing griffin holds up and
+ * half open over its back (see wingCarriage): the arm climbs out and back from the shoulder, the hand
+ * curves back behind it, and the flight feathers hang down and back from the arm so the wing shows
+ * its face to the side. (Raised as a flat level sheet it was a plank, and a line from in front.)
  */
-export function buildSpreadFeatheredWing(side: number, S: number, base: THREE.Color, accent: THREE.Color): WingBuild {
+export function buildSpreadFeatheredWing(side: number, S: number, base: THREE.Color, accent: THREE.Color, raise = 0): WingBuild {
   const s = side >= 0 ? 1 : -1;
-  const u = v3(s, 0.06, -0.14).normalize(); // span: out, a touch up and back
-  const c0 = v3(0, 0, -1);
+  const u = v3(s * (1 - 0.35 * raise), 0.06 + raise, -0.14 - 0.35 * raise).normalize(); // span: out, a touch up and back
+  const c0 = v3(0, -0.8 * raise, -1);
   const c = c0.sub(u.clone().multiplyScalar(c0.dot(u))).normalize(); // chord: back, ⟂ span
   const n = new THREE.Vector3().crossVectors(u, c).multiplyScalar(s).normalize(); // up, either side
 
@@ -375,12 +381,29 @@ export function buildSpreadFeatheredWing(side: number, S: number, base: THREE.Co
       const sweep = -0.05 * Math.sin(Math.PI * a); // the leading edge bows forward
       const cb = chord * (1 - notch * sstep(0.35, 1, b));
       const camber = 0.035 * S * Math.sin(Math.PI * b) * (1 - 0.5 * a);
-      p.copy(u).multiplyScalar(a * S).addScaledVector(c, (sweep + b * cb) * S).addScaledVector(n, camber);
+      const arc = 0.24 * raise * a * a; // a raised wing's hand curves back from the wrist
+      const droop = 0.1 * raise * a * a; // …and its tip arches over, outward and down
+      p.copy(u).multiplyScalar(a * S).addScaledVector(c, (sweep + arc + b * cb) * S).addScaledVector(n, camber - droop * S);
       return camber;
     },
     (a, b, col) => plumageAt(t, a, b, HAND, 10, 9, FINGERS * 2, col),
   );
   return { surface: geo, bones: [], wrist: null, lift };
+}
+
+/** How a wing is carried at rest. */
+export type WingCarriage = 'spread' | 'folded' | 'raised';
+
+/**
+ * A membrane wing stands spread. A feathered wing FOLDS along the flank of a body that walks on two
+ * legs (a bird's: the leaf reaches back past the hip and the trunk ends there) — but a body on four
+ * legs has a haunch and a hind leg where that leaf would lie: wrapped over them a griffin's wings were
+ * a pair of boxy saddlebags strapped round its hips, and it did not read as winged at all. It carries
+ * them RAISED instead, held up and half open from the shoulder.
+ */
+export function wingCarriage(feathered: boolean, legPairs: number): WingCarriage {
+  if (!feathered) return 'spread';
+  return legPairs >= 2 ? 'raised' : 'folded';
 }
 
 /**

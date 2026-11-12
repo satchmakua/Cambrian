@@ -43,6 +43,17 @@ const ARCH_TILT_MAX = 1.2;
 /** A leg's root link (haunch, shoulder) is at most this ×the radius of the body it roots on. */
 const HIP_MAX = 0.68;
 
+/** A knuckle-walker's shoulder joint: how far out along the chest's flank it sits (×the chest's
+ *  half-width), how far above the chest's axis (×its half-depth), and the deltoid's swell over the
+ *  arm's own root radius. */
+const SHOULDER_OUT = 0.8;
+const SHOULDER_UP = 0.28;
+const DELTOID = 1.22;
+/** The most a knuckle-walker's arm is stretched or shortened to rest its hand on the ground. */
+const ARM_REACH: [number, number] = [0.72, 1.4];
+/** How far behind the middle of a reared trunk's pelvis its hip joints sit (×the pelvis's radius). */
+const REARED_HIP_BACK = 0.34;
+
 /** Minimum grown radius for an eye bulb (bu) — the face must always read (M19/M24). */
 const EYE_R_MIN = 0.06;
 
@@ -88,6 +99,8 @@ export function grow(genome: Genome): Phenotype {
   let legGenesHere: AppendageGene[] = []; // …and their genes (a jumper's hind legs outreach its fore)
   let tagmaHere = false; // …and whether that segment is an arthropod's thorax (see isTagma)
   let sprawlHere = false; // …and whether its legs sprawl (decided once for them all — see below)
+  /** a body that walks on its arms as well as its legs (an ape): its trunk carries a pair of hand-tipped arms */
+  const armWalker = dev.symmetry === 'bilateral' && dev.body.appendages.some((a) => a.kind === 'arm' && a.terminal === 'hand' && a.pair);
 
   growSegment(dev.body, [0, 0, 0], [0, 0, 0, 1], 0, -1, null);
 
@@ -241,10 +254,14 @@ export function grow(genome: Genome): Phenotype {
       // shoulder / haunch: legs thicken the spine node they attach to, giving the body muscular
       // structure instead of a uniform tube. Once per node: on a short trunk several leg pairs share
       // a node, and compounding ×1.22 per pair swelled a spider's 1–2 node body into a giant ball.
+      // (less and less as an arm-walker's trunk REARS off its hips, and not at all on an ape's: its hips
+      // are the narrow end of a wedge that widens to the shoulders, and swollen they made the rump a
+      // ball as broad as the chest, bulging out behind the hind legs)
       if (app.kind === 'leg' && !haunched.has(spine[ai])) {
         haunched.add(spine[ai]);
         // (a gentle swell — at ×1.22 the shoulders and hips humped the back into a two-bump sway)
-        nodes[spine[ai]].radius = Math.min(nodes[spine[ai]].radius * 1.12, nodes[spine[ai]].radius + 0.2);
+        const swollen = Math.min(nodes[spine[ai]].radius * 1.12, nodes[spine[ai]].radius + 0.2);
+        nodes[spine[ai]].radius = reared > 0 && armWalker ? lerp(swollen, nodes[spine[ai]].radius, reared) : swollen;
       }
       // Legs ride the CHAIN, not the nearest node: the slot is interpolated between neighbouring spine
       // nodes (and extrapolated past a 1-node trunk's ends), so a hexapod's or a spider's legs spread
@@ -402,6 +419,22 @@ export function grow(genome: Genome): Phenotype {
       const kind = n.part?.kind;
       // a tail's (or an arm's) ROOT: its first node off a parent of another kind
       if ((kind !== 'tail' && kind !== 'arm') || p < 0 || nodes[p].part?.kind === kind) continue;
+      // A KNUCKLE-WALKER's arm ends ON the ground: the shoulder stays put and the arm below it is
+      // stretched or shortened (a little) until the hand rests there, as a leg's is to plant its foot.
+      // (Left at its grown length, an ape on long legs stood with its fists hanging in the air, and
+      // one on short legs with its forearms squashed to half the upper arm's length.) By degrees, as
+      // the trunk rears: see knuckleArm.
+      const knuckle = kind === 'arm' && nodes[p].kind === 'spine' && nodes[p].segment === 0 && dev.symmetry === 'bilateral' ? rearedness(dev.body.curve[0]) : 0;
+      if (knuckle > 0) {
+        const chain = [i];
+        for (let k = kids[i].find((c) => nodes[c].part?.kind === kind); k !== undefined; k = kids[k].find((c) => nodes[c].part?.kind === kind)) chain.push(k);
+        const hand = nodes[chain[chain.length - 1]];
+        const drop = n.pos[1] - hand.pos[1];
+        if (hand.terminal === 'hand' && chain.length > 1 && drop > 1e-6) {
+          const s = lerp(1, clamp((n.pos[1] - (groundY + hand.radius * 0.85)) / drop, ARM_REACH), knuckle);
+          for (const c of chain) nodes[c].pos[1] = n.pos[1] + (nodes[c].pos[1] - n.pos[1]) * s;
+        }
+      }
       let lift = 0;
       let cur = i;
       while (true) {
@@ -428,6 +461,14 @@ export function grow(genome: Genome): Phenotype {
         max[a] = Math.max(max[a], n.pos[a] + n.radius);
       }
     }
+  }
+
+  /** How far an arm is an ape's — the limb it walks on its knuckles with: a paired, hand-tipped arm
+   *  on a trunk reared up off its hips (0 on a level body, a theropod's little arms … 1 on one wholly
+   *  reared; by degrees between, like everything else a rearing trunk changes). */
+  function knuckleArm(app: AppendageGene, base: BodyNode): number {
+    if (app.kind !== 'arm' || app.terminal !== 'hand' || !app.pair || dev.symmetry !== 'bilateral' || base.segment !== 0) return 0;
+    return rearedness(dev.body.curve[0]);
   }
 
   function growLimb(app: AppendageGene, base: BodyNode, dir0: Vec3, parentIdx: number): void {
@@ -460,6 +501,16 @@ export function grow(genome: Genome): Phenotype {
       if (legPairsHere === 1 && splay < 0.5) {
         startPos = [base.pos[0] + sideX * flank * 0.5, base.pos[1] - base.radius * 0.18, base.pos[2]];
         dir = [0, -1, 0];
+        // …and under a trunk REARED off its hips (an ape's) the hip joints sit at the BACK of the
+        // pelvis, the thighs dropping from under the tail end: hung from its middle, the whole rear
+        // half of the rump stood out behind the heels as a ball. (By degrees as the trunk rears, and
+        // evenly, from the lean of the most upright level walker: on top of the hips' slide to the
+        // pelvis over the same leans, a quicker shift was a jump.)
+        // (only where arms carry the front of the body: a bird that stands tall has nothing but its
+        // two feet under it, and with its hips at the back of its pelvis it stood ahead of them,
+        // falling on its bill)
+        const up = armWalker ? clamp((HIP_BACK_FROM - dev.body.curve[0]) / (HIP_BACK_FROM - UPRIGHT_FULL), [0, 1]) : 0;
+        if (up > 0) startPos[2] -= REARED_HIP_BACK * base.radius * up;
       }
       // ARTHROPOD legs (a hexapod or more, or an extreme sprawl): not a mammal's column folding fore-aft
       // at the knee but an ARCH in the leg's own vertical plane — the femur rises up-and-out, the knee
@@ -548,6 +599,20 @@ export function grow(genome: Genome): Phenotype {
       // still wears its face proud rather than swallowing it.
       const out = surfaceExtent(base, root) + seat * app.thickness;
       startPos = [base.pos[0] + root[0] * out, base.pos[1] + root[1] * out, base.pos[2] + root[2] * out];
+      // A KNUCKLE-WALKER's arm (an ape's) hangs from a SHOULDER: the upper corner of the chest, out on
+      // its flank, the deltoid standing proud of the ribs — an ape is widest across the shoulders.
+      // (Rooted where it aimed, under the chest, each arm left the breastbone like a foreleg: from the
+      // front the ape was a thumb on four posts, no wider at the shoulder than at the neck.)
+      const knuckle = knuckleArm(app, base);
+      if (knuckle > 0) {
+        const sideX = dir[0] >= 0 ? 1 : -1;
+        const shoulder: Vec3 = [
+          base.pos[0] + sideX * surfaceExtent(base, [sideX, 0, 0]) * SHOULDER_OUT,
+          base.pos[1] + base.radius * (base.scale?.[1] ?? 1) * SHOULDER_UP,
+          base.pos[2],
+        ];
+        startPos = [lerp(startPos[0], shoulder[0], knuckle), lerp(startPos[1], shoulder[1], knuckle), lerp(startPos[2], shoulder[2], knuckle)];
+      }
       // An eye STALK stands up from wherever it is rooted — a crab's from the front rim of its shell —
       // leaning the way its root faces. (Grown straight out along the root's direction, stalks could
       // only be rooted on top of the body: set on the front rim, they pointed forward like feelers.)
@@ -593,6 +658,9 @@ export function grow(genome: Genome): Phenotype {
         // trunk a peanut between them. The limb below keeps its girth.
         if (j === 0 && !arch) r = Math.min(r, HIP_MAX * base.radius);
       }
+      // (an ape's upper arm swells into the shoulder it hangs from: see knuckleArm)
+      const deltoid = j === 0 ? knuckleArm(app, base) : 0;
+      if (deltoid > 0) r *= 1 + (DELTOID - 1) * deltoid;
       // an eye STALK is a stalk: slimmer than the eye it carries. (Its links were as thick as the
       // eyeball — a snail's feelers and a crab's eyes stood on chimneys.)
       if (!last && app.terminal === 'eye') r *= STALK_SLIM;
@@ -701,6 +769,8 @@ function pullLegAzimuth(az: number, coh: number): number {
  *  legs a third of the way up its body; an ape −0.34 or more). */
 const UPRIGHT_FROM = -0.27;
 const UPRIGHT_FULL = -0.34;
+/** …and the pitch from which a rearing trunk's hip joints begin to move to the back of its pelvis */
+const HIP_BACK_FROM = -0.255;
 
 /**
  * How reared a trunk of this pitch per link is: 0 a level body … 1 one standing upright off its hips.

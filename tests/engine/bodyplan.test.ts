@@ -845,15 +845,21 @@ describe('body plans', () => {
   });
 
   it('an ape: a broad chest over narrow hips, its head on its shoulders, eyes forward, long arms to the ground', () => {
-    // (a pear-shaped trunk swelling at the belly, a neck, eyes on the sides of the head and arms that
-    // stopped at the hips read as a seal)
+    // (a pear-shaped trunk swelling at the belly, a neck that held the head off on a stalk, eyes on the
+    // sides of the head and arms that stopped at the hips read as a seal)
     for (let seed = 1; seed <= 8; seed++) {
       const p = grow(genomeOfMorphotype(seed, 'primate'));
       const t = trunkOf(p);
       expect(t[t.length - 1].radius, `#${seed} chest`).toBeGreaterThan(1.1 * t[0].radius);
       for (let k = 1; k < t.length - 1; k++) expect(t[k].radius, `#${seed} no belly`).toBeLessThan(t[t.length - 1].radius);
-      const sections = new Set(p.nodes.filter((n) => n.kind === 'spine').map((n) => n.segment));
-      expect(sections.size, `#${seed} no neck`).toBe(2);
+      // (its one nape link is as thick as the skull and leaves that skull overlapping the chest)
+      const spine = p.nodes.filter((n) => n.kind === 'spine');
+      const skull = spine.filter((n) => n.segment === Math.max(...spine.map((m) => m.segment ?? 0)))[0];
+      const nape = spine.filter((n) => n.segment === 1 && n !== skull);
+      expect(nape.length, `#${seed} no neck`).toBeLessThanOrEqual(1);
+      for (const n of nape) expect(n.radius, `#${seed} no neck`).toBeGreaterThan(0.9 * skull.radius);
+      const chest = t[t.length - 1];
+      expect(Math.hypot(skull.pos[1] - chest.pos[1], skull.pos[2] - chest.pos[2]), `#${seed} no neck`).toBeLessThan(skull.radius + chest.radius);
       const ground = Math.min(...p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg').map((n) => n.pos[1]));
       const height = p.bounds.max[1] - ground;
       for (const h of p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'arm')) {
@@ -861,7 +867,7 @@ describe('body plans', () => {
         expect((h.pos[1] - ground) / height, `#${seed} hand low`).toBeLessThan(0.4);
       }
       const eyes = p.nodes.filter((n) => n.terminal === 'eye');
-      const head = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 1);
+      const head = spine.filter((n) => n.segment === skull.segment);
       const headW = 2 * Math.max(...head.map((n) => n.radius * (n.scale?.[0] ?? 1)));
       expect(Math.abs(eyes[0].pos[0] - eyes[1].pos[0]) / headW, `#${seed} eyes close-set`).toBeLessThan(0.6);
     }
@@ -1102,6 +1108,32 @@ describe('bred bodies keep the rules their founders keep', () => {
       for (const taper of [1.03, 1.06, 1.11, 1.15]) expect(at(taper), `crab #${seed} taper ${taper}`).toBeCloseTo(at(1), 9);
     }
     expect(seen).toBeGreaterThan(6);
+  });
+
+  it("an ape's hips sit at the back of its pelvis because its arms carry its front: a bird standing as tall keeps its feet under it", () => {
+    // (the rule was every reared trunk's: a hawk, which stands nearly as upright as an ape leans,
+    // had its legs moved back from under it and stood ahead of its own feet, falling on its bill)
+    const footZ = (p: Phenotype) => {
+      const feet = p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg');
+      return feet.reduce((t, n) => t + n.pos[2], 0) / feet.length;
+    };
+    for (let seed = 1; seed <= 8; seed++) {
+      const g = genomeOfMorphotype(seed, 'primate');
+      const arm = g.body.appendages.find((a) => a.kind === 'arm' && a.terminal === 'hand' && a.pair)!;
+      expect(arm, `primate #${seed} walks on its arms`).toBeDefined();
+      const ape = grow(g);
+      const armless = grow({ ...g, body: { ...g.body, appendages: g.body.appendages.filter((a) => a.kind !== 'arm') } });
+      const pelvis = trunkOf(ape)[0].radius;
+      // without the arms to stand on, the same body's feet come forward under it, and its haunches fill out
+      expect((footZ(armless) - footZ(ape)) / pelvis, `primate #${seed}`).toBeGreaterThan(0.25);
+      expect(trunkOf(armless)[0].radius, `primate #${seed} haunches`).toBeGreaterThan(pelvis * 1.08);
+      // …and a hawk given an ape's arms sets its feet back as an ape does
+      const h = genomeOfMorphotype(seed, 'raptor');
+      expect(h.body.appendages.some((a) => a.kind === 'arm')).toBe(false);
+      const hawk = grow(h);
+      const armed = grow({ ...h, body: { ...h.body, appendages: [...h.body.appendages, arm] } });
+      expect((footZ(hawk) - footZ(armed)) / trunkOf(hawk)[0].radius, `raptor #${seed}`).toBeGreaterThan(0.15);
+    }
   });
 
   it('a trunk rears by degrees: no one step of its lean takes the legs from mid-body to the rump', () => {
