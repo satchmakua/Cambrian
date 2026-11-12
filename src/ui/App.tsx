@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { grow } from '../engine/grow';
 import { coherence, describe } from '../engine/morphospace';
 import { CreatureViewer } from '../viewer/CreatureViewer';
@@ -11,8 +11,11 @@ import { Menagerie } from '../viewer/Menagerie';
 import { binKey, MENAGERIE_GRID } from '../viewer/archive';
 import { downloadCreatureGlb } from '../viewer/exportGltf';
 import { MORPHOTYPE_IDS } from '../engine/random';
-import { Studio } from '../viewer/Studio';
-import { WorldView } from '../world/WorldView';
+// The valley and the Studio are loaded when they are first opened: neither is needed to draw the menu
+// or the breeder. (A modest saving — about 7% of the code fetched before the menu shows; the rest is
+// the 3D library and the creature renderer, which the menu's own stage needs.)
+const WorldView = lazy(() => import('../world/WorldView').then((m) => ({ default: m.WorldView })));
+const Studio = lazy(() => import('../viewer/Studio').then((m) => ({ default: m.Studio })));
 import { useStore } from './store';
 import { MainMenu } from './menu/MainMenu';
 import { PauseMenu } from './menu/PauseMenu';
@@ -90,7 +93,7 @@ export function App() {
   if (view === 'menu') return <MainMenu />;
   if (view === 'world') {
     return (
-      <>
+      <Suspense fallback={<ScreenLoading />}>
         <WorldView
           founder={genome}
           onExit={() => setView('breed')}
@@ -101,15 +104,15 @@ export function App() {
           }}
         />
         {pause}
-      </>
+      </Suspense>
     );
   }
   if (view === 'studio') {
     return (
-      <>
+      <Suspense fallback={<ScreenLoading />}>
         <Studio genome={genome} skinMode={skinMode} onSkinMode={setSkinMode} onAdopt={adopt} onExit={() => setView('breed')} onMenu={openMenu} />
         {pause}
-      </>
+      </Suspense>
     );
   }
   const menagerieCount = Object.keys(menagerie).length;
@@ -232,6 +235,11 @@ export function App() {
       {pause}
     </div>
   );
+}
+
+/** Shown for the moment a screen's code is fetched, the first time it is opened. */
+function ScreenLoading() {
+  return <div className="screen-loading">Loading…</div>;
 }
 
 function hex(n: number): string {

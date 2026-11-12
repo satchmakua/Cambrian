@@ -18,7 +18,7 @@ import * as THREE from 'three';
 import { grow } from '../engine/grow';
 import { CreatureMesh } from './CreatureMesh';
 import { StudioEnvironment } from './StudioEnvironment';
-import { framingOf } from './Studio';
+import { framingOf } from './framing';
 import { scissorRect } from './scissor';
 import { restPosed } from './rig';
 import type { Genome } from '../engine/genome';

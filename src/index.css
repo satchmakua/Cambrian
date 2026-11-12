@@ -2314,3 +2314,15 @@ body,
     text-align: left;
   }
 }
+
+/* a screen's code being fetched, the first time it is opened */
+.screen-loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+}
