@@ -74,6 +74,9 @@ const ARM_REACH: [number, number] = [0.72, 1.4];
 /** How far behind the middle of a reared trunk's pelvis its hip joints sit (×the pelvis's radius). */
 const REARED_HIP_BACK = 0.34;
 
+/** How far on toward the trunk's end a hooved leg roots (×the trunk's radius there): see hoofSet. */
+const HOOF_SET = 0.55;
+
 /** Minimum grown radius for an eye bulb (bu) — the face must always read (M19/M24). */
 const EYE_R_MIN = 0.06;
 /** A plain tail whose style gene is at or over this is a SCULLING tail (a crocodile's): deep, and
@@ -439,7 +442,7 @@ export function grow(genome: Genome): Phenotype {
       // Legs ride the CHAIN, not the nearest node: the slot is interpolated between neighbouring spine
       // nodes (and extrapolated past a 1-node trunk's ends), so a hexapod's or a spider's legs spread
       // fore-aft along the body instead of collapsing onto the same one or two nodes.
-      if (app.kind === 'leg' && dev.symmetry !== 'radial') growAppendage(app, spine[ai], chainBase(spine, app.attachT));
+      if (app.kind === 'leg' && dev.symmetry !== 'radial') growAppendage(app, spine[ai], hoofSet(app, chainBase(spine, app.attachT), spine));
       else growAppendage(app, spine[ai]);
     }
 
@@ -470,6 +473,23 @@ export function grow(genome: Genome): Phenotype {
       pos: [a.pos[0] + (b.pos[0] - a.pos[0]) * u, a.pos[1] + (b.pos[1] - a.pos[1]) * u, a.pos[2] + (b.pos[2] - a.pos[2]) * u],
       radius: a.radius + (b.radius - a.radius) * u,
     };
+  }
+
+  /**
+   * A HOOVED leg roots under the end of the trunk it carries — the haunch at the back of the rump,
+   * the shoulder at the front of the chest: a deer's legs frame its body. Its base moves on along the
+   * trunk's axis toward that end, by up to HOOF_SET of the trunk's radius there. (On the slots every
+   * quadruped shares, a deer stood with its legs bunched under its middle, a barrel of a body
+   * overhanging them at both ends: a barrel balanced on a trestle.)
+   */
+  function hoofSet(app: AppendageGene, base: BodyNode, spine: number[]): BodyNode {
+    if (app.terminal !== 'hoof' || spine.length < 2) return base;
+    const t = clamp(app.attachT, [0, 1]);
+    const a = nodes[spine[t < 0.5 ? 0 : spine.length - 1]].pos;
+    const b = nodes[spine[t < 0.5 ? 1 : spine.length - 2]].pos;
+    const axis = norm([a[0] - b[0], a[1] - b[1], a[2] - b[2]]);
+    const k = HOOF_SET * Math.abs(t - 0.5) * 2 * base.radius;
+    return { ...base, pos: [base.pos[0] + axis[0] * k, base.pos[1] + axis[1] * k, base.pos[2] + axis[2] * k] };
   }
 
   function growAppendage(app: AppendageGene, attachIdx: number, virtualBase?: BodyNode): void {

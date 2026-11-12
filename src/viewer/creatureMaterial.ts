@@ -261,6 +261,9 @@ export function makeCreatureMaterial(
           vec3 skin = mix(uMain, uBelly, 1.0 - smoothstep(0.1, 0.4, up));
           skin = mix(skin, uBack, smoothstep(0.64, 0.96, up));
           float pat = patternField(bp, uPType, uPScale);
+          // (spots fade out down the legs, as a fawn's dapples or a cheetah's do — the blotches laid on
+          // a slim shin stretched into streaks)
+          if (uPType == 3) pat *= 1.0 - 0.75 * vLeg;
           skin = mix(skin, uPattern, clamp(pat * uContrast, 0.0, 1.0));
           // a deeper accent in the cores of strong markings (rosette rings, ocelli) → richness
           skin = mix(skin, uPattern2, smoothstep(0.55, 0.95, pat) * uContrast * 0.4);
@@ -569,18 +572,15 @@ float patternField(vec3 p0, int type, float scale) {
     return smoothstep(-w, w, s);
   }
   float c = gFw * scale * 0.55;                                 // voronoi cells per pixel
-  if (type == 3) {                                              // spots / rosettes (leopard)
+  if (type == 3) {                                              // spots — solid, soft-edged blotches
+    // One blotch per cell, its edge roughened by a band-limited wobble. (Rings drawn at radii of their
+    // own through the body were cut by the skin wherever they fell: open rings and doubled rings — the
+    // letters C, O and 8, coffee-cup stains, stamped over the animal; and a paler middle in every
+    // blotch kept a fawn's dapples rings still.)
     vec2 F = voronoi(p * scale * 0.55);
-    // One blotch per cell, its edge roughened by a band-limited wobble: a small one is a solid spot,
-    // a large one a ROSETTE — a dark rim round a middle a shade darker than the coat. Rim and middle
-    // are cut from the one distance, so the rim is always the blotch's own edge. (A ring drawn at a
-    // radius of its own was cut by the skin wherever it happened to fall: open rings and doubled
-    // rings — the letters C, O and 8, or coffee-cup stains, stamped over the animal.)
     float n = fbmA(p * scale * 1.6, scale * 1.6);
     float v = F.x + (n - 0.5) * 0.16;
-    float blotch = 1.0 - smoothstep(0.26 - c, 0.31 + c, v);
-    float middle = 1.0 - smoothstep(0.12 - c, 0.19 + c, v);
-    return mix(0.12, blotch * (1.0 - 0.55 * middle), 1.0 - smoothstep(0.25, 0.6, c));
+    return mix(0.12, 1.0 - smoothstep(0.24 - c, 0.32 + c, v), 1.0 - smoothstep(0.25, 0.6, c));
   }
   if (type == 4) {                                              // ocelli — concentric eye-spots (peacock)
     // An eye-spot is a figure ON the skin — a dark pupil, a pale gap, a ring — so it is measured in

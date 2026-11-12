@@ -334,37 +334,28 @@ describe('creature material shader injection', () => {
     expect(ahead / tips).toBeLessThan(behind / tips - 0.12); // (0.56)
   });
 
-  it('a rosette is one blotch — a dark rim round a paler middle — and an eye-spot is whole or absent', () => {
+  it('a spot is one solid blotch, fading down the legs, and an eye-spot is whole or absent', () => {
     // (rings were drawn at radii of their own through the body, and the skin cut each wherever it
     // fell: open rings, doubled rings, rings with no middle — the letters C, O and 8 on every
-    // spotted animal, and an octopus's eye-spots mostly empty hoops)
+    // spotted animal; then a paler middle in every blotch kept a fawn's dapples rings; and an
+    // octopus's eye-spots were mostly empty hoops)
     const f = compileShaderStrings().fragmentShader;
     const smooth = (a: number, b: number, x: number) => {
       // (GLSL smoothstep, either way round)
       const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
       return t * t * (3 - 2 * t);
     };
-    // spots: rim and middle are cut from the ONE distance v
     expect(f).toContain('float v = F.x + (n - 0.5) * 0.16;');
-    expect(f).toContain('float blotch = 1.0 - smoothstep(0.26 - c, 0.31 + c, v);');
-    expect(f).toContain('float middle = 1.0 - smoothstep(0.12 - c, 0.19 + c, v);');
-    expect(f).toContain('return mix(0.12, blotch * (1.0 - 0.55 * middle), 1.0 - smoothstep(0.25, 0.6, c));');
+    expect(f).toContain('return mix(0.12, 1.0 - smoothstep(0.24 - c, 0.32 + c, v), 1.0 - smoothstep(0.25, 0.6, c));');
     for (const c of [0, 0.015, 0.03]) {
-      const mark = (v: number) => (1 - smooth(0.26 - c, 0.31 + c, v)) * (1 - 0.55 * (1 - smooth(0.12 - c, 0.19 + c, v)));
-      // from the blotch's centre outward: the paler middle, up to the dark rim, down to the coat — once
-      const vs = Array.from({ length: 251 }, (_, i) => i * 0.002);
-      const ms = vs.map(mark);
-      const peak = ms.indexOf(Math.max(...ms));
-      expect(ms[0], `footprint ${c}: the middle`).toBeCloseTo(0.45, 9);
-      expect(ms[peak], `footprint ${c}: the rim`).toBe(1);
+      const mark = (v: number) => 1 - smooth(0.24 - c, 0.32 + c, v);
+      // from the blotch's centre outward: solid, then falling once to the coat
+      const ms = Array.from({ length: 251 }, (_, i) => mark(i * 0.002));
+      expect(ms[0], `footprint ${c}: solid`).toBe(1);
       expect(ms[ms.length - 1], `footprint ${c}: the coat`).toBe(0);
-      for (let i = 1; i < ms.length; i++) {
-        if (i <= peak) expect(ms[i], `footprint ${c}: rising to the rim`).toBeGreaterThanOrEqual(ms[i - 1] - 1e-12);
-        else expect(ms[i], `footprint ${c}: falling from it`).toBeLessThanOrEqual(ms[i - 1] + 1e-12);
-      }
-      // the rim has width (it does not vanish between the middle and the edge)
-      expect(ms.filter((m) => m === 1).length * 0.002, `footprint ${c}: a rim with width`).toBeGreaterThan(0.005);
+      for (let i = 1; i < ms.length; i++) expect(ms[i], `footprint ${c}`).toBeLessThanOrEqual(ms[i - 1] + 1e-12);
     }
+    expect(f).toContain('if (uPType == 3) pat *= 1.0 - 0.75 * vLeg;');
     // eye-spots: measured in the skin, from each cell's centre laid flat on it
     expect(f).toContain('float dn = dot(d, gNb);');
     expect(f).toContain('float rho = sqrt(max(dot(d, d) - dn * dn, 0.0));');
