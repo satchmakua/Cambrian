@@ -121,13 +121,36 @@ function bakeLegs(g: THREE.BufferGeometry, phenotype: Phenotype): void {
   g.setAttribute('aLeg', new THREE.BufferAttribute(legWeights(phenotype, bp.array, bp.count), 1));
 }
 
-/** Build (and cache) a creature's smooth surface ahead of mounting it — the World schedules these
- *  one per frame so a burst of new genomes never stalls rendering. Same key/builder as CreatureMesh. */
-export function prebuildSkin(phenotype: Phenotype, mode: 'smooth' | 'hybrid', quality: SkinQuality, carved = true): void {
+/** The geometry cache's key for a carapace shell (turtle, crab, beetle) at a fineness. */
+export const shellKey = (quality: SkinQuality) => `shell:${quality}`;
+
+const hasCarapace = (phenotype: Phenotype) => phenotype.nodes.some((n) => n.terminal === 'carapace');
+
+/** A creature's carapace shell, built once per fineness and shared (an empty geometry where the body
+ *  gives the shell nothing to cover). */
+function shellGeometry(phenotype: Phenotype, quality: SkinQuality): THREE.BufferGeometry {
+  return getGeometry(phenotype, shellKey(quality), () => {
+    const g = buildShellGeometry(phenotype, quality);
+    if (!g) return new THREE.BufferGeometry();
+    g.setAttribute('aBodyPos', (g.getAttribute('position') as THREE.BufferAttribute).clone());
+    return g;
+  });
+}
+
+/**
+ * Build (and cache) everything a creature's smooth skin needs, ahead of mounting it — the World
+ * schedules these within a time budget each frame, so a burst of new genomes never stalls rendering.
+ * Same keys and builders as CreatureMesh, which then finds it all ready: the surface, its carapace
+ * shell where it has one, and (`rigged`) the skin weights that bind the surface to a skeleton —
+ * between them a third to a half again of the surface's own cost, which a render used to pay.
+ */
+export function prebuildSkin(phenotype: Phenotype, mode: 'smooth' | 'hybrid', quality: SkinQuality, carved = true, rigged = false): void {
   const full = mode === 'hybrid';
-  getGeometry(phenotype, skinKey(full, quality, carved), () =>
+  const geo = getGeometry(phenotype, skinKey(full, quality, carved), () =>
     buildSkin(phenotype, full, carved ? mouthCarves(phenotype) : NO_CARVES, quality),
   );
+  if (rigged) ensureSkinWeights(geo, phenotype);
+  if (hasCarapace(phenotype)) shellGeometry(phenotype, quality);
 }
 
 export function CreatureMesh({
@@ -200,22 +223,14 @@ export function CreatureMesh({
   }, [smoothGeo, phenotype, smoothKey]);
   // a conforming carapace shell (turtle / crab), built from the trunk's own field — shared + cached
   // like the skin. Drawn in every skin mode: it is a separate solid, not part of the body field.
-  const hasShell = useMemo(() => phenotype.nodes.some((n) => n.terminal === 'carapace'), [phenotype]);
-  const shellKey = `shell:${quality}`;
-  const shellGeo = useMemo(() => {
-    if (!hasShell) return null;
-    return getGeometry(phenotype, shellKey, () => {
-      const g = buildShellGeometry(phenotype, quality);
-      if (!g) return new THREE.BufferGeometry();
-      g.setAttribute('aBodyPos', (g.getAttribute('position') as THREE.BufferAttribute).clone());
-      return g;
-    });
-  }, [hasShell, phenotype, quality, shellKey]);
+  const hasShell = useMemo(() => hasCarapace(phenotype), [phenotype]);
+  const shellGeo = useMemo(() => (hasShell ? shellGeometry(phenotype, quality) : null), [hasShell, phenotype, quality]);
   useEffect(() => {
     if (!shellGeo) return;
-    retainGeometry(phenotype, shellKey);
-    return () => releaseGeometry(phenotype, shellKey);
-  }, [shellGeo, phenotype, shellKey]);
+    const key = shellKey(quality);
+    retainGeometry(phenotype, key);
+    return () => releaseGeometry(phenotype, key);
+  }, [shellGeo, phenotype, quality]);
   // the shell wears hard scutes: plates (turtle) or the body's own chitin (crab), with a bold
   // reticulate seam pattern. A turtle's is a darker, browner horn than the leathery skin that comes
   // out from under it — in the body's own tone the dome had no edge and the scutes ran on over the
