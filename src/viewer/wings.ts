@@ -653,3 +653,60 @@ export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 
   const rays = outline.filter((_, i) => i % 2 === 1).map((o) => ({ a: hub.clone(), b: o.clone() }));
   return { membrane, rays };
 }
+
+/** The girth of a body's trunk: the radius of its stoutest trunk link. */
+export function trunkGirth(p: Phenotype): number {
+  let g = 0;
+  for (const n of p.nodes) if (n.kind === 'spine' && (n.segment ?? 0) === 0) g = Math.max(g, n.radius);
+  return g || 0.4;
+}
+
+/**
+ * The girth a fin is sized to: the radius of the body link it grows from (walking up past the fin's
+ * own chain). A caudal fin grows at the tail's tip, where the body is thin, and is sized to the trunk.
+ * `radius` is the fin node's own, for a fin that hangs from no body link at all.
+ */
+export function finGirth(p: Phenotype, idx: number, kind: FinKind, radius: number): number {
+  const parent = new Int32Array(p.nodes.length).fill(-1);
+  for (const [a, b] of p.edges) parent[b] = a;
+  let c = parent[idx];
+  while (c >= 0 && p.nodes[c].kind !== 'spine') c = parent[c];
+  const girth = c >= 0 ? p.nodes[c].radius : Math.max(radius, 0.2) * 2;
+  return kind === 'caudal' ? Math.max(girth, trunkGirth(p) * 0.8) : girth;
+}
+
+/** a fin as the mesh data lists it (see meshData's MeshFeature) */
+export interface FinPart {
+  idx: number;
+  quat: readonly [number, number, number, number];
+  style: number;
+  radius: number;
+  kind?: string;
+}
+
+/**
+ * The box a body's fins reach to, in the body frame — null if it has none. A fin is DRAWN from its
+ * node, not grown as nodes of its own: a fish's tail fan reaches most of a body's depth past the last
+ * node of its tail, a sail stands a girth over the back. The body's own bounds stop short of them, so
+ * a view framed on those cut the tail fin off at the edge of the plate.
+ */
+export function finBounds(p: Phenotype, fins: readonly FinPart[]): { min: [number, number, number]; max: [number, number, number] } | null {
+  const min: [number, number, number] = [Infinity, Infinity, Infinity];
+  const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+  for (const f of fins) {
+    const aim = v3(0, 0, 1).applyQuaternion(new THREE.Quaternion(f.quat[0], f.quat[1], f.quat[2], f.quat[3]));
+    const kind = finKindOf(aim, f.kind);
+    const fin = buildFin(kind, aim, finGirth(p, f.idx, kind, f.radius), finScaleOf(f.style), finCutOf(f.style));
+    const pos = fin.membrane.getAttribute('position') as THREE.BufferAttribute;
+    const o = p.nodes[f.idx].pos;
+    for (let i = 0; i < pos.count; i++) {
+      const v = [o[0] + pos.getX(i), o[1] + pos.getY(i), o[2] + pos.getZ(i)];
+      for (let k = 0; k < 3; k++) {
+        min[k] = Math.min(min[k], v[k]);
+        max[k] = Math.max(max[k], v[k]);
+      }
+    }
+    fin.membrane.dispose();
+  }
+  return fins.length ? { min, max } : null;
+}

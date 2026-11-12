@@ -3,6 +3,8 @@
  * (the Studio's plates, the litter's thumbnails, the portraits). Pure.
  */
 import type { Phenotype } from '../engine/grow';
+import { buildMeshData } from './meshData';
+import { finBounds } from './wings';
 
 export interface Framing {
   center: [number, number, number];
@@ -13,7 +15,18 @@ export interface Framing {
 }
 
 export function framingOf(p: Phenotype): Framing {
-  const { min, max } = p.bounds;
+  let { min, max } = p.bounds;
+  // …and out to its fins, which are drawn from their nodes rather than grown as nodes (see finBounds).
+  // (A wing lies folded along the body; a feathered tail's fan and a frill stay within reach of it.)
+  if (p.nodes.some((n) => n.terminal === 'fin')) {
+    const feathered = p.genomeRef.covering.type === 'feathers';
+    const fins = buildMeshData(p).features.filter((f) => f.type === 'fin' && f.kind !== 'wing' && f.kind !== 'frill' && !(feathered && f.kind === 'tail'));
+    const reach = finBounds(p, fins);
+    if (reach) {
+      min = [Math.min(min[0], reach.min[0]), Math.min(min[1], reach.min[1]), Math.min(min[2], reach.min[2])];
+      max = [Math.max(max[0], reach.max[0]), Math.max(max[1], reach.max[1]), Math.max(max[2], reach.max[2])];
+    }
+  }
   const center: [number, number, number] = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
   const ext: [number, number, number] = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
   const size = Math.max(ext[0], ext[1], ext[2], 0.6);

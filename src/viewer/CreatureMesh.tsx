@@ -27,7 +27,7 @@ import { makeCreatureMaterial } from './creatureMaterial';
 import { bareLegsOf, footPlanOf, lastLinkOf, legWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finKindOf, finScaleOf, longWingFold, LONG_WING, type FinBuild } from './wings';
+import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, longWingFold, trunkGirth, LONG_WING, type FinBuild } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface } from './bodyField';
 import { BROW_TILT, eyeClearings, eyeSeat, eyeTilt, isSwimmer } from './eyeSeat';
@@ -38,7 +38,7 @@ import { shardGeometry } from './shards';
 import { frillGeometry, frillPlan } from './frill';
 import { getGeometry, retainGeometry, releaseGeometry, hasGeometry } from './geometryCache';
 import { mouthCarves, surfacePrims } from './mouthLine';
-import { gillCutOf, gillGeometry, gillMarks } from './gills';
+import { gillCutOf, gillGeometry, gillMarks, gillRadiusOf } from './gills';
 import { sampleTrajectory, type Trajectory } from '../physics/fitness';
 import type { SkinMode } from '../ui/store';
 
@@ -1206,15 +1206,8 @@ function Fin({ f, color, lite = false, phenotype, surface = 'hybrid' }: { f: Mes
 export function finOf(f: MeshFeature, phenotype: Phenotype, surface: SkinSurface = 'hybrid'): FinBuild {
   const q = new THREE.Quaternion(f.quat[0], f.quat[1], f.quat[2], f.quat[3]);
   const aim = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
-  // girth: the radius of the body node this fin grows from (walk up past the fin chain)
-  const parent = new Int32Array(phenotype.nodes.length).fill(-1);
-  for (const [a, b] of phenotype.edges) parent[b] = a;
-  let c = parent[f.idx];
-  while (c >= 0 && phenotype.nodes[c].kind !== 'spine') c = parent[c];
-  const girth = c >= 0 ? phenotype.nodes[c].radius : Math.max(f.radius, 0.2) * 2;
   const kind = finKindOf(aim, f.kind);
-  // a caudal grows at the tail tip, where the body is thin — size it to the trunk instead
-  const g = kind === 'caudal' ? Math.max(girth, trunkGirth(phenotype) * 0.8) : girth;
+  const g = finGirth(phenotype, f.idx, kind, f.radius);
   const cut = finCutOf(f.style);
   // a fin along the midline of a back or a belly (a bony fish's sail and keel are three body-girths
   // long) stands on the skin all the way: its root is traced down the surface under its chord.
@@ -1254,12 +1247,6 @@ function tagmata(p: Phenotype): boolean {
   const parent = new Int32Array(p.nodes.length).fill(-1);
   for (const [a, b] of p.edges) parent[b] = a;
   return p.nodes.some((n, i) => n.part?.kind === 'leg' && parent[i] >= 0 && p.nodes[parent[i]].kind === 'spine' && (p.nodes[parent[i]].segment ?? 0) > 0);
-}
-
-function trunkGirth(p: Phenotype): number {
-  let g = 0;
-  for (const n of p.nodes) if (n.kind === 'spine' && (n.segment ?? 0) === 0) g = Math.max(g, n.radius);
-  return g || 0.4;
 }
 
 // A frill: half a ruff of ribbed skin round the neck — the pair is the whole collar (frill.ts).
@@ -1549,7 +1536,7 @@ function Gill({ f, color, phenotype, surface }: { f: MeshFeature; color: number;
   const r = Math.max(f.radius, 0.06);
   const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.5).getHex(), [color]);
   const cut = gillCutOf(f.style);
-  const marks = useMemo(() => (cut === 'bars' ? null : gillGeometry(gillMarks(phenotype, f.idx, surface, cut, r))), [cut, phenotype, f.idx, surface, r]);
+  const marks = useMemo(() => (cut === 'bars' ? null : gillGeometry(gillMarks(phenotype, f.idx, surface, cut, gillRadiusOf(phenotype, f.idx, cut, r)))), [cut, phenotype, f.idx, surface, r]);
   useEffect(() => () => marks?.dispose(), [marks]);
   if (marks) {
     return (

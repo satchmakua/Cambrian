@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { grow, type Phenotype } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
 import { buildMeshData, type MeshFeature } from '../../src/viewer/meshData';
-import { gillCutOf, gillGeometry, gillMarks } from '../../src/viewer/gills';
+import { COVER_OF_DEPTH, gillCutOf, gillGeometry, gillMarks, gillRadiusOf } from '../../src/viewer/gills';
 import { finOf } from '../../src/viewer/CreatureMesh';
 import { buildFin, finChord, finCutOf, finKindOf, finScaleOf } from '../../src/viewer/wings';
 import { surfacePrims } from '../../src/viewer/mouthLine';
@@ -37,7 +37,7 @@ describe('gills that lie in the skin', () => {
         for (const f of gillsOf(p)) {
           const cut = gillCutOf(f.style);
           if (cut === 'bars') continue;
-          const m = gillMarks(p, f.idx, 'hybrid', cut, Math.max(f.radius, 0.06));
+          const m = gillMarks(p, f.idx, 'hybrid', cut, gillRadiusOf(p, f.idx, cut, Math.max(f.radius, 0.06)));
           const o = p.nodes[f.idx].pos;
           expect(m.lines.length, `${id} #${seed}`).toBe(cut === 'cover' ? 1 : 5);
           for (const line of m.lines) {
@@ -53,6 +53,35 @@ describe('gills that lie in the skin', () => {
       }
     }
     expect(marks).toBeGreaterThan(100);
+  });
+
+  it('a gill cover is the plate over the gills: its rim crosses more than half the depth of the flank', () => {
+    // (sized to the gill part alone — a third of a girth — it was a comma scratched on the flank,
+    // a sixth of the body's depth from end to end)
+    let seen = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = body('fish', seed);
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      for (const f of gillsOf(p)) {
+        const link = p.nodes[parent.get(f.idx)!];
+        const half = link.radius * (link.scale?.[1] ?? 1);
+        const own = Math.max(f.radius, 0.06);
+        const r = gillRadiusOf(p, f.idx, 'cover', own);
+        expect(r).toBeCloseTo(Math.max(own, COVER_OF_DEPTH * half), 12);
+        const span = (rad: number) => {
+          const [line] = gillMarks(p, f.idx, 'hybrid', 'cover', rad).lines;
+          return Math.max(...line.map((q) => q.y)) - Math.min(...line.map((q) => q.y));
+        };
+        expect(span(r) / (2 * half), `fish #${seed}`).toBeGreaterThan(0.42);
+        expect(span(r) / (2 * half), `fish #${seed}: within the flank`).toBeLessThan(0.75);
+        expect(span(own) / (2 * half), `fish #${seed}: the part's own size is a scratch`).toBeLessThan(0.3);
+        seen++;
+      }
+      // a shark's slits are the size of the gill part: five short creases, not five long cuts
+      const sh = body('shark', seed);
+      for (const f of gillsOf(sh)) expect(gillRadiusOf(sh, f.idx, 'slits', f.radius)).toBe(f.radius);
+    }
+    expect(seen).toBeGreaterThan(12);
   });
 
   it("a gill cover's rim is on the tail side of the gill and bulges toward the tail, on both flanks", () => {

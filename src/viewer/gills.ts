@@ -25,10 +25,29 @@ const COVER_RY = 1.35; // … and up and down the flank
 const SLITS = [-0.72, -0.36, 0, 0.36, 0.72]; // ×gill radius along the body
 const SLIT_PTS = 5;
 const SLIT_LEAN = 0.16; // each slit leans, its top toward the tail
-const COVER_CORD = 0.055; // ×gill radius: the cord's own radius
+const COVER_CORD = 0.03; // ×the cover's radius: the cord's own radius
 const SLIT_CORD = 0.04;
 /** a cord's centre stands this many of its radii above the skin (the rest of it is sunk) */
 const PROUD = 0.35;
+
+/** a gill cover's radius, at the least, ×the half-depth of the body link it lies on */
+export const COVER_OF_DEPTH = 0.4;
+
+/**
+ * How big a flush gill is drawn. Slits are the size of the gill part itself. A gill COVER is the plate
+ * over a bony fish's gills — its rim crosses more than half the depth of the flank — so it is sized to
+ * the body link it lies on, or to the gill part if that is larger. (Sized to the part alone, a third
+ * of a girth, it was a comma scratched on the flank.)
+ */
+export function gillRadiusOf(p: Phenotype, idx: number, cut: GillCut, r: number): number {
+  if (cut !== 'cover') return r;
+  const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+  let c = parent.get(idx);
+  while (c !== undefined && p.nodes[c].kind !== 'spine') c = parent.get(c);
+  if (c === undefined) return r;
+  const link = p.nodes[c];
+  return Math.max(r, COVER_OF_DEPTH * link.radius * (link.scale?.[1] ?? 1));
+}
 
 export interface GillMarks {
   /** each mark's centre line, relative to the gill node's position (body frame) */
