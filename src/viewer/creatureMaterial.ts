@@ -199,7 +199,7 @@ export function makeCreatureMaterial(
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
-        '#include <common>\nattribute vec3 aBodyPos;\nattribute float aFlesh;\nattribute float aAO;\nattribute float aLeg;\nvarying vec3 vBodyPos;\nvarying vec3 vWNrm;\nvarying float vFlesh;\nvarying float vAO;\nvarying float vLeg;',
+        '#include <common>\nattribute vec3 aBodyPos;\nattribute float aFlesh;\nattribute float aAO;\nattribute float aLeg;\nvarying vec3 vBodyPos;\nvarying vec3 vWNrm;\nvarying vec3 vBNrm;\nvarying float vFlesh;\nvarying float vAO;\nvarying float vLeg;',
       )
       .replace('#include <project_vertex>', '  vBodyPos = aBodyPos;\n  vFlesh = aFlesh;\n  vAO = aAO;\n  vLeg = aLeg;\n#include <project_vertex>')
       // a fur shell rides out along the (skinned) normal
@@ -209,7 +209,8 @@ export function makeCreatureMaterial(
       .replace('#include <common>', '#include <common>\nuniform float uShellH;\nuniform float uShellLen;')
       .replace(
         '#include <beginnormal_vertex>',
-        '#include <beginnormal_vertex>\n  vWNrm = normalize(mat3(modelMatrix) * objectNormal);',
+        // (objectNormal here is the REST normal, in the body's own frame — before skinning bends it)
+        '#include <beginnormal_vertex>\n  vWNrm = normalize(mat3(modelMatrix) * objectNormal);\n  vBNrm = objectNormal;',
       );
 
     shader.fragmentShader = shader.fragmentShader
@@ -231,6 +232,14 @@ export function makeCreatureMaterial(
           // into staircases. The fur's shells keep the cheap derivative: a strand hides it.)
           float hX = 0.0;
           float hY = 0.0;
+          // which way the plumage lies here: toward the tail and a little down, flat on the skin — back
+          // along the back and the belly, down-and-back on a flank, down a chest that faces forward
+          {
+            gNb = normalize(vBNrm);
+            vec3 flow = vec3(0.0, -0.45, -1.0);
+            vec3 t = flow - gNb * dot(flow, gNb);
+            gLay = t / max(length(t), 1e-3);
+          }
           if (uShellH < 0.0 && uFine > 0.5) {
             surfaceHeight(bp + dPx, uCover);
             hX = gHb;
@@ -410,6 +419,7 @@ export function makeCreatureMaterial(
 const FRAG_HELPERS = /* glsl */ `
 varying vec3 vBodyPos;
 varying vec3 vWNrm;
+varying vec3 vBNrm;
 varying float vFlesh;
 varying float vAO;
 varying float vLeg;
@@ -434,6 +444,8 @@ float gDhy = 0.0; // … and one pixel down (see the colour stage)
 float gFine = 0.0; // 1 where those are measured (else the bump takes the derivative of the height)
 float gFacet = 0.5; // a crystal's facet under this pixel: its own shade, 0..1 (see surfaceHeight)
 float gSeam = 0.0;  // … and how near this pixel is to that facet's cut edge, 0..1
+vec3 gLay = vec3(0.0, 0.0, -1.0); // which way a feather lies on the skin here (body space, unit; see scallops)
+vec3 gNb = vec3(0.0, 1.0, 0.0);   // … and the skin's own normal there (body space, unit)
 
 // ANTI-ALIASING. A procedural texture aliases into "TV static" once its detail is finer than a pixel:
 // the old fur relief ran at 26 cycles/bu × 5 octaves, i.e. sub-pixel for any creature not filling
@@ -581,6 +593,43 @@ float patternField(vec3 p0, int type, float scale) {
   return smoothstep(-1.6, 1.6, p0.z * 0.9 + (fbm3(p0 * 0.6) - 0.5));
 }
 
+// --- an imbricated coat ---------------------------------------------------------
+// Overlapping scallops laid along a direction: a bird's contour feathers, roof tiles. Every cell of a
+// grid roots one scallop — a ball, stretched a little along the lay, whose height ramps up from its
+// root end to its tip — and the HIGHEST scallop over a point is the one that shows. So every tip lies
+// over the roots of the scallops behind it and ends there in a round edge: rows of soft arcs, each
+// shadowed where it lies on the next. (A cell per feather with straight borders, each sloped back,
+// was a crazed glaze of little polygons — scales or cobbles, never plumage.)
+// The grid is sheared: each layer along z stands half a cell across from the last, in x and in y, so
+// the scallops fall in a quincunx on the back and on a flank alike. fw is a pixel's width in cells.
+// Returns the coat's height at q, 0..1, and how near q is to the midline of the scallop that shows.
+float scallops(vec3 q, vec3 lay, vec3 nrm, float fw, out float shaft) {
+  vec3 qs = vec3(q.x + 0.5 * q.z, q.y + 0.5 * q.z, q.z);
+  vec3 ip = floor(qs);
+  vec3 fp = qs - ip;
+  float soft = 0.1 + fw;
+  float top = 0.0;
+  float ta = 0.0;
+  vec3 td = vec3(0.0);
+  for (int k = -1; k <= 1; k++)
+  for (int j = -1; j <= 1; j++)
+  for (int i = -1; i <= 1; i++) {
+    vec3 g = vec3(float(i), float(j), float(k));
+    vec3 ds = fp - g - 0.5 - (hash33(ip + g) - 0.5) * 0.16;
+    vec3 d = vec3(ds.x - 0.5 * ds.z, ds.y - 0.5 * ds.z, ds.z); // (unsheared: true distances)
+    float along = dot(d, lay);
+    // across² + (along / 1.15)²: a scallop is a little longer than it is wide
+    float ell = sqrt(max(dot(d, d) - along * along * 0.2439, 0.0));
+    float h = (0.5 + 0.51 * along) * (1.0 - smoothstep(0.85 - soft, 0.85, ell));
+    if (h > top) { top = h; ta = along; td = d; }
+  }
+  // the top scallop's midline, measured in the skin: a feather's shaft
+  vec3 side = td - lay * ta;
+  side -= nrm * dot(side, nrm);
+  shaft = 1.0 - smoothstep(0.015, 0.06 + fw, length(side));
+  return clamp(top, 0.0, 1.0);
+}
+
 // --- a cut stone's faces -------------------------------------------------------
 // Space divided into tetrahedra (a simplex grid): every corner of the grid takes a height of its own,
 // and the height inside a tetrahedron is the flat blend of its four corners. So the height is FLAT
@@ -614,19 +663,13 @@ float facets(vec3 q, out float id, out float wall) {
 // bump is a crisp scale/plate/feather read up close and a clean surface at a distance.
 float surfaceHeight(vec3 p, int cover) {
   if (cover == 1) {                                             // scales — imbricated, laid back
-    // Like the plumage: each cell a scale whose free edge points back (−z) and overlaps the next, the
-    // height ramping up from its tucked root to that edge — small, so a fish or a lizard wears a
-    // fine shingle, not a tortoiseshell of dome-and-groove polygons. Every border falls to one floor:
-    // no step for the derivative bump to draw as a dotted line. (No row bricking: a floor(z) shift is
-    // a hard seam under the bump — a 1-px streak at every row.)
-    vec3 q = vec3(p.x * 15.0, p.y * 15.0, p.z * 11.0);
-    float f2;
-    vec4 c = cellNear(q, f2);
-    float ramp = clamp(0.5 - c.z * 0.8, 0.0, 1.0);
-    float edge = smoothstep(0.0, 0.22, f2 - c.w);
-    float lay = mix(0.45, ramp * (1.0 - 0.25 * dot(c.xy, c.xy)) * edge, aaW(15.0));
-    gHb = lay * 0.007;
-    return clamp(0.78 - lay * 0.55, 0.0, 1.0);
+    // A fish's scales, a snake's, a lizard's: small round-edged scallops shingled toward the tail, each
+    // lying on the roots of the ones behind (see scallops). (A cell per scale with straight borders
+    // was a fine crazing that read as rough skin; larger, a tortoiseshell of polygons.)
+    float mid;
+    float lay = mix(0.66, scallops(p * 17.0, gLay, gNb, gFw * 17.0, mid), aaW(17.0));
+    gHb = lay * 0.006;
+    return clamp(0.8 - lay * 0.55, 0.0, 1.0);
   }
   if (cover == 2) {                                             // fur — clumped pile, locks, streaks
     float clumps = fbmA(vec3(p.x * 5.0, p.y * 5.0, p.z * 2.4), 5.0);
@@ -638,26 +681,17 @@ float surfaceHeight(vec3 p, int cover) {
     return clumps * 0.4 + locks * 0.32 + streak * 0.28;
   }
   if (cover == 3) {                                             // feathers — imbricated, laid back
-    // Each cell is a feather laid head-to-tail (cells stretched along the body). Its ROOT end (+z,
-    // toward the head) is tucked under the feather in front and its TIP end (−z) lies over the one
-    // behind: the height ramps up from root to tip and steps down at the tip's edge, so the plumage
-    // reads as overlapping scallops shingled toward the tail. (Domed cells read as turtle scutes or
-    // cobbles; a constant-z row step sat under the bump as a 1-px streak at every row.)
-    // (small: a contour feather is a few millimetres — at 9 cells a unit a bird's head wore five
-    // polygons across, a turtle's scutes)
-    vec3 q = vec3(p.x * 19.0, p.y * 19.0, p.z * 11.0);
-    float f2;
-    vec4 c = cellNear(q, f2);                                   // xyz: point − centre; w: F1
-    float ramp = clamp(0.5 - c.z * 0.75, 0.0, 1.0);             // root (front) low → tip (back) high
-    float round_ = 1.0 - 0.3 * dot(c.xy, c.xy);                 // a vane's rounded cross-section
-    // every border falls to the same floor, so the relief is continuous across cells: the tip's edge
-    // is a soft shadowed crease, never a step (a step under the derivative bump is a 1-px dotted line)
-    float edge = smoothstep(0.0, 0.38, f2 - c.w);
+    // Contour feathers: overlapping scallops laid along the body (see scallops), each a little under
+    // a tenth of a body unit long — a bird's head wears a dozen across, not five polygons — and down
+    // the middle of each, seen close, the fine pale line of its shaft.
     float barbs = fbmA(vec3(p.x * 40.0, p.y * 40.0, p.z * 9.0), 40.0);
-    float lay = mix(0.5, ramp * round_ * edge, aaW(19.0));
-    gHb = lay * 0.0055 + (barbs - 0.5) * 0.001;
-    // (gH reads as a RECESS for the grime and roughness: the tucked roots are where the shadow sits)
-    return clamp(0.75 - lay * 0.5 + (barbs - 0.5) * 0.05, 0.0, 1.0);
+    float shaft;
+    float lay = mix(0.66, scallops(p * 13.0, gLay, gNb, gFw * 13.0, shaft), aaW(13.0));
+    shaft *= aaW(50.0);
+    gHb = lay * 0.0075 + (barbs - 0.5) * 0.001 + shaft * 0.0012;
+    // (gH reads as a RECESS for the grime and roughness: where a feather comes out from under the
+    // one in front is where the shadow sits; its tip is clean)
+    return clamp(0.82 - lay * 0.6 + (barbs - 0.5) * 0.05 - shaft * 0.18, 0.0, 1.0);
   }
   if (cover == 4) {                                             // chitin — a smooth lacquered cuticle
     // Hard and glossy: a faint undulation and fine punctures, no seam network. (Voronoi grooves drew a

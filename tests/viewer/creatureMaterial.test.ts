@@ -224,6 +224,104 @@ describe('creature material shader injection', () => {
     expect(steepest).toBeLessThan(2.5); // (a step would read as thousands here)
   });
 
+  it('plumage and scales are overlapping scallops laid along the body, not a crazing of polygons', () => {
+    // (a cell per feather with straight borders read as cobbles or a turtle's scutes on every bird,
+    // and as rough skin on every fish)
+    const s = compileShaderStrings('feathers');
+    const f = s.fragmentShader;
+    expect(f).toContain('float scallops(vec3 q, vec3 lay, vec3 nrm, float fw, out float shaft) {');
+    expect(f).toContain('float lay = mix(0.66, scallops(p * 13.0, gLay, gNb, gFw * 13.0, shaft), aaW(13.0));'); // feathers
+    expect(f).toContain('float lay = mix(0.66, scallops(p * 17.0, gLay, gNb, gFw * 17.0, mid), aaW(17.0));'); // scales
+    // the lay: toward the tail and a little down, flat on the skin — from the body's REST normal, which
+    // the vertex stage hands down (the world normal turns with the animal; the pattern must not)
+    expect(s.vertexShader).toContain('varying vec3 vBNrm;');
+    expect(s.vertexShader).toContain('vBNrm = objectNormal;');
+    expect(f).toContain('varying vec3 vBNrm;');
+    const iLay = f.indexOf('gLay = t / max(length(t), 1e-3);');
+    expect(f).toContain('vec3 flow = vec3(0.0, -0.45, -1.0);');
+    expect(f).toContain('vec3 t = flow - gNb * dot(flow, gNb);');
+    expect(iLay).toBeGreaterThan(0);
+    // … worked out before the relief is first read
+    expect(iLay).toBeLessThan(f.indexOf('surfaceHeight(bp + dPx, uCover);'));
+
+    // The same arithmetic as the shader's scallops() (its loop pinned here line by line):
+    expect(f).toContain('vec3 qs = vec3(q.x + 0.5 * q.z, q.y + 0.5 * q.z, q.z);');
+    expect(f).toContain('vec3 ds = fp - g - 0.5 - (hash33(ip + g) - 0.5) * 0.16;');
+    expect(f).toContain('vec3 d = vec3(ds.x - 0.5 * ds.z, ds.y - 0.5 * ds.z, ds.z);');
+    expect(f).toContain('float ell = sqrt(max(dot(d, d) - along * along * 0.2439, 0.0));');
+    expect(f).toContain('float h = (0.5 + 0.51 * along) * (1.0 - smoothstep(0.85 - soft, 0.85, ell));');
+    const fract = (x: number) => x - Math.floor(x);
+    const hash33 = (p: number[]) =>
+      [
+        p[0] * 127.1 + p[1] * 311.7 + p[2] * 74.7,
+        p[0] * 269.5 + p[1] * 183.3 + p[2] * 246.1,
+        p[0] * 113.5 + p[1] * 271.9 + p[2] * 124.6,
+      ].map((v) => fract(Math.sin(v) * 43758.5453123));
+    const smooth = (a: number, b: number, x: number) => {
+      const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+      return t * t * (3 - 2 * t);
+    };
+    const scallops = (q: number[], lay: number[]) => {
+      const soft = 0.1;
+      const qs = [q[0] + 0.5 * q[2], q[1] + 0.5 * q[2], q[2]];
+      const ip = qs.map(Math.floor);
+      const fp = qs.map((v, i) => v - ip[i]);
+      let top = 0;
+      for (let k = -1; k <= 1; k++) {
+        for (let j = -1; j <= 1; j++) {
+          for (let i = -1; i <= 1; i++) {
+            const g = [i, j, k];
+            const jit = hash33(ip.map((v, a) => v + g[a]));
+            const ds = fp.map((v, a) => v - g[a] - 0.5 - (jit[a] - 0.5) * 0.16);
+            const d = [ds[0] - 0.5 * ds[2], ds[1] - 0.5 * ds[2], ds[2]];
+            const along = d[0] * lay[0] + d[1] * lay[1] + d[2] * lay[2];
+            const ell = Math.sqrt(Math.max(d[0] * d[0] + d[1] * d[1] + d[2] * d[2] - along * along * 0.2439, 0));
+            top = Math.max(top, (0.5 + 0.51 * along) * (1 - smooth(0.85 - soft, 0.85, ell)));
+          }
+        }
+      }
+      return Math.min(1, Math.max(0, top));
+    };
+    let seed = 4242;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    let barest = 1;
+    let steepest = 0;
+    let ahead = 0;
+    let behind = 0;
+    let tips = 0;
+    for (let n = 0; n < 12000; n++) {
+      const q = [rnd() * 30 - 15, rnd() * 30 - 15, rnd() * 30 - 15];
+      // a skin facing any way, and the lay on it
+      const nrm = [rnd() - 0.5, rnd() - 0.5, rnd() - 0.5];
+      const nl = Math.hypot(nrm[0], nrm[1], nrm[2]);
+      const nb = nrm.map((v) => v / nl);
+      const flow = [0, -0.45, -1];
+      const dot = flow[0] * nb[0] + flow[1] * nb[1] + flow[2] * nb[2];
+      const t = flow.map((v, i) => v - nb[i] * dot);
+      const tl = Math.hypot(t[0], t[1], t[2]);
+      if (tl < 0.2) continue; // (the two whorls, where the skin faces along the flow)
+      const lay = t.map((v) => v / tl);
+      const h = scallops(q, lay);
+      // no bare patch: some scallop covers every point, well up its ramp
+      barest = Math.min(barest, h);
+      // no step: the round edge is a slope (the bump would draw a step as a hard line)
+      const eps = 1e-3;
+      steepest = Math.max(steepest, Math.abs(scallops(q.map((v, i) => v + lay[i] * eps), lay) - h) / eps);
+      // imbricated: just past a tip the coat falls to the scallop it lies on; just behind the tip
+      // it is the same scallop, a little lower on its ramp
+      if (h > 0.9) {
+        tips++;
+        ahead += scallops(q.map((v, i) => v + lay[i] * 0.3), lay);
+        behind += scallops(q.map((v, i) => v - lay[i] * 0.3), lay);
+      }
+    }
+    expect(barest).toBeGreaterThan(0.2); // (0.27 here)
+    expect(steepest).toBeLessThan(16); // (12 here: the edge's own slope; a step would read as hundreds)
+    expect(tips).toBeGreaterThan(100);
+    expect(behind / tips).toBeGreaterThan(0.7); // (0.76)
+    expect(ahead / tips).toBeLessThan(behind / tips - 0.12); // (0.56)
+  });
+
   it('thinning fur takes the coat\'s own tone: no scatter of dark specks on an animal seen whole', () => {
     // (the last sparse strands kept the shadow of a dense pile's roots: a bear seen whole wore pepper)
     const f = compileShaderStrings().fragmentShader;
