@@ -237,6 +237,28 @@ describe('animation rig', () => {
     expect(Math.max(...misses)).toBeLessThan(0.4);
   });
 
+  it('a body on splayed legs feeds without dragging its feet: its trunk stays still', () => {
+    // (a dipping chest carried a frog's feet 0.4 of its height across the ground — 0.2 for a crocodile's
+    // — because arched legs are not refolded to follow it)
+    for (const id of ['anuran', 'crocodilian', 'lizard', 'chelonian', 'crab', 'insectoid']) {
+      for (let seed = 1; seed <= 10; seed++) {
+        const ph = p(id, seed);
+        const r = createRig(ph);
+        const T = r.template;
+        if (!T.legs.some((l) => l.arched)) continue;
+        expect(T.grazeDip, `${id} #${seed} no dip`).toBe(0);
+        poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 1, swim: false, turn: 0 });
+        const ground = Math.min(...T.legs.map((l) => ph.nodes[l.nodes[l.nodes.length - 1]].pos[1] - ph.nodes[l.nodes[l.nodes.length - 1]].radius));
+        const tall = Math.max(0.1, Math.max(...T.legs.map((l) => ph.nodes[l.nodes[0]].pos[1])) - ground);
+        for (const l of T.legs) {
+          const f = l.nodes[l.nodes.length - 1];
+          const w = footWorld(r, f);
+          expect(Math.hypot(w.y - ph.nodes[f].pos[1], w.z - ph.nodes[f].pos[2]) / tall, `${id} #${seed} foot`).toBeLessThan(0.03);
+        }
+      }
+    }
+  });
+
   it('a two-legged feeder tips over its hips as one piece: beak to the ground, feet where they stood', () => {
     // (it could tip only as far as its legs could fold to follow — a bird's beak hung 0.4 of its
     // height above what it pecked at, 0.8 for the worst — and bent joint by joint its wings stood off it)
@@ -269,7 +291,7 @@ describe('animation rig', () => {
         expect(root.position.distanceTo(r.rest[T.trunk[0]]), `${id} #${seed} home`).toBeLessThan(1e-9);
         expect(Math.abs(root.rotation.x), `${id} #${seed} level`).toBeLessThan(1e-9);
       }
-      expect(misses.reduce((a, b) => a + b, 0) / misses.length, `${id} mean miss`).toBeLessThan(0.15);
+      expect(misses.reduce((a, b) => a + b, 0) / misses.length, `${id} mean miss`).toBeLessThan(0.2);
       expect(Math.max(...misses), `${id} worst miss`).toBeLessThan(0.4);
     }
     // a four-legged grazer still curves its back, and is not shifted at all

@@ -192,6 +192,29 @@ describe('beak mouth (mouth overhaul)', () => {
     expect(hi.hook / hi.r).toBeLessThan(0.3);
   });
 
+  it('a turtle’s beak lies flat across its jaws, at its mouth — not on edge down the middle of its face', () => {
+    // (built like a bird's — a tall narrow blade, ridden up toward the brow — but too short to read as
+    // a bill, it was a black slot between the eyes)
+    for (let seed = 11; seed <= 16; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'chelonian'));
+      const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const built = buildBeak(p, idx, [], false, 'hybrid')!;
+      expect(built, `#${seed}`).not.toBeNull();
+      built.upper.computeBoundingBox();
+      const b = built.upper.boundingBox!;
+      const wide = b.max.x - b.min.x;
+      const tall = b.max.y - b.min.y;
+      expect(wide / tall, `#${seed} wide and low`).toBeGreaterThan(1.5);
+      // rooted at the mouth: its top no higher above the seat than the beak's own size
+      expect(b.max.y - built.seat.p[1], `#${seed} at the mouth`).toBeLessThan(0.75 * built.r);
+    }
+    // a bird's stays a blade on edge
+    const bird = grow(genomeOfMorphotype(12, 'bird'));
+    const bb = buildBeak(bird, bird.nodes.findIndex((n) => n.terminal === 'mouth'), [], false, 'hybrid')!;
+    bb.upper.computeBoundingBox();
+    expect(bb.upper.boundingBox!.max.x - bb.upper.boundingBox!.min.x).toBeLessThan(bb.upper.boundingBox!.max.y - bb.upper.boundingBox!.min.y);
+  });
+
   it('a bird of prey wears a hawk’s bill and a songbird a slim one, whatever the seed', () => {
     // (the hook was half a coin toss: the two plans drew from the same bills and looked alike)
     for (let seed = 1; seed <= 12; seed++) {

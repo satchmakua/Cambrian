@@ -93,7 +93,7 @@ export function buildBeak(
   const slim = 1 - 0.22 * sPos + 0.06 * (hash01(seed, idx + 47) - 0.5);
   // a bill is broad at the root — it spans the front of the face — and tapers to the tip (thin
   // cones from a narrow root hung below the face like a walrus's tusks)
-  const upperR0 = r * (shelled ? 0.9 : 0.72 * slim);
+  const upperR0 = r * (shelled ? 0.62 : 0.72 * slim);
 
   // The bill's axis: mostly the HEAD's forward, tipped a little toward the mouth's downward aim. Run
   // along the mouth aim itself (pitched ~40° down to seat the maw on the face front) the mandibles
@@ -108,7 +108,8 @@ export function buildBeak(
   // face: the mouth seat sits low (its aim is pitched down onto the face front), and a bill rooted
   // there hung under a bulging forehead like a thorn off the chin — a real culmen runs on from the brow
   const back = 0.3 * r;
-  const lift = 0.3 * r;
+  // (a turtle's sheath stays at its mouth: ridden up the face like a bird's culmen, it sat between the eyes)
+  const lift = shelled ? 0 : 0.3 * r;
   const baseU: Vec3 = [c0.p[0] + bup[0] * (0.14 * r + lift) - dir[0] * back, c0.p[1] + bup[1] * (0.14 * r + lift) - dir[1] * back, c0.p[2] + bup[2] * (0.14 * r + lift) - dir[2] * back];
   const baseL: Vec3 = [c0.p[0] - bup[0] * (0.2 * r - lift) - dir[0] * back * 0.9, c0.p[1] - bup[1] * (0.2 * r - lift) - dir[1] * back * 0.9, c0.p[2] - bup[2] * (0.2 * r - lift) - dir[2] * back * 0.9];
   void cu;
@@ -135,13 +136,16 @@ export function buildBeak(
   );
   // blade-cones: the flatten axis is side-to-side (spec.right), NOT the surface normal — squashing
   // along `up` reads flat duck-bill/cartoon; a tall narrow blade reads raptor.
+  // A TURTLE's is the other way about: a wide low sheath across the front of its jaws. (Stood on edge
+  // like a bird's, and too short to read as a bill, it was a black slot down the middle of the face.)
+  const flatN = shelled ? bup : spec.right;
   const upper = sweepTube(
-    upperPath.map((p) => ({ p, n: spec.right })),
-    { radius: (u) => Math.max(r * 0.03, upperR0 * Math.pow(1 - u, 0.95)), flatten: 0.3 + 0.2 * sPos, radialSegments: 10 },
+    upperPath.map((p) => ({ p, n: flatN })),
+    { radius: (u) => Math.max(r * 0.03, upperR0 * Math.pow(1 - u, 0.95)), flatten: shelled ? 0.42 : 0.3 + 0.2 * sPos, radialSegments: 10 },
   );
   const lower = sweepTube(
-    lowerPath.map((p) => ({ p, n: spec.right })),
-    { radius: (u) => Math.max(r * 0.025, upperR0 * 0.72 * Math.pow(1 - u, 1.05)), flatten: 0.3, radialSegments: 10 },
+    lowerPath.map((p) => ({ p, n: flatN })),
+    { radius: (u) => Math.max(r * 0.025, upperR0 * 0.72 * Math.pow(1 - u, 1.05)), flatten: shelled ? 0.42 : 0.3, radialSegments: 10 },
   );
 
   // the interior wedge: rim near the skin, throat point sunk — into the real carve when recessed,

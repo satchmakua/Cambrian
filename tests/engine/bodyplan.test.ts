@@ -239,6 +239,54 @@ describe('body plans', () => {
     }
   });
 
+  it('a turtle has a small head on a thinner neck — not a balloon half the size of its shell', () => {
+    // (its skull drew any shape going, the swollen ones included: 0.24 to 1.1 of the shell's depth)
+    for (let seed = 1; seed <= 16; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'chelonian'));
+      const spine = p.nodes.filter((n) => n.kind === 'spine');
+      const last = Math.max(...spine.map((n) => n.segment ?? 0));
+      const shell = Math.max(...trunkOf(p).map((n) => n.radius));
+      const skull = spine.filter((n) => n.segment === last)[0];
+      const neck = spine.filter((n) => (n.segment ?? 0) > 0 && (n.segment ?? 0) < last);
+      expect(skull.radius / shell, `#${seed} head`).toBeLessThan(0.46);
+      expect(skull.radius / shell, `#${seed} head`).toBeGreaterThan(0.18);
+      expect(Math.min(...neck.map((n) => n.radius)), `#${seed} neck thinner than the head`).toBeLessThan(skull.radius);
+    }
+  });
+
+  it('a theropod carries a heavy tail: deep at the root, a counterweight to its head and chest', () => {
+    // (a thin rod a quarter of the body's depth, stuck in a round rump like a stick in a potato)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'biped'));
+      const t = trunkOf(p).sort((a, b) => a.pos[2] - b.pos[2]);
+      const tail = p.nodes.filter((n) => n.part?.kind === 'tail');
+      expect(tail.length, `#${seed}`).toBeGreaterThanOrEqual(5);
+      expect(tail[0].radius / t[0].radius, `#${seed} root`).toBeGreaterThan(0.5);
+      const len = t[0].pos[2] - Math.min(...tail.map((n) => n.pos[2]));
+      const body = t[t.length - 1].pos[2] + t[t.length - 1].radius - (t[0].pos[2] - t[0].radius);
+      expect(len / body, `#${seed} length`).toBeGreaterThan(0.8);
+    }
+  });
+
+  it('a chimera stands on its legs and carries a head on a neck', () => {
+    // (it lay on its belly on sprawled legs behind a swollen sack of a head)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'chimera'));
+      const spine = p.nodes.filter((n) => n.kind === 'spine');
+      const last = Math.max(...spine.map((n) => n.segment ?? 0));
+      expect(last, `#${seed} neck and head`).toBeGreaterThanOrEqual(2);
+      const ry = (n: (typeof spine)[number]) => n.radius * (n.scale?.[1] ?? 1);
+      const t = trunkOf(p);
+      const D = 2 * Math.max(...t.map(ry));
+      const feet = p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg');
+      const ground = Math.min(...feet.map((n) => n.pos[1] - n.radius));
+      const belly = Math.min(...t.map((n) => n.pos[1] - ry(n)));
+      expect((belly - ground) / D, `#${seed} clearance`).toBeGreaterThan(0.3);
+      const skull = spine.filter((n) => n.segment === last)[0];
+      expect((2 * ry(skull)) / D, `#${seed} head no bigger than its body`).toBeLessThan(0.9);
+    }
+  });
+
   it('an urchin is a ball of spines: dozens, straight, standing out all over it', () => {
     // (it had one ring of jointed arms curled under it as legs: a ball on a spider's legs)
     for (let seed = 1; seed <= 12; seed++) {
