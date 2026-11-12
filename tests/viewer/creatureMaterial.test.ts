@@ -322,6 +322,60 @@ describe('creature material shader injection', () => {
     expect(ahead / tips).toBeLessThan(behind / tips - 0.12); // (0.56)
   });
 
+  it('a rosette is one blotch — a dark rim round a paler middle — and an eye-spot is whole or absent', () => {
+    // (rings were drawn at radii of their own through the body, and the skin cut each wherever it
+    // fell: open rings, doubled rings, rings with no middle — the letters C, O and 8 on every
+    // spotted animal, and an octopus's eye-spots mostly empty hoops)
+    const f = compileShaderStrings().fragmentShader;
+    const smooth = (a: number, b: number, x: number) => {
+      // (GLSL smoothstep, either way round)
+      const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+      return t * t * (3 - 2 * t);
+    };
+    // spots: rim and middle are cut from the ONE distance v
+    expect(f).toContain('float v = F.x + (n - 0.5) * 0.16;');
+    expect(f).toContain('float blotch = 1.0 - smoothstep(0.26 - c, 0.31 + c, v);');
+    expect(f).toContain('float middle = 1.0 - smoothstep(0.12 - c, 0.19 + c, v);');
+    expect(f).toContain('return mix(0.12, blotch * (1.0 - 0.55 * middle), 1.0 - smoothstep(0.25, 0.6, c));');
+    for (const c of [0, 0.015, 0.03]) {
+      const mark = (v: number) => (1 - smooth(0.26 - c, 0.31 + c, v)) * (1 - 0.55 * (1 - smooth(0.12 - c, 0.19 + c, v)));
+      // from the blotch's centre outward: the paler middle, up to the dark rim, down to the coat — once
+      const vs = Array.from({ length: 251 }, (_, i) => i * 0.002);
+      const ms = vs.map(mark);
+      const peak = ms.indexOf(Math.max(...ms));
+      expect(ms[0], `footprint ${c}: the middle`).toBeCloseTo(0.45, 9);
+      expect(ms[peak], `footprint ${c}: the rim`).toBe(1);
+      expect(ms[ms.length - 1], `footprint ${c}: the coat`).toBe(0);
+      for (let i = 1; i < ms.length; i++) {
+        if (i <= peak) expect(ms[i], `footprint ${c}: rising to the rim`).toBeGreaterThanOrEqual(ms[i - 1] - 1e-12);
+        else expect(ms[i], `footprint ${c}: falling from it`).toBeLessThanOrEqual(ms[i - 1] + 1e-12);
+      }
+      // the rim has width (it does not vanish between the middle and the edge)
+      expect(ms.filter((m) => m === 1).length * 0.002, `footprint ${c}: a rim with width`).toBeGreaterThan(0.005);
+    }
+    // eye-spots: measured in the skin, from each cell's centre laid flat on it
+    expect(f).toContain('float dn = dot(d, gNb);');
+    expect(f).toContain('float rho = sqrt(max(dot(d, d) - dn * dn, 0.0));');
+    expect(f).toContain('float pupil = 1.0 - smoothstep(0.1 - c, 0.15 + c, rho);');
+    expect(f).toContain('float ring = smoothstep(0.06 + c, 0.0, abs(rho - 0.32));');
+    expect(f).toContain('mark = max(mark, (1.0 - smoothstep(0.22, 0.42, abs(dn))) * max(pupil, ring * 0.9));');
+    const figure = (rho: number, dn: number) => (1 - smooth(0.22, 0.42, Math.abs(dn))) * Math.max(1 - smooth(0.1, 0.15, rho), 0.9 * smooth(0.06, 0, Math.abs(rho - 0.32)));
+    for (const dn of [0, 0.1, 0.2]) {
+      // however deep its centre lies under the skin, the same whole figure: pupil, gap, ring
+      expect(figure(0, dn), `depth ${dn}`).toBe(1);
+      expect(figure(0.21, dn), `depth ${dn}`).toBeLessThan(0.02);
+      expect(figure(0.32, dn), `depth ${dn}`).toBeCloseTo(0.9, 6);
+      expect(figure(0.45, dn), `depth ${dn}`).toBe(0);
+    }
+    // …and one too deep is gone, pupil and ring together (never a ring left alone)
+    expect(figure(0, 0.42)).toBe(0);
+    expect(figure(0.32, 0.42)).toBe(0);
+    for (let dn = 0.22; dn <= 0.42; dn += 0.02) expect(figure(0.32, dn) / Math.max(figure(0, dn), 1e-9)).toBeLessThanOrEqual(0.9 + 1e-9);
+    // (the normal the figure is laid on is set before the pattern is read)
+    expect(f.indexOf('gNb = normalize(vBNrm);')).toBeLessThan(f.indexOf('float pat = patternField(bp, uPType, uPScale);'));
+    expect(f.indexOf('gNb = normalize(vBNrm);')).toBeGreaterThan(0);
+  });
+
   it('thinning fur takes the coat\'s own tone: no scatter of dark specks on an animal seen whole', () => {
     // (the last sparse strands kept the shadow of a dense pile's roots: a bear seen whole wore pepper)
     const f = compileShaderStrings().fragmentShader;

@@ -567,19 +567,39 @@ float patternField(vec3 p0, int type, float scale) {
   float c = gFw * scale * 0.55;                                 // voronoi cells per pixel
   if (type == 3) {                                              // spots / rosettes (leopard)
     vec2 F = voronoi(p * scale * 0.55);
-    // a band-limited wobble roughens the spot edge and BREAKS the rosette ring into arcs — a
-    // leopard's rosette is a broken ring of dark blotches, a whole crisp circle read as a stamp
+    // One blotch per cell, its edge roughened by a band-limited wobble: a small one is a solid spot,
+    // a large one a ROSETTE — a dark rim round a middle a shade darker than the coat. Rim and middle
+    // are cut from the one distance, so the rim is always the blotch's own edge. (A ring drawn at a
+    // radius of its own was cut by the skin wherever it happened to fall: open rings and doubled
+    // rings — the letters C, O and 8, or coffee-cup stains, stamped over the animal.)
     float n = fbmA(p * scale * 1.6, scale * 1.6);
-    float fill = 1.0 - smoothstep(0.14 - c, 0.3 + c, F.x + (n - 0.5) * 0.14);
-    float ring = smoothstep(0.085 + c, 0.0, abs(F.x - 0.29 + (n - 0.5) * 0.1)) * smoothstep(0.28, 0.46, n);
-    return mix(0.3, clamp(max(fill * 0.72, ring * 1.1), 0.0, 1.0), 1.0 - smoothstep(0.25, 0.6, c));
+    float v = F.x + (n - 0.5) * 0.16;
+    float blotch = 1.0 - smoothstep(0.26 - c, 0.31 + c, v);
+    float middle = 1.0 - smoothstep(0.12 - c, 0.19 + c, v);
+    return mix(0.12, blotch * (1.0 - 0.55 * middle), 1.0 - smoothstep(0.25, 0.6, c));
   }
   if (type == 4) {                                              // ocelli — concentric eye-spots (peacock)
+    // An eye-spot is a figure ON the skin — a dark pupil, a pale gap, a ring — so it is measured in
+    // the skin: from each cell's centre laid flat on it (gNb is the skin's own normal). A centre deep
+    // under the skin fades out. (Measured through the body, the skin cut every one at its own depth:
+    // most showed as an empty ring of some size or other, a few as a bare dot.)
     c = gFw * scale * 0.5;
-    vec2 F = voronoi(p * scale * 0.5);
-    float center = 1.0 - smoothstep(0.07 - c, 0.13 + c, F.x);
-    float ring = smoothstep(0.055 + c, 0.0, abs(F.x - 0.4));
-    return mix(0.2, clamp(max(center, ring * 0.9), 0.0, 1.0), 1.0 - smoothstep(0.25, 0.6, c));
+    vec3 q = p * scale * 0.5;
+    vec3 ip = floor(q);
+    vec3 fp = q - ip;
+    float mark = 0.0;
+    for (int k = -1; k <= 1; k++)
+    for (int j = -1; j <= 1; j++)
+    for (int i = -1; i <= 1; i++) {
+      vec3 g = vec3(float(i), float(j), float(k));
+      vec3 d = g + 0.25 + 0.5 * hash33(ip + g) - fp;
+      float dn = dot(d, gNb);
+      float rho = sqrt(max(dot(d, d) - dn * dn, 0.0));
+      float pupil = 1.0 - smoothstep(0.1 - c, 0.15 + c, rho);
+      float ring = smoothstep(0.06 + c, 0.0, abs(rho - 0.32));
+      mark = max(mark, (1.0 - smoothstep(0.22, 0.42, abs(dn))) * max(pupil, ring * 0.9));
+    }
+    return mix(0.12, mark, 1.0 - smoothstep(0.25, 0.6, c));
   }
   if (type == 5) {                                              // reticulate — crisp net (giraffe/croc)
     c = gFw * scale * 0.5;
