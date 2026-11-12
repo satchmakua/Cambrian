@@ -152,6 +152,93 @@ describe('body plans', () => {
     expect(hawk.leg).toBeGreaterThan(1.2 * dove.leg);
   });
 
+  it('a raised neck roots at the top of the shoulders, so the head it carries clears the back', () => {
+    // (begun on the trunk's axis it had the whole chest to climb first: a dog's crown rode 0.25 of
+    // its chest's depth above its back, a deer's 0.3 — every necked animal stretching forward to sniff)
+    for (const [id, min] of [['canid', 0.2], ['felid', 0.25], ['ungulate', 0.35], ['bird', 0.3], ['dragon', 0.2]] as const) {
+      for (let seed = 1; seed <= 16; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const spine = p.nodes.filter((n) => n.kind === 'spine');
+        const last = Math.max(...spine.map((n) => n.segment ?? 0));
+        const ry = (n: (typeof spine)[number]) => n.radius * (n.scale?.[1] ?? 1);
+        const t = trunkOf(p).sort((a, b) => a.pos[2] - b.pos[2]);
+        const chest = t[t.length - 1];
+        const neck = spine.filter((n) => (n.segment ?? 0) > 0 && (n.segment ?? 0) < last).sort((a, b) => (a.segment ?? 0) - (b.segment ?? 0) || 0);
+        // the neck's first link sits above the chest's own axis
+        expect(neck[0].pos[1], `${id} #${seed} neck root`).toBeGreaterThan(chest.pos[1] + 0.15 * ry(chest));
+        const skull = spine.filter((n) => n.segment === last)[0];
+        const back = Math.max(...t.map((n) => n.pos[1] + ry(n)));
+        expect((skull.pos[1] + ry(skull) - back) / (2 * Math.max(...t.map(ry))), `${id} #${seed} crown`).toBeGreaterThan(min);
+      }
+    }
+    // …while a bear's stays level with its back: its neck barely lifts
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'ursid'));
+      const spine = p.nodes.filter((n) => n.kind === 'spine');
+      const last = Math.max(...spine.map((n) => n.segment ?? 0));
+      const ry = (n: (typeof spine)[number]) => n.radius * (n.scale?.[1] ?? 1);
+      const t = trunkOf(p);
+      const skull = spine.filter((n) => n.segment === last)[0];
+      const back = Math.max(...t.map((n) => n.pos[1] + ry(n)));
+      expect((skull.pos[1] + ry(skull) - back) / (2 * Math.max(...t.map(ry))), `bear #${seed}`).toBeLessThan(0.3);
+    }
+  });
+
+  it('a dragon stands tall with its head above its back; a wyvern is a biped, chest up over big legs', () => {
+    const measure = (id: string, seed: number) => {
+      const p = grow(genomeOfMorphotype(seed, id));
+      const spine = p.nodes.filter((n) => n.kind === 'spine');
+      const last = Math.max(...spine.map((n) => n.segment ?? 0));
+      const ry = (n: (typeof spine)[number]) => n.radius * (n.scale?.[1] ?? 1);
+      const t = trunkOf(p).sort((a, b) => a.pos[2] - b.pos[2]);
+      const D = 2 * Math.max(...t.map(ry));
+      const back = Math.max(...t.map((n) => n.pos[1] + ry(n)));
+      const belly = Math.min(...t.map((n) => n.pos[1] - ry(n)));
+      const feet = p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg');
+      const ground = Math.min(...feet.map((n) => n.pos[1] - n.radius));
+      const skull = spine.filter((n) => n.segment === last)[0];
+      const neck = spine.filter((n) => (n.segment ?? 0) > 0 && (n.segment ?? 0) < last);
+      const wing = p.nodes.find((n) => n.part?.kind === 'wing' && n.kind === 'terminal');
+      const tail = p.nodes.filter((n) => n.part?.kind === 'tail');
+      const legs = p.nodes.filter((n) => n.part?.kind === 'leg' && n.kind === 'limb');
+      return {
+        clearance: (belly - ground) / D,
+        crown: (skull.pos[1] + ry(skull) - back) / D,
+        neckLinks: neck.length,
+        wing: wing ? wing.radius / Math.max(...t.map((n) => n.radius)) : null,
+        tailRoot: tail.length ? (2 * tail[0].radius) / D : null,
+        shank: (2 * Math.min(...legs.map((n) => n.radius))) / D,
+        feet: feet.length,
+        chestUp: t[t.length - 1].pos[1] - t[0].pos[1],
+        footZ: feet.reduce((a, n) => a + n.pos[2], 0) / feet.length,
+        z0: t[0].pos[2] - t[0].radius,
+        z1: t[t.length - 1].pos[2] + t[t.length - 1].radius,
+      };
+    };
+    for (let seed = 1; seed <= 12; seed++) {
+      const d = measure('dragon', seed);
+      // (a belly-dragging sausage on pegs, the head at ground level: a winged shrew)
+      expect(d.feet, `dragon #${seed}`).toBe(4);
+      expect(d.clearance, `dragon #${seed} clearance`).toBeGreaterThan(0.45);
+      expect(d.crown, `dragon #${seed} head above the back`).toBeGreaterThan(0.2);
+      expect(d.neckLinks, `dragon #${seed} neck`).toBeGreaterThanOrEqual(3);
+      if (d.tailRoot !== null) expect(d.tailRoot, `dragon #${seed} tail root`).toBeGreaterThan(0.3);
+      if (d.wing !== null) expect(d.wing, `dragon #${seed} wing`).toBeGreaterThan(0.42);
+      const w = measure('wyvern', seed);
+      // (the dragon with its forelegs deleted: a balloon on two pegs under its back third)
+      expect(w.feet, `wyvern #${seed}`).toBe(2);
+      expect(w.chestUp, `wyvern #${seed} chest up`).toBeGreaterThan(0.25);
+      expect(w.clearance, `wyvern #${seed} clearance`).toBeGreaterThan(0.5);
+      expect(w.shank, `wyvern #${seed} legs`).toBeGreaterThan(0.14);
+      expect(w.crown, `wyvern #${seed} head above the back`).toBeGreaterThan(0.25);
+      // its feet stand under the middle of its body, not its rear end
+      const u = (w.footZ - w.z0) / (w.z1 - w.z0);
+      expect(u, `wyvern #${seed} feet under it`).toBeGreaterThan(0.3);
+      expect(u, `wyvern #${seed} feet under it`).toBeLessThan(0.75);
+      expect(w.wing!, `wyvern #${seed} wing`).toBeGreaterThan(0.42);
+    }
+  });
+
   it('a shark has a long pointed snout with its mouth set back beneath it', () => {
     // (a blunt melon with a grin on its very tip, and no snout at all, read as a porpoise)
     for (let seed = 1; seed <= 16; seed++) {

@@ -214,6 +214,29 @@ describe('animation rig', () => {
     expect(misses.filter((m) => m < 0.15).length / misses.length).toBeGreaterThan(0.6);
   });
 
+  it('a deer reaches the grass: a neck long enough for its legs, and free to come all the way down', () => {
+    // (three short links on stilts, and a neck root that turned no further than level: it grazed the
+    // air 0.4 of its own height above the grass — 0.54 for the worst)
+    const misses: number[] = [];
+    for (let seed = 1; seed <= 12; seed++) {
+      const ph = p('ungulate', seed);
+      const r = createRig(ph);
+      const T = r.template;
+      poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 1, swim: false, turn: 0 });
+      const ground = Math.min(...T.legs.map((l) => ph.nodes[l.nodes[l.nodes.length - 1]].pos[1] - ph.nodes[l.nodes[l.nodes.length - 1]].radius));
+      const tall = Math.max(...T.legs.map((l) => ph.nodes[l.nodes[0]].pos[1])) - ground;
+      const mi = ph.nodes.findIndex((n) => n.terminal === 'mouth');
+      misses.push((footWorld(r, mi).y - ground - ph.nodes[mi].radius * 0.5 - 0.03) / tall);
+      for (const l of T.legs) {
+        const f = l.nodes[l.nodes.length - 1];
+        const w = footWorld(r, f);
+        expect(Math.hypot(w.y - ph.nodes[f].pos[1], w.z - ph.nodes[f].pos[2]) / tall, `#${seed} foot`).toBeLessThan(0.05);
+      }
+    }
+    expect(misses.reduce((a, b) => a + b, 0) / misses.length).toBeLessThan(0.25);
+    expect(Math.max(...misses)).toBeLessThan(0.4);
+  });
+
   it('a two-legged feeder tips over its hips as one piece: beak to the ground, feet where they stood', () => {
     // (it could tip only as far as its legs could fold to follow — a bird's beak hung 0.4 of its
     // height above what it pecked at, 0.8 for the worst — and bent joint by joint its wings stood off it)

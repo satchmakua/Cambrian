@@ -1211,7 +1211,9 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
     const foldS = (trunkLen * 1.05 + girth * 0.9) * (0.85 + gene * 0.3);
     const w = feathered
       ? buildFeatheredWing(side, foldS, plumage, accent)
-      : buildMembraneWing(side, Math.max(trunkLen * 1.15, girth * 3) * (0.75 + gene * 0.5), 0.55 + 0.3 * (g.seed % 7) / 7);
+      : // (the wing's own gene counts for more than it did — the same at a typical 0.4, half again
+        // at 0.9 — so a body bred or built for big wings gets them)
+        buildMembraneWing(side, Math.max(trunkLen * 1.15, girth * 3) * (0.55 + gene), 0.55 + 0.3 * (g.seed % 7) / 7);
     // the flight posture: the same plumage opened out — a wing reaches further spread than folded
     const spread = feathered ? buildSpreadFeatheredWing(side, foldS * 1.35, plumage, accent).surface : null;
     // a folded wing tucks against the UPPER FLANK (a bird's wing lies along its side, not on its

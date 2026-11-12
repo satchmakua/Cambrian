@@ -194,8 +194,12 @@ export const LOOK_MAX = 1.1;
 
 /** the second and later neck joints' share of a feeding head's curl (the face turns down to the grass) */
 const GRAZE_CURL = 0.12;
+/** the most the first neck joint pitches to feed (rad): a neck carried high (a deer's, a dragon's,
+ *  an ostrich's — raised 80° and more at rest) has that much to come down before it even points at
+ *  the ground; at 1.5 such a neck only reached level, and its owner grazed the air */
+const GRAZE_NECK_MAX = 2.0;
 /** the most a feeder's chest dips (rad) — past this a body reads as kneeling, not grazing */
-const GRAZE_DIP_MAX = 0.42;
+const GRAZE_DIP_MAX = 0.55;
 /** …and a two-legged body's: a bird pecks by tipping its whole body forward over its legs, tail up —
  *  its chest stands high (and higher the more upright it stands), and no neck of its own reaches the
  *  ground from there. */
@@ -277,7 +281,7 @@ function solveGraze(p: Phenotype, parent: Int32Array, trunk: number[], neck: num
   const dipMax = biped ? GRAZE_DIP_BIPED : nT > 1 ? GRAZE_DIP_MAX : 0;
   for (let dip = 0; dip <= dipMax + 1e-9; dip += 0.03) {
     const shift = shiftOf(dip);
-    for (let a = -0.3; a <= 1.5 + 1e-9; a += 0.025) {
+    for (let a = -0.3; a <= GRAZE_NECK_MAX + 1e-9; a += 0.025) {
       const c = Math.abs(mouthY(dip, a) + shift[0] - target) / tall + dip * 0.25 + Math.abs(a - 0.55) * 0.02;
       if (c < cost) {
         cost = c;

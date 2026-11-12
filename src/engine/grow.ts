@@ -25,6 +25,9 @@ const RUNNER_TUCK = 6.5;
 /** An arthropod's tagma joint (pedicel / petiole / neck): the waist's radius ×the thinner section's. */
 const TAGMA_WAIST = 0.36;
 
+/** How far up the chest a fully raised neck roots (×the chest's half-depth above its axis). */
+const NECK_ROOT = 0.4;
+
 /** A leg's root link (haunch, shoulder) is at most this ×the radius of the body it roots on. */
 const HIP_MAX = 0.68;
 
@@ -115,6 +118,17 @@ export function grow(genome: Genome): Phenotype {
     let pos = startPos;
     let quat = startQuat;
     let prev = parentIdx;
+    // A NECK leaves the body from the top of the shoulders, not out of the middle of the chest's
+    // front: begun on the trunk's axis it had the whole depth of the chest to climb before the head
+    // it carries could clear the back, and a raised neck still held its head level with the withers
+    // (every necked animal looked as if it were stretching forward to sniff something). The more a
+    // neck lifts, the higher on the chest it roots.
+    if (depth > 0 && seg.child && parentIdx >= 0 && seg.curve[0] < 0 && dev.symmetry === 'bilateral' && seg.appendages.length === 0) {
+      const P = nodes[parentIdx];
+      const up = qRotate([0, 1, 0], startQuat);
+      const rise = NECK_ROOT * P.radius * (P.scale?.[1] ?? 1) * clamp(-seg.curve[0] / 0.3, [0, 1]);
+      pos = [pos[0] + up[0] * rise, pos[1] + up[1] * rise, pos[2] + up[2] * rise];
+    }
     // Head carriage: the last segment of the chain (the head) is held near level whatever the neck
     // does — a raised neck lifts the head, it doesn't aim the face at the sky. In bilateral mode the
     // chain only ever pitches (yaw is dropped), so the frame is a pure X rotation and its pitch
