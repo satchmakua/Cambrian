@@ -171,8 +171,11 @@ export function CreatureViewer({
       <OrbitControls
         makeDefault
         target={[0, 0, 0]}
-        autoRotate={!frozen && spin}
+        autoRotate={!frozen && spin && !menuOpen}
         autoRotateSpeed={0.8}
+        // (under the menu the turn stops dead: left to coast, its easing asks for frame after frame —
+        // on a slow machine, for many seconds — behind a menu that should have the machine to itself)
+        enableDamping={!menuOpen}
         enablePan={false}
         minDistance={size * 0.7}
         maxDistance={size * 7}

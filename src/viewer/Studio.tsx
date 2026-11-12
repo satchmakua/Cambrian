@@ -24,7 +24,7 @@ import { grow, type Phenotype } from '../engine/grow';
 import type { Genome } from '../engine/genome';
 import { describe, nearestKinds, DESCRIPTOR_LABELS } from '../engine/morphospace';
 import { genomeOfMorphotype, MORPHOTYPE_IDS } from '../engine/random';
-import type { SkinMode } from '../ui/store';
+import { useStore, type SkinMode } from '../ui/store';
 import { CreatureMesh } from './CreatureMesh';
 import { SkeletonOverlay, BONE_COLORS } from './SkeletonOverlay';
 import { StudioEnvironment } from './StudioEnvironment';
@@ -76,8 +76,13 @@ function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl, flight
   const invalidate = useThree((s) => s.invalidate);
   const frozen = devGaitPhase();
   const heldT = devRigTime();
+  // (the preview holds still while the game menu is over it, and picks up when the menu closes)
+  const menuOpen = useStore((s) => s.menuOpen);
+  useEffect(() => {
+    if (!menuOpen) invalidate();
+  }, [menuOpen, invalidate]);
   useFrame((_, dt) => {
-    if (!rig) return;
+    if (!rig || menuOpen) return;
     if (heldT !== null) rig.t = heldT;
     if (motion === 'dead') {
       // (dev: the World's carcass pose, upright so the limp legs and sagging neck can be judged)

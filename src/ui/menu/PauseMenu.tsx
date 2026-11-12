@@ -21,6 +21,7 @@ export function PauseMenu({ onClose }: { onClose: () => void }) {
   });
   const game = useStore((s) => s.game);
   const view = useStore((s) => s.view);
+  const unkept = useStore((s) => s.unkept);
 
   // the valley's clock stops while the menu is up
   const wasRunning = useRef(false);
@@ -39,6 +40,7 @@ export function PauseMenu({ onClose }: { onClose: () => void }) {
       if (e.key !== 'Escape') return;
       e.stopPropagation();
       e.preventDefault();
+      if (e.repeat) return; // (held down: once is enough — a repeat would shut the menu it just backed out to)
       if (screen !== 'home') setScreen('home');
       else onClose();
     };
@@ -54,6 +56,11 @@ export function PauseMenu({ onClose }: { onClose: () => void }) {
             <header>
               <h2>Paused</h2>
               <p>{game.name}</p>
+              {unkept && (
+                <p className="mm-warn" role="status">
+                  The browser has run out of room to keep this game by itself. Save it to a slot (or export it) so nothing bred since is lost.
+                </p>
+              )}
             </header>
             <nav className="mm-list" aria-label="Game menu">
               <button className="primary" autoFocus onClick={onClose}><b>Resume</b></button>

@@ -145,7 +145,10 @@ export function WorldView({ founder, onExit, onAdopt, onMenu }: { founder: Genom
   const chron = useWorldUi((s) => s.chronicle);
   const fileRef = useRef<HTMLInputElement>(null);
   const quality = useQuality();
-  // (the scene holds its last frame while the game menu is over it: nothing to draw, nothing to step)
+  // (the scene holds still while the game menu is over it — nothing steps — and is drawn again only
+  // when something asks: the window changing size, an option changed in the menu's own Settings.
+  // Switched off outright it kept nothing: resizing a canvas clears it, and the valley behind the
+  // menu went blank on entering full screen or changing the resolution.)
   const menuOpen = useStore((s) => s.menuOpen);
   const hints = useSettings((s) => s.gameplay.hints);
   const autosaveMinutes = useSettings((s) => s.gameplay.autosaveMinutes);
@@ -184,6 +187,7 @@ export function WorldView({ founder, onExit, onAdopt, onMenu }: { founder: Genom
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.code !== 'Space' || e.repeat) return;
+      if (useStore.getState().menuOpen) return; // (the menu is up: time is stopped, and stays stopped)
       const t = e.target as HTMLElement | null;
       if (t && /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(t.tagName)) return;
       e.preventDefault();
@@ -254,7 +258,7 @@ export function WorldView({ founder, onExit, onAdopt, onMenu }: { founder: Genom
   return (
     <div className="world">
       {/* the scene mounts paused while its shaders compile (in parallel, where the browser can), then runs */}
-      <Canvas className="world-canvas" frameloop={warm && !menuOpen ? 'always' : 'never'} shadows={quality.shadows} dpr={dprOf(quality, 1.75)} camera={{ position: [40, 38, 70], fov: 45, near: 0.2, far: 1200 }} gl={{ preserveDrawingBuffer: import.meta.env.DEV }}>
+      <Canvas className="world-canvas" frameloop={!warm ? 'never' : menuOpen ? 'demand' : 'always'} shadows={quality.shadows} dpr={dprOf(quality, 1.75)} camera={{ position: [40, 38, 70], fov: 45, near: 0.2, far: 1200 }} gl={{ preserveDrawingBuffer: import.meta.env.DEV }}>
         <KeepPrograms />
         {!warm && <WarmShaders onReady={() => setWarm(true)} />}
         <WorldScene />

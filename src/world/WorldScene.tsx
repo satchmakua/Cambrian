@@ -25,6 +25,7 @@ import { Actor, Carcass, useSkinScheduler } from './Actors';
 import { getWorld, useWorldUi, worldVersion, bumpVersion, worldSceneLive } from './worldStore';
 import { StudioEnvironment } from '../viewer/StudioEnvironment';
 import { useQuality } from '../ui/settings';
+import { useStore } from '../ui/store';
 
 const MAX_STEPS_PER_FRAME = 90;
 
@@ -226,6 +227,8 @@ function KeyPan() {
       return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
     };
     const down = (e: KeyboardEvent) => {
+      // (under the game menu the keys are the menu's: nothing is held, and the arrows scroll its lists)
+      if (useStore.getState().menuOpen) return held.current.clear();
       if (e.ctrlKey || e.metaKey || e.altKey || typing(e)) return;
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') held.current.add(e.code);
       if (!PAN_KEYS.has(e.code)) return;
@@ -401,6 +404,20 @@ function DevLook() {
       }
       rows.push({ what: `${actors.n} groups (creatures, carcasses, nests…)`, tris: actors.tris, calls: actors.calls });
       return { base, rows: rows.sort((a, b) => b.tris - a.tris).slice(0, 16).map((r) => `${String(Math.round(r.tris / 1000)).padStart(5)}k tris ${String(r.calls).padStart(4)} calls  ${r.what}`) };
+    };
+    // …and what a frame costs to draw END TO END, the graphics card included: `n` frames drawn in a
+    // row, each waited out (gl.finish), in ms a frame. (The frame loop's own pace says little on a slow
+    // or a software renderer, where the browser decides when a frame may start.)
+    (window as unknown as { __cambrianFrameMs?: (n?: number) => unknown }).__cambrianFrameMs = (n = 3) => {
+      const ctx = gl.getContext();
+      gl.render(scene, camera);
+      ctx.finish();
+      const t0 = performance.now();
+      for (let i = 0; i < n; i++) {
+        gl.render(scene, camera);
+        ctx.finish();
+      }
+      return { ms: (performance.now() - t0) / n, triangles: gl.info.render.triangles, calls: gl.info.render.calls };
     };
     (window as unknown as { __cambrianRender?: () => unknown }).__cambrianRender = () => ({
       calls: gl.info.render.calls,

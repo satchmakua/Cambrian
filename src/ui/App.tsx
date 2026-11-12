@@ -14,11 +14,14 @@ import { MORPHOTYPE_IDS } from '../engine/random';
 // The valley and the Studio are loaded when they are first opened: neither is needed to draw the menu
 // or the breeder. (A modest saving — about 7% of the code fetched before the menu shows; the rest is
 // the 3D library and the creature renderer, which the menu's own stage needs.)
-const WorldView = lazy(() => import('../world/WorldView').then((m) => ({ default: m.WorldView })));
-const Studio = lazy(() => import('../viewer/Studio').then((m) => ({ default: m.Studio })));
+// (a fetch that fails is tried once more; one that keeps failing is shown by the screen boundary)
+const WorldView = lazy(fetching(() => import('../world/WorldView').then((m) => ({ default: m.WorldView }))));
+const Studio = lazy(fetching(() => import('../viewer/Studio').then((m) => ({ default: m.Studio }))));
 import { useStore } from './store';
 import { useWorldUi } from '../world/worldStore';
 import { MainMenu } from './menu/MainMenu';
+import { fetching } from './ScreenBoundary';
+import { typingIn } from './keys';
 import { PauseMenu } from './menu/PauseMenu';
 
 export function App() {
@@ -75,8 +78,9 @@ export function App() {
       return;
     }
     const key = (e: KeyboardEvent) => {
-      // (the open menu handles its own Esc; a text field keeps its keys)
-      if (e.key === 'Escape' && !paused && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) setPaused(true);
+      // (the open menu handles its own Esc; a key held down opens it once, not on every repeat)
+      if (e.key !== 'Escape' || e.repeat || paused || typingIn(e.target)) return;
+      setPaused(true);
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
