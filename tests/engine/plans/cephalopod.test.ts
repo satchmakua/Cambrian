@@ -121,4 +121,14 @@ describe('octopus', () => {
     expect(p.nodes.filter((n) => n.terminal === 'eye').length).toBe(2);
     expect(webPanels(p, isHybridNode).length).toBeGreaterThan(0);
   });
+
+  it('a web joins a radial ring only: a bilateral mutant carrying webbed arms grows no skin across its chest', () => {
+    const g = genomeOfMorphotype(3, 'felid');
+    const arm = genomeOfMorphotype(3, 'cephalopod').body.appendages.find((a) => a.kind === 'tentacle' && a.web)!;
+    // two pairs of webbed arms on the cat's trunk
+    g.body.appendages.push({ ...arm, pair: true, attachAzimuth: 4.4, attachT: 0.9 }, { ...arm, pair: true, attachAzimuth: 4.9, attachT: 0.9 });
+    const p = grow(g);
+    expect(p.nodes.filter((n) => n.part?.web).length).toBeGreaterThan(0);
+    expect(webPanels(p, isHybridNode).length).toBe(0);
+  });
 });

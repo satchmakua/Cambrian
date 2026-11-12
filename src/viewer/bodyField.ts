@@ -538,6 +538,10 @@ function quatOfBasis(X: Vec3, Y: Vec3, Z: Vec3): [number, number, number, number
  */
 export function webPanels(p: Phenotype, include: (n: BodyNode) => boolean): { c: Vec3; q: [number, number, number, number]; r: Vec3 }[] {
   const out: { c: Vec3; q: [number, number, number, number]; r: Vec3 }[] = [];
+  // (a web joins a RING of arms round a radial body: on a bilateral one — a mutant carrying webbed
+  // arms in pairs — the arms "next" to each other round the trunk are left and right, and a panel
+  // between them would be skin stretched across its chest)
+  if (p.genomeRef.symmetry !== 'radial') return out;
   const kids: number[][] = p.nodes.map(() => []);
   for (const [a, b] of p.edges) kids[a].push(b);
   // each webbed arm's chain, root first, grouped by the body node it grows from

@@ -305,6 +305,9 @@ const UNDERSIDE = 0.8;
 const LONG_SNOUT = 1.3;
 /** a mandibled mouth is at most this many of its own radii from corner to corner */
 const MANDIBLE_SPAN = 2.0;
+/** …and so is a mouth set on a headless body's trunk (a slug's): its line's span is an angle about the
+ *  whole body there, and it ran from flank to flank — a grin across the front of the animal */
+const TRUNK_MOUTH_SPAN = 2.4;
 
 export function buildMouthLine(
   p: Phenotype,
@@ -372,12 +375,14 @@ export function buildMouthLine(
   // no wider than they reach. (The line's span is an angle about the body it sits on: on a head that
   // is a mouth's width — on a crab, whose mouth sits on its trunk, the lips ran the whole breadth of
   // the animal, a dark wire strung under its front from claw to claw.)
-  if (s.variant === 'mandibles') {
+  const onTrunk = headed && p.nodes[p.edges.find(([, b]) => b === s.idx)?.[0] ?? 0]?.segment === 0 && !p.nodes.some((n) => n.kind === 'spine' && (n.segment ?? 0) > 0);
+  const span = s.variant === 'mandibles' ? MANDIBLE_SPAN : onTrunk ? TRUNK_MOUTH_SPAN : 0;
+  if (span > 0) {
     for (let k = 0; k < 5; k++) {
       const a = upper[0].p, b = upper[samples - 1].p;
       const w = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
-      if (w <= MANDIBLE_SPAN * s.r) break;
-      s = { ...s, arc: (s.arc * MANDIBLE_SPAN * s.r) / w };
+      if (w <= span * s.r) break;
+      s = { ...s, arc: (s.arc * span * s.r) / w };
       upper = traceCurve(f, [], s, origin, samples, upperPitch);
       lower = traceCurve(f, carves, s, origin, samples, lowerPitch);
     }

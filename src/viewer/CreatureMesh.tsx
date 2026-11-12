@@ -63,12 +63,27 @@ const IRIS_PALETTE: [number, number, number, number][] = [
   [1, 0.78, 0.55, 0.34], // violet
   [1, 0.0, 0.0, 0.12], // near-black
 ];
-function irisFor(seed: number): number {
-  const total = IRIS_PALETTE.reduce((t, e) => t + e[0], 0);
+// An animal's eye (round or beady) is one of the natural colours: dark brown above all (most mammals'
+// and most birds'), amber, hazel, gold, a cat's green, a rare pale blue; never the accents above (a
+// violet- or blood-eyed dog read as a toy, or a demon). An alien's glowing eye keeps the full palette.
+const NATURAL_IRIS: [number, number, number, number][] = [
+  // weight, hue, sat, light
+  [6, 0.07, 0.6, 0.16], // dark brown
+  [4, 0.08, 0.7, 0.24], // brown
+  [4, 0.09, 0.9, 0.34], // amber
+  [2, 0.11, 0.55, 0.3], // hazel
+  [2, 0.13, 0.85, 0.4], // gold
+  [1.5, 0.27, 0.55, 0.3], // green
+  [1, 0.55, 0.6, 0.45], // pale blue
+  [1.5, 0.0, 0.0, 0.1], // near-black
+];
+export function irisFor(seed: number, natural = false): number {
+  const palette = natural ? NATURAL_IRIS : IRIS_PALETTE;
+  const total = palette.reduce((t, e) => t + e[0], 0);
   // two independent hashes: one picks the swatch, one jitters hue/sat a touch for within-type variety
   let r = unitHash(seed, 0x1e5) * total;
-  let e = IRIS_PALETTE[0];
-  for (const c of IRIS_PALETTE) {
+  let e = palette[0];
+  for (const c of palette) {
     r -= c[0];
     if (r <= 0) { e = c; break; }
   }
@@ -293,7 +308,16 @@ export function CreatureMesh({
   // colors dominate; striking blues/reds/violets appear as a minority, so eye colour is a real point
   // of variety without every creature reading as a clown.
   // (an ape's eyes are a warm dark brown — the curated palette's yellow-greens read as a cat's)
-  const irisColor = useMemo(() => (isApe(phenotype) ? new THREE.Color().setHSL(0.07 + 0.03 * unitHash(seed, 0xa9e), 0.55, 0.12).getHex() : irisFor(seed)), [seed, phenotype]);
+  // (an animal's eye — round or beady — is a natural colour; an alien's glowing one may be any)
+  const animalEye = useMemo(() => {
+    const eye = data.features.find((f) => f.type === 'eye');
+    const v = eye ? eyeVariant(eye.style) : 'round';
+    return v === 'round' || v === 'beady';
+  }, [data]);
+  const irisColor = useMemo(
+    () => (isApe(phenotype) ? new THREE.Color().setHSL(0.07 + 0.03 * unitHash(seed, 0xa9e), 0.55, 0.12).getHex() : irisFor(seed, animalEye)),
+    [seed, phenotype, animalEye],
+  );
 
   // scratch buffer the trajectory sampler writes each played-back frame into
   const animScratch = useMemo(() => new Float32Array(data.nodes.length * 3), [data]);

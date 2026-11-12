@@ -147,6 +147,23 @@ describe('marking colours harmonise with the body', () => {
       expect(off).toBeLessThanOrEqual(6); // only the rare vivid (exotic) coats break the rule
     }
   });
+
+  it('a familiar frog, lizard or snake mostly wears its own hue or umber: an arbitrary colour is the exception', () => {
+    // (a third to half of them took any hue, and a complementary flash on top: a green frog with
+    // purple spots, a yellow snake banded in violet)
+    const dist = (a: number, b: number) => Math.min(Math.abs(a - b), 1 - Math.abs(a - b));
+    for (const kind of ['anuran', 'lizard', 'serpent']) {
+      let off = 0;
+      const n = 80;
+      for (let seed = 1; seed <= n; seed++) {
+        const { hueA, hueB } = genomeOfMorphotype(seed, kind).palette;
+        const kin = dist(hueA, hueB) <= 0.061;
+        const umber = hueB >= 0.06 && hueB <= 0.106;
+        if (!kin && !umber) off++;
+      }
+      expect(off / n, kind).toBeLessThan(0.35);
+    }
+  });
 });
 
 describe('mouth bands', () => {

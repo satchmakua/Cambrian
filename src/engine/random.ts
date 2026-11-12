@@ -275,7 +275,8 @@ const MORPHOTYPES: readonly Morpho[] = [
   // ostrich/emu: tall, heavy, two long stilt legs, a small beaked head, shaggy feathers (the neck is M24)
   { id: 'ratite', cluster: 'familiar', weight: 1.2, legAz: [4.62, 4.71], girth: [0.34, 0.5], repeat: [2, 3], height: [0.92, 1.08], elong: [1.15, 1.35], neck: [0.3, 0.38], neckLinks: [7, 8], neckLift: [-0.24, -0.2], headSize: [0.42, 0.5], headShape: ['tapered', 'wedge', 'round'], headDome: [0.8, 0.95], legPairs: [1], posture: 'upright', legLen: [2.05, 2.4], legThick: [0.3, 0.4], legTerm: ['claw'], tail: 0.9, tailTerm: ['none'], tailSegs: [1, 2], tailLen: [0.3, 0.5], tailThick: [0.24, 0.34], tailDroop: [-1.55, -1.3], tailCurl: [-0.3, -0.15], head: 0.5, eyeStyle: [0, 0.2], mouthStyle: [0.26, 0.37], covering: ['feathers'], pattern: ['plain', 'mottle'], soberMarks: true, hue: [0.06, 0.12], sat: [0.3, 0.5] },
   // --- uncanny ---
-  { id: 'dragon', cluster: 'uncanny', weight: 0.9, eyeEl: [0.7, 0.85], muzzleDrop: [0.12, 0.24], snout: [0.5, 0.75], muzzle: [0.52, 0.62], tailTaper: [0.78, 0.84], tailCurl: [-0.1, -0.03], tailSegs: [5, 6], tailThick: [0.5, 0.62], tailDroop: [-1.5, -1.3], taper: [1.05, 1.1], girth: [0.5, 0.66], repeat: [3, 4], elong: [1.15, 1.35], neck: [0.46, 0.54], neckLinks: [3, 3], neckLift: [-0.42, -0.34], headSize: [0.6, 0.75], legPairs: [2], posture: 'digitigrade', legLen: [0.9, 1.15], legThick: [0.5, 0.62], legTerm: ['claw'], wings: 0.85, wingSize: [1.5, 1.8], tail: 0.95, tailTerm: ['none', 'barb', 'club'], headShape: ['flat', 'wedge'], horns: 0.9, spines: 0.8, crest: 0.3, eyeStyle: [0.4, 0.9], mouthStyle: [0.14, 0.24], covering: ['scales', 'plates'], pattern: ['reticulate', 'bands', 'mottle'], sheen: [0.35, 0.8], hue: [0.0, 0.95], sat: [0.5, 0.9] },
+  // a dragon: four legs and a pair of great wings (one in seven was wingless — a horned, banded horse)
+  { id: 'dragon', cluster: 'uncanny', weight: 0.9, eyeEl: [0.7, 0.85], muzzleDrop: [0.12, 0.24], snout: [0.5, 0.75], muzzle: [0.52, 0.62], tailTaper: [0.78, 0.84], tailCurl: [-0.1, -0.03], tailSegs: [5, 6], tailThick: [0.5, 0.62], tailDroop: [-1.5, -1.3], taper: [1.05, 1.1], girth: [0.5, 0.66], repeat: [3, 4], elong: [1.15, 1.35], neck: [0.46, 0.54], neckLinks: [3, 3], neckLift: [-0.42, -0.34], headSize: [0.6, 0.75], legPairs: [2], posture: 'digitigrade', legLen: [0.9, 1.15], legThick: [0.5, 0.62], legTerm: ['claw'], wings: 1, wingSize: [1.5, 1.8], tail: 0.95, tailTerm: ['none', 'barb', 'club'], headShape: ['flat', 'wedge'], horns: 0.9, spines: 0.8, crest: 0.3, eyeStyle: [0.4, 0.9], mouthStyle: [0.14, 0.24], covering: ['scales', 'plates'], pattern: ['reticulate', 'bands', 'mottle'], sheen: [0.35, 0.8], hue: [0.0, 0.95], sat: [0.5, 0.9] },
   { id: 'wyvern', cluster: 'uncanny', weight: 0.85, headShape: ['flat', 'wedge'], headWide: [0.86, 1.0], headDome: [0.72, 0.84], eyeEl: [0.7, 0.85], muzzleDrop: [0.12, 0.24], snout: [0.5, 0.75], muzzle: [0.52, 0.62], tailTaper: [0.78, 0.84], tailSegs: [5, 6], tailThick: [0.5, 0.6], tailDroop: [-1.5, -1.3], rear: [-0.22, -0.15], girth: [0.42, 0.56], repeat: [3, 4], elong: [1.2, 1.5], neck: [0.44, 0.52], neckLinks: [3, 4], neckLift: [-0.3, -0.2], headSize: [0.62, 0.78], legPairs: [1], posture: 'digitigrade', legLen: [1.1, 1.4], legThick: [0.5, 0.64], legTerm: ['claw'], wings: 1, wingSize: [1.7, 2.0], tail: 0.95, tailTerm: ['barb'], horns: 0.8, spines: 0.6, eyeStyle: [0.4, 0.9], mouthStyle: [0.14, 0.24], covering: ['scales'], pattern: ['bands', 'reticulate'], sheen: [0.3, 0.7], hue: [0.0, 0.95], sat: [0.5, 0.9] },
   // an octopus: a tall mantle over a crown of arms, thick where they leave it and drawn out to fine
   // tips; TWO eyes, low on the head just above the arms, with a bar of a pupil (one eye per arm — a
@@ -730,11 +731,15 @@ function scaffold(rng: Rng, seed: number, symmetry: Symmetry, radialCount: numbe
  */
 function markingHue(hueA: number, u: number, cover: CoveringType, wild: boolean): number {
   const wrap = (h: number) => ((h % 1) + 1) % 1;
-  const free = wild ? 1 : cover === 'fur' ? 0 : cover === 'skin' || cover === 'plates' ? 0.3 : cover === 'feathers' || cover === 'scales' ? 0.5 : 1;
+  // A familiar animal's markings are mostly its own hue, darker or paler, or umber to near-black; a
+  // contrasting colour is the exception — a warning (a poison frog's, a coral snake's) or a bird's
+  // plumage. (Any hue a third to half of the time, and a complementary flash on top, made a green frog
+  // with purple spots, a yellow snake banded in violet: toys.) Birds keep the most colour.
+  const free = wild ? 1 : cover === 'fur' ? 0 : cover === 'feathers' ? 0.4 : cover === 'scales' ? 0.2 : cover === 'skin' || cover === 'plates' ? 0.12 : 1;
   if (u < free) return wrap(u / free + hueA); // any hue
   const k = (u - free) / (1 - free); // 0..1
   const kin = cover === 'fur' ? 0.55 : 0.6;
-  const flash = cover === 'fur' ? 0.55 : 0.8; // pelts never wear a complementary flash
+  const flash = cover === 'fur' ? 0.55 : cover === 'feathers' ? 0.8 : 0.7; // pelts never wear a complementary flash
   if (k < kin) return wrap(hueA + (k / kin - 0.5) * 0.12); // kin: within ±0.06 of the body hue
   if (k < flash) return wrap(hueA + 0.5 + ((k - kin) / (flash - kin) - 0.5) * 0.08); // a complementary flash
   return 0.06 + ((k - flash) / (1 - flash)) * 0.045; // umber / near-black markings
