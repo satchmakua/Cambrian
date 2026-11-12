@@ -28,4 +28,19 @@ describe('ursid', () => {
       expect(p.nodes.some((n) => n.terminal === 'whisker'), `#${seed}`).toBe(false);
     }
   });
+
+  it("its back rises to the hump over its shoulders, and its muzzle is held out level from the brow", () => {
+    // (level from rump to shoulders, the muzzle hung from the brow at a hound's droop: a tapir, a hippo)
+    for (const seed of SEEDS) {
+      const p = grow(genomeOfMorphotype(seed, 'ursid'));
+      const trunk = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 0).sort((a, b) => a.pos[2] - b.pos[2]);
+      const top = (n: (typeof trunk)[number]) => n.pos[1] + n.radius * (n.scale?.[1] ?? 1);
+      const rump = trunk[0], shoulders = trunk[trunk.length - 1];
+      expect((top(shoulders) - top(rump)) / rump.radius, `#${seed} hump`).toBeGreaterThan(0.4);
+      const depth = Math.max(...p.nodes.filter((n) => n.kind === 'spine').map((n) => n.segment ?? 0));
+      const skull = p.nodes.filter((n) => n.kind === 'spine' && n.segment === depth);
+      const brain = skull[0], muzzle = skull[skull.length - 1];
+      expect((muzzle.pos[1] - brain.pos[1]) / brain.radius, `#${seed} level muzzle`).toBeGreaterThan(-0.55);
+    }
+  });
 });

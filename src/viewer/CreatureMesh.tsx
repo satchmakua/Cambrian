@@ -536,6 +536,7 @@ export function CreatureMesh({
         recessed={showSmooth && carves.length > 0}
         surface={showSmooth ? (full ? 'hybrid' : 'smooth') : 'kit'}
         lite={detail !== 'full'}
+        fur={furMats}
       />
     );
     // rigged: the feature sits at its bone's origin (= its node at rest) and moves with it
@@ -661,6 +662,7 @@ function Feature({
   recessed,
   surface,
   lite = false,
+  fur = NO_FUR,
 }: {
   f: MeshFeature;
   footColor: number;
@@ -672,6 +674,7 @@ function Feature({
   recessed: boolean;
   surface: SkinSurface;
   lite?: boolean; // reduced detail: structural spars (fin rays, wing bones) are dropped
+  fur?: readonly THREE.Material[]; // the coat's fur shells, for the parts the coat runs onto (a paw)
 }) {
   switch (f.type) {
     case 'eye':
@@ -717,7 +720,7 @@ function Feature({
     case 'whisker':
       return <Whisker f={f} color={footColor} />;
     case 'paw':
-      return <Paw f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} leg={f.kind === 'leg'} />;
+      return <Paw f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} leg={f.kind === 'leg'} fur={fur} />;
     case 'hoof':
       return <Hoof f={f} color={footColor} />;
     case 'hand':
@@ -1071,7 +1074,9 @@ function pawGeometry(r: number, origin: readonly number[]): { fur: THREE.BufferG
   return { fur, claws: clawGeo };
 }
 
-function Paw({ f, color, skin, origin, leg = false }: { f: MeshFeature; color: number; skin?: THREE.Material; origin: readonly number[]; leg?: boolean }) {
+const NO_FUR: readonly THREE.Material[] = [];
+
+function Paw({ f, color, skin, origin, leg = false, fur = NO_FUR }: { f: MeshFeature; color: number; skin?: THREE.Material; origin: readonly number[]; leg?: boolean; fur?: readonly THREE.Material[] }) {
   const r = Math.max(f.radius, 0.06);
   const geo = useMemo(() => {
     const g = pawGeometry(r, origin);
@@ -1093,6 +1098,9 @@ function Paw({ f, color, skin, origin, leg = false }: { f: MeshFeature; color: n
           <meshStandardMaterial color={color} roughness={0.78} />
         </mesh>
       )}
+      {/* the coat runs on down over the paw: its shells, as on the leg above (without them the fur
+          stopped at the ankle in a ring, over a bare shiny paw — a sock and a slipper) */}
+      {skin && fur.map((m, i) => <mesh key={`fur${i}`} geometry={geo.fur} material={m} />)}
       <mesh geometry={geo.claws} castShadow>
         <meshStandardMaterial color={dark} roughness={0.45} />
       </mesh>
