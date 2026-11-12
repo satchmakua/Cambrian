@@ -14,12 +14,31 @@ import type { Phenotype } from '../engine/grow';
 import { shankColor } from './keratin';
 import type { BareLegs } from './creatureMaterial';
 
-export type FootPlan = 'bird' | 'reptile' | 'frog';
+export type FootPlan = 'bird' | 'reptile' | 'frog' | 'theropod';
+
+/** A THEROPOD: a scaled, bare-skinned or feathered body walking on one pair of clawed legs that
+ *  carries a pair of arms, not wings, in front of them — the two-legged dinosaur (a bird's forelimbs
+ *  are its wings, a lizard walks on four, and a furred ape stands on flat feet, not claws). */
+export function isTheropod(p: Phenotype): boolean {
+  const t = p.genomeRef.covering.type;
+  if (t !== 'feathers' && t !== 'scales' && t !== 'plates' && t !== 'skin') return false;
+  const apps = p.genomeRef.body.appendages;
+  const legs = apps.filter((a) => a.kind === 'leg');
+  return (
+    legs.length === 1 &&
+    legs[0].terminal === 'claw' &&
+    apps.some((a) => a.kind === 'arm' && a.terminal === 'hand') &&
+    !apps.some((a) => a.kind === 'wing')
+  );
+}
 
 /** Which toed foot a clawed leg ends in, by covering (arthropods keep their single tarsal claw):
- *  feathers → a bird's, scales/plates → a lizard's clawed fan, bare skin → a frog's pad-tipped toes. */
+ *  feathers → a bird's, scales/plates → a lizard's clawed fan, bare skin → a frog's pad-tipped toes.
+ *  A theropod stands on three thick clawed toes whatever it wears: on a lizard's fan of five, or a
+ *  frog's long pad-tipped fingers, a striding dinosaur stood on a pair of small splayed hands. */
 export function footPlanOf(p: Phenotype): FootPlan | null {
   const t = p.genomeRef.covering.type;
+  if (isTheropod(p)) return 'theropod';
   if (t === 'feathers') return 'bird';
   if (t === 'scales' || t === 'plates' || t === 'crystal') return 'reptile';
   if (t === 'skin') return 'frog';
@@ -149,6 +168,18 @@ function toesOf(plan: FootPlan, r: number, link: number, taloned = false): ToeSp
       { az: Math.PI, len: L * 0.5, r0: t * 0.9 }, // the hallux
     ];
   }
+  if (plan === 'theropod') {
+    // three stout toes spread forward, the middle one longest, and a short spur of a hallux behind:
+    // a big foot, about as long as half the shank above it
+    const L = Math.max(r * 3.2, link * 0.5);
+    const t = Math.max(r * 0.52, L * 0.14);
+    return [
+      { az: -0.5, len: L * 0.8, r0: t * 0.94 },
+      { az: 0, len: L, r0: t },
+      { az: 0.5, len: L * 0.8, r0: t * 0.94 },
+      { az: Math.PI, len: L * 0.3, r0: t * 0.7 },
+    ];
+  }
   if (plan === 'frog') {
     // long, thin, widely splayed toes
     const L = Math.max(r * 2.8, link * 0.42);
@@ -254,7 +285,7 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number, talone
     }
     // the claw: a curved-down cone off the tip
     const cdir = dir.clone().setY(-0.55).normalize();
-    const cl = t.r0 * (plan === 'bird' ? 2.2 : 1.9);
+    const cl = t.r0 * (plan === 'bird' ? 2.2 : plan === 'theropod' ? 2.3 : 1.9);
     const claw = new THREE.ConeGeometry(t.r0 * 0.5, cl, 6);
     claw.applyMatrix4(
       new THREE.Matrix4().compose(tip.clone().add(cdir.clone().multiplyScalar(cl * 0.45)), new THREE.Quaternion().setFromUnitVectors(up, cdir), new THREE.Vector3(1, 1, 1)),
@@ -268,4 +299,55 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number, talone
   };
   // (a frog's foot has no claws: an empty geometry keeps the mesh pair uniform)
   return { toes: merge(toes), claws: claws.length ? merge(claws) : new THREE.BufferGeometry() };
+}
+
+/**
+ * A theropod's hand: a small palm and three short fingers reaching on along the forearm, each bent
+ * down at the knuckle and tipped with a dark hooked claw. Authored along the wrist node's rest
+ * orientation `quat` (local +Z runs on down the arm, local −Y is the way the elbow folds) and
+ * returned in the body frame about the node, like a foot. (A primate's flat four-fingered hand at
+ * the end of an arm this small was a dark knot — a burnt lump on a stick.)
+ */
+export function clawedHandGeometry(r: number, quat: readonly number[]): { fingers: THREE.BufferGeometry; claws: THREE.BufferGeometry } {
+  const fingers: THREE.BufferGeometry[] = [];
+  const claws: THREE.BufferGeometry[] = [];
+  const up = new THREE.Vector3(0, 1, 0);
+  const one = new THREE.Vector3(1, 1, 1);
+  const palm = new THREE.SphereGeometry(1, 10, 8);
+  palm.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(0, 0, r * 0.35), new THREE.Quaternion(), new THREE.Vector3(r * 1.25, r * 0.85, r * 1.2)));
+  fingers.push(palm);
+  const t = r * 0.42; // a finger's root radius
+  const L = r * 3.0; // …and its length
+  [-0.5, 0, 0.5].forEach((az, i) => {
+    const len = L * (i === 1 ? 1 : 0.86);
+    const root = new THREE.Vector3(Math.sin(az) * r * 0.75, 0, r * 0.7);
+    const knuckle = root.clone().add(new THREE.Vector3(Math.sin(az) * 0.9, -0.25, Math.cos(az)).normalize().multiplyScalar(len * 0.55));
+    const tip = knuckle.clone().add(new THREE.Vector3(Math.sin(az) * 0.5, -0.9, Math.cos(az) * 0.6).normalize().multiplyScalar(len * 0.45));
+    const pts = [root, knuckle, tip];
+    for (let k = 0; k < 2; k++) {
+      const a = pts[k], b = pts[k + 1];
+      const ra = t * (k === 0 ? 1 : 0.85), rb = t * (k === 0 ? 0.85 : 0.65);
+      const seg = b.clone().sub(a);
+      const cyl = new THREE.CylinderGeometry(rb, ra, seg.length(), 8, 1);
+      cyl.applyMatrix4(new THREE.Matrix4().compose(a.clone().add(b).multiplyScalar(0.5), new THREE.Quaternion().setFromUnitVectors(up, seg.clone().normalize()), one));
+      fingers.push(cyl);
+      const joint = new THREE.SphereGeometry(rb, 8, 6);
+      joint.translate(b.x, b.y, b.z);
+      fingers.push(joint);
+    }
+    // the claw hooks on down and back toward the palm
+    const cdir = new THREE.Vector3(Math.sin(az) * 0.2, -1, -0.15).normalize();
+    const cl = t * 2.6;
+    const claw = new THREE.ConeGeometry(t * 0.6, cl, 6);
+    claw.applyMatrix4(new THREE.Matrix4().compose(tip.clone().add(cdir.clone().multiplyScalar(cl * 0.42)), new THREE.Quaternion().setFromUnitVectors(up, cdir), one));
+    claws.push(claw);
+  });
+  const turn = new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3]));
+  const merge = (gs: THREE.BufferGeometry[]) => {
+    const m = mergeGeometries(gs.map((g) => (g.index ? g.toNonIndexed() : g)), false) ?? gs[0];
+    for (const g of gs) if (g !== m) g.dispose();
+    m.applyMatrix4(turn);
+    return m;
+  };
+  return { fingers: merge(fingers), claws: merge(claws) };
 }

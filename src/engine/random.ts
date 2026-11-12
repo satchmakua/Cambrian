@@ -58,7 +58,8 @@ interface Morpho {
   legCurl?: Rg; // how hard the leg folds at knee and hock — overrides the posture's default (a standing
   //               dog's hind leg is near a post: on a cat's deep fold its paws sat under its belly, a crouch)
   legTaper?: Rg; // per-link thinning down the leg — default [0.7, 0.85]; nearer 0.9 the shank keeps
-  //                its girth and the paw at its end is a real foot, not a knob on a dowel
+  //                its girth and the paw at its end is a real foot, not a knob on a dowel (a strider's
+  //                shank and ankle stay stout)
   posture?: Posture; // leg stance (§6.1): sprawling / digitigrade / plantigrade / hooved / upright
   legTerm?: readonly Terminal[];
   /** the cut of a feathered leg's clawed foot (viewer/feet TALONED): under 0.6 the thin perching toes
@@ -137,7 +138,8 @@ interface Morpho {
   armThick?: Rg; // grasping-arm root radius ×girth — default [0.18, 0.28]
   armTaper?: Rg; // default [0.7, 0.85]
   armCurl?: Rg; // the elbow's bend (rad per joint) — default [0.35, 0.55]; an ape's long arms hang near straight
-  armSegs?: number; // the arm's link count (an ape's is a shoulder, an elbow and a fist: on four the forearm broke again above the wrist)
+  armSegs?: number; // the arm's link count (else 3 or 4 by the draw): an ape's is a shoulder, an elbow and a fist (on
+  //                   four the forearm broke again above the wrist); a theropod's small arm is upper arm, forearm, hand
   horns?: number;
   /** where along a plain head the horns root (0 = the cranium) — default mid-head, which on a head of
    *  two links is its SNOUT: a pair of horns stood on the tip of the nose like a stalk. A constant: no draw. */
@@ -181,6 +183,8 @@ interface Morpho {
   legSegs?: number; // every leg's link count (a crab's merus, carpus and pointed dactyl: on two links its legs were table legs)
   spineCount?: number; // how many spines stand along the back (a crystal beast's row of shards)
   spineSize?: Rg; // × a back spine's usual length and girth
+  legYaw?: number; // every leg's sideways bend per joint (rad; else a small draw either way): 0 keeps a strider's
+  //                   legs in the fore-aft plane, its feet under its hips
   mouthStyle?: Rg; // bands (viewer/partStyles mouthVariant): <0.06 herbivore · <0.125 maw · <0.25 fanged · <0.375 beak ·
   //                   <0.5 mandibles · <0.625 sucker · <0.75 lamprey · <0.85 baleen · <0.93 proboscis · else trunk
   covering?: readonly CoveringType[]; // skin material (MORPHOLOGY §7); default ['skin']
@@ -233,7 +237,16 @@ const MORPHOTYPES: readonly Morpho[] = [
   // a THEROPOD: a horizontal body balanced over two strong legs, a long tail held out behind to
   // counterweigh a big-jawed head on an S-curved neck, small arms (as an upright walker it read as a
   // blob — a cartoon dinosaur, a penguin)
-  { id: 'biped', cluster: 'familiar', weight: 1.0, legAz: [4.6, 4.71], girth: [0.34, 0.42], repeat: [3, 3], height: [0.95, 1.05], elong: [1.05, 1.25], taper: [1.04, 1.1], rear: [-0.1, -0.03], neck: [0.52, 0.62], neckLinks: [2, 2], neckLift: [-0.32, -0.22], legPairs: [1], posture: 'digitigrade', legLen: [1.65, 2.0], legThick: [0.46, 0.6], legTerm: ['claw'], arms: 1, armLen: [0.32, 0.45], armThick: [0.14, 0.2], armT: [0.86, 0.96], armAz: [3.9, 4.2], armEl: [0.3, 0.55], tail: 1.0, tailSegs: [5, 6], tailLen: [0.8, 1.0], tailThick: [0.62, 0.78], tailTaper: [0.78, 0.86], tailDroop: [-1.5, -1.38], tailCurl: [-0.06, 0.02], tailTerm: ['none'], head: 1.0, headSize: [0.78, 0.92], headShape: ['wedge', 'tapered', 'blocky'], snout: [0.45, 0.7], eyeStyle: [0, 0.3], eyeEl: [0.7, 0.9], mouthStyle: [0.13, 0.24], covering: ['scales', 'skin', 'feathers'], pattern: ['stripes', 'mottle', 'plain', 'bands'], hue: [0.04, 0.4], sat: [0.35, 0.65] },
+  // The trunk is four links, deeper than it is wide and near twice as long as deep, running into a
+  // tail as thick as the hips (on three round links it was a ball with a carrot stuck in it). The
+  // skull is three links tapering gently to a blunt snout — a long flat-topped wedge half as deep as
+  // it is long, the eyes high on its sides mid-way back, the mouth set back so its line runs along the
+  // jaws — on a neck of three links (a stretched two-link head was a dome as big as the chest, its
+  // back end swallowing the neck: a tadpole's head on a chick). The arms root on the front of the
+  // chest under the neck and reach forward, three links ending in a clawed hand (aimed down from the
+  // belly on four links they hung to the knees, a second shrivelled pair of legs); the legs keep
+  // their girth to the ankle and drop straight under the hips (thin stilts planted in an A).
+  { id: 'biped', cluster: 'familiar', weight: 1.0, legAz: [4.6, 4.71], girth: [0.34, 0.42], repeat: [4, 4], height: [1.3, 1.45], elong: [1.15, 1.3], taper: [0.96, 1.0], rear: [-0.08, -0.03], neck: [0.5, 0.58], neckLinks: [3, 3], neckLift: [-0.3, -0.22], legPairs: [1], posture: 'digitigrade', legLen: [1.75, 2.05], legThick: [0.62, 0.74], legTaper: [0.8, 0.87], legYaw: 0, legTerm: ['claw'], arms: 1, armLen: [0.32, 0.45], armThick: [0.2, 0.26], armT: [0.9, 0.98], armAz: [3.85, 4.1], armEl: [0.75, 0.95], armCurl: [0.15, 0.3], armSegs: 3, tail: 1.0, tailSegs: [6, 6], tailLen: [1.08, 1.22], tailThick: [0.86, 1.0], tailTaper: [0.76, 0.82], tailDroop: [-1.5, -1.38], tailCurl: [-0.06, 0.02], tailTerm: ['none'], head: 1.0, headSize: [0.74, 0.86], headShape: ['wedge'], headWide: [0.8, 0.92], headDome: [1.0, 1.12], headLong: [1.35, 1.6], headLinks: 3, headTaper: [0.76, 0.82], eyeT: [0.3, 0.45], eyeAz: [0.6, 0.8], eyeStyle: [0, 0.3], eyeEl: [0.2, 0.4], mouthT: [0.45, 0.6], mouthEl: [1.15, 1.25], mouthSize: [1.2, 1.4], mouthStyle: [0.13, 0.24], covering: ['scales', 'skin', 'feathers'], pattern: ['stripes', 'mottle', 'plain', 'bands'], hue: [0.04, 0.4], sat: [0.35, 0.65] },
   // weasel/otter: a long low body with an arched back (`rear` above zero bends the trunk down toward
   // the head; grow stands the hump mid-back), deeper at the chest than the loin, on four short stout
   // legs tucked under it; a small flat wedge of a head on a neck as thick as the skull, small round ears
@@ -343,13 +356,12 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
     if (m.hindSegs && lp >= 2 && i === 0) g.segments = m.hindSegs;
     if (m.legSegs) g.segments = m.legSegs;
     if (m.legStyle) g.style = rg(rng, m.legStyle); // (no draw unless the morph sets it)
+    if (m.legYaw !== undefined) g.curl = [g.curl[0], m.legYaw];
     apps.push(g);
   }
   // a forward-reaching grasping arm pair (primate) near the shoulders
   if (chance(rng, m.arms ?? 0)) {
-    const arm = graspArm(rng, rg(rng, m.armT, [0.62, 0.78]), girth, m);
-    if (m.armSegs) arm.segments = m.armSegs; // (no draw: every other morphotype's genome stream stays as it was)
-    apps.push(arm);
+    apps.push(graspArm(rng, rg(rng, m.armT, [0.62, 0.78]), girth, m));
   }
   // (no draw unless the morph has claws: every other morphotype's genome stream stays as it was)
   if (m.claws && chance(rng, m.claws)) apps.push(cheliped(rng, girth));
@@ -757,7 +769,8 @@ function graspArm(rng: Rng, attachT: number, girth: number, m?: Morpho): Appenda
     attachT,
     attachAzimuth: rg(rng, m?.armAz, [3.5, 3.95]), // out to the side and down
     attachElevation: rg(rng, m?.armEl, [0.25, 0.55]), // reaching forward
-    segments: randint(rng, 3, 4),
+    // (the draw is made whatever the morph pins, so no other gene moves)
+    segments: ((links: number) => m?.armSegs ?? links)(randint(rng, 3, 4)),
     length: clamp(girth * rg(rng, m?.armLen, [0.5, 0.72]), A.length),
     thickness: clamp(girth * rg(rng, m?.armThick, [0.18, 0.28]), A.thickness),
     taper: rg(rng, m?.armTaper, [0.7, 0.85]),

@@ -25,7 +25,7 @@ import { Mouth } from './mouths';
 import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
-import { bareLegsOf, footPlanOf, lastLinkOf, legWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
+import { bareLegsOf, clawedHandGeometry, footPlanOf, isTheropod, lastLinkOf, legWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
 import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, longWingFold, trunkGirth, wingCarriage, LONG_WING, type FinBuild } from './wings';
@@ -693,7 +693,13 @@ function Feature({
     case 'hoof':
       return <Hoof f={f} color={footColor} />;
     case 'hand':
-      return isApe(phenotype) ? <ApeLimb f={f} skin={skin} phenotype={phenotype} fist /> : <Hand f={f} color={footColor} />;
+      return isApe(phenotype) ? (
+        <ApeLimb f={f} skin={skin} phenotype={phenotype} fist />
+      ) : isTheropod(phenotype) ? (
+        <ClawedHand f={f} skin={skin} phenotype={phenotype} />
+      ) : (
+        <Hand f={f} color={footColor} />
+      );
     default:
       return f.kind === 'leg' && isApe(phenotype) ? <ApeLimb f={f} skin={skin} phenotype={phenotype} /> : <Foot f={f} color={footColor} />;
   }
@@ -1130,6 +1136,30 @@ function ApeLimb({ f, skin, phenotype, fist = false }: { f: MeshFeature; skin: T
       <mesh geometry={geo.fur} material={skin} castShadow />
       <mesh geometry={geo.bare} castShadow>
         <meshStandardMaterial color={bare} roughness={0.8} />
+      </mesh>
+    </group>
+  );
+}
+
+// A theropod's hand (feet.ts): three short clawed fingers in the body's own covering.
+function ClawedHand({ f, skin, phenotype }: { f: MeshFeature; skin: THREE.Material; phenotype: Phenotype }) {
+  // (the wrist of so small an arm is a few hundredths across: at its own size the hand vanished)
+  const r = Math.max(f.radius, 0.045) * 1.15;
+  const origin = phenotype.nodes[f.idx].pos;
+  const geo = useMemo(() => {
+    const g = clawedHandGeometry(r, f.quat);
+    return { fingers: bakeSkin(g.fingers, origin), claws: g.claws };
+  }, [r, f.quat, origin]);
+  useEffect(() => () => {
+    geo.fingers.dispose();
+    geo.claws.dispose();
+  }, [geo]);
+  const claw = useMemo(() => new THREE.Color(shankColor(phenotype.genomeRef.seed)).multiplyScalar(0.35).getHex(), [phenotype]);
+  return (
+    <group>
+      <mesh geometry={geo.fingers} material={skin} castShadow />
+      <mesh geometry={geo.claws} castShadow>
+        <meshStandardMaterial color={claw} roughness={0.4} />
       </mesh>
     </group>
   );
