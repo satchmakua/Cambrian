@@ -3,8 +3,8 @@ import { grow, type Phenotype } from '../../../src/engine/grow';
 import { defaultGenome } from '../../../src/engine/genome';
 import { randomGenome, genomeOfMorphotype } from '../../../src/engine/random';
 import { buildFieldPrims, fieldAt } from '../../../src/viewer/bodyField';
-import { buildJawed, JAWED_PARAMS, type JawedVariant } from '../../../src/viewer/mouths/jawed';
-import { mouthCarves } from '../../../src/viewer/mouthLine';
+import { buildJawed, jawDrawn, teethDrawn, JAW_SHOWN, TEETH_SHOWN, JAWED_PARAMS, type JawedVariant } from '../../../src/viewer/mouths/jawed';
+import { mouthCarves, mouthSpec, surfacePrims } from '../../../src/viewer/mouthLine';
 
 const VARIANTS: JawedVariant[] = ['herbivore', 'maw', 'fanged', 'underbite'];
 
@@ -125,6 +125,51 @@ describe('jawed mouth build (mouth overhaul)', () => {
     expect(buildJawed(p, idx, [], false, 'herbivore')!.lowerTeeth.length).toBe(0);
   });
 
+
+  it('a shut mouth is one seam: the lower jaw is not drawn until it opens, nor a mammal\'s teeth', () => {
+    // (the mouth is built agape and its lower jaw swung shut; but the lower lip is a longer curve than
+    // the upper, and swung up it crossed it in an X at the corners, doubled it into a bar, or stood out
+    // past the snout like whiskers — and a mammal's canine tips hung off its shut lip as stray pegs)
+    expect(jawDrawn(0)).toBe(false); // at rest: Breed, the Studio, a creature in the World with its mouth shut
+    expect(jawDrawn(0.05)).toBe(false);
+    expect(jawDrawn(0.3)).toBe(true); // chewing
+    expect(jawDrawn(1)).toBe(true); // a bite, a call
+    expect(teethDrawn(true, 0)).toBe(false);
+    expect(teethDrawn(true, 0.3)).toBe(true);
+    expect(teethDrawn(false, 0)).toBe(true); // a crocodile's, a shark's: along the seam
+    expect(JAW_SHOWN).toBeGreaterThan(0);
+    expect(TEETH_SHOWN).toBeGreaterThanOrEqual(JAW_SHOWN);
+  });
+
+  it('a seam mouth lies in the snout: neither its lip nor the fold over its teeth stands off the head', () => {
+    // (the lip rim was pushed forward a fifth as far as a projecting muzzle's and the fold over the
+    // teeth as far as a muzzle's own: a shelf a quarter of the mouth's radius clear of the head, teeth
+    // hanging under it — a brace on a shark's chin, a plank on a theropod's nose)
+    let seen = 0;
+    for (const id of ['shark', 'crocodilian', 'biped', 'lizard', 'fish', 'anuran', 'serpent', 'dragon']) {
+      for (let seed = 1; seed <= 8; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const idx = mouthIdx(p);
+        const variant = mouthSpec(p, idx)!.variant;
+        if (!(VARIANTS as string[]).includes(variant)) continue;
+        const b = buildJawed(p, idx, [], false, variant as JawedVariant, 'hybrid')!;
+        if (!b.sealed) continue;
+        seen++;
+        const f = surfacePrims(p, 'hybrid'); // (the skin as it is drawn: the blended field)
+        const o = p.nodes[idx].pos;
+        const off = (g: { getAttribute(name: string): { count: number; getX(i: number): number; getY(i: number): number; getZ(i: number): number } }) => {
+          const a = g.getAttribute('position');
+          let worst = -Infinity;
+          for (let i = 0; i < a.count; i++) worst = Math.max(worst, fieldAt(f, a.getX(i) + o[0], a.getY(i) + o[1], a.getZ(i) + o[2]));
+          return worst / b.r;
+        };
+        expect(off(b.upperLip), `${id} #${seed} lip`).toBeLessThan(0.07);
+        expect(off(b.muzzle), `${id} #${seed} rim`).toBeLessThan(0.11);
+        if (b.upperTeeth.length > 0) expect(off(b.upperFold), `${id} #${seed} fold`).toBeLessThan(0.14);
+      }
+    }
+    expect(seen).toBeGreaterThan(40);
+  });
 
   it('a reptile, a frog or a fish shuts its mouth as a seam: no projecting grin, a croc or a shark shows only small teeth', () => {
     // (a fish's and a shark's projecting grin of cream teeth over a sausage lip read as a Muppet)

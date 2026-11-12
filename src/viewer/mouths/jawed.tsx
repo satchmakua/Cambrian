@@ -35,11 +35,24 @@ import { JawContext, hingeOf, poseJaw } from './jaw';
 
 export type JawedVariant = 'herbivore' | 'maw' | 'fanged' | 'underbite';
 
-/** how far a mammal's jaw hangs open at rest (0 = lips meeting) — a hair, so it reads alive */
+/** how far a jaw hangs open at rest (0 = lips meeting) */
 const REST_SHUT = 0;
-/** everything else rests with its jaws barely parted: the teeth show along a closed line (a croc's,
- *  a shark's grin) instead of the gaping mask the built pose holds */
-const REST_PARTED = 0.05;
+/**
+ * Below this much opening the lower jaw is not drawn at all: a shut mouth is ONE seam — the upper
+ * lip's line. The mouth is built agape and the lower jaw swung shut on its hinge, but the lower lip
+ * is a longer curve than the upper (it runs round under the chin), so swung up it never lay along
+ * it: it crossed it in an X at the corners, doubled it into a thick bar, or stood out past the snout
+ * like a pair of whiskers; and the mandible behind it hung under the jaw as a loose strip.
+ */
+export const JAW_SHOWN = 0.08;
+/** …and a mammal's teeth only show once its mouth has opened this far (over a shut lip the canines'
+ *  tips were stray pegs hanging off the mouth line) */
+export const TEETH_SHOWN = 0.12;
+
+/** Is the lower jaw (its lip, its mass, its tooth row) drawn at this much opening? */
+export const jawDrawn = (open: number): boolean => open > JAW_SHOWN;
+/** Is the upper tooth row drawn? A reptile's or a shark's always, along its seam; a mammal's once the mouth opens. */
+export const teethDrawn = (muzzled: boolean, open: number): boolean => !muzzled || open > TEETH_SHOWN;
 
 interface JawedParams {
   upper: ToothProfile | null;
@@ -196,10 +209,13 @@ export function buildJawed(
         jawR: base.jawR * 0.7,
       }
     : {
-        // a reptile's, a frog's or a fish's: the jaw IS the snout — a dark seam along it, its small teeth
+        // a reptile's, a frog's or a fish's: the jaw IS the snout — a dark seam along it, its small teeth.
+        // (It lies IN the snout's surface: pushed forward even a fifth as far as a projecting muzzle's,
+        // the rim stood off the head as a ledge — a second lip under a shark's snout, a nub on a
+        // theropod's nose.)
         ...base,
         ...SEALED_TEETH[variant],
-        project: base.project * 0.18,
+        project: base.project * 0.03,
         lipR: (u) => base.lipR(u) * 0.32,
         lowerLipR: (u) => base.lowerLipR(u) * 0.3,
         muzzleR: base.muzzleR * 0.55,
@@ -255,11 +271,15 @@ export function buildJawed(
   // the tooth line (+aim) and draping down (−away), so it covers the roots and closes that view —
   // a convex labial covering. The upper teeth then root a touch back (−aim), tucked behind it, so
   // only their downward tips show below the fold's edge.
+  // (on a seam mouth — a reptile's, a shark's — the fold is the lip itself, lying on the snout: pushed
+  // as far forward as a projecting muzzle's, it stood clear of the head, a shelf with teeth under it
+  // — a brace hung on a shark's chin, a plank on a theropod's nose)
+  const foldOut = r * (sealed ? 0.035 : 0.16);
   const foldPts: SweepPoint[] = upper.map((s) => ({
     p: [
-      s.p[0] + spec.aim[0] * r * 0.16 - s.away[0] * r * 0.05,
-      s.p[1] + spec.aim[1] * r * 0.16 - s.away[1] * r * 0.05,
-      s.p[2] + spec.aim[2] * r * 0.16 - s.away[2] * r * 0.05,
+      s.p[0] + spec.aim[0] * foldOut - s.away[0] * r * 0.05,
+      s.p[1] + spec.aim[1] * foldOut - s.away[1] * r * 0.05,
+      s.p[2] + spec.aim[2] * foldOut - s.away[2] * r * 0.05,
     ] as Vec3,
     n: s.n,
   }));
@@ -455,15 +475,18 @@ export function JawedMouth({
   const hinge = useMemo(() => (built ? hingeOf(built.upper, built.lower, built.aim) : null), [built]);
   const throat = useRef<THREE.Mesh>(null);
   const jawMassRef = useRef<THREE.Mesh>(null);
+  const upperRow = useRef<THREE.InstancedMesh | null>(null);
   useFrame(() => {
     if (!hinge || !lowerJaw.current) return;
-    // no control (Breed / Studio still): a mammal holds its mouth shut, everything else the built gape
-    const open = jaw ? jaw.open : shut ? REST_SHUT : REST_PARTED;
+    // no control (Breed / Studio still): the mouth is held shut
+    const open = jaw ? jaw.open : REST_SHUT;
     poseJaw(lowerJaw.current, hinge, open);
+    lowerJaw.current.visible = jawDrawn(open);
     if (throat.current) throat.current.visible = open > 0.35;
     // a shut mammal's chin is the skull's own: the lofted mandible only shows once the jaw drops
     // (held shut it hung under the chin as a pale band)
-    if (jawMassRef.current) jawMassRef.current.visible = !muzzled || open > 0.12;
+    if (jawMassRef.current) jawMassRef.current.visible = teethDrawn(muzzled, open);
+    if (upperRow.current) upperRow.current.visible = teethDrawn(muzzled, open);
   });
 
   if (!built) return null;
@@ -485,13 +508,16 @@ export function JawedMouth({
         <instancedMesh
           args={[fang, mats.teeth, built.upperTeeth.length]}
           frustumCulled={false}
+          visible={!muzzled}
           ref={(m: THREE.InstancedMesh | null) => {
+            upperRow.current = m;
             if (m) setToothInstances(m, built.upperTeeth);
           }}
         />
       )}
-      {/* the lower jaw: lip, mass and tooth row — one group, so it can swing on its hinge */}
-      <group ref={lowerJaw}>
+      {/* the lower jaw: lip, mass and tooth row — one group, so it can swing on its hinge (and it is
+          only drawn once the mouth opens: see JAW_SHOWN) */}
+      <group ref={lowerJaw} visible={false}>
             <mesh ref={jawMassRef} geometry={built.jawMass} material={coatMat} castShadow />
             <mesh geometry={built.lowerLip} material={mats.lip} castShadow />
             {built.lowerTeeth.length > 0 && (
