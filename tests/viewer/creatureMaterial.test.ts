@@ -238,7 +238,19 @@ describe('creature material shader injection', () => {
     expect(s.vertexShader).toContain('vBNrm = objectNormal;');
     expect(f).toContain('varying vec3 vBNrm;');
     const iLay = f.indexOf('gLay = t / max(length(t), 1e-3);');
-    expect(f).toContain('vec3 flow = vec3(0.0, -0.45, -1.0);');
+    expect(f).toContain('float fore = max(gNb.z, 0.0);');
+    expect(f).toContain('vec3 flow = vec3(0.0, -0.45 + 1.2 * fore * fore, -1.0);');
+    // (the lay is a field with no blind spot on the skin that faces forward: the flow there is never
+    // along the normal, so its projection on the skin never vanishes)
+    for (const [y, z] of [[0, 1], [0.41, 0.91], [0.7, 0.7], [-0.6, 0.8], [1, 0]]) {
+      const l = Math.hypot(y, z);
+      const n = [0, y / l, z / l];
+      const fore = Math.max(n[2], 0);
+      const flow = [0, -0.45 + 1.2 * fore * fore, -1];
+      const d = flow[1] * n[1] + flow[2] * n[2];
+      const t = [0, flow[1] - n[1] * d, flow[2] - n[2] * d];
+      expect(Math.hypot(t[1], t[2]), `normal (0, ${y}, ${z})`).toBeGreaterThan(0.3);
+    }
     expect(f).toContain('vec3 t = flow - gNb * dot(flow, gNb);');
     expect(iLay).toBeGreaterThan(0);
     // … worked out before the relief is first read

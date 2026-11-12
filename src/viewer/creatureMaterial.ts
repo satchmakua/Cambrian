@@ -233,10 +233,14 @@ export function makeCreatureMaterial(
           float hX = 0.0;
           float hY = 0.0;
           // which way the plumage lies here: toward the tail and a little down, flat on the skin — back
-          // along the back and the belly, down-and-back on a flank, down a chest that faces forward
+          // along the back and the belly, down-and-back on a flank, down a chest that faces forward —
+          // and on skin that faces forward and up (a brow, a snout) up and back over the head. (Toward
+          // the tail everywhere, a forehead facing just the way that flow came from had none left to lie
+          // along: the scales there whirled into a rosette.)
           {
             gNb = normalize(vBNrm);
-            vec3 flow = vec3(0.0, -0.45, -1.0);
+            float fore = max(gNb.z, 0.0);
+            vec3 flow = vec3(0.0, -0.45 + 1.2 * fore * fore, -1.0);
             vec3 t = flow - gNb * dot(flow, gNb);
             gLay = t / max(length(t), 1e-3);
           }

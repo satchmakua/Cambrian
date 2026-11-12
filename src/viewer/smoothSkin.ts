@@ -177,12 +177,17 @@ export function buildShellGeometry(p: Phenotype, quality: SkinQuality = 'high'):
   // much sideways as upward: a "thin" 0.07 stood a crab's shell a quarter of its radius out past its
   // flanks
   const t0 = rMax * (thin ? 0.035 : 0.1) * prominence;
-  const dome = rMax * (thin ? 0.06 : 0.22) * prominence; // extra on top — the domed back
+  // extra on top — the domed back (a tortoise's horn shell stands high over the flat body inside it)
+  const dome = rMax * (thin ? 0.06 : 0.32) * prominence;
   // the skirt: covers the back and upper flanks, not the belly — a turtle's horn shell comes well down
   // its sides and lips outward over the legs; a crab's carapace (and a beetle's wing-cases) ends at the
   // body's widest line, its edge barely proud. (Cut low and flared like the turtle's, a crab's shell
   // was a hat: a brim standing out all round, the belly hanging under it — a flying saucer side-on.)
-  const yCut = yMid - rMax * (thin ? 0.04 : 0.28);
+  // (a horn shell comes down to just above the flat underside: cut higher, the belly hung below its
+  // rim as a ball and the shell was a cap on a round animal)
+  let depth = 0;
+  for (const n of trunk) depth = Math.max(depth, n.radius * (n.scale?.[1] ?? 1));
+  const yCut = yMid - (thin ? rMax * 0.04 : Math.max(rMax * 0.28, depth * 0.7));
   const flare = rMax * (thin ? 0.025 : 0.18);
 
   const field = (x: number, y: number, z: number): number => {

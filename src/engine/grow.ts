@@ -190,6 +190,8 @@ export function grow(genome: Genome): Phenotype {
   let ringedHere = false; // …and whether it is a myriapod's trunk of rings (see isRinged)
   let ringFloorHere = 0; // …and the ground its legs then reach down to
   let ringPoint = 0; // …and the length of the points they stand on (see RING_POINT)
+  /** a body under a horn SHELL (a tortoise's: a carapace over a trunk not wearing an arthropod's chitin) */
+  const shelled = dev.symmetry === 'bilateral' && genome.covering.type !== 'chitin' && dev.body.appendages.some((a) => a.terminal === 'carapace');
   /** a body that walks on its arms as well as its legs (an ape): its trunk carries a pair of hand-tipped arms */
   const armWalker = dev.symmetry === 'bilateral' && dev.body.appendages.some((a) => a.kind === 'arm' && a.terminal === 'hand' && a.pair);
 
@@ -841,7 +843,10 @@ export function grow(genome: Genome): Phenotype {
         // arthropod legs are slender jointed rods (a spider's leg is a fraction of its body's girth);
         // vertebrate legs are a muscular haunch that falls away fast to a slim shin: ~1.5× at the hip,
         // ~1.05× by the knee, ~0.7× at the ankle (a straight taper read as a noodle)
-        r *= arch && !sprawl ? 0.62 - 0.22 * t : 0.7 + 0.8 * (1 - t) * (1 - t);
+        // …and a SHELLED body's legs (a tortoise's) are columns out of the openings of its shell, their
+        // roots inside it: swollen at the hip like a lizard's, each thigh stood out under the rim as a
+        // ball as big as the head — a frog wearing a shell
+        r *= shelled ? 0.95 - 0.15 * t : arch && !sprawl ? 0.62 - 0.22 * t : 0.7 + 0.8 * (1 - t) * (1 - t);
         // …but a haunch is part of the body it hangs from, never a second body beside it: on a
         // thick-limbed animal (a bear) the swollen hips stood out of the flanks as four balls, the
         // trunk a peanut between them. The limb below keeps its girth.

@@ -275,8 +275,12 @@ describe('beak mouth (mouth overhaul)', () => {
       const p = grow(g);
       const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
       const b = buildBeak(p, idx, [], false)!;
-      expect(b.upperLen, `#${seed}`).toBeLessThan(0.65 * b.r);
-      expect(b.hook, `#${seed}`).toBeLessThan(0.2 * b.r);
+      // short and blunt — shorter than any bird's bill (1.1 of the mouth's size and more), a little
+      // hooked — but there to be seen: at half the mouth's size it was sunk in the snout
+      expect(b.upperLen, `#${seed}`).toBeLessThan(1.0 * b.r);
+      expect(b.upperLen, `#${seed}`).toBeGreaterThan(0.75 * b.r);
+      expect(b.hook, `#${seed}`).toBeLessThan(0.3 * b.r);
+      expect(b.hook, `#${seed}`).toBeGreaterThan(0.18 * b.r);
     }
   });
 });

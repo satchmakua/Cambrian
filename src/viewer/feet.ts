@@ -14,7 +14,7 @@ import type { Phenotype } from '../engine/grow';
 import { shankColor } from './keratin';
 import type { BareLegs } from './creatureMaterial';
 
-export type FootPlan = 'bird' | 'reptile' | 'frog' | 'theropod';
+export type FootPlan = 'bird' | 'reptile' | 'frog' | 'theropod' | 'stump';
 
 /** A THEROPOD: a scaled, bare-skinned or feathered body walking on one pair of clawed legs that
  *  carries a pair of arms, not wings, in front of them — the two-legged dinosaur (a bird's forelimbs
@@ -39,6 +39,9 @@ export function isTheropod(p: Phenotype): boolean {
 export function footPlanOf(p: Phenotype): FootPlan | null {
   const t = p.genomeRef.covering.type;
   if (isTheropod(p)) return 'theropod';
+  // a tortoise stands on round stumps with short blunt claws (on a lizard's splayed fan, or a frog's
+  // long pad-tipped toes, a shelled body stood on hands)
+  if (t !== 'chitin' && p.genomeRef.body.appendages.some((a) => a.terminal === 'carapace')) return 'stump';
   if (t === 'feathers') return 'bird';
   if (t === 'scales' || t === 'plates' || t === 'crystal') return 'reptile';
   if (t === 'skin') return 'frog';
@@ -180,6 +183,12 @@ function toesOf(plan: FootPlan, r: number, link: number, taloned = false): ToeSp
       { az: Math.PI, len: L * 0.3, r0: t * 0.7 },
     ];
   }
+  if (plan === 'stump') {
+    // five short blunt toes, barely clear of a broad round sole: the elephantine foot of a tortoise
+    const L = Math.max(r * 1.25, link * 0.18);
+    const t = Math.max(r * 0.42, L * 0.3);
+    return [-0.9, -0.45, 0, 0.45, 0.9].map((az, i) => ({ az, len: L * (i === 0 || i === 4 ? 0.8 : 1), r0: t }));
+  }
   if (plan === 'frog') {
     // long, thin, widely splayed toes
     const L = Math.max(r * 2.8, link * 0.42);
@@ -249,7 +258,9 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number, talone
   // a pad under the ankle joining the toes
   const pad = new THREE.SphereGeometry(1, 12, 8);
   // (tall enough to swallow the end of the leg tube above it)
-  pad.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(0, floor + r * 0.62, 0), new THREE.Quaternion(), new THREE.Vector3(r * 1.08, r * 0.72, r * 1.08)));
+  // (a tortoise's sole is broad: the stump of its leg spread a little on the ground)
+  const sole = plan === 'stump' ? 1.35 : 1.08;
+  pad.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(0, floor + r * 0.62, 0), new THREE.Quaternion(), new THREE.Vector3(r * sole, r * 0.72, r * sole)));
   toes.push(pad);
   for (const t of toesOf(plan, r, link, hooked)) {
     const dir = new THREE.Vector3(Math.sin(t.az), 0, Math.cos(t.az));
@@ -285,7 +296,7 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number, talone
     }
     // the claw: a curved-down cone off the tip
     const cdir = dir.clone().setY(-0.55).normalize();
-    const cl = t.r0 * (plan === 'bird' ? 2.2 : plan === 'theropod' ? 2.3 : 1.9);
+    const cl = t.r0 * (plan === 'bird' ? 2.2 : plan === 'theropod' ? 2.3 : plan === 'stump' ? 1.1 : 1.9);
     const claw = new THREE.ConeGeometry(t.r0 * 0.5, cl, 6);
     claw.applyMatrix4(
       new THREE.Matrix4().compose(tip.clone().add(cdir.clone().multiplyScalar(cl * 0.45)), new THREE.Quaternion().setFromUnitVectors(up, cdir), new THREE.Vector3(1, 1, 1)),

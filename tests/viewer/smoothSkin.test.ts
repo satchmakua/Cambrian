@@ -219,9 +219,16 @@ describe('smooth skin (M15)', () => {
         const tx1 = Math.max(...trunk.map((n) => n.pos[0] + n.radius * (n.scale?.[0] ?? 1)));
         expect(min[0]).toBeGreaterThan(tx0 - rMax * 0.9);
         expect(max[0]).toBeLessThan(tx1 + rMax * 0.9);
-        // and it is a BACK shell: nothing hangs below the trunk's mid-height skirt
+        // and it is a BACK shell: a crab's chitin ends at its body's widest line; a tortoise's horn
+        // shell comes down most of the way over its flanks — but stops short of its flat underside
         const yMid = trunk.reduce((t, n) => t + n.pos[1], 0) / trunk.length;
-        expect(min[1]).toBeGreaterThan(yMid - rMax * 0.45);
+        if (id === 'crab') expect(min[1]).toBeGreaterThan(yMid - rMax * 0.45);
+        else {
+          const depth = Math.max(...trunk.map((n) => n.radius * (n.scale?.[1] ?? 1)));
+          const belly = Math.min(...trunk.map((n) => n.pos[1] - n.radius * (n.scale?.[1] ?? 1)));
+          expect(min[1], `#${s} over the flanks`).toBeLessThan(yMid - depth * 0.5);
+          expect(min[1], `#${s} not under the belly`).toBeGreaterThan(belly + depth * 0.15);
+        }
       }
     }
   });
