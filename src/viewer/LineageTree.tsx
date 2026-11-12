@@ -28,7 +28,9 @@ export function LineageTree({
 
   const width = PAD * 2 + layout.cols * DX;
   const height = PAD * 2 + (layout.rows - 1) * DY;
-  const ids = Object.keys(nodes);
+  // (only what hangs from the founder has a place: a lineage is one tree, but a creature that somehow
+  // is not on it is left out of the drawing rather than taking the screen down with it)
+  const ids = Object.keys(nodes).filter((id) => layout.pos[id]);
   const px = (id: string) => PAD + layout.pos[id].x * DX;
   const py = (id: string) => PAD + layout.pos[id].y * DY;
 
@@ -36,7 +38,7 @@ export function LineageTree({
     <svg className="lineage-svg" width={width} height={height} role="tree">
       {ids.map((id) => {
         const n = nodes[id];
-        if (n.parentId == null) return null;
+        if (n.parentId == null || !layout.pos[n.parentId]) return null;
         return (
           <line key={`e${id}`} className="lineage-edge" x1={px(n.parentId)} y1={py(n.parentId)} x2={px(id)} y2={py(id)} />
         );

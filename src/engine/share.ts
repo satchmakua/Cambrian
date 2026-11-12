@@ -13,6 +13,7 @@
  * engine dependency-free (no pako / no async CompressionStream) is worth more than a
  * few hundred bytes. Revisit if strings ever get unwieldy.
  */
+import { DEPTH_MAX, GENE_BOUNDS, clamp } from './bounds';
 import {
   GENOME_VERSION,
   type Genome,
@@ -81,6 +82,22 @@ export function checkGenome(o: unknown): Genome {
   return validateGenome(o);
 }
 
+// A creature string, a save or a World file is whatever someone typed, edited or damaged. Its SHAPE
+// is checked (a wrong one is refused); its NUMBERS are brought inside the bounds every gene the game
+// itself makes already keeps (bounds.ts) — so a file that says a body has a billion arms, minus five
+// links or a taper of 1e300 grows the nearest legal creature instead of hanging the page, crashing
+// the grower or filling a skeleton with NaN. A genome the game wrote is inside the bounds already and
+// comes back exactly as it went out.
+const S = GENE_BOUNDS.segment;
+const A = GENE_BOUNDS.appendage;
+const C = GENE_BOUNDS.covering;
+const P = GENE_BOUNDS.palette;
+/** how deep a chain of `child` segments may be written (the grower stops at DEPTH_MAX; deeper ones
+ *  are dead weight, and a file a hundred thousand deep would overflow the stack just being read) */
+const CHILD_DEPTH_MAX = DEPTH_MAX * 4;
+/** appendage genes per segment that are read (the grower stops at its node cap long before) */
+const APPENDAGES_READ_MAX = S.appendageCount[1] * 4;
+
 function validateGenome(o: unknown): Genome {
   const g = obj(o, 'genome');
   if (g.version !== GENOME_VERSION) {
@@ -90,12 +107,12 @@ function validateGenome(o: unknown): Genome {
     version: GENOME_VERSION,
     seed: u32(g.seed, 'seed'),
     symmetry: oneOf(g.symmetry, SYMMETRIES, 'symmetry'),
-    radialCount: num(g.radialCount, 'radialCount'),
+    radialCount: within(g.radialCount, GENE_BOUNDS.radialCount, 'radialCount'),
     // coherence is optional (M24); absent ⇒ fully coherent. Clamp anything present into [0,1].
     coherence: typeof g.coherence === 'number' && Number.isFinite(g.coherence) ? Math.min(1, Math.max(0, g.coherence)) : 1,
     covering: validateCovering(g.covering),
     palette: validatePalette(g.palette),
-    body: validateSegment(g.body),
+    body: validateSegment(g.body, 0),
   };
 }
 
@@ -104,44 +121,52 @@ function validateCovering(o: unknown): Genome['covering'] {
   return {
     type: oneOf(c.type, COVERING_TYPES, 'covering.type'),
     pattern: oneOf(c.pattern, PATTERN_TYPES, 'covering.pattern'),
-    patternScale: num(c.patternScale, 'patternScale'),
-    patternContrast: num(c.patternContrast, 'patternContrast'),
-    sheen: num(c.sheen, 'sheen'),
+    patternScale: within(c.patternScale, C.patternScale, 'patternScale'),
+    patternContrast: within(c.patternContrast, C.patternContrast, 'patternContrast'),
+    sheen: within(c.sheen, C.sheen, 'sheen'),
   };
 }
 
 function validatePalette(o: unknown): Genome['palette'] {
   const p = obj(o, 'palette');
-  return { hueA: num(p.hueA, 'hueA'), hueB: num(p.hueB, 'hueB'), sat: num(p.sat, 'sat'), light: num(p.light, 'light') };
+  // (hues wrap — a hue of 1.2 is a colour, not damage — so they are only kept finite and modest)
+  return { hueA: within(p.hueA, HUE_READ, 'hueA'), hueB: within(p.hueB, HUE_READ, 'hueB'), sat: within(p.sat, P.sat, 'sat'), light: within(p.light, P.light, 'light') };
 }
+const HUE_READ: readonly [number, number] = [-64, 64];
 
-function validateSegment(o: unknown): SegmentGene {
+function validateSegment(o: unknown, depth: number): SegmentGene {
   const s = obj(o, 'segment');
+  const size = vec3(s.size, 'size');
+  const curve = vec2(s.curve, 'curve');
   const seg: SegmentGene = {
-    size: vec3(s.size, 'size'),
-    repeat: num(s.repeat, 'repeat'),
-    taper: num(s.taper, 'taper'),
-    curve: vec2(s.curve, 'curve'),
-    appendages: arr(s.appendages, 'appendages').map(validateAppendage),
+    size: [clamp(size[0], S.size), clamp(size[1], S.size), clamp(size[2], S.size)],
+    repeat: within(s.repeat, S.repeat, 'repeat'),
+    taper: within(s.taper, S.taper, 'taper'),
+    curve: [clamp(curve[0], S.curvePitch), clamp(curve[1], S.curveYaw)],
+    appendages: arr(s.appendages, 'appendages').slice(0, APPENDAGES_READ_MAX).map(validateAppendage),
   };
-  if (s.child !== undefined) seg.child = validateSegment(s.child);
+  if (s.child !== undefined) {
+    if (depth + 1 >= CHILD_DEPTH_MAX) fail('child');
+    seg.child = validateSegment(s.child, depth + 1);
+  }
   return seg;
 }
 
 function validateAppendage(o: unknown): AppendageGene {
   const a = obj(o, 'appendage');
+  const curl = vec2(a.curl, 'curl');
   return {
     kind: oneOf(a.kind, KINDS, 'kind'),
-    style: num(a.style, 'style'),
-    attachT: num(a.attachT, 'attachT'),
-    attachAzimuth: num(a.attachAzimuth, 'attachAzimuth'),
-    attachElevation: num(a.attachElevation, 'attachElevation'),
-    roll: num(a.roll, 'roll'),
-    segments: num(a.segments, 'segments'),
-    length: num(a.length, 'length'),
-    thickness: num(a.thickness, 'thickness'),
-    taper: num(a.taper, 'taper'),
-    curl: vec2(a.curl, 'curl'),
+    style: within(a.style, A.style, 'style'),
+    attachT: within(a.attachT, A.attachT, 'attachT'),
+    attachAzimuth: within(a.attachAzimuth, A.attachAzimuth, 'attachAzimuth'),
+    attachElevation: within(a.attachElevation, A.attachElevation, 'attachElevation'),
+    roll: within(a.roll, A.roll, 'roll'),
+    segments: within(a.segments, A.segments, 'segments'),
+    length: within(a.length, A.length, 'length'),
+    thickness: within(a.thickness, A.thickness, 'thickness'),
+    taper: within(a.taper, A.taper, 'taper'),
+    curl: [clamp(curl[0], A.curlPitch), clamp(curl[1], A.curlYaw)],
     terminal: oneOf(a.terminal, TERMINALS, 'terminal'),
     pair: bool(a.pair, 'pair'),
   };
@@ -159,6 +184,10 @@ function obj(v: unknown, field: string): Record<string, unknown> {
 function num(v: unknown, field: string): number {
   if (typeof v !== 'number' || !Number.isFinite(v)) fail(field);
   return v;
+}
+/** A finite number, brought inside its gene's bounds. */
+function within(v: unknown, bounds: readonly [number, number], field: string): number {
+  return clamp(num(v, field), bounds);
 }
 function u32(v: unknown, field: string): number {
   return num(v, field) >>> 0;

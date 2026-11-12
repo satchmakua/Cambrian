@@ -88,6 +88,25 @@ describe('a game, start to finish', () => {
     expect(getWorld().seed).toBe(before.seed);
   });
 
+  it('a save whose lineage will not play changes nothing either — the valley is not swapped first', async () => {
+    fresh('Keep me too', 6);
+    populate(getWorld(), null);
+    const before = { game: useStore.getState().game, seed: getWorld().seed, creatures: getWorld().creatures.length, currentId: useStore.getState().currentId };
+    const g = captureGame('Other', 'other', 1);
+    // a lineage that passes for one but cannot be played (its current creature is not in it): the
+    // checks on a file refuse this; a slot written by a broken build, or handed over directly, could hold it
+    const broken = { ...g, setup: { worldSeed: 999, ecosystem: 'standard' as const }, world: null, breeder: { ...g.breeder, currentId: '404' } };
+    expect(() => playSave(broken)).toThrow();
+    expect(getWorld().seed).toBe(before.seed);
+    expect(getWorld().creatures.length).toBe(before.creatures);
+    expect(worldSetup().worldSeed).toBe(1234);
+    expect(useStore.getState().game).toEqual(before.game);
+    expect(useStore.getState().currentId).toBe(before.currentId);
+    // (and through the store's own restore: the game's name is not taken before the lineage is)
+    expect(() => useStore.getState().restore(broken.breeder, { id: 'x', name: 'Wrong', setup: broken.setup })).toThrow();
+    expect(useStore.getState().game).toEqual(before.game);
+  });
+
   it('a save file comes in as a slot of its own, never over one already there', async () => {
     const store = memoryStore();
     fresh('Exported', 3);

@@ -25,11 +25,14 @@ export function childIdsOf(nodes: LineageNodes, id: string): string[] {
     .sort((a, b) => Number(a) - Number(b));
 }
 
-/** Path from a node up to its root, root-first. */
+/** Path from a node up to its root, root-first. (A lineage is a tree; were it ever handed a ring of
+ *  parents, the walk stops after one lap instead of never.) */
 export function pathToRoot(nodes: LineageNodes, id: string): string[] {
   const path: string[] = [];
+  const seen = new Set<string>();
   let cur: string | null = id;
-  while (cur && nodes[cur]) {
+  while (cur && nodes[cur] && !seen.has(cur)) {
+    seen.add(cur);
     path.push(cur);
     cur = nodes[cur].parentId;
   }
@@ -56,19 +59,42 @@ export function layoutTree(nodes: LineageNodes, root: string): TreeLayout {
   const pos: Record<string, { x: number; y: number }> = {};
   let nextRow = 0;
   let maxDepth = 0;
+  if (!nodes[root]) return { pos, cols: 0, rows: 1 };
 
-  const visit = (id: string, depth: number): void => {
-    maxDepth = Math.max(maxDepth, depth);
-    const kids = childIdsOf(nodes, id);
-    if (kids.length === 0) {
-      pos[id] = { x: depth, y: nextRow++ };
-      return;
+  // every node's children, found in one pass (asking each node in turn for its children was a pass
+  // over the whole lineage per node: a second of work at a few thousand generations, on every pick)
+  const kids = new Map<string, string[]>();
+  for (const n of Object.values(nodes)) {
+    if (n.parentId === null) continue;
+    const list = kids.get(n.parentId);
+    if (list) list.push(n.id);
+    else kids.set(n.parentId, [n.id]);
+  }
+  for (const list of kids.values()) list.sort((a, b) => Number(a) - Number(b));
+
+  // children first, then their parent — with a stack of our own rather than the call stack's (a
+  // lineage is mostly one long line: ten thousand generations deep is ten thousand calls deep)
+  const stack: { id: string; depth: number; next: number }[] = [{ id: root, depth: 0, next: 0 }];
+  while (stack.length > 0) {
+    const top = stack[stack.length - 1];
+    const list = kids.get(top.id);
+    if (list && top.next < list.length) {
+      stack.push({ id: list[top.next++], depth: top.depth + 1, next: 0 });
+      continue;
     }
-    for (const k of kids) visit(k, depth + 1);
-    const ys = kids.map((k) => pos[k].y);
-    pos[id] = { x: depth, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
-  };
-
-  if (nodes[root]) visit(root, 0);
+    stack.pop();
+    maxDepth = Math.max(maxDepth, top.depth);
+    if (!list) {
+      pos[top.id] = { x: top.depth, y: nextRow++ };
+    } else {
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (const k of list) {
+        lo = Math.min(lo, pos[k].y);
+        hi = Math.max(hi, pos[k].y);
+      }
+      pos[top.id] = { x: top.depth, y: (lo + hi) / 2 };
+    }
+  }
   return { pos, cols: maxDepth, rows: Math.max(1, nextRow) };
 }

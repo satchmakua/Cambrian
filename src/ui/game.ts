@@ -2,8 +2,9 @@
  * The game as a whole — starting one, saving it, loading it, leaving it.
  *
  * A game spans two stores: the breeder's lineage (`store.ts`) and the valley (`worldStore.ts`). The
- * functions here move both together, so a load or a new game is all-or-nothing: the valley is put
- * in place first (the step that can fail on a damaged save), the lineage after.
+ * functions here move both together, so a load or a new game is all-or-nothing: everything that can
+ * fail on a damaged save (growing the creature being bred, reading the World) is done before either
+ * store is touched, and what puts the two in place afterwards cannot fail.
  */
 import { grow } from '../engine/grow';
 import { coherence } from '../engine/morphospace';
@@ -32,6 +33,7 @@ export function founderFor(seed: number, kind: string | null, symmetry: Symmetry
 /** Begin a fresh game: a new lineage at the founder, a new (as yet unvisited) valley, on the chosen screen. */
 export function startNewGame(o: NewGameOptions): void {
   const setup = { worldSeed: o.worldSeed >>> 0, ecosystem: o.ecosystem };
+  grow(o.founder); // (a founder that will not grow stops here, with nothing replaced)
   installWorld(setup, null);
   useStore.getState().newGame(o.founder, o.symmetry, { id: null, name: cleanName(o.name), setup });
   useStore.getState().setView(o.startIn);
@@ -83,8 +85,15 @@ export async function saveGame(store: SaveStore, name: string, id: string | null
 
 /** Make a saved game the one being played. Throws (a readable error), changing nothing, if it will not load. */
 export function playSave(g: SavedGame, view?: GameView): void {
-  installWorld(g.setup, g.world); // (the step that can fail: a damaged World)
-  useStore.getState().restore(g.breeder, { id: g.id, name: g.name, setup: g.setup });
+  // Both halves are made ready before either is put in place: the lineage first (its creature is grown
+  // and its litter bred — nothing is replaced yet), then the valley (a damaged World throws here, and
+  // still nothing has been replaced), and only then the lineage, by a step that cannot fail.
+  const takeLineage = useStore.getState().readyRestore(g.breeder);
+  installWorld(g.setup, g.world);
+  takeLineage({ id: g.id, name: g.name, setup: g.setup });
+  // (the valley was written to the browser while the last game's lineage still filled it; with that
+  // gone there may be room now, if there was not then)
+  autosave();
   useStore.getState().setView(view ?? 'breed');
 }
 

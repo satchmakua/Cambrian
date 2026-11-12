@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { GENE_BOUNDS } from '../../src/engine/bounds';
+import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
 import {
   SAVE_FORMAT, SAVE_V, checkSave, cleanName, describeSave, headerOf, memoryStore, newSaveId, nextGameName, packGame, parseSave, saveFileName, serializeSave, sortSaves,
@@ -86,11 +88,83 @@ describe('saved games', () => {
     expect(bad((g) => (g.breeder.currentId = '9'))).toThrow(/which creature was being bred/);
   });
 
+  it('a lineage must be one family tree of numbered creatures: no second founder, no ring, no borrowed names', () => {
+    const bad = (mutate: (g: SavedGame) => void) => {
+      const g = JSON.parse(serializeSave(game())) as SavedGame;
+      mutate(g);
+      return () => checkSave(g);
+    };
+    const nodesOf = (g: SavedGame) => g.breeder.nodes as unknown as Record<string, Record<string, unknown>>;
+    // a second founder — or a parent written as a number, which must not quietly become one
+    expect(bad((g) => (nodesOf(g)['2'].parentId = null))).toThrow(/not one family tree/);
+    expect(bad((g) => (nodesOf(g)['2'].parentId = 1))).toThrow(/parent that is not there/);
+    // a ring of parents (1 → 2 → 1), which the tree could never place
+    expect(bad((g) => (nodesOf(g)['1'].parentId = '2'))).toThrow(/not one family tree/);
+    expect(bad((g) => (nodesOf(g)['1'].parentId = '1'))).toThrow(/not one family tree/);
+    // names every object answers to are not creatures
+    expect(bad((g) => (g.breeder.currentId = 'constructor'))).toThrow(/which creature was being bred/);
+    expect(bad((g) => (g.breeder.currentId = '__proto__'))).toThrow(/which creature was being bred/);
+    expect(bad((g) => (nodesOf(g)['2'].parentId = 'toString'))).toThrow(/parent that is not there/);
+    expect(bad((g) => (nodesOf(g)['hasOwnProperty'] = { ...nodesOf(g)['2'], parentId: '0' }))).toThrow(/unreadable/);
+    const proto = JSON.parse(serializeSave(game()).replace('"nodes":{', '"nodes":{"__proto__":{"genome":1},')) as SavedGame;
+    expect(() => checkSave(proto)).toThrow(/unreadable/);
+    // a counter no id could be made from is put right, not kept
+    const g = JSON.parse(serializeSave(game())) as SavedGame;
+    (g.breeder as unknown as { counter: number }).counter = 1e300;
+    expect(checkSave(g).breeder.counter).toBe(3);
+    // …and a long, branching lineage is still read (the check is not quadratic, and does not recurse)
+    const big = JSON.parse(serializeSave(game())) as SavedGame;
+    const base = nodesOf(big)['2'];
+    for (let i = 3; i < 20000; i++) nodesOf(big)[String(i)] = { ...base, id: String(i), parentId: String(i % 7 === 0 ? i - 3 : i - 1), generation: i };
+    const t0 = Date.now();
+    expect(Object.keys(checkSave(big).breeder.nodes).length).toBe(20000);
+    expect(Date.now() - t0).toBeLessThan(4000);
+  });
+
+  it('numbers no creature could have are brought back inside the genes’ bounds, so the save still grows', () => {
+    const g = JSON.parse(serializeSave(game())) as SavedGame;
+    const body = g.breeder.nodes['2'].genome.body as unknown as { repeat: number; taper: number; size: number[]; appendages: { segments: number; length: number }[] };
+    body.repeat = -5; // (the grower read a spine of minus five links and threw)
+    body.taper = 1e300; // (…and this filled the skeleton with infinities)
+    body.size = [1e9, -3, 0];
+    body.appendages[0].segments = 1e7;
+    body.appendages[0].length = -1;
+    (g.breeder.nodes['2'].genome as unknown as { radialCount: number }).radialCount = 1e12; // (…and this never came back)
+    const fixed = checkSave(g);
+    const got = fixed.breeder.nodes['2'].genome;
+    expect(got.radialCount).toBe(GENE_BOUNDS.radialCount[1]);
+    expect(got.body.repeat).toBe(GENE_BOUNDS.segment.repeat[0]);
+    expect(got.body.taper).toBe(GENE_BOUNDS.segment.taper[1]);
+    expect(got.body.size).toEqual([GENE_BOUNDS.segment.size[1], GENE_BOUNDS.segment.size[0], GENE_BOUNDS.segment.size[0]]);
+    expect(got.body.appendages[0].segments).toBe(GENE_BOUNDS.appendage.segments[1]);
+    expect(got.body.appendages[0].length).toBe(GENE_BOUNDS.appendage.length[0]);
+    for (const symmetry of ['bilateral', 'radial'] as const) {
+      const t0 = Date.now();
+      const p = grow({ ...got, symmetry });
+      expect(Date.now() - t0).toBeLessThan(2000);
+      expect(p.nodes.length).toBeGreaterThan(0);
+      expect(p.nodes.every((n) => n.pos.every(Number.isFinite) && Number.isFinite(n.radius))).toBe(true);
+    }
+    // the summary's creature (drawn in every list of saves) is the mended one
+    expect(fixed.summary.creature).toEqual(got);
+    // a chain of segments deeper than any body is refused rather than read to the bottom
+    const deep = JSON.parse(serializeSave(game())) as SavedGame;
+    let seg = deep.breeder.nodes['0'].genome.body as unknown as Record<string, unknown>;
+    for (let i = 0; i < 5000; i++) {
+      const next: Record<string, unknown> = { size: [1, 1, 1], repeat: 1, taper: 1, curve: [0, 0], appendages: [] };
+      seg.child = next;
+      seg = next;
+    }
+    expect(() => checkSave(deep)).toThrow(/creature 0/);
+  });
+
   it('what can be mended is: the id counter, the set-up, a bad menagerie cell, a summary that lies', () => {
     const g = JSON.parse(serializeSave(game())) as SavedGame & { breeder: { counter: number } };
     g.breeder.counter = 1; // would hand out an id already in use
     (g.setup as unknown as { ecosystem: string }).ecosystem = 'crowded';
     (g.breeder.menagerie as unknown as Record<string, unknown>)['9:9'] = { genome: 'nope', desc: [1], score: 1, nearest: 'x' };
+    // (a cell under a name that is no cell is left out too, however well-formed what it holds)
+    (g.breeder.menagerie as unknown as Record<string, unknown>)['constructor'] = g.breeder.menagerie['2:3'];
     g.summary.generation = 999;
     g.summary.lineage = 1;
     const fixed = checkSave(g);
