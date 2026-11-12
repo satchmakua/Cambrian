@@ -698,7 +698,48 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   the Studio's code loads when they are first opened. **Tests:** `tests/world/renderCost.test.ts`
   (no transmissive materials; the distant skin's size and bounds).
 
+- [x] **M76 — The first review, fixed.** A fast-forward never lands on a valley that was swapped
+  under it (a new game, a load, a reset each end the run). A save is one family tree of numbered
+  creatures with every gene inside its bounds, and a load changes nothing unless all of it reads.
+  `Esc` opens the menu from a slider or a tick box (not from a text field), a held key opens it once,
+  the screens behind it stop drawing, and a screen that fails — or whose code cannot be fetched —
+  shows a card with a way out instead of a blank page. World skins are built ahead of the render
+  (surface, skin weights, shell), kept once built, and chosen by a level of detail that does not
+  flicker at its edges. **Tests:** `tests/world/worldStore.test.ts`, `skins.test.ts`,
+  `tests/ui/saves.test.ts`, `game.test.ts`, `keys.test.ts`, `browserKeep.test.ts`,
+  `tests/engine/share.test.ts`, `lineage.test.ts`.
+
+- [x] **M77 — The body plans, one by one.** Twenty-odd plans reworked against proportions measured
+  in chest depths: cats and dogs (one skull, ears on its corners, a wedge of a trunk, a level back);
+  mice and bears; fish (a wedge of a head, a long sail, a keel) and sharks (a snout, a raked blade,
+  slits); birds (one tail) and hawks that are not pigeons; dragons that stand and wyverns that are
+  bipeds; deer with necks that reach the grass; urchins with a coat of spines, a horror of its own,
+  slugs, slender eye stalks; turtles, chimeras, theropods, ostriches; crocodiles with jaws, lizards
+  with necks and whip tails, slim weasels. Feeding keeps every foot planted: bipeds tip at the hips,
+  long necks arch, sprawlers hold still. **Tests:** `tests/engine/bodyplan.test.ts` (per plan),
+  `morphospace.test.ts`, `parts.test.ts`, `tests/viewer/rig.test.ts › feeding`, `wings.test.ts ›
+  fin cuts`, `ear.test.ts`, `nose.test.ts`, `mouths/beak.test.ts`.
+
+- [x] **M78 — The second review, fixed.** Bred bodies keep the rules their founders keep: an ear is
+  one flap on the skull, a one-link trunk is not shrunk by its taper, a trunk rears by degrees
+  (`rearedness`), a youngster's head is big for its body and not bigger than it. Gill covers and
+  slits are traced over the skin (`gills.ts`) and a midline fin's base follows the back. The skin
+  queue is its own module (`skinQueue.ts`): a youngster's adult body is ordered at what the camera
+  calls for now, and a body waiting for its first skin builds no shell in the render. A lineage whose
+  numbering has run away is renumbered on load; the Studio's camera keeps its angle when a pose
+  changes; the main menu no longer depends on the creature being bred. **Tests:**
+  `bodyplan.test.ts › bred bodies`, `juvenile.test.ts`, `tests/viewer/gills.test.ts`,
+  `framing.test.ts`, `tests/world/skins.test.ts › built to order`, `saves.test.ts › runaway
+  numbering`, `keys.test.ts › a part that fails`; in a browser, `?failstage=1` → the failure card →
+  Main menu → the menu.
+
 ### Next up (unchecked — pick from here)
+
+- [ ] **The plans the audit still marks down.** Crabs (claws that pinch, stalk eyes on the front
+  rim, legs that arch, a low wide shell); the many-legged alien (segments, a leg pair on each); the
+  crystalline creature (facets, shards — nothing crystalline about it yet); apes (a brow and a
+  muzzle, shoulders wider than the head, knuckles not rakes); frogs (forelegs with elbows, long hind
+  feet); and the coverings (feathers that read as scales, patchy fur, coarse pattern cells).
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.
 - [ ] **A lineage film.** A wild species' body changes over the generations, as a strip of portraits.

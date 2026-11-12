@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M67–M75; M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M76–M78: two reviews and the body plans reworked one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -42,8 +42,53 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Test invariants | `tests/engine/invariants.ts` | ✅ shared phenotype + genome-bounds asserts |
 | glTF export (stretch) | `src/viewer/exportGltf.ts`, `src/viewer/ShareBar.tsx` | ✅ bakes capsule/smooth + features → binary `.glb` via GLTFExporter |
 | Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic; **+ gait playback** |
+| World skins | `src/world/skinQueue.ts`, `lod.ts`, `src/viewer/geometryCache.ts` | ✅ three finenesses by distance, ordered and built off the render within a frame budget, kept once built (tested in node) |
+| Marks on the skin | `src/viewer/gills.ts`, `wings.ts` (`buildFin` root), `eyeSeat.ts` | ✅ gill covers / slits and midline fin bases traced over the drawn surface |
+| Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M76–M78 — Two reviews, and the body plans one by one · 2026-11-12
+
+- **Review what shipped, then make the review prove itself.** Twice, finders read a batch area by
+  area and every finding went to a separate verifier told to refute it by reproduction. 21 held in
+  the menu / saves / skins batch, 13 in the creature rework; a handful were refuted, and one came
+  back "this needs eyes" (is a kitten's head too big?) — settled by rendering it both ways. The
+  first script counted a verifier that crashed as a refutation; it now reports "unverified".
+- **A fix that leans on an assumption has to make it true.** Ears were taken out of the skin to cure
+  lobed skulls, on the assumption an ear is one node. Founders' are; mutation jitters every part's
+  link count, and a third of all cat and dog litters held a child whose ear hovered above its head.
+  The rule now lives in growth (an ear gene grows one node, whatever it says), which also mends the
+  saves already holding such genes — a guard in mutation would not have.
+- **A threshold beside a prior is a cliff.** "Reared upright" was a line at −0.26 and the most
+  upright hawk leans −0.255: a tenth of hawk chicks had their legs jump from mid-body to the rump.
+  Moving the prior changes the animal; moving the line moves the cliff. It is a ramp now.
+- **A ceiling on a counter only moves the edge.** A save counting from 1e15 loaded cleanly and then
+  minted ids its own reader refuses. Capping at 1e9 leaves the same trap at 1e9 for a file sitting
+  there. A lineage whose numbering has run away is renumbered from 0 on load: no edge.
+- **Draw on the surface that is drawn.** A feature's node sits on its trunk link's own ellipsoid;
+  the blended skin stands a fraction of a radius clear of it, by a different amount at each end of
+  a mark. Gill covers and slits laid flat at the node were two-thirds buried; a fish's sail, run
+  straight from its root, hung over the back's fall. Both are traced over the field now, and the
+  check is a ray test against the real mesh, not the field they were placed with.
+- **The way out cannot pass through the wreck.** The main menu is where a failed screen sends the
+  player. It drew the creature being bred — so when that creature was the failure, the menu failed
+  too, with no button left. The menu now mounts before anything grows that creature, and its own
+  stage sits behind a boundary. (`?failstage=1` breaks the stage on purpose, to see this.)
+- **Proportions in the animal's own units.** Each plan was measured in chest depths (trunk length,
+  belly clearance, skull, neck rise, tail) against the animal it is meant to be, before and after:
+  "a cat's skull is 0.9 of its chest, its back level, its belly a chest-depth off the ground" is a
+  target a prior can be tuned to and a test can hold; "looks more like a cat" is neither.
+- **One skull, then ears.** The lobes on every mammal's head were ear stubs meshed into the skin.
+  With ears as features only and a neck that rises from the top of the shoulders, cats, dogs, mice,
+  bears, deer and weasels each got a head that is one shape, carried above the back.
+- **A new knob must not reshuffle the old ones.** Every new prior field draws from the generator
+  only where a plan sets it, so giving the shark a blade did not re-roll every cat already bred.
+- **Feeding is a whole-body pose.** A biped tips at the hips as one piece (bent joint by joint, a
+  bird's wings stood off its back); a long neck arches down; a body on splayed legs keeps its trunk
+  still, since those legs are not refolded — on two legs as well as six.
+- **Gate the commit on the test run.** One commit went out with a failing test because the commit
+  was chained after the run with `;`. Commits are now `&&`-ed behind the suite's exit code.
 
 ## M74–M75 — A front door; half the frame · 2026-11-12
 
