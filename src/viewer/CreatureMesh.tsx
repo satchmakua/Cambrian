@@ -37,6 +37,7 @@ import { browRidgeGeometry, faceMaskOf, isApe } from './face';
 import { apeFootGeometry, fistGeometry } from './apeLimbs';
 import { clawGeometry } from './claw';
 import { shardGeometry } from './shards';
+import { quillGeometry } from './quills';
 import { frillGeometry, frillPlan } from './frill';
 import { getGeometry, retainGeometry, releaseGeometry, hasGeometry } from './geometryCache';
 import { mouthCarves, surfacePrims } from './mouthLine';
@@ -479,6 +480,27 @@ export function CreatureMesh({
     return { bone: par >= 0 ? rig.bones[par] : rig.root, at };
   }, [rig, shellGeo, phenotype]);
 
+  // an urchin's quills, one smooth cone each, root to point — all of them one mesh, kept at every
+  // distance (they are its outline: without them it was a bare ball), riding the trunk
+  const quillGeo = useMemo(() => quillGeometry(phenotype, detail === 'full' ? 8 : 5), [phenotype, detail]);
+  useEffect(() => () => quillGeo?.dispose(), [quillGeo]);
+  const quillColor = useMemo(() => coatDark(pal).getHex(), [pal]);
+  const quillMount = useMemo(() => (rig && quillGeo ? { bone: rig.bones[0] ?? rig.root, at: phenotype.nodes[0].pos } : null), [rig, quillGeo, phenotype]);
+  const quillNode = quillGeo ? (
+    quillMount ? (
+      createPortal(
+        <mesh geometry={quillGeo} position={[-quillMount.at[0], -quillMount.at[1], -quillMount.at[2]]} castShadow>
+          <meshStandardMaterial color={quillColor} roughness={0.38} metalness={0.05} />
+        </mesh>,
+        quillMount.bone,
+      )
+    ) : (
+      <mesh geometry={quillGeo} castShadow>
+        <meshStandardMaterial color={quillColor} roughness={0.38} metalness={0.05} />
+      </mesh>
+    )
+  ) : null;
+
   // a crocodile's armour — rows of keeled scutes down the back and the crest of the tail — in the
   // skin's own material, each link's plates hung from that link (not drawn at a distance, nor on a
   // recorded gait's re-posed kit)
@@ -542,6 +564,7 @@ export function CreatureMesh({
           )}
         {featureNodes}
         {scuteNodes}
+        {quillNode}
       </group>
     );
   }
@@ -590,6 +613,7 @@ export function CreatureMesh({
       {shellGeo && shellMat && <mesh geometry={shellGeo} material={shellMat} castShadow receiveShadow />}
       {featureNodes}
       {scuteNodes}
+      {quillNode}
     </group>
   );
 }

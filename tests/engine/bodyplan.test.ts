@@ -368,8 +368,12 @@ describe('body plans', () => {
         const along = [tip.pos[0] - root.pos[0], tip.pos[1] - root.pos[1], tip.pos[2] - root.pos[2]];
         const dot = (out[0] * along[0] + out[1] * along[1] + out[2] * along[2]) / (Math.hypot(...out) * Math.hypot(...along));
         expect(dot, `#${seed} spine stands out`).toBeGreaterThan(0.9);
-        // long and thin: several times the tip's width, a fair share of the body's radius
-        expect(Math.hypot(...along) / body.radius, `#${seed} spine length`).toBeGreaterThan(0.6);
+        // long and thin: several times the tip's width, a fair share of the body's radius — its whole
+        // length, root on the body to point (the shorter secondaries between the primaries included)
+        let first = p.nodes.indexOf(tip);
+        while (p.nodes[parent.get(first)!].part?.kind === 'spine') first = parent.get(first)!;
+        const whole = Math.hypot(...[0, 1, 2].map((k) => tip.pos[k] - p.nodes[first].pos[k]));
+        expect(whole / body.radius, `#${seed} spine length`).toBeGreaterThan(0.45);
         expect(tip.radius / body.radius, `#${seed} spine thin`).toBeLessThan(0.12);
         if (tip.pos[1] > body.pos[1] + 0.3 * body.radius) up++;
         if (tip.pos[1] < body.pos[1] - 0.3 * body.radius) down++;

@@ -14,6 +14,7 @@
  * rim — a mouth becomes negative space cut into the head, not a lump glued in front of it.
  */
 import type { Phenotype, BodyNode } from '../engine/grow';
+import { quillNodes } from './quills';
 import type { Vec3 } from '../engine/genome';
 
 export interface FieldPrims {
@@ -117,7 +118,9 @@ function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): 
 }
 
 export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'): FieldPrims {
-  const include = mode === 'hybrid' ? isHybridNode : isBodyNode;
+  // (an urchin's quills are drawn root to point, each one cone: quills.ts)
+  const quills = new Set(mode === 'hybrid' ? [...quillNodes(p)].map((i) => p.nodes[i]) : []);
+  const include = mode === 'hybrid' ? (n: BodyNode) => isHybridNode(n) && !quills.has(n) : isBodyNode;
   // an eyestalk's last link runs INTO the eyeball (which draws itself): mesh it as a thin cone ending
   // at the eye, or the eye hangs in the air above a stump
   const stalkTip = (a: BodyNode, b: BodyNode) => mode === 'hybrid' && b.terminal === 'eye' && a.kind === 'limb' && a.part?.kind === 'eyestalk';

@@ -125,6 +125,14 @@ export function headStop(seg: SegmentGene, depth: number): number {
   return t * t * (3 - 2 * t) * d * d * (3 - 2 * d);
 }
 
+/** A spine part whose style gene is at or past this is a QUILL (an urchin's): one smooth cone from root
+ *  to point, kept out of the skin and drawn whole (viewer/quills). Every other spine is drawn in 0..0.4. */
+export const QUILL_STYLE = 0.9;
+/** whether a part (a gene or a grown node's) is a quill */
+export function isQuill(part: { kind: string; style: number } | undefined): boolean {
+  return part?.kind === 'spine' && part.style >= QUILL_STYLE;
+}
+
 /** A plain tail whose style gene is at or over this — and under SCULL_STYLE — is a BRUSH (a fox's, a wolf's). */
 export const BRUSH_STYLE = 0.6;
 
