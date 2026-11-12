@@ -8,7 +8,7 @@
  * leaving the hinge purely forward, arriving at the tip purely inward, drooping a touch — with the
  * tips stopping just short of meeting by the gape. Serrations root ON the blade centerline's inner
  * rim (a saw edge raking toward the opposing blade), and behind the pair sits the actual mouth:
- * thin lip beads swept along the upper/lower lines and a dark recessed-aware interior sheet.
+ * a dark recessed-aware interior sheet between the upper and lower lines (no lips).
  *
  * Geometry is authored NODE-RELATIVE (world minus the mouth node's rest position, no rotation), so
  * the feature group's per-frame translation carries the whole assembly with the animated head.
@@ -19,10 +19,10 @@ import type { Phenotype } from '../../engine/grow';
 import type { Vec3 } from '../../engine/genome';
 import { basisToQuat, cross3, dot3, norm3, type Carve } from '../bodyField';
 import type { MeshFeature } from '../meshData';
-import { buildMouthLine, hash01, mouthSpec, type MouthSample, type MouthSpec, type SkinSurface } from '../mouthLine';
+import { buildMouthLine, hash01, mouthSpec, type MouthSpec, type SkinSurface } from '../mouthLine';
 import { sweepTube, type SweepPoint } from '../sweep';
 import { fangGeometry, setToothInstances, type ToothXform } from '../teeth';
-import { INTERIOR, LIP, jig } from './palette';
+import { INTERIOR, jig } from './palette';
 import { interiorSheet, relRow } from './shared';
 
 const PATH_PTS = 8; // centerline samples per blade
@@ -37,10 +37,13 @@ export interface MandiblesBuild {
   blades: [THREE.BufferGeometry, THREE.BufferGeometry];
   /** serration fangs, node-relative — the first 4 belong to bladePaths[0], the last 4 to [1] */
   serrations: ToothXform[];
-  upperLip: THREE.BufferGeometry;
-  lowerLip: THREE.BufferGeometry;
   interior: THREE.BufferGeometry;
 }
+
+/** A blade's radius along it (×the mouth's radius): stout at the hinge, down to a point. (At a third of
+ *  this the jaws were two hairs hanging off the face — the mouth line behind them did the reading,
+ *  and read as a human smile.) */
+const bladeRadius = (u: number): number => 0.26 - 0.215 * u;
 
 /** Pure build — everything derives from the mouth line; null if the node isn't a mouth. */
 export function buildMandibles(
@@ -89,13 +92,13 @@ export function buildMandibles(
     // the blade: flattened against the horizontal shear plane, stout at the hinge, tapering to a
     // near-point (the stag-beetle read — the pair scissors past each other, edge to edge)
     const pts: SweepPoint[] = path.map((p) => ({ p, n: spec.up }));
-    const geo = sweepTube(pts, { radius: (u) => r * (0.15 - 0.125 * u), flatten: 0.35, radialSegments: 10 });
+    const geo = sweepTube(pts, { radius: (u) => r * bladeRadius(u), flatten: 0.5, radialSegments: 10 });
 
     // serrations — 4 per blade, rooted on the path's inner rim, raking toward the opposing blade
     const teeth: ToothXform[] = [];
     for (let k = SERR_FROM; k <= SERR_TO; k++) {
       const u = k / (PATH_PTS - 1);
-      const bladeR = r * (0.15 - 0.125 * u);
+      const bladeR = r * bladeRadius(u);
       const root: Vec3 = [
         path[k][0] + L[0] * bladeR * 0.85,
         path[k][1] + L[1] * bladeR * 0.85,
@@ -127,10 +130,9 @@ export function buildMandibles(
   const bladeL = buildBlade(-1);
   const bladeR = buildBlade(1);
 
-  // the true mouth behind the tools — thin lip beads pressed along both line curves
-  const lipPts = (row: MouthSample[]): SweepPoint[] => row.map((s) => ({ p: s.p, n: s.n }));
-  const upperLip = sweepTube(lipPts(upper), { radius: () => r * 0.06, flatten: 0.6, radialSegments: 8 });
-  const lowerLip = sweepTube(lipPts(lower), { radius: () => r * 0.06, flatten: 0.6, radialSegments: 8 });
+  // the true mouth behind the tools is only the dark of its opening: an arthropod has no lips. (Lip
+  // beads along both curves drew a smile across an ant's whole face, and on a crab — its mouth under
+  // the front of its shell — a loop of wire hanging below the rim.)
 
   // the interior — recessed into the real carve on smooth skin, a hair proud of the capsule kit
   // as a dark throat backdrop (depth by shading, not geometry)
@@ -143,8 +145,6 @@ export function buildMandibles(
     bladePaths: [bladeL.path, bladeR.path],
     blades: [bladeL.geo, bladeR.geo],
     serrations: [...bladeL.teeth, ...bladeR.teeth],
-    upperLip,
-    lowerLip,
     interior,
   };
 }
@@ -285,10 +285,8 @@ function InsectMandibles({
   const fang = useMemo(() => fangGeometry(), []);
   const mats = useMemo(() => {
     const chitin = new THREE.Color(dark).lerp(new THREE.Color(0x241d18), 0.55);
-    const lip = new THREE.Color(dark).lerp(new THREE.Color(LIP), 0.4);
     return {
       chitin: new THREE.MeshStandardMaterial({ color: chitin, roughness: 0.35, metalness: 0.12 }),
-      lip: new THREE.MeshStandardMaterial({ color: lip, roughness: 0.52 }),
       interior: new THREE.MeshStandardMaterial({ color: INTERIOR, roughness: 0.3, side: THREE.DoubleSide }),
       teeth: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42 }),
     };
@@ -301,8 +299,6 @@ function InsectMandibles({
       if (built) {
         built.blades[0].dispose();
         built.blades[1].dispose();
-        built.upperLip.dispose();
-        built.lowerLip.dispose();
         built.interior.dispose();
       }
     },
@@ -315,8 +311,6 @@ function InsectMandibles({
   return (
     <group>
       <mesh geometry={built.interior} material={mats.interior} />
-      <mesh geometry={built.upperLip} material={mats.lip} />
-      <mesh geometry={built.lowerLip} material={mats.lip} />
       <mesh geometry={built.blades[0]} material={mats.chitin} castShadow />
       <mesh geometry={built.blades[1]} material={mats.chitin} castShadow />
       {built.serrations.length > 0 && (

@@ -30,7 +30,7 @@ function allFinite(g: THREE.BufferGeometry): boolean {
 }
 
 function geoms(b: MandiblesBuild): THREE.BufferGeometry[] {
-  return [b.blades[0], b.blades[1], b.upperLip, b.lowerLip, b.interior];
+  return [b.blades[0], b.blades[1], b.interior];
 }
 
 describe('mandibles mouth (mouth overhaul)', () => {
@@ -44,12 +44,35 @@ describe('mandibles mouth (mouth overhaul)', () => {
       const b = buildMandibles(p, idx, [], false)!;
       expect(a.bladePaths).toEqual(b.bladePaths);
       expect(a.serrations).toEqual(b.serrations);
-      for (let g = 0; g < 5; g++) {
+      for (let g = 0; g < geoms(a).length; g++) {
         expect(Array.from(positions(geoms(a)[g]))).toEqual(Array.from(positions(geoms(b)[g])));
       }
       checked++;
     }
     expect(checked).toBeGreaterThan(0);
+  });
+
+  it('the jaws are solid and the mouth behind them has no lips: nothing to read as a smile', () => {
+    // (blades a third as thick were two hairs hanging off the face, and the lip beads behind them
+    // drew a human smile across an ant's whole head — on a crab, a loop of wire under its shell)
+    for (const [id, seed] of [['insectoid', 11], ['insectoid', 12], ['crab', 11], ['arthro-alien', 11]] as const) {
+      const p = grow(genomeOfMorphotype(seed, id));
+      const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const built = buildMandibles(p, idx, [], false, 'hybrid')!;
+      expect(Object.keys(built).filter((k) => /lip/i.test(k)), `${id} #${seed}`).toEqual([]);
+      for (let side = 0; side < 2; side++) {
+        // the blade at its hinge: its first ring of vertices stands a quarter of the mouth's radius out
+        const pos = built.blades[side].getAttribute('position');
+        const h = built.bladePaths[side][0];
+        let wide = 0;
+        for (let i = 0; i < 10; i++) wide = Math.max(wide, Math.hypot(pos.getX(i) - h[0], pos.getY(i) - h[1], pos.getZ(i) - h[2]));
+        expect(wide, `${id} #${seed} stout at the hinge`).toBeGreaterThan(0.2 * built.r);
+        // …and it is a jaw's length: most of the mouth's radius, from hinge to point
+        const path = built.bladePaths[side];
+        const tip = path[path.length - 1];
+        expect(Math.hypot(tip[0] - h[0], tip[1] - h[1], tip[2] - h[2]), `${id} #${seed} a jaw's length`).toBeGreaterThan(0.8 * built.r);
+      }
+    }
   });
 
   it('returns null when the node is not a mouth', () => {

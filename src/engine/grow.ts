@@ -27,6 +27,8 @@ const TAGMA_WAIST = 0.36;
 
 /** An eye stalk's links, ×the radius the eye's gene gives them. */
 const STALK_SLIM = 0.5;
+/** An eye stalk rises at least this steeply (the Y of its unit direction: about 51° above level). */
+const STALK_RISE = 0.78;
 
 /** How far up the chest a fully raised neck roots (×the chest's half-depth above its axis). */
 const NECK_ROOT = 0.4;
@@ -462,14 +464,16 @@ export function grow(genome: Genome): Phenotype {
         const hx = sideX * Math.cos(fan);
         const hz = Math.sin(fan);
         // a spider's knees peak high over its back and its long shins reach far out and down; a crab's
-        // legs reach out low and level from under the shell and bend straight down to their points; a
+        // legs rise out from under the shell's rim, run on outward and down, and turn to points planted
+        // wide — the body slung low between them (out level and then straight down, they were the legs
+        // of a table, and the crab stood as tall as it was wide); a
         // hexapod's femur runs out nearer level, the tibia drops steeply and the tarsus angles out
         // along the ground (one profile for all read as a spider on stilts or an insect on its belly)
         const n = app.segments - 1; // segment advances (n nodes span n-1 lengths)
         const [k0, mid, end]: Vec3[] = spider
           ? [[hx, 0.85, hz], [hx * 0.6, -0.75, hz * 0.6], [hx * 0.3, -1, hz * 0.3]]
           : decapod
-            ? [[hx, 0.45, hz], [hx * 0.75, -0.3, hz * 0.75], [hx * 0.2, -1, hz * 0.2]]
+            ? [[hx, 0.62, hz], [hx, -0.5, hz], [hx * 0.55, -1, hz * 0.55]]
             : [[hx, 0.4, hz], [hx * 0.45, -1, hz * 0.45], [hx * 0.6, -0.45, hz * 0.6]];
         arch = [];
         if (n <= 1) arch.push(norm([hx * 0.7, -0.7, hz * 0.7]));
@@ -528,6 +532,14 @@ export function grow(genome: Genome): Phenotype {
       // still wears its face proud rather than swallowing it.
       const out = surfaceExtent(base, root) + seat * app.thickness;
       startPos = [base.pos[0] + root[0] * out, base.pos[1] + root[1] * out, base.pos[2] + root[2] * out];
+      // An eye STALK stands up from wherever it is rooted — a crab's from the front rim of its shell —
+      // leaning the way its root faces. (Grown straight out along the root's direction, stalks could
+      // only be rooted on top of the body: set on the front rim, they pointed forward like feelers.)
+      if (app.kind === 'eyestalk' && t === 'eye' && app.segments >= 2 && dev.symmetry !== 'radial' && dir[1] < STALK_RISE) {
+        const flat = Math.hypot(dir[0], dir[2]);
+        const k = flat > 1e-6 ? Math.sqrt(1 - STALK_RISE * STALK_RISE) / flat : 0;
+        dir0 = [dir[0] * k, STALK_RISE, dir[2] * k];
+      }
     }
     // orient +Z → aim direction, then roll about that axis (orients flat parts). A radial body's parts
     // each stand in an UPRIGHT frame (turned to their heading, then tilted): the shortest turn from +Z

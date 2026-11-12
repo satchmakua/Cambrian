@@ -9,7 +9,7 @@
  * from the arm into the palm.
  */
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Vec3 } from '../engine/genome';
 import { sweepTube, type SweepPoint } from './sweep';
 
@@ -26,23 +26,29 @@ export interface ClawPlan {
 
 const PTS = 9;
 
-/** The claw's shape for a node of radius `r` (pure, claw frame). */
+/**
+ * The claw's shape for a node of radius `r` (pure, claw frame).
+ *
+ * The fingers are as long as the palm and half its depth each at the root, with daylight between them
+ * from the palm's front edge to their points: that notch is what says "pincer". (As two short spikes
+ * on the front of a long bulb, half buried in it, the claw read as a sharpened crayon.)
+ */
 export function clawPlan(r: number): ClawPlan {
   const fixed: Vec3[] = [];
   const dactyl: Vec3[] = [];
   for (let k = 0; k < PTS; k++) {
     const u = k / (PTS - 1);
-    // the fixed finger leaves the palm's lower front and curls up a little at the point
-    fixed.push([0, -r * 0.42 + r * 0.34 * u * u, r * 1.55 + r * 1.75 * u]);
-    // the dactyl hinges at the palm's upper front and closes down onto it
-    dactyl.push([0, r * 0.5 - r * 0.32 * u - r * 0.12 * u * u, r * 1.4 + r * 1.95 * u]);
+    // the fixed finger runs on from the palm's underside, near level, and turns up at its point
+    fixed.push([0, r * (-0.5 + 0.1 * u + 0.36 * u * u * u), r * (1.1 + 2.45 * u)]);
+    // the dactyl hinges at the palm's upper front, arches over the gape and hooks down to meet it
+    dactyl.push([0, r * (0.55 + 0.22 * u - 0.67 * u * u), r * (1.15 + 2.35 * u)]);
   }
   return {
-    palm: { c: [0, 0, r * 0.7], r: [r * 0.78, r * 1.1, r * 1.5] },
+    palm: { c: [0, 0, r * 0.5], r: [r * 0.62, r * 1.02, r * 1.2] },
     fixed,
     dactyl,
-    fixedR: (u) => r * (0.44 - 0.4 * u),
-    dactylR: (u) => r * (0.4 - 0.36 * u),
+    fixedR: (u) => r * (0.46 - 0.42 * Math.pow(u, 1.2)),
+    dactylR: (u) => r * (0.42 - 0.38 * Math.pow(u, 1.2)),
   };
 }
 
@@ -75,8 +81,14 @@ export function clawGeometry(r: number, quat: readonly number[]): { shell: THREE
   const shellParts = [palm, knuckle, tube(fb, plan.fixedR, 0, CUT), tube(db, plan.dactylR, 0, CUT)];
   const tipParts = [tube(ft, plan.fixedR, CUT, 1), tube(dt, plan.dactylR, CUT, 1)];
   const merge = (parts: THREE.BufferGeometry[]) => {
-    const g = mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p)), false) ?? parts[0];
-    for (const p of parts) if (p !== g) p.dispose();
+    const loose = parts.map((p) => (p.index ? p.toNonIndexed() : p));
+    const soup = mergeGeometries(loose, false) ?? loose[0];
+    for (const p of [...parts, ...loose]) if (p !== soup) p.dispose();
+    // weld by position, then shade smooth: left as a triangle soup, every triangle took its own
+    // normal and the palm was a ball of flat tiles on an otherwise smooth animal
+    soup.deleteAttribute('normal');
+    const g = mergeVertices(soup, r * 1e-4);
+    if (g !== soup) soup.dispose();
     g.applyQuaternion(q);
     g.computeVertexNormals();
     return g;

@@ -239,6 +239,35 @@ describe('smooth skin (M15)', () => {
     }
   });
 
+  it("a crab's carapace ends at its body's widest line, its edge barely proud — a turtle's comes down its sides", async () => {
+    // (cut low and flared like a turtle's, the crab's shell was a hat: a brim standing a quarter of
+    // the body's radius out all round, the belly hanging below it — a flying saucer from the side)
+    const { buildShellGeometry } = await import('../../src/viewer/smoothSkin');
+    const measure = (id: string, seed: number) => {
+      const p = grow(genomeOfMorphotype(seed, id));
+      const shell = buildShellGeometry(p, 'low');
+      if (!shell) return null;
+      const { min, max } = scan(shell.getAttribute('position').array as ArrayLike<number>);
+      const trunk = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 0);
+      const rMax = Math.max(...trunk.map((n) => n.radius));
+      const yMid = trunk.reduce((t, n) => t + n.pos[1], 0) / trunk.length;
+      const halfW = Math.max(...trunk.map((n) => n.pos[0] + n.radius * (n.scale?.[0] ?? 1)));
+      return { skirt: (yMid - min[1]) / rMax, brim: (max[0] - halfW) / rMax };
+    };
+    let crabs = 0;
+    for (let seed = 1; seed <= 8; seed++) {
+      const m = measure('crab', seed);
+      if (!m) continue;
+      crabs++;
+      expect(m.skirt, `crab #${seed} ends at the widest line`).toBeLessThan(0.12);
+      expect(m.brim, `crab #${seed} no brim`).toBeLessThan(0.18);
+      expect(m.brim, `crab #${seed} an edge all the same`).toBeGreaterThan(0);
+    }
+    expect(crabs).toBeGreaterThan(5);
+    const turtle = measure('chelonian', 5)!;
+    expect(turtle.skirt).toBeGreaterThan(0.2);
+  });
+
   it('an anisotropic trunk is one smooth elliptical tube — no per-node bulges (the caterpillar)', async () => {
     const { buildFieldPrims, fieldAt } = await import('../../src/viewer/bodyField');
     for (const id of ['fish', 'felid', 'crocodilian']) {

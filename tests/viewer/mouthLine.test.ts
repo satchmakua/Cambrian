@@ -116,6 +116,30 @@ describe('mouth line (mouth overhaul)', () => {
     }
   });
 
+  it('a mandibled mouth is a small one: no wider than its jaws can close across', () => {
+    // (a mouth line spans an angle about the body it sits on. On a head that is a mouth's width; on
+    // a crab — its mouth on its trunk — the lips ran the whole breadth of the animal, and an ant's
+    // ran from one side of its head to the other)
+    let seen = 0;
+    for (const id of ['crab', 'insectoid', 'arthro-alien']) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const spec = firstMouth(p);
+        if (!spec || spec.variant !== 'mandibles') continue;
+        seen++;
+        const line = buildMouthLine(p, spec, [], 17, 'hybrid');
+        expect(line.width / spec.r, `${id} #${seed}`).toBeLessThan(2.1);
+        if (id === 'crab') {
+          const body = p.nodes.find((n) => n.kind === 'spine')!;
+          expect(line.width / (2 * body.radius * (body.scale?.[0] ?? 1)), `crab #${seed} a small mouth under the front`).toBeLessThan(0.4);
+        }
+        // (still a mouth: its corners apart, its lips on the skin)
+        expect(line.width / spec.r, `${id} #${seed}`).toBeGreaterThan(0.8);
+      }
+    }
+    expect(seen).toBeGreaterThan(20);
+  });
+
   it('mouth carves remove matter exactly where the maw is', () => {
     const p = grow(funnelGenome());
     const carves = mouthCarves(p);

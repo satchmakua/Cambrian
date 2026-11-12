@@ -308,14 +308,17 @@ const FACE_MIN = 0.45;
 const UNDERSIDE = 0.8;
 /** a head node stretched longer than this (× its radius) is a snout, its mouth along its jaw line */
 const LONG_SNOUT = 1.3;
+/** a mandibled mouth is at most this many of its own radii from corner to corner */
+const MANDIBLE_SPAN = 2.0;
 
 export function buildMouthLine(
   p: Phenotype,
-  s: MouthSpec,
+  spec: MouthSpec,
   carves: readonly Carve[] = [],
   samples = 17,
   surface: SkinSurface = 'kit',
 ): MouthLine {
+  let s = spec;
   const f = surfacePrims(p, surface);
   // ray origin: inside the anchor node, pulled a touch back from the mouth so rays always exit
   // through the face (a mouth seated proud of a snout tip still traces onto the snout).
@@ -368,6 +371,21 @@ export function buildMouthLine(
     setDown -= 0.06;
     upper = traceCurve(f, [], s, origin, samples, upperPitch);
     lower = traceCurve(f, carves, s, origin, samples, lowerPitch);
+  }
+
+  // A MANDIBLED mouth is a small one: its blades hinge at its corners and close across it, so it is
+  // no wider than they reach. (The line's span is an angle about the body it sits on: on a head that
+  // is a mouth's width — on a crab, whose mouth sits on its trunk, the lips ran the whole breadth of
+  // the animal, a dark wire strung under its front from claw to claw.)
+  if (s.variant === 'mandibles') {
+    for (let k = 0; k < 5; k++) {
+      const a = upper[0].p, b = upper[samples - 1].p;
+      const w = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+      if (w <= MANDIBLE_SPAN * s.r) break;
+      s = { ...s, arc: (s.arc * MANDIBLE_SPAN * s.r) / w };
+      upper = traceCurve(f, [], s, origin, samples, upperPitch);
+      lower = traceCurve(f, carves, s, origin, samples, lowerPitch);
+    }
   }
 
   // weld the corners exactly (shared start/end), then fix `away` signs: the top lip's `away`

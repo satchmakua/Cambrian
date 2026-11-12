@@ -33,6 +33,21 @@ function meanField(p: Phenotype, geo: THREE.BufferGeometry, o: readonly number[]
   return sum / pos.count;
 }
 
+/** Is this point inside a limb (a link of an arm, a leg, a stalk …), rather than under the body's own skin? */
+function insideALimb(p: Phenotype, pt: readonly number[]): boolean {
+  for (const [a, b] of p.edges) {
+    const A = p.nodes[a], B = p.nodes[b];
+    if (B.kind === 'spine' || B.terminal === 'mouth') continue;
+    const ab = [B.pos[0] - A.pos[0], B.pos[1] - A.pos[1], B.pos[2] - A.pos[2]];
+    const ap = [pt[0] - A.pos[0], pt[1] - A.pos[1], pt[2] - A.pos[2]];
+    const t = Math.min(1, Math.max(0, (ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / Math.max(ab[0] ** 2 + ab[1] ** 2 + ab[2] ** 2, 1e-9)));
+    const d = Math.hypot(ap[0] - ab[0] * t, ap[1] - ab[1] * t, ap[2] - ab[2] * t);
+    // (a limb's first link runs from the body's node: its girth is the limb's, not the body's)
+    if (d < 1.2 * Math.max(A.kind === 'spine' ? 0 : A.radius, B.radius)) return true;
+  }
+  return false;
+}
+
 describe('baleen mouth (mouth overhaul)', () => {
   it('returns null when the node is not a mouth', () => {
     const p = grow(defaultGenome());
@@ -94,6 +109,9 @@ describe('baleen mouth (mouth overhaul)', () => {
       // skin — the bound below only means something where the mouth has its own patch of skin)
       const crowded = g.p.genomeRef.symmetry === 'radial' && qRotateV(g.p.nodes[g.idx].quat, [0, 0, 1])[1] < -0.9;
       for (const pl of crowded ? [] : built.plates) {
+        // (likewise a plate at a corner of a wide mouth that reaches a limb's root — a crab's claw
+        // arms leave its front either side of its mouth: there the field reads the arm's depth)
+        if (insideALimb(g.p, [pl.pos[0] + o[0], pl.pos[1] + o[1], pl.pos[2] + o[2]])) continue;
         // the root was pulled back from an on-surface point by sink·len (0.15), never further
         const d = Math.abs(fieldAt(f, pl.pos[0] + o[0], pl.pos[1] + o[1], pl.pos[2] + o[2]));
         expect(d).toBeLessThanOrEqual(pl.len * 0.15 + ON_SURFACE);

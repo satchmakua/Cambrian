@@ -21,6 +21,53 @@ describe('crab claw', () => {
     expect(c.palm.r[1]).toBeGreaterThan(2 * c.fixedR(0));
   });
 
+  it('the fingers are as long as the palm, with daylight between them from the palm to their points', () => {
+    // (two short spikes on the front of a long bulb, half buried in it: the claw read as a
+    // sharpened crayon — it is the notch between the fingers that says "pincer")
+    const r = 0.2;
+    const c = clawPlan(r);
+    const n = c.fixed.length;
+    const palmFront = c.palm.c[2] + c.palm.r[2];
+    const palmLong = 2 * c.palm.r[2];
+    expect(c.fixed[n - 1][2] - palmFront).toBeGreaterThan(0.7 * palmLong);
+    expect(c.dactyl[n - 1][2] - palmFront).toBeGreaterThan(0.7 * palmLong);
+    // each finger half the palm's depth at its root
+    expect(c.fixedR(0)).toBeGreaterThan(0.4 * c.palm.r[1]);
+    expect(c.dactylR(0)).toBeGreaterThan(0.38 * c.palm.r[1]);
+    // the gape: clear between the fingers' surfaces at every sample past the palm's front
+    let widest = 0;
+    for (let k = 0; k < n; k++) {
+      const u = k / (n - 1);
+      if (c.fixed[k][2] < palmFront) continue;
+      const gape = c.dactyl[k][1] - c.dactylR(u) - (c.fixed[k][1] + c.fixedR(u));
+      expect(gape, `sample ${k}`).toBeGreaterThan(0);
+      widest = Math.max(widest, gape);
+    }
+    expect(widest).toBeGreaterThan(0.25 * r);
+  });
+
+  it('is shaded smooth: one welded surface, not a soup of flat tiles', () => {
+    // (merged as loose triangles, every triangle took its own normal: a faceted ball on a smooth animal)
+    const g = clawGeometry(0.2, [0, 0, 0, 1]);
+    for (const geo of [g.shell, g.tips]) {
+      expect(geo.index).not.toBeNull();
+      const tris = geo.index!.count / 3;
+      expect(geo.getAttribute('position').count).toBeLessThan(tris); // (a soup has three vertices a triangle)
+      const nrm = geo.getAttribute('normal');
+      expect(nrm.count).toBe(geo.getAttribute('position').count);
+    }
+    // the palm's normals turn smoothly: neighbouring vertices of a triangle never face far apart
+    const idx = g.shell.index!;
+    const nrm = g.shell.getAttribute('normal');
+    let sharp = 0;
+    for (let t = 0; t < idx.count; t += 3) {
+      const a = idx.getX(t), b = idx.getX(t + 1);
+      const dot = nrm.getX(a) * nrm.getX(b) + nrm.getY(a) * nrm.getY(b) + nrm.getZ(a) * nrm.getZ(b);
+      if (dot < 0.3) sharp++;
+    }
+    expect(sharp / (idx.count / 3)).toBeLessThan(0.05);
+  });
+
   it('builds finite geometry turned into the node frame', () => {
     const q = [0, Math.sin(0.4), 0, Math.cos(0.4)];
     const g = clawGeometry(0.2, q);

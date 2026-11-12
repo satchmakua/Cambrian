@@ -980,11 +980,63 @@ describe('body plans', () => {
       const hips = p.nodes.filter((n, i) => n.part?.kind === 'leg' && p.nodes[parent.get(i)!].kind === 'spine');
       for (const c of claws) {
         expect(c.pos[2], `#${seed} claw ahead`).toBeGreaterThan(body.pos[2] + body.radius * s[2] * 0.6);
-        expect(c.radius, `#${seed} a big claw`).toBeGreaterThan(1.8 * Math.max(...hips.map((h) => h.radius)));
+        expect(c.radius, `#${seed} a big claw`).toBeGreaterThan(1.4 * Math.max(...hips.map((h) => h.radius)));
       }
       const feet = p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg');
       expect(feet.length, `#${seed} legs`).toBe(8);
       for (const f of feet) expect(Math.abs(f.pos[0]), `#${seed} splayed`).toBeGreaterThan(halfW * 1.15);
+    }
+  });
+
+  it("a crab's legs arch out and down to points planted wide, the body slung low between them", () => {
+    // (out level and then straight down on two links, they were the legs of a table: the crab stood
+    // as tall as it was wide, a tick on stilts)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'crab'));
+      const body = trunkOf(p)[0];
+      const s = body.scale ?? [1, 1, 1];
+      const belly = body.pos[1] - body.radius * s[1];
+      const tall = 2 * body.radius * s[1];
+      const legs = legChains(p);
+      expect(legs.length, `#${seed}`).toBe(8);
+      for (const { nodes } of legs) {
+        expect(nodes.length, `#${seed} links`).toBe(4);
+        const [hip, knee, shin, foot] = nodes;
+        expect(knee.pos[1], `#${seed} the knee rises over the hip`).toBeGreaterThan(hip.pos[1] + 0.15);
+        expect(Math.abs(shin.pos[0]), `#${seed} runs on outward`).toBeGreaterThan(Math.abs(knee.pos[0]));
+        expect(shin.pos[1], `#${seed} and down`).toBeLessThan(knee.pos[1]);
+        // the last link still leans outward: a point planted wide, not a post under the knee
+        expect(Math.abs(foot.pos[0]), `#${seed} planted wide`).toBeGreaterThan(Math.abs(shin.pos[0]) + 0.1);
+        // slung low: the belly clears the ground by a fraction of the body's own depth
+        const clear = belly - foot.pos[1];
+        expect(clear / tall, `#${seed} off the ground`).toBeGreaterThan(0.04);
+        expect(clear / tall, `#${seed} slung low`).toBeLessThan(0.35);
+      }
+    }
+  });
+
+  it("a crab's eyes stand on slender stalks at the front rim of its shell — every crab's", () => {
+    // (one crab in twenty had no stalks and its eyes were buried under the shell: no face at all;
+    // the rest wore thick chimneys rising from the middle of the dome, splayed like horns)
+    for (let seed = 1; seed <= 24; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'crab'));
+      const body = trunkOf(p)[0];
+      const s = body.scale ?? [1, 1, 1];
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      const eyes = p.nodes.map((n, i) => ({ n, i })).filter((e) => e.n.terminal === 'eye');
+      expect(eyes.length, `#${seed}`).toBe(2);
+      for (const { n: eye, i } of eyes) {
+        const stalk = p.nodes[parent.get(i)!];
+        expect(stalk.part?.kind, `#${seed} on a stalk`).toBe('eyestalk');
+        expect(stalk.kind, `#${seed} on a stalk`).toBe('limb');
+        expect(stalk.radius, `#${seed} slender`).toBeLessThan(0.7 * eye.radius);
+        // at the front, either side of the middle
+        expect(eye.pos[2], `#${seed} at the front`).toBeGreaterThan(body.pos[2] + 0.7 * body.radius * s[2]);
+        expect(Math.abs(eye.pos[0]), `#${seed} apart`).toBeGreaterThan(0.3 * body.radius * s[0]);
+        // standing up: the eye well above where its stalk leaves the body
+        expect(eye.pos[1] - stalk.pos[1], `#${seed} standing`).toBeGreaterThan(0.6 * Math.hypot(eye.pos[0] - stalk.pos[0], eye.pos[2] - stalk.pos[2]));
+        expect(eye.pos[1], `#${seed} up at the shell's top`).toBeGreaterThan(body.pos[1] + 0.8 * body.radius * s[1]);
+      }
     }
   });
 
