@@ -92,8 +92,8 @@ describe('mouth line (mouth overhaul)', () => {
     // (on a frog's flat head the gape slid the lower lip, and the drooping corners, round under the
     // jaw: the mouth hung below the head as a loose hooked loop)
     // (a long snout's mouth runs back along its jaw line, a muzzle's mandible drops by design: both
-    // are left as traced)
-    for (const kind of ['anuran', 'slime', 'dragon']) {
+    // are left as traced; and a slug's mouth is under the front of its body, where it belongs)
+    for (const kind of ['anuran', 'dragon']) {
       for (let seed = 1; seed <= 6; seed++) {
         const p = grow(genomeOfMorphotype(seed, kind));
         const spec = firstMouth(p);
