@@ -75,9 +75,31 @@ function SimDriver() {
   return null;
 }
 
+/** The sun's shadow map is redrawn once in this many frames (see DayNight). */
+export const SHADOW_EVERY = 2;
+
 /** Sun, moon and sky from the time of day. */
 function DayNight() {
   const q = useQuality();
+  const gl = useThree((s) => s.gl);
+  // The sun's shadow map is redrawn every other frame. Drawing it means drawing every shadow caster
+  // in the valley again from the sun — about half as many triangles as the picture itself — and
+  // nearly all of them are trees and bushes whose shadows move with the sun, a hair a second. On
+  // the frames between, the map and the matrix that reads it are both the last ones drawn, so the
+  // shadows stay exactly where they were; a running animal's shadow is one frame behind it.
+  const frame = useRef(0);
+  useEffect(() => {
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = true;
+    frame.current = 0; // (a new light, a new map size: draw it on the very next frame)
+    return () => {
+      gl.shadowMap.autoUpdate = true;
+      gl.shadowMap.needsUpdate = true;
+    };
+  }, [gl, q.shadows, q.shadowMap]);
+  useFrame(() => {
+    if (frame.current++ % SHADOW_EVERY === 0) gl.shadowMap.needsUpdate = true;
+  });
   const sun = useRef<THREE.DirectionalLight>(null);
   const hemi = useRef<THREE.HemisphereLight>(null);
   const target = useMemo(() => new THREE.Object3D(), []);

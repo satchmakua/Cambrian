@@ -15,6 +15,17 @@ import { biomeAt, heightAt, normalAt, type Terrain } from '../sim/terrain';
 import type { World } from '../sim/world';
 import { SEASON_LOOK } from './Landscape';
 import { useQuality } from '../ui/settings';
+import { cellMeshes, cellPrint, cellsOf, keepAt } from './cells';
+
+/** the meadow is drawn as this many squares a side, each culled on its own (see cells.ts) */
+export const GRASS_CELLS = 5;
+/** every square of grass is looked at again this often (s) — and re-posed only if its grass changed */
+const GRASS_LOOK = 0.5;
+/** a square of meadow is drawn in full within this distance of the camera, thinning to GRASS_LEAST of
+ *  its tufts at GRASS_FAR and beyond (a tuft that far off is a pixel or two of a green ground) */
+export const GRASS_FULL = 45;
+export const GRASS_FAR = 150;
+export const GRASS_LEAST = 0.35;
 
 /** One tuft: `n` blades fanned around the base, each a 2-segment tapering strip (uv.y = 0 root … 1 tip). */
 function tuftGeometry(n = 6): THREE.BufferGeometry {
@@ -169,44 +180,74 @@ export function Grass({ world }: { world: World }) {
     mats.grass.dispose();
     mats.flower.dispose();
   }, [geo, head, mats]);
-  const tuftRef = useRef<THREE.InstancedMesh>(null);
   const flowerRef = useRef<THREE.InstancedMesh>(null);
+  // The tufts, a square of meadow at a time: one instanced mesh each, with bounds of its own, so the
+  // squares behind the camera and out to its sides are not drawn. (One mesh for the whole meadow was
+  // drawn whole wherever the camera looked: 306k triangles at High, most of them out of view.)
+  const cells = useMemo(() => cellsOf(tufts, world.terrain.size, GRASS_CELLS, (i) => tufts[i].s * 1.7 + 0.4), [tufts, world.terrain.size]);
+  const meshes = useMemo(() => cellMeshes(cells, geo, mats.grass, { receive: true }), [cells, geo, mats.grass]);
+  useEffect(() => () => meshes.forEach((m) => m.dispose()), [meshes]);
 
-  // (re)pose every tuft from the live grass field: tall and green where lush, short stubble where cropped
-  const timer = useRef(1);
-  // (a rebuilt mesh starts with every instance at the origin: pose it on its first frame)
+  // (re)pose the tufts from the live grass field: tall and green where lush, short stubble where
+  // cropped. A square at a time, round and round, and only a square whose grass (or snow) has changed
+  // since it was last posed: re-posing every tuft twice a second uploaded the whole meadow's
+  // matrices and colours each time, though a herd grazes a few squares of it.
+  const prints = useRef<number[]>([]);
+  const next = useRef(0);
+  const due = useRef(0);
+  const flowerTimer = useRef(1);
+  // (a rebuilt mesh starts with every instance at the origin: pose them all on the first frame)
   useEffect(() => {
-    timer.current = 1;
-  }, [tufts]);
+    prints.current = cells.map(() => NaN);
+    next.current = 0;
+    due.current = cells.length;
+    flowerTimer.current = 1;
+  }, [cells, flowers]);
   const o = useMemo(() => new THREE.Object3D(), []);
   const c = useMemo(() => new THREE.Color(), []);
   const white = useMemo(() => new THREE.Color(0xe8ecef), []);
-  useFrame((_, dt) => {
+  useFrame((st, dt) => {
     time.value += dt;
     // the season's tint, and a frosting of snow on the blades in winter
     const snow = SEASON_LOOK.snow.value;
     mats.grass.color.copy(SEASON_LOOK.tint.value).lerp(white, snow * 0.4);
-    timer.current += dt;
-    if (timer.current < 0.5) return;
-    timer.current = 0;
-    const m = tuftRef.current;
-    if (m) {
-      for (let i = 0; i < tufts.length; i++) {
+    // the far squares are drawn thinner (a camera looking the length of the valley has all of it in
+    // view: nothing to cull, and most of the meadow a hundred units off)
+    for (let k = 0; k < cells.length; k++) {
+      const d = st.camera.position.distanceTo(cells[k].sphere.center) - cells[k].sphere.radius;
+      meshes[k].count = Math.ceil(cells[k].items.length * keepAt(d, GRASS_FULL, GRASS_FAR, GRASS_LEAST));
+    }
+    const lushOf = (cell: number) => {
+      const cap = world.grassCap[cell];
+      return cap > 0 ? Math.min(1, world.grass[cell] / cap) : 0.6;
+    };
+    due.current = Math.min(cells.length, due.current + (dt / GRASS_LOOK) * cells.length);
+    for (; due.current >= 1 && cells.length > 0; due.current -= 1) {
+      const k = next.current;
+      next.current = (k + 1) % cells.length;
+      const cell = cells[k];
+      const print = cellPrint(cell, (i) => Math.round(lushOf(tufts[i].cell) * 32), Math.round(snow * 20));
+      if (print === prints.current[k]) continue;
+      prints.current[k] = print;
+      const m = meshes[k];
+      cell.items.forEach((i, j) => {
         const t = tufts[i];
-        const cap = world.grassCap[t.cell];
-        const lush = cap > 0 ? Math.min(1, world.grass[t.cell] / cap) : 0.6;
-        const h = t.s * (0.22 + 0.78 * lush) * (1 - 0.4 * SEASON_LOOK.snow.value); // winter flattens it
+        const lush = lushOf(t.cell);
+        const h = t.s * (0.22 + 0.78 * lush) * (1 - 0.4 * snow); // winter flattens it
         o.position.set(t.x, t.y - 0.02, t.z);
         o.rotation.set(t.tilt[0], t.r, t.tilt[1]);
         o.scale.set(t.s * 0.9, h, t.s * 0.9);
         o.updateMatrix();
-        m.setMatrixAt(i, o.matrix);
+        m.setMatrixAt(j, o.matrix);
         c.copy(t.wood ? SHADE : LUSH).lerp(STRAW, (1 - lush) * 0.85);
-        m.setColorAt(i, c);
-      }
+        m.setColorAt(j, c);
+      });
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
+    flowerTimer.current += dt;
+    if (flowerTimer.current < 0.5) return;
+    flowerTimer.current = 0;
     const f = flowerRef.current;
     if (f) {
       for (let i = 0; i < flowers.length; i++) {
@@ -229,7 +270,9 @@ export function Grass({ world }: { world: World }) {
 
   return (
     <>
-      <instancedMesh ref={tuftRef} args={[geo, mats.grass, tufts.length]} receiveShadow frustumCulled={false} />
+      {meshes.map((m, i) => (
+        <primitive key={cells[i].id} object={m} />
+      ))}
       <instancedMesh ref={flowerRef} args={[head, mats.flower, flowers.length]} frustumCulled={false} />
     </>
   );

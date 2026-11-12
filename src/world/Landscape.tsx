@@ -17,6 +17,10 @@ import { heightAt, biomeAt, moistureAt, normalAt, WATER_LEVEL, type Terrain } fr
 import type { World } from '../sim/world';
 import { yearLook } from './seasonLook';
 import { FOLIAGE_TIME, coniferGeometry, crownGeometry, foliageMaterial, withSightCut } from './foliage';
+import { cellMeshes, cellsOf } from './cells';
+
+/** tree crowns and bushes are drawn as this many squares of the valley a side, each culled on its own */
+export const FLORA_CELLS = 4;
 
 const RES = 200; // terrain grid quads per side
 
@@ -305,7 +309,6 @@ const FRUIT_SLOTS: [number, number, number][] = Array.from({ length: MAX_FRUIT_P
 });
 
 export function Bushes({ world }: { world: World }) {
-  const bushRef = useRef<THREE.InstancedMesh>(null);
   const fruitRef = useRef<THREE.InstancedMesh>(null);
   const plants = world.plants;
   const leaf = useMemo(() => crownGeometry([[0, 0, 0, 1], [0.55, -0.15, 0.25, 0.7], [-0.5, -0.2, -0.2, 0.65], [0.1, 0.35, -0.35, 0.6]], 0.2, 2), []);
@@ -314,29 +317,38 @@ export function Bushes({ world }: { world: World }) {
   // (the berries go with their leaves along the follow camera's sightline — left behind, they floated)
   const berryMat = useMemo(() => withSightCut(new THREE.MeshStandardMaterial({ color: 0xc8322e, roughness: 0.35, emissive: 0x3a0808 })), []);
   useEffect(() => () => berryMat.dispose(), [berryMat]);
-  const berry = useMemo(() => new THREE.SphereGeometry(0.16, 8, 6), []);
+  // (a berry is a few pixels across: six sides are round enough)
+  const berry = useMemo(() => new THREE.SphereGeometry(0.16, 6, 5), []);
   useEffect(() => () => {
     leaf.dispose();
     berry.dispose();
   }, [leaf, berry]);
 
+  // the bushes, a square of the valley at a time, each square culled on its own (see cells.ts)
+  const sites = useMemo(() => plants.map((p) => ({ x: p.x, y: heightAt(world.terrain, p.x, p.z), z: p.z })), [plants, world.terrain]);
+  const cells = useMemo(() => cellsOf(sites, world.terrain.size, FLORA_CELLS, (i) => plants[i].size * 2.2), [sites, plants, world.terrain.size]);
+  const bushes = useMemo(() => cellMeshes(cells, leaf, leafMat, { cast: true, receive: true }), [cells, leaf, leafMat]);
+  useEffect(() => () => bushes.forEach((m) => m.dispose()), [bushes]);
+
   // static bush transforms
   useEffect(() => {
-    const m = bushRef.current;
-    if (!m) return;
     const o = new THREE.Object3D();
     const c = new THREE.Color();
-    plants.forEach((p, i) => {
-      o.position.set(p.x, heightAt(world.terrain, p.x, p.z) + p.size * 0.55, p.z);
-      o.scale.set(p.size * 1.15, p.size * 0.8, p.size * 1.1);
-      o.rotation.set(0, (p.id * 1.37) % 6.28, 0);
-      o.updateMatrix();
-      m.setMatrixAt(i, o.matrix);
-      m.setColorAt(i, c.setHSL(0.27 + ((p.id * 0.13) % 0.06), 0.45, 0.22 + ((p.id * 0.07) % 0.06)));
+    cells.forEach((cell, k) => {
+      const m = bushes[k];
+      cell.items.forEach((i, j) => {
+        const p = plants[i];
+        o.position.set(p.x, sites[i].y + p.size * 0.55, p.z);
+        o.scale.set(p.size * 1.15, p.size * 0.8, p.size * 1.1);
+        o.rotation.set(0, (p.id * 1.37) % 6.28, 0);
+        o.updateMatrix();
+        m.setMatrixAt(j, o.matrix);
+        m.setColorAt(j, c.setHSL(0.27 + ((p.id * 0.13) % 0.06), 0.45, 0.22 + ((p.id * 0.07) % 0.06)));
+      });
+      m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
     });
-    m.instanceMatrix.needsUpdate = true;
-    if (m.instanceColor) m.instanceColor.needsUpdate = true;
-  }, [plants, world.terrain]);
+  }, [cells, bushes, plants, sites]);
 
   // fruit: show as many berries as each bush holds (refreshed twice a second)
   const timer = useRef(1);
@@ -347,27 +359,31 @@ export function Bushes({ world }: { world: World }) {
     const m = fruitRef.current;
     if (!m) return;
     const o = new THREE.Object3D();
-    const hidden = new THREE.Matrix4().makeScale(0, 0, 0);
+    // the berries that are there, packed to the front, and only those drawn. (A slot with no berry
+    // in it was an instance scaled to nothing — still eighty triangles sent down for every one:
+    // 109k a frame for a valley of bushes mostly picked clean.)
+    let n = 0;
     plants.forEach((p, i) => {
-      const y0 = heightAt(world.terrain, p.x, p.z);
-      for (let s = 0; s < MAX_FRUIT_PER_BUSH; s++) {
-        const idx = i * MAX_FRUIT_PER_BUSH + s;
-        if (s < Math.floor(p.fruit)) {
-          const [fx, fy, fz] = FRUIT_SLOTS[s];
-          o.position.set(p.x + fx * p.size, y0 + fy * p.size + p.size * 0.5, p.z + fz * p.size);
-          o.scale.setScalar(0.8 + p.size * 0.4);
-          o.updateMatrix();
-          m.setMatrixAt(idx, o.matrix);
-        } else m.setMatrixAt(idx, hidden);
+      const y0 = sites[i].y;
+      const held = Math.min(MAX_FRUIT_PER_BUSH, Math.floor(p.fruit));
+      for (let s = 0; s < held; s++) {
+        const [fx, fy, fz] = FRUIT_SLOTS[s];
+        o.position.set(p.x + fx * p.size, y0 + fy * p.size + p.size * 0.5, p.z + fz * p.size);
+        o.scale.setScalar(0.8 + p.size * 0.4);
+        o.updateMatrix();
+        m.setMatrixAt(n++, o.matrix);
       }
     });
+    m.count = n;
     m.instanceMatrix.needsUpdate = true;
   });
 
   return (
     <>
-      <instancedMesh ref={bushRef} args={[leaf, leafMat, plants.length]} castShadow receiveShadow />
-      <instancedMesh ref={fruitRef} args={[berry, berryMat, plants.length * MAX_FRUIT_PER_BUSH]} />
+      {bushes.map((m, i) => (
+        <primitive key={cells[i].id} object={m} />
+      ))}
+      <instancedMesh ref={fruitRef} args={[berry, berryMat, plants.length * MAX_FRUIT_PER_BUSH]} frustumCulled={false} />
     </>
   );
 }
@@ -412,9 +428,7 @@ export function Decor({ terrain, world }: { terrain: Terrain; world?: World }) {
     return { trees, pines, rocks };
   }, [terrain]);
   const trunkRef = useRef<THREE.InstancedMesh>(null);
-  const crownRef = useRef<THREE.InstancedMesh>(null);
   const pineTrunkRef = useRef<THREE.InstancedMesh>(null);
-  const pineRef = useRef<THREE.InstancedMesh>(null);
   const rockRef = useRef<THREE.InstancedMesh>(null);
   const geos = useMemo(() => ({
     trunk: new THREE.CylinderGeometry(0.22, 0.34, 1, 6),
@@ -434,6 +448,14 @@ export function Decor({ terrain, world }: { terrain: Terrain; world?: World }) {
     [],
   );
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
+  // The crowns — the heavy part of a tree: a thousand triangles each — a square of the valley at a
+  // time, each square culled on its own in the main pass and in the sun's shadow pass (cells.ts).
+  // (Trunks and rocks are a few triangles apiece: one mesh of each, drawn whole.)
+  const crownCells = useMemo(() => cellsOf(trees, terrain.size, FLORA_CELLS, (i) => 7.5 * trees[i].s), [trees, terrain.size]);
+  const pineCells = useMemo(() => cellsOf(pines, terrain.size, FLORA_CELLS, (i) => 3.5 * pines[i].s), [pines, terrain.size]);
+  const crowns = useMemo(() => cellMeshes(crownCells, geos.crown, mats.crown, { cast: true, receive: true }), [crownCells, geos.crown, mats.crown]);
+  const pineCrowns = useMemo(() => cellMeshes(pineCells, geos.pine, mats.pine, { cast: true, receive: true }), [pineCells, geos.pine, mats.pine]);
+  useEffect(() => () => [...crowns, ...pineCrowns].forEach((m) => m.dispose()), [crowns, pineCrowns]);
   useEffect(() => {
     const o = new THREE.Object3D();
     const c = new THREE.Color();
@@ -444,13 +466,20 @@ export function Decor({ terrain, world }: { terrain: Terrain; world?: World }) {
       o.scale.set(t.s, H, t.s);
       o.updateMatrix();
       trunkRef.current?.setMatrixAt(i, o.matrix);
-      o.position.set(t.x, t.y + H + 0.9 * t.s, t.z);
-      o.scale.set(1.9 * t.s, 1.75 * t.s, 1.9 * t.s);
-      o.updateMatrix();
-      crownRef.current?.setMatrixAt(i, o.matrix);
-      // a spread of greens, a few going gold
-      const gold = (i * 7) % 23 === 0;
-      crownRef.current?.setColorAt(i, gold ? c.setHSL(0.13, 0.55, 0.3) : c.setHSL(0.24 + (i % 7) * 0.014, 0.45, 0.17 + (i % 5) * 0.018));
+    });
+    crownCells.forEach((cell, k) => {
+      cell.items.forEach((i, j) => {
+        const t = trees[i];
+        const H = 3.2 * t.s;
+        o.position.set(t.x, t.y + H + 0.9 * t.s, t.z);
+        o.rotation.set(0, t.r, 0);
+        o.scale.set(1.9 * t.s, 1.75 * t.s, 1.9 * t.s);
+        o.updateMatrix();
+        crowns[k].setMatrixAt(j, o.matrix);
+        // a spread of greens, a few going gold
+        const gold = (i * 7) % 23 === 0;
+        crowns[k].setColorAt(j, gold ? c.setHSL(0.13, 0.55, 0.3) : c.setHSL(0.24 + (i % 7) * 0.014, 0.45, 0.17 + (i % 5) * 0.018));
+      });
     });
     pines.forEach((t, i) => {
       const H = 1.4 * t.s;
@@ -459,11 +488,18 @@ export function Decor({ terrain, world }: { terrain: Terrain; world?: World }) {
       o.scale.set(t.s * 0.8, H, t.s * 0.8);
       o.updateMatrix();
       pineTrunkRef.current?.setMatrixAt(i, o.matrix);
-      o.position.set(t.x, t.y + H * 0.7, t.z);
-      o.scale.set(1.3 * t.s, 1.6 * t.s, 1.3 * t.s);
-      o.updateMatrix();
-      pineRef.current?.setMatrixAt(i, o.matrix);
-      pineRef.current?.setColorAt(i, c.setHSL(0.36 + (i % 5) * 0.01, 0.38, 0.13 + (i % 4) * 0.015));
+    });
+    pineCells.forEach((cell, k) => {
+      cell.items.forEach((i, j) => {
+        const t = pines[i];
+        const H = 1.4 * t.s;
+        o.position.set(t.x, t.y + H * 0.7, t.z);
+        o.rotation.set(0, t.r, 0);
+        o.scale.set(1.3 * t.s, 1.6 * t.s, 1.3 * t.s);
+        o.updateMatrix();
+        pineCrowns[k].setMatrixAt(j, o.matrix);
+        pineCrowns[k].setColorAt(j, c.setHSL(0.36 + (i % 5) * 0.01, 0.38, 0.13 + (i % 4) * 0.015));
+      });
     });
     seasonKey.current = -1; // re-tint for the current season
     rocks.forEach((r, i) => {
@@ -473,9 +509,9 @@ export function Decor({ terrain, world }: { terrain: Terrain; world?: World }) {
       o.updateMatrix();
       rockRef.current?.setMatrixAt(i, o.matrix);
     });
-    for (const m of [trunkRef.current, crownRef.current, pineTrunkRef.current, pineRef.current, rockRef.current]) if (m) m.instanceMatrix.needsUpdate = true;
-    for (const m of [crownRef.current, pineRef.current]) if (m?.instanceColor) m.instanceColor.needsUpdate = true;
-  }, [trees, pines, rocks]);
+    for (const m of [trunkRef.current, pineTrunkRef.current, rockRef.current, ...crowns, ...pineCrowns]) if (m) m.instanceMatrix.needsUpdate = true;
+    for (const m of [...crowns, ...pineCrowns]) if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  }, [trees, pines, rocks, crownCells, pineCells, crowns, pineCrowns]);
 
   // the seasons on the trees: broadleaves turn (each its own autumn colour), drop their leaves for
   // winter (the crown thins to a bare twiggy dome) and leaf out again; conifers just catch the snow
@@ -491,35 +527,40 @@ export function Decor({ terrain, world }: { terrain: Terrain; world?: World }) {
     const { turn, bare, snow } = yearLook(world.time);
     const o = new THREE.Object3D();
     const c = new THREE.Color();
-    const crown = crownRef.current;
-    if (crown) {
-      trees.forEach((t, i) => {
+    crownCells.forEach((cell, n) => {
+      const crown = crowns[n];
+      cell.items.forEach((i, j) => {
+        const t = trees[i];
         c.copy(greens[i]).lerp(AUTUMN[i % AUTUMN.length], turn * (0.7 + 0.3 * ((i * 13) % 7) / 7)).lerp(BARE, bare * 0.85);
-        crown.setColorAt(i, c);
+        crown.setColorAt(j, c);
         const H = 3.2 * t.s;
         const k = 1 - 0.5 * bare;
         o.position.set(t.x, t.y + H + 0.9 * t.s * k, t.z);
         o.rotation.set(0, t.r, 0);
         o.scale.set(1.9 * t.s * k, 1.75 * t.s * k, 1.9 * t.s * k);
         o.updateMatrix();
-        crown.setMatrixAt(i, o.matrix);
+        crown.setMatrixAt(j, o.matrix);
       });
       crown.instanceMatrix.needsUpdate = true;
       if (crown.instanceColor) crown.instanceColor.needsUpdate = true;
-    }
-    const pine = pineRef.current;
-    if (pine) {
-      pines.forEach((_, i) => pine.setColorAt(i, c.copy(pineGreens[i]).lerp(SNOWY, snow * 0.5)));
+    });
+    pineCells.forEach((cell, n) => {
+      const pine = pineCrowns[n];
+      cell.items.forEach((i, j) => pine.setColorAt(j, c.copy(pineGreens[i]).lerp(SNOWY, snow * 0.5)));
       if (pine.instanceColor) pine.instanceColor.needsUpdate = true;
-    }
+    });
   });
 
   return (
     <>
       <instancedMesh ref={trunkRef} args={[geos.trunk, mats.trunk, trees.length]} castShadow />
-      <instancedMesh ref={crownRef} args={[geos.crown, mats.crown, trees.length]} castShadow receiveShadow />
+      {crowns.map((m, i) => (
+        <primitive key={`crown${crownCells[i].id}`} object={m} />
+      ))}
       <instancedMesh ref={pineTrunkRef} args={[geos.trunk, mats.pineTrunk, pines.length]} castShadow />
-      <instancedMesh ref={pineRef} args={[geos.pine, mats.pine, pines.length]} castShadow receiveShadow />
+      {pineCrowns.map((m, i) => (
+        <primitive key={`pine${pineCells[i].id}`} object={m} />
+      ))}
       <instancedMesh ref={rockRef} args={[geos.rock, undefined, rocks.length]} castShadow receiveShadow>
         <meshStandardMaterial color={0x6f6a62} roughness={0.92} flatShading />
       </instancedMesh>
