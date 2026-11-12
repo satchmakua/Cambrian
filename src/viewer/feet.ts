@@ -190,9 +190,10 @@ function toesOf(plan: FootPlan, r: number, link: number, taloned = false): ToeSp
     return [-0.9, -0.45, 0, 0.45, 0.9].map((az, i) => ({ az, len: L * (i === 0 || i === 4 ? 0.8 : 1), r0: t }));
   }
   if (plan === 'frog') {
-    // long, thin, widely splayed toes
+    // long, widely splayed toes — slim, but fingers, not sticks (at a fourteenth of their length
+    // thick, with a ball on each tip, every foot was a little star of pins)
     const L = Math.max(r * 2.8, link * 0.42);
-    const t = Math.max(r * 0.26, L * 0.075);
+    const t = Math.max(r * 0.32, L * 0.1);
     return [-1.15, -0.55, 0, 0.55, 1.15].map((az, i) => ({ az, len: L * (i === 0 || i === 4 ? 0.7 : i === 2 ? 1 : 0.88), r0: t }));
   }
   const L = Math.max(r * 2.2, link * 0.32);
