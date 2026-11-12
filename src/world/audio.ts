@@ -41,6 +41,14 @@ export function voiceOf(t: Traits): Voice {
 class Engine {
   ctx: AudioContext | null = null;
   master: GainNode | null = null;
+  /** master volume, 0 … 1 (a setting) */
+  private volume = 0.7;
+
+  setVolume(v: number): void {
+    this.volume = Math.min(1, Math.max(0, v));
+    if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.volume, this.ctx.currentTime, 0.05);
+  }
+
   private noise: AudioBuffer | null = null;
   private wind: { gain: GainNode; filter: BiquadFilterNode } | null = null;
   private rain: { hiss: GainNode; patter: GainNode } | null = null;
@@ -54,7 +62,7 @@ class Engine {
       const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new Ctx();
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.7;
+      this.master.gain.value = this.volume;
       this.master.connect(this.ctx.destination);
       this.noise = this.makeNoise();
       this.startWind();

@@ -18,6 +18,7 @@ import type { Phenotype } from '../engine/grow';
 import { CreatureMesh, prebuildSkin, skinKey, type Detail } from '../viewer/CreatureMesh';
 import { hasGeometry } from '../viewer/geometryCache';
 import { createRig, LOOK_MAX, poseDead, poseRig, SLEEP_DROP } from '../viewer/rig';
+import { getQuality } from '../ui/settings';
 import { juvenileGenome, JUVENILE_UNTIL } from '../engine/juvenile';
 import { JawContext, type JawControl } from '../viewer/mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from '../viewer/flight';
@@ -128,7 +129,8 @@ function useNear(get: () => THREE.Vector3 | null, radius: number): boolean {
     const p = get();
     if (!p) return;
     const d = camera.position.distanceTo(p);
-    const next = cur.current ? d < radius * 1.25 : d < radius;
+    // (fine skins are a graphics option: off, nothing is ever near enough)
+    const next = getQuality().fineSkins && (cur.current ? d < radius * 1.25 : d < radius);
     if (next !== cur.current) {
       cur.current = next;
       setNear(next);
@@ -197,10 +199,12 @@ function useDetail(get: () => THREE.Vector3 | null, force: boolean): Detail {
     if (!p) return;
     const d = camera.position.distanceTo(p);
     const was = cur.current;
-    let next: Detail = d < LOD_FULL ? 'full' : d < LOD_LITE ? 'lite' : 'none';
+    // (the bands scale with the creature-detail option)
+    const k = getQuality().lod;
+    let next: Detail = d < LOD_FULL * k ? 'full' : d < LOD_LITE * k ? 'lite' : 'none';
     // hysteresis: hold the finer level until 15% past its band edge
-    if (was === 'full' && next !== 'full' && d < LOD_FULL * 1.15) next = 'full';
-    if (was === 'lite' && next === 'none' && d < LOD_LITE * 1.15) next = 'lite';
+    if (was === 'full' && next !== 'full' && d < LOD_FULL * k * 1.15) next = 'full';
+    if (was === 'lite' && next === 'none' && d < LOD_LITE * k * 1.15) next = 'lite';
     if (force) next = 'full';
     if (next !== was) {
       cur.current = next;

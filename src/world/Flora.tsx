@@ -14,9 +14,7 @@ import { mulberry32 } from '../engine/rng';
 import { biomeAt, heightAt, normalAt, type Terrain } from '../sim/terrain';
 import type { World } from '../sim/world';
 import { SEASON_LOOK } from './Landscape';
-
-const TUFTS = 17000;
-const FLOWERS = 900;
+import { useQuality } from '../ui/settings';
 
 /** One tuft: `n` blades fanned around the base, each a 2-segment tapering strip (uv.y = 0 root … 1 tip). */
 function tuftGeometry(n = 6): THREE.BufferGeometry {
@@ -113,7 +111,9 @@ interface Tuft {
   wood: boolean;
 }
 
-function scatter(terrain: Terrain, gridN: number) {
+/** Scatter up to `maxTufts` tufts and `maxFlowers` flowers. One seeded stream decides every site, so
+ *  a lower budget keeps a subset of the same meadow (the first sites drawn), not a different one. */
+function scatter(terrain: Terrain, gridN: number, maxTufts: number, maxFlowers: number) {
   const rng = mulberry32(terrain.seed ^ 0x6a55);
   const tufts: Tuft[] = [];
   const flowers: { x: number; z: number; y: number; cell: number; c: number; s: number }[] = [];
@@ -123,7 +123,7 @@ function scatter(terrain: Terrain, gridN: number) {
     const j = Math.min(gridN - 1, Math.max(0, Math.floor((z + terrain.size / 2) / cellSize)));
     return j * gridN + i;
   };
-  for (let i = 0; i < TUFTS * 6 && tufts.length < TUFTS; i++) {
+  for (let i = 0; i < maxTufts * 6 && tufts.length < maxTufts; i++) {
     const x = (rng() - 0.5) * terrain.size * 0.98;
     const z = (rng() - 0.5) * terrain.size * 0.98;
     const b = biomeAt(terrain, x, z);
@@ -131,7 +131,7 @@ function scatter(terrain: Terrain, gridN: number) {
     const n = normalAt(terrain, x, z);
     if (n[1] < 0.8) continue; // no grass on steep banks
     tufts.push({ x, z, y: heightAt(terrain, x, z), cell: cellOf(x, z), s: 0.45 + rng() * 0.5, r: rng() * 6.283, tilt: [n[2] * 0.6, -n[0] * 0.6], wood: b === 'wood' });
-    if (b === 'meadow' && flowers.length < FLOWERS && rng() < 0.09) {
+    if (b === 'meadow' && flowers.length < maxFlowers && rng() < 0.09) {
       flowers.push({ x: x + (rng() - 0.5) * 0.3, z: z + (rng() - 0.5) * 0.3, y: heightAt(terrain, x, z), cell: cellOf(x, z), c: Math.floor(rng() * 5), s: 0.7 + rng() * 0.5 });
     }
   }
@@ -144,7 +144,9 @@ const STRAW = new THREE.Color(0xc0ad62);
 const PETALS = [0xf4f1e6, 0xf2c94c, 0xb48be6, 0xe98bb0, 0x8fb8f0].map((c) => new THREE.Color(c));
 
 export function Grass({ world }: { world: World }) {
-  const { tufts, flowers } = useMemo(() => scatter(world.terrain, world.gridN), [world]);
+  // (how much is drawn is a graphics option: the meshes are rebuilt when it changes)
+  const q = useQuality();
+  const { tufts, flowers } = useMemo(() => scatter(world.terrain, world.gridN, q.grass, q.flowers), [world, q.grass, q.flowers]);
   const geo = useMemo(() => tuftGeometry(), []);
   const head = useMemo(() => {
     const g = new THREE.IcosahedronGeometry(0.075, 0);
@@ -172,6 +174,10 @@ export function Grass({ world }: { world: World }) {
 
   // (re)pose every tuft from the live grass field: tall and green where lush, short stubble where cropped
   const timer = useRef(1);
+  // (a rebuilt mesh starts with every instance at the origin: pose it on its first frame)
+  useEffect(() => {
+    timer.current = 1;
+  }, [tufts]);
   const o = useMemo(() => new THREE.Object3D(), []);
   const c = useMemo(() => new THREE.Color(), []);
   const white = useMemo(() => new THREE.Color(0xe8ecef), []);

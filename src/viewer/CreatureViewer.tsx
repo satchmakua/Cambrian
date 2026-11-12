@@ -62,6 +62,8 @@ import type { SkinMode } from '../ui/store';
 import { CreatureMesh } from './CreatureMesh';
 import { createRig, poseRig } from './rig';
 import { traitsOf } from '../sim/traits';
+import { dprOf, useQuality, useSettings } from '../ui/settings';
+import { useStore } from '../ui/store';
 
 export function CreatureViewer({
   phenotype,
@@ -72,6 +74,10 @@ export function CreatureViewer({
   skinMode?: SkinMode;
   trajectory?: Trajectory | null;
 }) {
+  const quality = useQuality();
+  const spin = useSettings((s) => s.gameplay.spin);
+  // (the stage holds still while the game menu is over it)
+  const menuOpen = useStore((s) => s.menuOpen);
   // Dev-only: freezing stops the auto-rotate and switches to on-demand rendering so the
   // page can go idle (a continuous loop otherwise blocks headless captures).
   const [frozen, setFrozen] = useState(false);
@@ -134,10 +140,10 @@ export function CreatureViewer({
   return (
     <Canvas
       key="creature-canvas"
-      frameloop={frozen ? 'demand' : 'always'}
+      frameloop={frozen || menuOpen ? 'demand' : 'always'}
       gl={{ preserveDrawingBuffer: import.meta.env.DEV }}
-      shadows
-      dpr={[1, 2]}
+      shadows={quality.shadows}
+      dpr={dprOf(quality, 2)}
       camera={{ position: [dist * 0.52, dist * 0.42, dist * 0.78], fov: 42 }}
     >
       <KeepPrograms />
@@ -147,7 +153,7 @@ export function CreatureViewer({
       <directionalLight
         position={[size * 1.2, size * 1.8, size * 1.0]}
         intensity={1.15}
-        castShadow
+        castShadow={quality.shadows}
         shadow-mapSize={[1024, 1024]}
         shadow-bias={-0.0004}
       />
@@ -156,14 +162,16 @@ export function CreatureViewer({
 
       {/* centre the creature at the origin so the auto-rotate orbits its middle, not its tail */}
       <group position={[-center[0], -center[1], -center[2]]}>
-        <IdleCreature phenotype={phenotype} skinMode={skinMode} trajectory={trajectory} alive={!frozen && !trajectory && skinMode !== 'capsules'} />
+        <IdleCreature phenotype={phenotype} skinMode={skinMode} trajectory={trajectory} alive={!frozen && !trajectory && skinMode !== 'capsules'} best={quality.heroSkin} />
       </group>
-      <ContactShadows position={[0, groundY, 0]} scale={size * 2.4} blur={2.2} opacity={0.5} far={size} resolution={512} />
+      {quality.contactShadow > 0 && (
+        <ContactShadows key={quality.contactShadow} position={[0, groundY, 0]} scale={size * 2.4} blur={2.2} opacity={0.5} far={size} resolution={quality.contactShadow} />
+      )}
 
       <OrbitControls
         makeDefault
         target={[0, 0, 0]}
-        autoRotate={!frozen}
+        autoRotate={!frozen && spin}
         autoRotateSpeed={0.8}
         enablePan={false}
         minDistance={size * 0.7}
@@ -177,7 +185,7 @@ export function CreatureViewer({
 /** The hero creature, alive at rest: on a smooth skin it is rigged and idles — breathes, shifts its
  *  weight, glances about, swishes its tail, blinks (the eyes blink on their own). Frozen headless
  *  captures and the capsule kit stay static. */
-function IdleCreature({ phenotype, skinMode, trajectory, alive }: { phenotype: Phenotype; skinMode: SkinMode; trajectory: Trajectory | null; alive: boolean }) {
+function IdleCreature({ phenotype, skinMode, trajectory, alive, best }: { phenotype: Phenotype; skinMode: SkinMode; trajectory: Trajectory | null; alive: boolean; best: 'high' | 'low' }) {
   const rig = useMemo(() => (alive ? createRig(phenotype) : null), [phenotype, alive]);
   const swim = useMemo(() => {
     const t = traitsOf(phenotype);
@@ -201,5 +209,6 @@ function IdleCreature({ phenotype, skinMode, trajectory, alive }: { phenotype: P
     const t = setTimeout(() => setFull(true), 150);
     return () => clearTimeout(t);
   }, [phenotype, alive]);
-  return <CreatureMesh phenotype={phenotype} skinMode={skinMode} trajectory={trajectory} rig={rig} carved={!rig} quality={full ? 'high' : 'low'} fur />;
+  // (the full skin is a graphics option: at low creature detail the hero keeps the thumbnails' skin)
+  return <CreatureMesh phenotype={phenotype} skinMode={skinMode} trajectory={trajectory} rig={rig} carved={!rig} quality={full ? best : 'low'} fur />;
 }

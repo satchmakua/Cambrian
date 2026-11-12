@@ -22,8 +22,9 @@ import { FOLIAGE_CUT } from './foliage';
 import { Precipitation, WEATHER_LOOK, setPrecipDaylight, updateWeatherLook } from './Weather';
 import { Director } from './Director';
 import { Actor, Carcass, useSkinScheduler } from './Actors';
-import { getWorld, useWorldUi, worldVersion, bumpVersion } from './worldStore';
+import { getWorld, useWorldUi, worldVersion, bumpVersion, worldSceneLive } from './worldStore';
 import { StudioEnvironment } from '../viewer/StudioEnvironment';
+import { useQuality } from '../ui/settings';
 
 const MAX_STEPS_PER_FRAME = 90;
 
@@ -75,6 +76,7 @@ function SimDriver() {
 
 /** Sun, moon and sky from the time of day. */
 function DayNight() {
+  const q = useQuality();
   const sun = useRef<THREE.DirectionalLight>(null);
   const hemi = useRef<THREE.HemisphereLight>(null);
   const target = useMemo(() => new THREE.Object3D(), []);
@@ -132,9 +134,10 @@ function DayNight() {
   return (
     <>
       <directionalLight
+        key={q.shadowMap}
         ref={sun}
-        castShadow
-        shadow-mapSize={[2048, 2048]}
+        castShadow={q.shadows}
+        shadow-mapSize={[q.shadowMap || 512, q.shadowMap || 512]}
         shadow-camera-left={-70}
         shadow-camera-right={70}
         shadow-camera-top={70}
@@ -145,7 +148,7 @@ function DayNight() {
       />
       <hemisphereLight ref={hemi} args={['#cfe0ff', '#3a3022', 0.6]} />
       <Sky distance={4500} sunPosition={sunPos} turbidity={6 + 14 * overcast} rayleigh={(night ? 0.2 : 1.6) * (1 - 0.75 * overcast)} mieCoefficient={0.006 + 0.02 * overcast} mieDirectionalG={0.85 - 0.3 * overcast} />
-      {night && overcast < 0.4 && <Stars radius={300} depth={60} count={2500} factor={5} fade speed={0.3} />}
+      {night && overcast < 0.4 && <Stars radius={300} depth={60} count={q.stars} factor={5} fade speed={0.3} />}
     </>
   );
 }
@@ -158,8 +161,8 @@ function SoundDriver() {
   // suspend the ambience (wind and rain beds) when the World is left — it played on in the breeder —
   // and resume it on return if the sound is still switched on
   useEffect(() => {
-    if (useWorldUi.getState().sound) SOUND.start();
-    return () => SOUND.stop();
+    worldSceneLive(true);
+    return () => worldSceneLive(false);
   }, []);
   useFrame(() => {
     if (!SOUND.running) return;

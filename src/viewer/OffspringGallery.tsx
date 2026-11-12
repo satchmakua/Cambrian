@@ -7,6 +7,7 @@ import { Canvas, useThree } from '@react-three/fiber';
 import { OffspringThumb } from './OffspringThumb';
 import { KeepPrograms } from './programs';
 import type { Genome } from '../engine/genome';
+import { dprOf, useQuality } from '../ui/settings';
 
 interface Props {
   offspring: Genome[];
@@ -17,6 +18,7 @@ interface Props {
 
 export function OffspringGallery({ offspring, generation, onPick, onReroll }: Props) {
   const body = useRef<HTMLDivElement>(null);
+  const quality = useQuality();
   // the nine buttons; each thumbnail's scene draws itself into its button's rectangle of the canvas
   const slots = useRef<(HTMLElement | null)[]>([]);
   return (
@@ -48,7 +50,7 @@ export function OffspringGallery({ offspring, generation, onPick, onReroll }: Pr
       {/* one canvas for all nine, laid over the gallery (clicks pass through to the buttons) */}
       {/* (inline: the canvas wrapper's own inline pointer-events would beat the stylesheet) */}
       {/* (the drawing buffer is kept between frames: each thumbnail redraws only when it changes) */}
-      <Canvas className="gallery-canvas" style={{ pointerEvents: 'none' }} frameloop="demand" dpr={[1, 1.75]} gl={{ antialias: true, preserveDrawingBuffer: true }}>
+      <Canvas className="gallery-canvas" style={{ pointerEvents: 'none' }} frameloop="demand" dpr={dprOf(quality, 1.75)} gl={{ antialias: true, preserveDrawingBuffer: true }}>
         <KeepPrograms />
         <Relayout target={body} />
         {offspring.map((g, i) => (

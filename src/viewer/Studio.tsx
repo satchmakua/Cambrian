@@ -32,6 +32,7 @@ import { KeepPrograms } from './programs';
 import { mouthVariant, eyeVariant } from './partStyles';
 import type { SkinQuality } from './smoothSkin';
 import { createRig, poseDead, poseRig, restPosed, SLEEP_DROP, type RigInstance } from './rig';
+import { dprOf, useQuality } from '../ui/settings';
 import { juvenileGenome } from '../engine/juvenile';
 import { JawContext, type JawControl } from './mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from './flight';
@@ -588,14 +589,17 @@ export function Studio({
   onSkinMode,
   onAdopt,
   onExit,
+  onMenu,
 }: {
   genome: Genome;
   skinMode: SkinMode;
   onSkinMode: (m: SkinMode) => void;
   onAdopt: (g: Genome) => void;
   onExit: () => void;
+  onMenu?: () => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
+  const quality = useQuality();
   const [tab, setTab] = useState<'bench' | 'bestiary'>(() =>
     typeof location !== 'undefined' && new URLSearchParams(location.search).get('bestiary') === '1' ? 'bestiary' : 'bench',
   );
@@ -637,6 +641,7 @@ export function Studio({
           {tab === 'bestiary' && <button onClick={() => setBestiarySeed((s) => s + 1)}>↻ new specimens</button>}
           <span className="sep" />
           <button onClick={onExit}>← back to breeding</button>
+          {onMenu && <button className="menu-btn" onClick={onMenu} title="menu: save, load, settings, exit (Esc)" aria-label="Menu">☰</button>}
         </div>
       </header>
       {tab === 'bench' ? (
@@ -651,7 +656,7 @@ export function Studio({
         frameloop="demand"
         eventSource={container as MutableRefObject<HTMLElement>}
         gl={{ preserveDrawingBuffer: import.meta.env.DEV, antialias: true }}
-        dpr={[1, 2]}
+        dpr={dprOf(quality, 2)}
       >
         <KeepPrograms />
         <View.Port />

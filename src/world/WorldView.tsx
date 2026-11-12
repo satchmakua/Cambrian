@@ -20,6 +20,8 @@ import { usePortrait } from '../viewer/portrait';
 import { KeepPrograms, WarmShaders } from '../viewer/programs';
 import { NARRATOR, sentence } from './narrator';
 import { spell, weatherAt } from '../sim/weather';
+import { dprOf, useQuality, useSettings } from '../ui/settings';
+import { useStore } from '../ui/store';
 
 const SPEEDS = [1, 4, 16, 48];
 let DEV_WARMED = false;
@@ -127,7 +129,7 @@ function Bar({ label, v, color }: { label: string; v: number; color: string }) {
   );
 }
 
-export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExit: () => void; onAdopt: (g: Genome) => void }) {
+export function WorldView({ founder, onExit, onAdopt, onMenu }: { founder: Genome; onExit: () => void; onAdopt: (g: Genome) => void; onMenu?: () => void }) {
   const running = useWorldUi((s) => s.running);
   const speed = useWorldUi((s) => s.speed);
   const follow = useWorldUi((s) => s.follow);
@@ -142,6 +144,11 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
   const ff = useWorldUi((s) => s.ff);
   const chron = useWorldUi((s) => s.chronicle);
   const fileRef = useRef<HTMLInputElement>(null);
+  const quality = useQuality();
+  // (the scene holds its last frame while the game menu is over it: nothing to draw, nothing to step)
+  const menuOpen = useStore((s) => s.menuOpen);
+  const hints = useSettings((s) => s.gameplay.hints);
+  const autosaveMinutes = useSettings((s) => s.gameplay.autosaveMinutes);
   const [warm, setWarm] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
@@ -159,18 +166,32 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
     }
   };
 
-  // the world is kept in the browser: every minute, and whenever the page is hidden or left
+  // the world is kept in the browser: every so often (a setting), and whenever the page is hidden or left
   useEffect(() => {
-    const t = setInterval(autosave, 60_000);
+    const t = autosaveMinutes > 0 ? setInterval(autosave, autosaveMinutes * 60_000) : undefined;
     const hide = () => document.visibilityState === 'hidden' && autosave();
     document.addEventListener('visibilitychange', hide);
     window.addEventListener('pagehide', autosave);
     return () => {
-      clearInterval(t);
+      if (t !== undefined) clearInterval(t);
       autosave();
       document.removeEventListener('visibilitychange', hide);
       window.removeEventListener('pagehide', autosave);
     };
+  }, [autosaveMinutes]);
+
+  // Space stops and starts time (not while typing, nor while a button has the focus — Space presses it)
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.repeat) return;
+      const t = e.target as HTMLElement | null;
+      if (t && /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(t.tagName)) return;
+      e.preventDefault();
+      setRunning(!useWorldUi.getState().running);
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // first visit: populate the starter ecosystem (+ the breeder's creature)
@@ -233,19 +254,20 @@ export function WorldView({ founder, onExit, onAdopt }: { founder: Genome; onExi
   return (
     <div className="world">
       {/* the scene mounts paused while its shaders compile (in parallel, where the browser can), then runs */}
-      <Canvas className="world-canvas" frameloop={warm ? 'always' : 'never'} shadows dpr={[1, 1.75]} camera={{ position: [40, 38, 70], fov: 45, near: 0.2, far: 1200 }} gl={{ preserveDrawingBuffer: import.meta.env.DEV }}>
+      <Canvas className="world-canvas" frameloop={warm && !menuOpen ? 'always' : 'never'} shadows={quality.shadows} dpr={dprOf(quality, 1.75)} camera={{ position: [40, 38, 70], fov: 45, near: 0.2, far: 1200 }} gl={{ preserveDrawingBuffer: import.meta.env.DEV }}>
         <KeepPrograms />
         {!warm && <WarmShaders onReady={() => setWarm(true)} />}
         <WorldScene />
       </Canvas>
       {!warm && <div className="world-loading">Waking the world…</div>}
-      {warm && <div className="cam-hint">drag to orbit · scroll to zoom · WASD or arrows to pan (Shift: faster)</div>}
+      {warm && hints && <div className="cam-hint">drag to orbit · scroll to zoom · WASD or arrows to pan (Shift: faster)</div>}
 
       <header className="world-bar">
         <h1>Cambrian</h1>
         <nav className="tabs">
           <button onClick={onExit}>Breed</button>
           <button className="active">World</button>
+          {onMenu && <button className="menu-btn" onClick={onMenu} title="menu: save, load, settings, exit (Esc)" aria-label="Menu">☰</button>}
         </nav>
         {snap && (
           <div className="clock">

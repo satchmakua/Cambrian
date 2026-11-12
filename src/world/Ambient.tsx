@@ -11,12 +11,15 @@ import { getWorld } from './worldStore';
 import { dayPhase, seasonOf } from '../sim/world';
 import { heightAt } from '../sim/terrain';
 import { WEATHER_LOOK } from './Weather';
+import { useQuality } from '../ui/settings';
 
 const N_FLIES = 520;
 const N_BUTTERFLIES = 46;
+/** the swarm at a graphics budget (a fraction of the full one, never none) */
+const swarm = (full: number, f: number) => Math.max(4, Math.round(full * f));
 const BOX = 38;
 
-function flyGeometry(): THREE.BufferGeometry {
+function flyGeometry(N_FLIES: number): THREE.BufferGeometry {
   const seed = new Float32Array(N_FLIES * 4);
   for (let i = 0; i < N_FLIES; i++) seed.set([Math.random(), Math.random(), Math.random(), Math.random()], i * 4);
   const g = new THREE.BufferGeometry();
@@ -26,7 +29,7 @@ function flyGeometry(): THREE.BufferGeometry {
 }
 
 /** A butterfly: two wing quads hinged on the body axis (x = ±1 marks the wing tip side). */
-function butterflyGeometry(): THREE.BufferGeometry {
+function butterflyGeometry(N_BUTTERFLIES: number): THREE.BufferGeometry {
   const pos: number[] = [];
   const side: number[] = [];
   const seed: number[] = [];
@@ -58,6 +61,7 @@ function butterflyGeometry(): THREE.BufferGeometry {
 
 export function Ambient() {
   const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3 } | null;
+  const share = useQuality().ambient;
   const u = useMemo(
     () => ({
       uTime: { value: 0 },
@@ -104,10 +108,10 @@ export function Ambient() {
           gl_FragColor = vec4(vec3(0.85, 1.0, 0.45) * glow * vA * 2.0, glow * vA);
         }`,
     });
-    const o = new THREE.Points(flyGeometry(), m);
+    const o = new THREE.Points(flyGeometry(swarm(N_FLIES, share)), m);
     o.frustumCulled = false;
     return o;
-  }, [u]);
+  }, [u, share]);
   const bugs = useMemo(() => {
     const m = new THREE.ShaderMaterial({
       uniforms: u,
@@ -154,10 +158,10 @@ export function Ambient() {
           gl_FragColor = vec4(col, 1.0);
         }`,
     });
-    const o = new THREE.Mesh(butterflyGeometry(), m);
+    const o = new THREE.Mesh(butterflyGeometry(swarm(N_BUTTERFLIES, share)), m);
     o.frustumCulled = false;
     return o;
-  }, [u]);
+  }, [u, share]);
 
   useFrame((st, dt) => {
     const w = getWorld();
