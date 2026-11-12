@@ -13,15 +13,19 @@ import { fieldAt, projectToSurface, qRotateV } from './bodyField';
 import type { MeshFeature } from './meshData';
 import { surfacePrims } from './mouthLine';
 import { eyeVariant } from './partStyles';
+import { armoured } from './scutes';
 
 /** how deep the ball's centre sits under the skin, in eye radii */
 export const SEAT_DEPTH = 0.42;
 /** …and a frog's: its eyes bulge from the crown, half the ball proud */
 export const BULGE_DEPTH = 0.06;
 
-/** A frog's or a toad's eye: bare skin, a walker (not a fish), looking up out of the top of the head. */
+/** A frog's or a toad's eye: bare skin, a walker (not a fish), looking up out of the top of the head.
+ *  A crocodile's too (an armoured body — see scutes): its eyes ride raised on the skull's upper
+ *  edges, the last of it to go under. (Sunk in the flat skull like a lizard's they were two dots.) */
 export function bulgingEye(p: Phenotype, aim: readonly number[]): boolean {
-  return p.genomeRef.covering.type === 'skin' && !isSwimmer(p) && aim[1] > 0.45;
+  if (aim[1] <= 0.45 || isSwimmer(p)) return false;
+  return p.genomeRef.covering.type === 'skin' || armoured(p);
 }
 /** the most a seated eye's aim may stray from the face normal (rad) */
 export const SEAT_MAX_TILT = 0.5;

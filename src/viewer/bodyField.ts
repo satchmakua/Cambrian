@@ -182,7 +182,12 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
       const i0 = edges[i][0], i1 = edges[i][1];
       const a = p.nodes[i0];
       const b = p.nodes[i1];
-      const ell = a.kind === 'spine' && b.kind === 'spine' && (a.scale || b.scale) ? a : null;
+      // a shaped chain is meshed as elliptical cones, link to link, in the first link's frame: the
+      // spine's sections, and a limb's own shaped links (the blade of a sculling tail — as round
+      // cones a crocodile's tail was a rat's, however its links were flattened)
+      const bothSpine = a.kind === 'spine' && b.kind === 'spine';
+      const bothLimb = a.kind !== 'spine' && b.kind !== 'spine';
+      const ell = (bothSpine || bothLimb) && (a.scale || b.scale) ? a : null;
       const sa: [number, number] = ell ? [a.scale?.[0] ?? 1, a.scale?.[1] ?? 1] : [1, 1];
       const sb: [number, number] = ell ? [b.scale?.[0] ?? 1, b.scale?.[1] ?? 1] : [1, 1];
       const rB = stalkTip(a, b) ? Math.min(a.radius * 0.8, b.radius * 0.45) : b.radius;
@@ -240,6 +245,9 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   // the chain and blur the haunch bumps into one long smooth back.
   for (const n of included) {
     if (!n.scale) continue;
+    // (a shaped limb link's cones carry its cross-section whole: an ellipsoid on top of them would
+    // only swell the joint where the two surfaces blend)
+    if (n.kind !== 'spine') continue;
     const interior = n.kind === 'spine' && (spineDeg.get(n) ?? 0) >= 2;
     if (interior && n.scale[2] <= 1.15) continue;
     shaped.push(n);

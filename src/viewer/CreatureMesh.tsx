@@ -18,6 +18,7 @@ import { blinkAt, LidContext } from './eyelids';
 import { legBearer, type Phenotype } from '../engine/grow';
 import { unitHash } from '../engine/rng';
 import { buildMeshData, type MeshFeature } from './meshData';
+import { scutePlan, scuteGeometries } from './scutes';
 import { eyeVariant, earVariant } from './partStyles';
 import { earGeometry } from './ear';
 import { Mouth } from './mouths';
@@ -475,6 +476,24 @@ export function CreatureMesh({
     return { bone: par >= 0 ? rig.bones[par] : rig.root, at };
   }, [rig, shellGeo, phenotype]);
 
+  // a crocodile's armour — rows of keeled scutes down the back and the crest of the tail — in the
+  // skin's own material, each link's plates hung from that link (not drawn at a distance, nor on a
+  // recorded gait's re-posed kit)
+  const scuteSurface = showSmooth ? (full ? 'hybrid' : 'smooth') : 'kit';
+  const armoured = detail !== 'none' && !trajectory;
+  const scutes = useMemo(
+    () => (armoured ? scuteGeometries(phenotype, scutePlan(phenotype, scuteSurface)) : []),
+    [phenotype, armoured, scuteSurface],
+  );
+  useEffect(() => () => scutes.forEach((s) => s.geo.dispose()), [scutes]);
+  const scuteNodes = scutes.map((s, k) =>
+    skinned && rig ? (
+      <group key={`sc${k}`}>{createPortal(<mesh geometry={s.geo} material={bodyMat} castShadow />, rig.bones[s.node])}</group>
+    ) : (
+      <mesh key={`sc${k}`} geometry={s.geo} material={bodyMat} position={data.nodes[s.node].pos} castShadow />
+    ),
+  );
+
   const featureNodes = data.features.map((f, k) => {
     if (detail !== 'full' && !keepAt(detail, f, cov.type === 'crystal')) return null;
     if (DEV_HIDE.has(f.type)) return null;
@@ -519,6 +538,7 @@ export function CreatureMesh({
             shellMount.bone,
           )}
         {featureNodes}
+        {scuteNodes}
       </group>
     );
   }
@@ -566,6 +586,7 @@ export function CreatureMesh({
       )}
       {shellGeo && shellMat && <mesh geometry={shellGeo} material={shellMat} castShadow receiveShadow />}
       {featureNodes}
+      {scuteNodes}
     </group>
   );
 }

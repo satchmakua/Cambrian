@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bipedSlot, grow, rearedness, type Phenotype } from '../../src/engine/grow';
+import { BRUSH_STYLE, SCULL_STYLE, bipedSlot, grow, isBrushTail, isScullingTail, rearedness, type Phenotype } from '../../src/engine/grow';
 import type { Genome, SegmentGene } from '../../src/engine/genome';
 import { genomeOfMorphotype, randomGenome } from '../../src/engine/random';
 
@@ -288,27 +288,30 @@ describe('body plans', () => {
     }
   });
 
-  it('a crocodile has long near-parallel jaws, its eyes on the skull behind them, and a tail to a point', () => {
+  it('a crocodile has long tapering jaws, its eyes on the skull behind them, and a tail to a point', () => {
     // (a blunt oval barely longer than wide — a toad's face — a mouth like a lip plate under the very
     // tip, and a tail that ended in a stub)
     for (let seed = 1; seed <= 12; seed++) {
       const g = genomeOfMorphotype(seed, 'crocodilian');
       const p = grow(g);
-      const head = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 1).sort((a, b) => a.pos[2] - b.pos[2]);
+      // (the head rides a short neck now: trunk, neck, head)
+      const head = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 2).sort((a, b) => a.pos[2] - b.pos[2]);
       expect(head.length, `#${seed} head links`).toBe(4);
       const rx = (n: (typeof head)[number]) => n.radius * (n.scale?.[0] ?? 1);
       const length = head[3].pos[2] + head[3].radius * (head[3].scale?.[2] ?? 1) - (head[0].pos[2] - head[0].radius * (head[0].scale?.[2] ?? 1));
       expect(length / (2 * rx(head[0])), `#${seed} long`).toBeGreaterThan(2);
-      // near parallel: the snout's tip still over half the skull's width
-      expect(rx(head[3]) / rx(head[0]), `#${seed} jaws`).toBeGreaterThan(0.5);
+      // a broad snout still, not a spike: its tip around half the skull's width (near-parallel jaws as
+      // wide as the body read as a log with eyes — see plans/crocodilian.test.ts for the taper)
+      expect(rx(head[3]) / rx(head[0]), `#${seed} jaws`).toBeGreaterThan(0.38);
       const eye = p.nodes.find((n) => n.terminal === 'eye')!;
       const mouth = p.nodes.find((n) => n.terminal === 'mouth')!;
       expect(eye.pos[2], `#${seed} eyes behind the jaws`).toBeLessThan(head[2].pos[2]);
-      // the mouth sits along the snout (its line then runs back down the jaws), looking straight ahead
-      const gene = g.body.child!.appendages.find((a) => a.terminal === 'mouth')!;
+      // the mouth sits along the snout (its line then runs back down the jaws), looking ahead and a
+      // little down (aimed dead ahead, its upper lip was traced over the top of the flat snout)
+      const gene = g.body.child!.child!.appendages.find((a) => a.terminal === 'mouth')!;
       expect(gene.attachT, `#${seed}`).toBeLessThan(0.7);
-      expect(gene.attachElevation, `#${seed}`).toBeGreaterThan(1.4);
-      expect(mouth.pos[2], `#${seed}`).toBeGreaterThan(head[2].pos[2]);
+      expect(gene.attachElevation, `#${seed}`).toBeGreaterThan(1.15);
+      expect(mouth.pos[2], `#${seed}`).toBeGreaterThan(head[1].pos[2]);
       const tail = p.nodes.filter((n) => n.part?.kind === 'tail');
       expect(tail[tail.length - 1].radius / tail[0].radius, `#${seed} tail to a point`).toBeLessThan(0.36);
       const t = trunkOf(p).sort((a, b) => a.pos[2] - b.pos[2]);
@@ -901,9 +904,10 @@ describe('body plans', () => {
     }
   });
 
-  it("a cat's or a dog's tail sweeps back and levels out or curves up — not a stick falling to the ground", () => {
+  it("a cat's tail sweeps back and levels out or curves up — not a stick falling to the ground", () => {
     // (drooped steeply with a downward curl, it ran straight to the floor: from behind, a fifth leg)
-    for (const id of ['felid', 'canid']) {
+    // (a dog's is a brush that hangs to its hocks, trailing out behind it: see plans/canid.test.ts)
+    for (const id of ['felid']) {
       for (let seed = 1; seed <= 8; seed++) {
         const p = grow(genomeOfMorphotype(seed, id));
         const tail = p.nodes.filter((n) => n.part?.kind === 'tail').sort((a, b) => b.pos[2] - a.pos[2]); // root → tip
@@ -1108,6 +1112,39 @@ describe('bred bodies keep the rules their founders keep', () => {
       for (const taper of [1.03, 1.06, 1.11, 1.15]) expect(at(taper), `crab #${seed} taper ${taper}`).toBeCloseTo(at(1), 9);
     }
     expect(seen).toBeGreaterThan(6);
+  });
+
+  it("a plain tail's style gene has one cut to a band: a fox's brush is not a blade, a crocodile's blade is not a brush", () => {
+    // (the brush was "style 0.6 and over" and the sculling tail "0.7 and over", each made without the
+    // other: a fox's tail would have been flattened to a blade, a crocodile's swollen to a brush)
+    expect(BRUSH_STYLE).toBeLessThan(SCULL_STYLE);
+    const tailGene = (id: string, seed: number) => genomeOfMorphotype(seed, id).body.appendages.find((a) => a.kind === 'tail')!;
+    const tailNodes = (p: Phenotype) => p.nodes.filter((n) => n.part?.kind === 'tail');
+    for (let seed = 1; seed <= 12; seed++) {
+      const fox = tailGene('canid', seed);
+      expect(isBrushTail(fox, fox.terminal), `canid #${seed}`).toBe(true);
+      expect(isScullingTail(fox, fox.terminal), `canid #${seed}`).toBe(false);
+      const croc = tailGene('crocodilian', seed);
+      expect(isScullingTail(croc, croc.terminal), `crocodilian #${seed}`).toBe(true);
+      expect(isBrushTail(croc, croc.terminal), `crocodilian #${seed}`).toBe(false);
+      // grown: the brush is round and fullest down its middle; the blade is flattened and only tapers
+      const brush = tailNodes(grow(genomeOfMorphotype(seed, 'canid')));
+      expect(brush.every((n) => !n.scale), `canid #${seed}: a round tail`).toBe(true);
+      expect(Math.max(...brush.slice(1, -1).map((n) => n.radius)), `canid #${seed}: bushy`).toBeGreaterThan(brush[0].radius * 1.3);
+      const blade = tailNodes(grow(genomeOfMorphotype(seed, 'crocodilian')));
+      expect(blade.some((n) => n.scale && n.scale[0] < 0.8), `crocodilian #${seed}: a blade`).toBe(true);
+      for (let i = 1; i < blade.length; i++) expect(blade[i].radius, `crocodilian #${seed}: no swell`).toBeLessThanOrEqual(blade[i - 1].radius * 1.02);
+    }
+    // every other tail in the founders is a plain rod (or carries a fin, a club, a barb)
+    for (const id of ['felid', 'ungulate', 'rodent', 'mustelid', 'lizard', 'dragon', 'wyvern', 'biped', 'chimera', 'fish', 'shark']) {
+      for (let seed = 1; seed <= 8; seed++) {
+        for (const a of genomeOfMorphotype(seed, id).body.appendages) {
+          if (a.kind !== 'tail') continue;
+          expect(isBrushTail(a, a.terminal), `${id} #${seed}`).toBe(false);
+          expect(isScullingTail(a, a.terminal), `${id} #${seed}`).toBe(false);
+        }
+      }
+    }
   });
 
   it("an ape's hips sit at the back of its pelvis because its arms carry its front: a bird standing as tall keeps its feet under it", () => {

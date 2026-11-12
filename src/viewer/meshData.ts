@@ -45,7 +45,10 @@ export interface MeshData {
 }
 
 export function buildMeshData(p: Phenotype): MeshData {
-  const nodes: MeshNode[] = p.nodes.map((n) => ({ pos: n.pos, radius: n.radius, scale: n.scale, quat: n.scale ? n.quat : undefined }));
+  // (a shaped LIMB link — the blade of a sculling tail — is the smooth skin's to draw: in the kit, round
+  // capsules between flattened links strung the tail into beads, so there it stays the round taper)
+  const shaped = (n: Phenotype['nodes'][number]) => (n.kind === 'spine' ? n.scale : undefined);
+  const nodes: MeshNode[] = p.nodes.map((n) => ({ pos: n.pos, radius: n.radius, scale: shaped(n), quat: shaped(n) ? n.quat : undefined }));
   const edges: MeshEdge[] = [];
   for (const [a, b] of p.edges) {
     // never draw the connecting capsule into a seated face organ (see SURFACE_ORGANS) — that tube is

@@ -56,6 +56,74 @@ const REARED_HIP_BACK = 0.34;
 
 /** Minimum grown radius for an eye bulb (bu) — the face must always read (M19/M24). */
 const EYE_R_MIN = 0.06;
+/** A plain tail whose style gene is at or over this is a SCULLING tail (a crocodile's): deep, and
+ *  flattened side to side toward its tip — the blade it swims with. Every other tail is round.
+ *  (The bands of a plain tail's style gene: under BRUSH_STYLE a tapering rod, from there up to here a
+ *  brush, from here a sculling blade — one cut each, as an eye's or a fin's style has.) */
+export const SCULL_STYLE = 0.8;
+/** …how much narrower than its link's radius the blade is at the tip, and how much deeper at its
+ *  deepest (three-fifths of the way down) */
+const SCULL_PINCH = 0.4;
+const SCULL_DEPTH = 0.35;
+
+/** whether an appendage gene (or a grown node's part) is a sculling tail */
+export function isScullingTail(part: { kind: string; style: number } | undefined, terminal: Terminal | undefined): boolean {
+  return part?.kind === 'tail' && (terminal ?? 'none') === 'none' && part.style >= SCULL_STYLE;
+}
+
+/**
+ * A STOP — the step down from a mammal's forehead to its muzzle. A head chain tapers by one ratio
+ * from link to link, so however its genes were set a long-muzzled skull was a single cone from the
+ * ears to the nose (a bull terrier's, or a rat's). A head of three or more links that barely tapers
+ * (a ratio past STOP_FROM, wholly by STOP_FULL) is instead a braincase with a muzzle hung on its
+ * front: the links past the first are a muzzle of STOP_MUZZLE the chain's girth, narrowing to the nose
+ * (by STOP_TAPER more of the chain's ratio at each link), set close against the braincase (STOP_STRIDE
+ * of the usual stride) and low on it, toward the line of the jaw (STOP_LOW of the difference in their
+ * depths) — so the brow stands up behind the bridge of the nose. Only a domed skull carried on a neck
+ * has one: a crocodile's long flat head barely tapers either, and is all jaw — there is no brow on
+ * it to step down from (see headStop).
+ */
+const STOP_FROM = 0.86;
+const STOP_FULL = 0.9;
+/** …and the skull's depth against its width below which there is none, and from which it is whole
+ *  (a dog's skull is 0.7 and more as deep as wide; a crocodile's 0.6 and less) */
+const STOP_FLAT = 0.6;
+const STOP_DOMED = 0.68;
+const STOP_MUZZLE = 0.58;
+const STOP_TAPER = 2;
+const STOP_STRIDE = 0.62;
+const STOP_LOW = 0.55;
+
+/** How much of a stop a head section has, `depth` sections out from the trunk: 0 a plain tapering
+ *  chain … 1 a braincase and a muzzle. */
+export function headStop(seg: SegmentGene, depth: number): number {
+  if (depth < 2 || seg.repeat < 3) return 0;
+  const t = clamp((seg.taper - STOP_FROM) / (STOP_FULL - STOP_FROM), [0, 1]);
+  // …and only on a skull deep enough to have a brow to step down from: a crocodile's — half as deep
+  // as it is wide, and carried on a neck of its own — is all jaw however little it tapers
+  const d = clamp((seg.size[1] / seg.size[0] - STOP_FLAT) / (STOP_DOMED - STOP_FLAT), [0, 1]);
+  return t * t * (3 - 2 * t) * d * d * (3 - 2 * d);
+}
+
+/** A plain tail whose style gene is at or over this — and under SCULL_STYLE — is a BRUSH (a fox's, a wolf's). */
+export const BRUSH_STYLE = 0.6;
+
+/** whether an appendage gene (or a grown node's part) is a brush */
+export function isBrushTail(part: { kind: string; style: number } | undefined, terminal: Terminal | undefined): boolean {
+  return part?.kind === 'tail' && (terminal ?? 'none') === 'none' && part.style >= BRUSH_STYLE && part.style < SCULL_STYLE;
+}
+/** How far toward the top of the croup a brush is set (added to the upward part of its aim). */
+const BRUSH_SEAT = 1.1;
+
+/**
+ * A brush's girth along its length (0 the root … 1 the tip), × the tail's own tapering radius: slim
+ * where it leaves the croup, fullest just past half way, drawn to a point. (A fox's tail grown as a
+ * plain rod — the same girth from root to a round end — was a sausage pinned to its rump.)
+ */
+export function brushProfile(t: number): number {
+  const u = clamp(t, [0, 1]);
+  return (0.55 + 0.8 * Math.sin(Math.PI * Math.pow(u, 1.15))) * (1 - 0.6 * Math.pow(u, 6));
+}
 
 export interface BodyNode {
   pos: Vec3;
@@ -221,12 +289,19 @@ export function grow(genome: Genome): Phenotype {
       pos = [wPos[0] + fwd[0] * cAt, wPos[1] + fwd[1] * cAt, wPos[2] + fwd[2] * cAt];
     }
 
+    // (a head — the chain's last section — may have a stop: see headStop)
+    const stop = !seg.child && dev.symmetry === 'bilateral' ? headStop(seg, depth) : 0;
+    const muzzle = 1 - stop * (1 - STOP_MUZZLE);
     for (let i = 0; i < seg.repeat; i++) {
       if (atCap()) break;
-      const radius = girth * Math.pow(seg.taper, i) * profileAt(i) * norm;
+      // (…and its muzzle narrows to the nose by STOP_TAPER more of the chain's ratio at each link)
+      const radius = girth * Math.pow(seg.taper, i + (i > 0 ? stop * STOP_TAPER * (i - 1) : 0)) * profileAt(i) * norm * (i > 0 ? muzzle : 1);
       const idx = addNode(pos, quat, radius, 'spine');
       nodes[idx].segment = depth;
       if (segScale) nodes[idx].scale = segScale;
+      // (…and round in section, whatever the braincase's: a broad flat skull's shape carried down the
+      // muzzle made it a duck's bill, wider than it was deep)
+      if (segScale && stop > 0 && i > 0) nodes[idx].scale = [csx + (1 - csx) * stop, csy + (1 - csy) * stop, csz];
       if (prev >= 0) edges.push([prev, idx]);
       spine.push(idx);
       prev = idx;
@@ -237,8 +312,18 @@ export function grow(genome: Genome): Phenotype {
       const yaw = dev.symmetry === 'bilateral' ? 0 : seg.curve[1];
       quat = qMul(quat, qFromEuler(seg.curve[0], yaw));
       const fwd = qRotate([0, 0, 1], quat);
-      const step = nodes[idx].radius * elong; // overlap-bounded stride → continuous body
+      let step = nodes[idx].radius * elong; // overlap-bounded stride → continuous body
+      if (stop > 0) {
+        // the muzzle's links stride by the chain's measure, not their own slimmer one (it keeps the
+        // length its genes asked for); the first is drawn in against the braincase
+        step = i === 0 ? step * (1 - stop * (1 - STOP_STRIDE)) : girth * Math.pow(seg.taper, i) * elong;
+      }
       pos = [pos[0] + fwd[0] * step, pos[1] + fwd[1] * step, pos[2] + fwd[2] * step];
+      if (stop > 0 && i === 0) {
+        const up = qRotate([0, 1, 0], quat);
+        const low = stop * STOP_LOW * radius * csy * (1 - seg.taper * muzzle);
+        pos = [pos[0] - up[0] * low, pos[1] - up[1] * low, pos[2] - up[2] * low];
+      }
     }
 
     const haunched = new Set<number>();
@@ -440,7 +525,8 @@ export function grow(genome: Genome): Phenotype {
       while (true) {
         const c = nodes[cur];
         c.pos[1] += lift;
-        const floor = groundY + c.radius * 0.85;
+        // (a blade of a tail is deeper than its radius — it lies on its lower edge)
+        const floor = groundY + c.radius * (c.scale?.[1] ?? 1) * 0.85;
         if (c.pos[1] < floor) {
           lift += floor - c.pos[1];
           c.pos[1] = floor;
@@ -476,6 +562,7 @@ export function grow(genome: Genome): Phenotype {
     let startPos: Vec3;
     let arch: Vec3[] | null = null; // an explicit leg polyline (segment directions): arthropod or sprawler
     let sprawl = false; // the polyline is a vertebrate sprawler's (thick, normal-length segments)
+    const brush = isBrushTail(app, app.terminal) && dev.symmetry === 'bilateral';
     if (app.kind === 'leg' && dev.symmetry !== 'radial') {
       // Legs attach at the shoulder/hip — the body's *side*, a touch above the belly — not the
       // underbelly midline, then descend. This widens the stance and puts the limb's top where it
@@ -595,6 +682,10 @@ export function grow(genome: Genome): Phenotype {
       // out of the middle of the body like spokes, the mantle hanging down between them to the floor.)
       let root = dir;
       if (dev.symmetry === 'radial' && app.kind === 'tentacle' && dir[1] < 0.2) root = norm([dir[0], dir[1] - TENTACLE_ROOT, dir[2]]);
+      // A BRUSH is set on at the top of the croup and falls away behind it, whichever way it is then
+      // carried. (Seated where it aims, like any other part, a tail that hangs came out from under
+      // the rump, between the thighs, with the buttocks standing out above it.)
+      if (brush) root = norm([dir[0], dir[1] + BRUSH_SEAT, dir[2]]);
       // measured against the node's TRUE surface (see surfaceExtent), so a long snout or a domed skull
       // still wears its face proud rather than swallowing it.
       const out = surfaceExtent(base, root) + seat * app.thickness;
@@ -661,6 +752,7 @@ export function grow(genome: Genome): Phenotype {
       // (an ape's upper arm swells into the shoulder it hangs from: see knuckleArm)
       const deltoid = j === 0 ? knuckleArm(app, base) : 0;
       if (deltoid > 0) r *= 1 + (DELTOID - 1) * deltoid;
+      if (brush) r *= brushProfile(segments > 1 ? j / (segments - 1) : 0);
       // an eye STALK is a stalk: slimmer than the eye it carries. (Its links were as thick as the
       // eyeball — a snail's feelers and a crab's eyes stood on chimneys.)
       if (!last && app.terminal === 'eye') r *= STALK_SLIM;
@@ -670,6 +762,13 @@ export function grow(genome: Genome): Phenotype {
       if (arch) quat = qFromTo([0, 0, 1], arch[Math.min(j, arch.length - 1)]);
       const idx = addNode(pos, quat, r, last ? 'terminal' : 'limb', last ? app.terminal : undefined);
       nodes[idx].part = { kind: app.kind, style: app.style };
+      // a SCULLING tail leaves the rump round and turns into a blade: its width falls away faster than
+      // its depth, so from the side it stays tall to near the tip and from above it runs to a thin
+      // line. (Round all the way down, a crocodile's tail was a cone — a rat's, scaled up.)
+      if (j > 0 && segments > 1 && isScullingTail(app, app.terminal)) {
+        const u = j / (segments - 1);
+        nodes[idx].scale = [1 - SCULL_PINCH * u, 1 + SCULL_DEPTH * Math.sin(Math.PI * 0.8 * u), 1];
+      }
       edges.push([prev, idx]);
       prev = idx;
       if (arch) {
@@ -850,7 +949,13 @@ function frontSegment(g: Genome): SegmentGene {
 function ensureBilateralFace(g: Genome): void {
   const head = frontSegment(g);
   const girth = (head.size[0] + head.size[1]) / 2;
-  ensureFace(head.appendages, girth, girth * Math.pow(head.taper, Math.max(0, head.repeat - 1)), head.repeat > 1 && !!g.body.child);
+  // (the muzzle of a head with a stop is slimmer than its chain's taper alone makes it)
+  let depth = 0;
+  for (let s = g.body; s.child; s = s.child) depth++;
+  const stop = headStop(head, depth);
+  const links = Math.max(0, head.repeat - 1);
+  const frontR = girth * Math.pow(head.taper, links + stop * STOP_TAPER * Math.max(0, links - 1)) * (1 - stop * (1 - STOP_MUZZLE));
+  ensureFace(head.appendages, girth, frontR, head.repeat > 1 && !!g.body.child);
 }
 
 /** Guarantee a prominent eye-set + a mouth (M24/M19): synthesize them if mutation deleted them,
