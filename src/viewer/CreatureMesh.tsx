@@ -15,7 +15,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { FlightContext } from './flight';
 import { blinkAt, LidContext } from './eyelids';
-import { legBearer, type Phenotype } from '../engine/grow';
+import { legBearer, pointedLegs, type Phenotype } from '../engine/grow';
 import { unitHash } from '../engine/rng';
 import { buildMeshData, type MeshFeature } from './meshData';
 import { scutePlan, scuteGeometries } from './scutes';
@@ -194,6 +194,9 @@ export function CreatureMesh({
   lazyShell?: boolean;
 }) {
   const data = useMemo(() => buildMeshData(phenotype), [phenotype]);
+  // a myriapod stands on the points of its legs: they are the last of each leg, kept at any distance
+  // its legs are (dropped with the other claws, every leg ended in the air)
+  const pointed = useMemo(() => pointedLegs(phenotype.genomeRef), [phenotype]);
   const pal = phenotype.genomeRef.palette;
   const cov = phenotype.genomeRef.covering;
   const seed = phenotype.genomeRef.seed;
@@ -495,7 +498,7 @@ export function CreatureMesh({
   );
 
   const featureNodes = data.features.map((f, k) => {
-    if (detail !== 'full' && !keepAt(detail, f, cov.type === 'crystal')) return null;
+    if (detail !== 'full' && !keepAt(detail, f, cov.type === 'crystal') && !(detail === 'lite' && pointed && f.type === 'claw' && f.kind === 'leg')) return null;
     if (DEV_HIDE.has(f.type)) return null;
     const el = detail === 'lite' && f.type === 'eye' ? (
       <LiteEye f={f} iris={irisColor} />
@@ -671,6 +674,7 @@ function Feature({
         return <Shards f={f} palette={phenotype.genomeRef.palette} seed={phenotype.genomeRef.seed} />;
       }
       if (f.kind === 'horn') return <Horn f={f} color={footColor} />;
+      if (f.kind === 'leg' && pointedLegs(phenotype.genomeRef)) return <LegPoint f={f} color={footColor} reach={phenotype.nodes[f.idx].pos[1] - phenotype.bounds.min[1]} />;
       const plan = f.kind === 'leg' ? footPlanOf(phenotype) : null;
       return plan ? <ToedFoot f={f} plan={plan} skin={skin} phenotype={phenotype} /> : <Claw f={f} color={footColor} />;
     }
@@ -1202,6 +1206,25 @@ function Claw({ f, color }: { f: MeshFeature; color: number }) {
       <coneGeometry args={[1, 1.4, 7]} />
       <meshStandardMaterial color={dark} roughness={0.55} metalness={0.05} />
     </mesh>
+  );
+}
+
+// A myriapod's leg ends in a POINT: a slim dark spike running on from its last link down to the
+// ground `reach` below the leg's last node. (A clawed foot's blunt cone, as wide as a leg this thin
+// and set in the middle of its last node, showed only as a dark collar round a blunt end.)
+function LegPoint({ f, color, reach }: { f: MeshFeature; color: number; reach: number }) {
+  const r = Math.max(f.radius, 0.06) * 1.4; // (a little wider than the leg's end, which it caps)
+  const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.55).getHex(), [color]);
+  // the node's +Z is its last link's run: how steeply that falls sets how long a spike reaches the ground
+  const fall = useMemo(() => -new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(f.quat[0], f.quat[1], f.quat[2], f.quat[3])).y, [f.quat]);
+  const len = Math.min(Math.max(reach, 0.06) / Math.max(fall, 0.45), 0.6) + r * 0.7;
+  return (
+    <group quaternion={f.quat}>
+      <mesh position={[0, 0, len / 2 - r * 0.7]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <coneGeometry args={[r, len, 9]} />
+        <meshStandardMaterial color={dark} roughness={0.45} metalness={0.05} />
+      </mesh>
+    </group>
   );
 }
 

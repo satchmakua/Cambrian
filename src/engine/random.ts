@@ -10,7 +10,7 @@
  */
 import { mulberry32, range, type Rng } from './rng';
 import { GENE_BOUNDS, clamp } from './bounds';
-import { bipedSlot, legSlots } from './grow';
+import { bipedSlot, legSlots, ringSlots } from './grow';
 import {
   GENOME_VERSION,
   type Genome,
@@ -185,6 +185,17 @@ interface Morpho {
   spineSize?: Rg; // × a back spine's usual length and girth
   legYaw?: number; // every leg's sideways bend per joint (rad; else a small draw either way): 0 keeps a strider's
   //                   legs in the fore-aft plane, its feet under its hips
+  /** a MYRIAPOD: the trunk has one link — one ring — to each leg pair, the pairs running its whole
+   *  length (see grow isRinged). Its `repeat` then stands unused. */
+  ringLegs?: boolean;
+  /** leg length × at the rearmost pair … at the foremost, graded evenly between (a centipede's legs
+   *  lengthen toward its trailing pair) — constants, so they cost no random draw */
+  legGrade?: readonly [number, number];
+  antennaAz?: Rg; // antenna azimuth on the head — default [1.1, 1.5] (near the crown, where a pair all but meets)
+  antennaEl?: Rg; // …how far they reach forward (rad) — default [0.3, 0.6]
+  antennaLen?: Rg; // …a link's length ×the head's girth — default [0.6, 1.1]
+  antennaSegs?: number; // …their link count — default 2 or 3
+  antennaCurl?: Rg; // …and their bend per link (positive droops the tip) — default [-0.3, 0.3]
   mouthStyle?: Rg; // bands (viewer/partStyles mouthVariant): <0.06 herbivore · <0.125 maw · <0.25 fanged · <0.375 beak ·
   //                   <0.5 mandibles · <0.625 sucker · <0.75 lamprey · <0.85 baleen · <0.93 proboscis · else trunk
   covering?: readonly CoveringType[]; // skin material (MORPHOLOGY §7); default ['skin']
@@ -269,8 +280,10 @@ const MORPHOTYPES: readonly Morpho[] = [
   // It stands on stout legs under its body (splayed like a lizard's, on thin shanks, it was a heavy trunk
   // on an A-frame of sticks), carries its tail clear of the ground, and wears its ruff round its head.
   { id: 'chimera', cluster: 'uncanny', weight: 0.9, girth: [0.45, 0.65], repeat: [3, 4], elong: [1.1, 1.4], taper: [1.04, 1.1], legThick: [0.5, 0.62], neck: [0.5, 0.6], neckLinks: [2, 3], neckLift: [-0.36, -0.26], headSize: [0.56, 0.7], headShape: ['wedge', 'tapered', 'blocky', 'round'], legPairs: [2], posture: 'digitigrade', legAz: [4.38, 4.56], legLen: [0.8, 1.1], legTerm: ['claw', 'foot', 'pincer'], wings: 1, dorsal: 0.85, pectoral: 0.6, flankFins: false, tail: 1, tailTerm: ['fin', 'claw', 'none'], wingSize: [1.3, 1.6], tailThick: [0.4, 0.54], tailTaper: [0.78, 0.86], tailDroop: [-1.45, -1.15], horns: 0.8, hornT: 0, hornAz: [0.85, 1.25], frill: 0.4, frillAt: 'head', spines: 0.4, eyeStyle: [0, 1], eyeCount: [2, 3], mouthStyle: [0.07, 0.49], covering: ['skin', 'scales', 'fur', 'feathers', 'chitin', 'plates'], pattern: ['stripes', 'bands', 'spots', 'ocelli', 'reticulate', 'gradient'], sheen: [0.2, 0.9], hue: [0, 1], sat: [0.5, 0.9] },
-  // wrong-arthropod: ten-plus sprawled legs, clustered compound/glowing eyes, multi-mandible, iridescent chitin
-  { id: 'arthro-alien', cluster: 'uncanny', weight: 1.0, girth: [0.34, 0.5], repeat: [3, 5], height: [0.7, 0.95], elong: [1.1, 1.4], legPairs: [5], posture: 'sprawling', legLen: [0.55, 0.85], legAz: [3.6, 4.0], legTerm: ['claw'], spines: 0.7, antennae: 0.6, gills: 0.3, eyeStyle: [0.6, 0.85], eyeCount: [4, 6], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['bands', 'reticulate'], sheen: [0.6, 0.95], hue: [0.15, 0.7], sat: [0.6, 0.9] },
+  // wrong-arthropod: a myriapod — a low flat chain of armoured rings, a pair of jointed legs to each,
+  // a shield of a head with compound eyes, mandibles and long feelers, iridescent chitin. (A smooth
+  // bottle with ten pegs under its middle, a rod of a tail and rivets down its back was a grub.)
+  { id: 'arthro-alien', cluster: 'uncanny', weight: 1.0, girth: [0.27, 0.36], repeat: [6, 8], ringLegs: true, legPairs: [6, 7, 8], height: [0.56, 0.72], elong: [1.0, 1.25], taper: [0.99, 1.0], rear: [-0.012, 0.004], posture: 'sprawling', legLen: [0.78, 0.96], legThick: [0.3, 0.37], legTaper: [0.8, 0.9], legSegs: 4, legGrade: [1.3, 0.85], legAz: [3.6, 4.0], legTerm: ['claw'], head: 1, headSize: [0.84, 0.94], headShape: ['round'], headLinks: 1, headWide: [1.12, 1.26], headDome: [0.7, 0.82], tail: 0, antennae: 1, antennaAz: [0.45, 0.7], antennaEl: [0.9, 1.05], antennaLen: [0.8, 1.05], antennaSegs: 4, antennaCurl: [0.1, 0.2], eyeStyle: [0.6, 0.85], eyeCount: [2], eyeAz: [0.25, 0.45], eyeEl: [0.4, 0.6], mouthStyle: [0.38, 0.49], covering: ['chitin'], pattern: ['plain', 'gradient', 'reticulate'], sheen: [0.6, 0.95], hue: [0.15, 0.7], sat: [0.6, 0.9] },
   // crystalline: angular rigid limbs, a spike ridge, glowing facet "eyes" (the core), hard plated/metallic gradient skin
   { id: 'crystalline', cluster: 'uncanny', weight: 0.5, girth: [0.46, 0.62], repeat: [3, 4], height: [0.85, 1.05], elong: [0.95, 1.15], taper: [1.0, 1.06], head: 1, headSize: [0.6, 0.72], headShape: ['blocky', 'wedge'], legPairs: [2], posture: 'upright', legLen: [0.62, 0.84], legThick: [0.36, 0.5], legTerm: ['claw'], spines: 1, spineCount: 5, spineSize: [1.25, 1.75], horns: 0.7, tail: 0.0, eyeStyle: [0.85, 1], eyeCount: [2], mouthStyle: [0.07, 0.12], covering: ['crystal'], pattern: ['gradient', 'plain'], sheen: [0.75, 1.0], hue: [0.5, 0.82], sat: [0.5, 0.85], light: [0.5, 0.68] }, // a beast of cut stone: faceted hide, a row of crystal shards down its back, lit from within
 ];
@@ -342,11 +355,14 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
   // growth-time normalization agree (legs land where the attractor wants them).
   const lp = pick(rng, m.legPairs ?? ([2] as const));
   const legTerm = pick(rng, m.legTerm ?? (['foot'] as const));
-  const slots = lp === 1 && m.rear ? [bipedSlot(m.rear[1])] : legSlots(lp);
+  // (a myriapod needs its five pairs: shattered to fewer in the wild tail, the plan is any other body)
+  const ringed = !!m.ringLegs && lp >= 5;
+  const slots = lp === 1 && m.rear ? [bipedSlot(m.rear[1])] : ringed ? ringSlots(lp) : legSlots(lp);
   for (let i = 0; i < lp; i++) {
     // a little slot jitter for individuality; the bauplan pass pulls it back toward the exact slot by
     // `coherence` (familiar ⇒ snapped, uncanny/wild ⇒ a touch looser — "coherent weird", M24)
-    const t = clamp(slots[i] + range(rng, -0.06, 0.06), A.attachT);
+    // (a myriapod's pairs stand a ring apart: the full jitter would walk a pair half-way to its neighbour)
+    const t = clamp(slots[i] + range(rng, -0.06, 0.06) * (ringed ? 0.3 : 1), A.attachT);
     const scale = lp >= 2 ? (i === 0 ? m.hindLeg : i === lp - 1 ? m.foreLeg : undefined) : undefined;
     const g = leg(rng, t, girth, { term: legTerm, lenMul: m.legLen, thickMul: m.legThick, azimuth: m.legAz, posture: m.posture, curl: m.legCurl, taper: m.legTaper });
     if (scale) {
@@ -357,6 +373,7 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
     if (m.legSegs) g.segments = m.legSegs;
     if (m.legStyle) g.style = rg(rng, m.legStyle); // (no draw unless the morph sets it)
     if (m.legYaw !== undefined) g.curl = [g.curl[0], m.legYaw];
+    if (m.legGrade && lp >= 2) g.length = clamp(g.length * (m.legGrade[0] + ((m.legGrade[1] - m.legGrade[0]) * i) / (lp - 1)), A.length);
     apps.push(g);
   }
   // a forward-reaching grasping arm pair (primate) near the shoulders
@@ -405,7 +422,7 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
 
   const body: SegmentGene = {
     size: [girth, girth * height, girth * elong],
-    repeat: randint(rng, m.repeat[0], m.repeat[1]),
+    repeat: ringed ? lp : randint(rng, m.repeat[0], m.repeat[1]),
     taper: clamp(rg(rng, m.taper, [0.86, 1.0]), GENE_BOUNDS.segment.taper),
     curve: [m.rear ? rg(rng, m.rear) : range(rng, -0.05, 0.03), wind ? range(rng, 0.06, 0.16) * (chance(rng, 0.5) ? -1 : 1) : range(rng, -0.02, 0.02)],
     appendages: apps,
@@ -585,7 +602,7 @@ function headSeg(rng: Rng, bodyGirth: number, m: Morpho, eyeStyle: number): Segm
   if (chance(rng, m.ears ?? 0)) apps.push(ear(rng, g, m.earStyle));
   if (chance(rng, m.whiskers ?? 0)) apps.push(whisker(rng, g));
   if (chance(rng, m.crest ?? 0)) apps.push(crest(rng, g));
-  if (chance(rng, m.antennae ?? 0)) apps.push(antenna(rng, g));
+  if (chance(rng, m.antennae ?? 0)) apps.push(antenna(rng, g, m));
   // a snout elongates the head into a muzzle/jaw that narrows toward the tip (where the mouth sits),
   // so dogs/horses/crocs read as themselves instead of round-faced blobs.
   const snout = rg(rng, m.snout, [0, 0]);
@@ -857,16 +874,17 @@ function spine(rng: Rng, attachT: number, girth: number): AppendageGene {
   });
 }
 
-function antenna(rng: Rng, refGirth: number): AppendageGene {
+function antenna(rng: Rng, refGirth: number, m?: Morpho): AppendageGene {
+  // (each draw is made whatever the morph pins, so no other gene moves)
   return part('antenna', 'none', true, 0.5, {
     attachT: range(rng, 0.85, 1.0),
-    attachAzimuth: range(rng, 1.1, 1.5),
-    attachElevation: range(rng, 0.3, 0.6),
-    segments: randint(rng, 2, 3),
-    length: clamp(refGirth * range(rng, 0.6, 1.1), A.length),
+    attachAzimuth: rg(rng, m?.antennaAz, [1.1, 1.5]),
+    attachElevation: rg(rng, m?.antennaEl, [0.3, 0.6]),
+    segments: ((links: number) => m?.antennaSegs ?? links)(randint(rng, 2, 3)),
+    length: clamp(refGirth * rg(rng, m?.antennaLen, [0.6, 1.1]), A.length),
     thickness: clamp(refGirth * range(rng, 0.06, 0.12), A.thickness),
     taper: range(rng, 0.7, 0.9),
-    curl: [range(rng, -0.3, 0.3), 0],
+    curl: [rg(rng, m?.antennaCurl, [-0.3, 0.3]), 0],
   });
 }
 

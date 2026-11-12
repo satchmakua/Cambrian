@@ -25,6 +25,26 @@ const RUNNER_TUCK = 6.5;
 /** An arthropod's tagma joint (pedicel / petiole / neck): the waist's radius ×the thinner section's. */
 const TAGMA_WAIST = 0.36;
 
+/** A MYRIAPOD's trunk (see isRinged) is a chain of rings, one to each leg pair. How much fatter its
+ *  middle rings are than its ends (a tenth: the fusiform swell of a mammal's barrel made it a grub)… */
+const RING_SWELL = 0.1;
+/** …the last ring's radius ×the rest's (the rump draws in over the rings before it)… */
+const RING_RUMP = 0.7;
+/** …a ring's length, rim to rim, ×its radius, and its hind and fore rims' radii ×its own (one round
+ *  node to a ring, the body was a string of pearls)… */
+const RING_PLATE = 0.6;
+const RING_RIM: readonly [number, number] = [0.97, 0.88];
+/** …the gap from one ring's fore rim to the next ring's hind rim ×a ring's radius, at a body's
+ *  shortest and longest (set as close as any trunk's links, the rings ran together into one tube)… */
+const RING_GAP: readonly [number, number] = [1.15, 1.35];
+/** …the joint between two rings: its radius ×the smaller ring's… */
+const RING_JOINT = 0.56;
+/** …how far its legs hold the belly off the ground (×the rings' mean radius)… */
+const RING_CLEARANCE = 0.7;
+/** …and how long a point each leg ends in, past its last node (×the same): the legs' own skin stops
+ *  that far above the ground and the point — a hard spike the viewer draws — stands on it. */
+const RING_POINT = 0.5;
+
 /** An eye stalk's links, ×the radius the eye's gene gives them. */
 const STALK_SLIM = 0.5;
 /** An eye stalk rises at least this steeply (the Y of its unit direction: about 51° above level). */
@@ -167,6 +187,9 @@ export function grow(genome: Genome): Phenotype {
   let legGenesHere: AppendageGene[] = []; // …and their genes (a jumper's hind legs outreach its fore)
   let tagmaHere = false; // …and whether that segment is an arthropod's thorax (see isTagma)
   let sprawlHere = false; // …and whether its legs sprawl (decided once for them all — see below)
+  let ringedHere = false; // …and whether it is a myriapod's trunk of rings (see isRinged)
+  let ringFloorHere = 0; // …and the ground its legs then reach down to
+  let ringPoint = 0; // …and the length of the points they stand on (see RING_POINT)
   /** a body that walks on its arms as well as its legs (an ape): its trunk carries a pair of hand-tipped arms */
   const armWalker = dev.symmetry === 'bilateral' && dev.body.appendages.some((a) => a.kind === 'arm' && a.terminal === 'hand' && a.pair);
 
@@ -177,6 +200,7 @@ export function grow(genome: Genome): Phenotype {
   const groundY = levelFeet(); // drop every foot to a common ground level (the creature stands)
   if (groundY !== null) groundTails(groundY); // …and no tail reaches below it
   recomputeBounds();
+  if (ringPoint > 0 && groundY !== null) min[1] = Math.min(min[1], groundY - ringPoint); // the ground is under the legs' points
 
   return { nodes, edges, bounds: { min, max }, genomeRef: genome };
 
@@ -254,7 +278,13 @@ export function grow(genome: Genome): Phenotype {
     // not shrink it — a crab's shell slimmed as that idle gene drifted up)
     const runner = depth === 0 && seg.repeat >= 2 && seg.taper > 1 && seg.appendages.filter((a) => a.kind === 'leg').length >= 2;
     const swell = runner ? BODY_BULGE * clamp(1 - RUNNER_TUCK * (seg.taper - 1), [0.3, 1]) : BODY_BULGE;
-    const bulge = depth > 0 && (!seg.child || seg.appendages.length === 0) ? 0 : swell * (1 - reared);
+    // A MYRIAPOD's trunk is a chain of RINGS: each link a hard ring with its own leg pair, a narrow
+    // joint between it and the next, the rings near equal down the body and drawing in to the rump.
+    // (Grown as any trunk — links overlapping, swollen in the middle — a ten-legged body was a
+    // smooth bottle with a comb of legs under its middle: a grub, not a thing in armour.)
+    const ringed = dev.symmetry === 'bilateral' && isRinged(seg, depth);
+    const ringAt = (i: number) => (ringed ? RING_RUMP + (1 - RING_RUMP) * smooth01(i / Math.max(seg.repeat - 1, 1) / 0.4) : 1);
+    const bulge = ringed ? RING_SWELL : depth > 0 && (!seg.child || seg.appendages.length === 0) ? 0 : swell * (1 - reared);
     const profileAt = (i: number) => 1 + bulge * Math.sin(Math.PI * (seg.repeat > 1 ? i / (seg.repeat - 1) : 0.5));
     // A taper above 1 grows the chain toward its front (a chest deeper than the hips, a fish deepest
     // behind its head) — it moves the bulk forward, it doesn't add any: the peak link is held to the
@@ -292,10 +322,31 @@ export function grow(genome: Genome): Phenotype {
     // (a head — the chain's last section — may have a stop: see headStop)
     const stop = !seg.child && dev.symmetry === 'bilateral' ? headStop(seg, depth) : 0;
     const muzzle = 1 - stop * (1 - STOP_MUZZLE);
+    // (…and its muzzle narrows to the nose by STOP_TAPER more of the chain's ratio at each link; a
+    // myriapod's rings draw in to its rump: see isRinged)
+    const radiusAt = (i: number) =>
+      girth * Math.pow(seg.taper, i + (i > 0 ? stop * STOP_TAPER * (i - 1) : 0)) * profileAt(i) * norm * (i > 0 ? muzzle : 1) * ringAt(i);
+    // (a ring's slim nodes — its two rims, the joint ahead of it — share the links' cross-section;
+    // parts seat on the rings' centres alone)
+    const ringNode = (at: Vec3, q: Quat, r: number): void => {
+      const j = addNode(at, q, r, 'spine');
+      nodes[j].segment = depth;
+      if (segScale) nodes[j].scale = segScale;
+      if (prev >= 0) edges.push([prev, j]);
+      prev = j;
+    };
+    const along = (at: Vec3, d: Vec3, by: number): Vec3 => [at[0] + d[0] * by, at[1] + d[1] * by, at[2] + d[2] * by];
     for (let i = 0; i < seg.repeat; i++) {
       if (atCap()) break;
-      // (…and its muzzle narrows to the nose by STOP_TAPER more of the chain's ratio at each link)
-      const radius = girth * Math.pow(seg.taper, i + (i > 0 ? stop * STOP_TAPER * (i - 1) : 0)) * profileAt(i) * norm * (i > 0 ? muzzle : 1);
+      const radius = radiusAt(i);
+      // a RING is a short barrel, rim to rim, its hind rim standing prouder than the fore (each plate
+      // laps the one behind it); the link's node is its middle
+      const axis = qRotate([0, 0, 1], quat);
+      const half = ringed ? radius * RING_PLATE * 0.5 : 0;
+      if (ringed) {
+        ringNode(pos, quat, radius * RING_RIM[0]);
+        pos = along(pos, axis, half);
+      }
       const idx = addNode(pos, quat, radius, 'spine');
       nodes[idx].segment = depth;
       if (segScale) nodes[idx].scale = segScale;
@@ -305,6 +356,10 @@ export function grow(genome: Genome): Phenotype {
       if (prev >= 0) edges.push([prev, idx]);
       spine.push(idx);
       prev = idx;
+      if (ringed && !atCap()) {
+        pos = along(pos, axis, half);
+        ringNode(pos, quat, radius * RING_RIM[1]);
+      }
 
       // advance along local forward (+Z), bending by the per-link curve. In bilateral mode the
       // lateral (yaw) bend is dropped so the spine stays on the X=0 plane — a winding S-curve would
@@ -312,11 +367,21 @@ export function grow(genome: Genome): Phenotype {
       const yaw = dev.symmetry === 'bilateral' ? 0 : seg.curve[1];
       quat = qMul(quat, qFromEuler(seg.curve[0], yaw));
       const fwd = qRotate([0, 0, 1], quat);
-      let step = nodes[idx].radius * elong; // overlap-bounded stride → continuous body
+      // (rings stand a gap apart — a gap of the two rings' mean radius, or toward the rump, where each
+      // ring is a size up on the last, the bigger one's rim closed over it. The slim joint sits where
+      // the two rims' rounds would meet: the bottom of the groove)
+      const next = ringed && i + 1 < seg.repeat ? radiusAt(i + 1) : radius;
+      let step = ringed ? ((radius + next) / 2) * lerp(RING_GAP[0], RING_GAP[1], (elong - 0.75) / 0.65) : nodes[idx].radius * elong; // overlap-bounded stride → continuous body
       if (stop > 0) {
         // the muzzle's links stride by the chain's measure, not their own slimmer one (it keeps the
         // length its genes asked for); the first is drawn in against the braincase
         step = i === 0 ? step * (1 - stop * (1 - STOP_STRIDE)) : girth * Math.pow(seg.taper, i) * elong;
+      }
+      if (ringed && (i + 1 < seg.repeat || seg.child) && !atCap()) {
+        const fore = radius * RING_RIM[1];
+        const hind = next * RING_RIM[0];
+        const at = clamp((step * step + fore * fore - hind * hind) / (2 * step), [0.25 * step, 0.75 * step]);
+        ringNode(along(pos, fwd, at), quat, RING_JOINT * Math.min(radius, next));
       }
       pos = [pos[0] + fwd[0] * step, pos[1] + fwd[1] * step, pos[2] + fwd[2] * step];
       if (stop > 0 && i === 0) {
@@ -333,6 +398,18 @@ export function grow(genome: Genome): Phenotype {
     // A body sprawls or it stands: decided once, from its legs' mean splay. Judged leg by leg, a turtle
     // whose genes sat either side of the line stood on its hind legs like posts and sprawled the fore.
     sprawlHere = legPairsHere > 0 && legGenesHere.reduce((t, a) => t + clamp((4.712 - a.attachAzimuth) * 0.62, [0.12, 1.05]), 0) / legPairsHere > 0.5;
+    ringedHere = ringed;
+    if (ringed) {
+      // every leg of a ringed body reaches the same floor: the lowest belly, less the clearance
+      let belly = Infinity;
+      let mean = 0;
+      for (const i of spine) {
+        belly = Math.min(belly, nodes[i].pos[1] - nodes[i].radius * (nodes[i].scale?.[1] ?? 1));
+        mean += nodes[i].radius / spine.length;
+      }
+      ringFloorHere = belly - RING_CLEARANCE * mean;
+      ringPoint = RING_POINT * mean;
+    }
     for (const app of seg.appendages) {
       if (atCap()) break;
       const ai = clampInt(Math.round(app.attachT * (spine.length - 1)), 0, spine.length - 1);
@@ -341,8 +418,9 @@ export function grow(genome: Genome): Phenotype {
       // a node, and compounding ×1.22 per pair swelled a spider's 1–2 node body into a giant ball.
       // (less and less as an arm-walker's trunk REARS off its hips, and not at all on an ape's: its hips
       // are the narrow end of a wedge that widens to the shoulders, and swollen they made the rump a
-      // ball as broad as the chest, bulging out behind the hind legs)
-      if (app.kind === 'leg' && !haunched.has(spine[ai])) {
+      // ball as broad as the chest, bulging out behind the hind legs. And a ring is armour, not
+      // muscle: it carries its legs without a swell)
+      if (app.kind === 'leg' && !ringed && !haunched.has(spine[ai])) {
         haunched.add(spine[ai]);
         // (a gentle swell — at ×1.22 the shoulders and hips humped the back into a two-bump sway)
         const swollen = Math.min(nodes[spine[ai]].radius * 1.12, nodes[spine[ai]].radius + 0.2);
@@ -614,7 +692,11 @@ export function grow(genome: Genome): Phenotype {
         // under its shell) splay out to the side
         const spider = legPairsHere >= 4 && tagmaHere;
         const decapod = legPairsHere >= 4 && !tagmaHere;
-        const fan = (app.attachT - 0.5) * (spider ? 2.3 : decapod ? 1.3 : 1.9);
+        // a MYRIAPOD's legs stand out square from the rings of its middle and flare at its ends: the
+        // front pairs reach forward beside the head, the last sweep back behind the rump like a
+        // centipede's trailing pair (fanned evenly, a row of ten was a comb)
+        const u = app.attachT - 0.5;
+        const fan = ringedHere ? (u > 0 ? 0.5 * u + 2.4 * u * u * u : 0.9 * u + 4.4 * u * u * u) : (app.attachT - 0.5) * (spider ? 2.3 : decapod ? 1.3 : 1.9);
         const hx = sideX * Math.cos(fan);
         const hz = Math.sin(fan);
         // a spider's knees peak high over its back and its long shins reach far out and down; a crab's
@@ -634,6 +716,22 @@ export function grow(genome: Genome): Phenotype {
         else for (let k = 0; k < n; k++) arch.push(norm(k === 0 ? k0 : k === n - 1 ? end : mid));
         dir = arch[0];
         startPos = [base.pos[0] + sideX * flank * 0.9, base.pos[1] + base.radius * 0.05, base.pos[2]];
+        if (ringedHere && n >= 2) {
+          // a myriapod's leg leaves low on its ring's flank, rises a little to the knee, runs out and
+          // down, and turns to a point planted well out to the side. The middle links take whatever
+          // slope brings the point to the body's one floor, so a long leg reaches further out instead
+          // of deeper down (every leg on the crab's profile, the longest pair stood the body on stilts
+          // and the rest hung straight to reach the ground beside it)
+          startPos = [base.pos[0] + sideX * flank * 0.86, base.pos[1] - base.radius * (base.scale?.[1] ?? 1) * 0.22, base.pos[2]];
+          const rise = norm([hx, 0.34, hz]);
+          const point = norm([hx * 0.22, -1, hz * 0.22]);
+          const L = app.length * 1.2;
+          const fall = clamp(((startPos[1] - ringFloorHere - ringPoint) / L + rise[1] + point[1]) / Math.max(n - 2, 1), [0.08, 0.94]);
+          const run = Math.sqrt(1 - fall * fall);
+          arch = [];
+          for (let k = 0; k < n; k++) arch.push(k === 0 ? rise : k === n - 1 ? point : [hx * run, -fall, hz * run]);
+          dir = arch[0];
+        }
       } else if (sprawlHere) {
         // a SPRAWLER (lizard, croc, newt): the upper leg juts out sideways at hip height, the elbow /
         // knee sits out beside the body and the shin drops to a foot planted wide — the push-up stance,
@@ -827,6 +925,15 @@ export function legSlots(pairs: number): readonly number[] {
   return out;
 }
 
+/** The leg slots of a MYRIAPOD's trunk (see isRinged): the pairs run its whole length, rump to
+ *  shoulders — a pair to each ring when there are as many. (On the slots above, drawn in toward the
+ *  middle, a ten-legged body carried a legless third of itself ahead of its legs.) */
+export function ringSlots(pairs: number): readonly number[] {
+  const out: number[] = [];
+  for (let i = 0; i < pairs; i++) out.push(pairs > 1 ? i / (pairs - 1) : 0.5);
+  return out;
+}
+
 /**
  * The bauplan pass: pure, deterministic structural normalization (M24). Pulls the legs onto the
  * canonical layout for their count (lerped by `coherence`) and guarantees a prominent face — so a
@@ -851,6 +958,11 @@ const LEG_AZ_HI = 4.95;
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
+}
+/** 0 → 1 over t ∈ [0, 1], eased at both ends. */
+function smooth01(t: number): number {
+  const u = clamp(t, [0, 1]);
+  return u * u * (3 - 2 * u);
 }
 
 /** Pull a leg's azimuth into the down-and-out band — folding any up-pointing aim down first, so a
@@ -905,7 +1017,7 @@ function normalizeSectionLegs(seg: SegmentGene, trunk: boolean, coh: number): vo
   // a REARED biped (the trunk pitched up off its hips: an ape, a kangaroo, a humanoid) stands on
   // its pelvis — the trunk's bottom end — not at a horizontal walker's balance point mid-body (a
   // bird's or a raptor's), where the legs sprouted from its belly
-  const slots = pairs === 1 && trunk ? [bipedSlot(seg.curve[0])] : legSlots(pairs);
+  const slots = pairs === 1 && trunk ? [bipedSlot(seg.curve[0])] : trunk && isRinged(seg, 0) ? ringSlots(pairs) : legSlots(pairs);
   legs.sort((x, y) => x.attachT - y.attachT); // front-to-back; assign slots in order
   legs.forEach((leg, i) => {
     leg.pair = true; // legs are always mirrored
@@ -923,6 +1035,20 @@ function isTagma(seg: SegmentGene, depth: number): boolean {
   let pairs = 0;
   for (const a of seg.appendages) if (a.kind === 'leg') pairs++;
   return pairs >= 3;
+}
+
+/** A trunk of five or more links carrying five or more leg pairs: a MYRIAPOD's — a centipede's, a
+ *  trilobite's, a woodlouse's — a chain of rings with a leg pair to each (see RING_SWELL). */
+export function isRinged(seg: SegmentGene, depth: number): boolean {
+  if (depth !== 0 || seg.repeat < 5) return false;
+  let pairs = 0;
+  for (const a of seg.appendages) if (a.kind === 'leg') pairs++;
+  return pairs >= 5;
+}
+
+/** Whether a creature's legs end in points drawn past their last nodes (a myriapod's: see RING_POINT). */
+export function pointedLegs(g: Genome): boolean {
+  return g.symmetry === 'bilateral' && isRinged(g.body, 0);
 }
 
 /** The section that carries the legs (the most of them): the trunk, or an arthropod's thorax. */
