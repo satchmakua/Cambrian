@@ -111,6 +111,47 @@ describe('body plans', () => {
     expect(second).toBeGreaterThanOrEqual(11);
   });
 
+  it('a bird has one tail: the stub runs straight back from the rump, under the fan it carries', () => {
+    // (the stub hung down and back, so the fan on its tip trailed below the wingtips: a second tail)
+    for (const id of ['bird', 'raptor']) {
+      for (let seed = 1; seed <= 16; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const tail = p.nodes.filter((n) => n.part?.kind === 'tail');
+        if (tail.length === 0) continue;
+        const rump = trunkOf(p).sort((a, b) => a.pos[2] - b.pos[2])[0];
+        const tip = tail[tail.length - 1];
+        const back = rump.pos[2] - tip.pos[2];
+        expect(back, `${id} #${seed} runs back`).toBeGreaterThan(0);
+        // level or a touch raised: never more than a little below the rump's own height
+        expect((tip.pos[1] - rump.pos[1]) / Math.max(back, 1e-6), `${id} #${seed} not hanging`).toBeGreaterThan(-0.2);
+      }
+    }
+  });
+
+  it('a bird of prey is not the pigeon recoloured: a shorter neck, a bigger head and bill, thicker legs', () => {
+    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+    const measure = (id: string) => {
+      const neck: number[] = [], head: number[] = [], bill: number[] = [], leg: number[] = [];
+      for (let seed = 1; seed <= 24; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const spine = p.nodes.filter((n) => n.kind === 'spine');
+        const last = Math.max(...spine.map((n) => n.segment ?? 0));
+        const girth = Math.max(...trunkOf(p).map((n) => n.radius));
+        neck.push(spine.filter((n) => (n.segment ?? 0) > 0 && (n.segment ?? 0) < last).length);
+        head.push(spine.filter((n) => n.segment === last)[0].radius / girth);
+        bill.push(p.nodes.find((n) => n.terminal === 'mouth')!.radius / girth);
+        leg.push(Math.max(...p.nodes.filter((n) => n.part?.kind === 'leg' && n.kind === 'limb').map((n) => n.radius)) / girth);
+      }
+      return { neck: mean(neck), head: mean(head), bill: mean(bill), leg: mean(leg) };
+    };
+    const hawk = measure('raptor');
+    const dove = measure('bird');
+    expect(hawk.neck).toBeLessThan(dove.neck);
+    expect(hawk.head).toBeGreaterThan(1.08 * dove.head);
+    expect(hawk.bill).toBeGreaterThan(1.15 * dove.bill);
+    expect(hawk.leg).toBeGreaterThan(1.2 * dove.leg);
+  });
+
   it('a shark has a long pointed snout with its mouth set back beneath it', () => {
     // (a blunt melon with a grin on its very tip, and no snout at all, read as a porpoise)
     for (let seed = 1; seed <= 16; seed++) {

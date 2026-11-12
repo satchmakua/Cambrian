@@ -185,7 +185,26 @@ describe('beak mouth (mouth overhaul)', () => {
     expect(hi).not.toBeNull();
     if (!lo || !hi) return;
     expect(hi.upperLen - lo.upperLen).toBeGreaterThan(0.2 * lo.r); // slenderness: longer up-band
-    expect(hi.hook).toBeGreaterThan(lo.hook); // and more hooked
+    // …and the hook goes with the build: the short stout bill (a hawk's, a parrot's) is the deeply
+    // hooked one, the long slim one (a dove's, a wader's) near straight
+    expect(lo.hook).toBeGreaterThan(1.5 * hi.hook);
+    expect(lo.hook / lo.r).toBeGreaterThan(0.4);
+    expect(hi.hook / hi.r).toBeLessThan(0.3);
+  });
+
+  it('a bird of prey wears a hawk’s bill and a songbird a slim one, whatever the seed', () => {
+    // (the hook was half a coin toss: the two plans drew from the same bills and looked alike)
+    for (let seed = 1; seed <= 12; seed++) {
+      const style = (id: string) => {
+        let seg = genomeOfMorphotype(seed, id).body;
+        while (seg.child) seg = seg.child;
+        return seg.appendages.find((a) => a.terminal === 'mouth')!.style;
+      };
+      expect(style('raptor'), `raptor #${seed}`).toBeLessThan(0.29);
+      expect(style('bird'), `bird #${seed}`).toBeGreaterThan(0.3);
+      expect(style('bird'), `bird #${seed}`).toBeLessThan(0.375);
+      expect(style('raptor'), `raptor #${seed}`).toBeGreaterThanOrEqual(0.25);
+    }
   });
 
   it('recessed sinks the interior wedge into the cavity; the capsule kit keeps it a hair proud', () => {

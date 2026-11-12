@@ -81,13 +81,15 @@ export function buildBeak(
   // the raptor draw deepens the hook. All bounds keep the tip inside the 1.5r protrusion budget.
   const style = spec.node.part?.style ?? 0.3;
   const sPos = Math.min(1, Math.max(0, (style - 0.25) / 0.125));
-  const deep = hash01(seed, idx + 61) > 0.5;
   // a turtle's beak is a short, blunt horny sheath over the jaws, not a bird's bill (run out to a
   // bird's length it hung off the chin like a thorn)
   const shelled = phenotype.nodes.some((n) => n.terminal === 'carapace');
   const upperLen = r * (shelled ? 0.48 + 0.1 * sPos : 1.15 + 0.4 * sPos + 0.12 * (hash01(seed, idx + 13) - 0.5));
   const lowerLen = upperLen * 0.75;
-  const hook = r * (shelled ? 0.16 : Math.min(0.45, 0.25 + 0.08 * sPos + (deep ? 0.12 : 0)));
+  // the hook goes with the build: a short stout bill is a hawk's or a parrot's, deeply hooked; a long
+  // slim one a dove's or a wader's, near straight. (It went the other way, plus a coin toss — so a
+  // bird of prey was as likely to wear a pigeon's bill as its own, and the two plans looked alike.)
+  const hook = r * (shelled ? 0.16 : 0.45 - 0.2 * sPos);
   const slim = 1 - 0.22 * sPos + 0.06 * (hash01(seed, idx + 47) - 0.5);
   // a bill is broad at the root — it spans the front of the face — and tapers to the tip (thin
   // cones from a narrow root hung below the face like a walrus's tusks)

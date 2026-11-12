@@ -72,6 +72,12 @@ export interface RigTemplate {
    *  down to the grass */
   graze: number;
   grazeDip: number;
+  /** …and, for a two-legged feeder, how far the whole body shifts (up, forward) as it tips, so that it
+   *  see-saws about its hips instead of swinging them off their legs (see solveGraze) */
+  grazeShift: [number, number];
+  /** a two-legged feeder tips as ONE piece, about its rump (the shift then holds its hips in place):
+   *  bent joint by joint like a grazer's, its back curled under and its folded wings stood off it */
+  grazeRigid: boolean;
   /** a long legless body's resting line: at rest it lies in a loose S (see restBends) */
   rest: RestLine | null;
   /** how each arm (parallel to `arms`) folds as the body lies down, and how it feeds */
@@ -190,6 +196,10 @@ export const LOOK_MAX = 1.1;
 const GRAZE_CURL = 0.12;
 /** the most a feeder's chest dips (rad) — past this a body reads as kneeling, not grazing */
 const GRAZE_DIP_MAX = 0.42;
+/** …and a two-legged body's: a bird pecks by tipping its whole body forward over its legs, tail up —
+ *  its chest stands high (and higher the more upright it stands), and no neck of its own reaches the
+ *  ground from there. */
+const GRAZE_DIP_BIPED = 1.0;
 
 /**
  * How a feeder reaches the ground. Feeding used to pitch the first neck joint by one fixed 0.55 rad:
@@ -201,20 +211,22 @@ const GRAZE_DIP_MAX = 0.42;
  * (The searches walk only the chains that move — the mouth's ancestry, then each leg — so a new body
  * costs a millisecond or two, not a frame.)
  */
-function solveGraze(p: Phenotype, parent: Int32Array, trunk: number[], neck: number[], legs: LegChain[], handFed: boolean): { neck: number; dip: number } {
-  const DEF = { neck: 0.55, dip: 0 };
+function solveGraze(p: Phenotype, parent: Int32Array, trunk: number[], neck: number[], legs: LegChain[], handFed: boolean): { neck: number; dip: number; shift: [number, number]; rigid: boolean } {
+  const DEF = { neck: 0.55, dip: 0, shift: [0, 0] as [number, number], rigid: false };
   const mouth = p.nodes.findIndex((n) => n.terminal === 'mouth');
   // (a hand-feeder only nods to meet its hand — see ArmPose)
-  if (handFed) return { neck: FEED_NOD, dip: 0 };
+  if (handFed) return { neck: FEED_NOD, dip: 0, shift: [0, 0], rigid: false };
   if (neck.length === 0 || legs.length === 0 || trunk.length === 0 || mouth < 0) return DEF;
   const ground = Math.min(...legs.map((l) => p.nodes[l.nodes[l.nodes.length - 1]].pos[1] - p.nodes[l.nodes[l.nodes.length - 1]].radius));
   const n = p.nodes.length;
   const nT = trunk.length;
   const trunkIdx = new Map(trunk.map((i, k) => [i, k]));
   const neckIdx = new Map(neck.map((i, k) => [i, k]));
+  // (a two-legged body tips as one piece, at its root; a grazer's back curves, joint by joint)
+  const biped = legs.length <= 2;
   const pitchOf = (i: number, dip: number, a: number): number => {
     const t = trunkIdx.get(i);
-    if (t !== undefined) return t >= 1 && nT > 1 ? dip / (nT - 1) : 0;
+    if (t !== undefined) return biped ? (t === 0 ? dip : 0) : t >= 1 && nT > 1 ? dip / (nT - 1) : 0;
     const k = neckIdx.get(i);
     if (k !== undefined) return k === 0 ? a : GRAZE_CURL;
     return 0;
@@ -233,6 +245,28 @@ function solveGraze(p: Phenotype, parent: Int32Array, trunk: number[], neck: num
     }
     return y;
   };
+  // A TWO-LEGGED feeder (a bird, a theropod) tips over its hips: tail up, head down, the body a
+  // see-saw on its legs. The trunk's joints turn about themselves, which swings the hips forward and
+  // down off the feet — so the whole body is shifted back by as much, and the hips stay where they
+  // were. (Without it a bird could tip only as far as its legs could fold to follow: its mouth hung
+  // half its own height above the ground it was pecking at.)
+  const hipPath: number[] = [];
+  if (biped) for (let i = legs[0].nodes[0]; i >= 0; i = parent[i]) hipPath.unshift(i);
+  const shiftOf = (dip: number): [number, number] => {
+    if (!biped || dip === 0) return [0, 0];
+    let y = p.nodes[hipPath[0]].pos[1], z = p.nodes[hipPath[0]].pos[2];
+    let cum = pitchOf(hipPath[0], dip, 0);
+    for (let j = 1; j < hipPath.length; j++) {
+      const i = hipPath[j], par = hipPath[j - 1];
+      const dy = p.nodes[i].pos[1] - p.nodes[par].pos[1], dz = p.nodes[i].pos[2] - p.nodes[par].pos[2];
+      const ny = y + dy * Math.cos(cum) - dz * Math.sin(cum);
+      z = z + dy * Math.sin(cum) + dz * Math.cos(cum);
+      y = ny;
+      if (trunkIdx.has(i)) cum += pitchOf(i, dip, 0);
+    }
+    const hip = p.nodes[hipPath[hipPath.length - 1]].pos;
+    return [hip[1] - y, hip[2] - z];
+  };
   // the mouth at the grass (just above it: its node sits inside the lips)
   const target = ground + p.nodes[mouth].radius * 0.5 + 0.03;
   let best = DEF;
@@ -240,12 +274,14 @@ function solveGraze(p: Phenotype, parent: Int32Array, trunk: number[], neck: num
   // (the miss is weighed against the shoulder height, so a mouse and a moose trade a dip alike; a
   // low-slung head may even lift a touch)
   const tall = Math.max(0.1, Math.max(...legs.map((l) => p.nodes[l.nodes[0]].pos[1])) - ground);
-  for (let dip = 0; dip <= (nT > 1 ? GRAZE_DIP_MAX : 0) + 1e-9; dip += 0.03) {
+  const dipMax = biped ? GRAZE_DIP_BIPED : nT > 1 ? GRAZE_DIP_MAX : 0;
+  for (let dip = 0; dip <= dipMax + 1e-9; dip += 0.03) {
+    const shift = shiftOf(dip);
     for (let a = -0.3; a <= 1.5 + 1e-9; a += 0.025) {
-      const c = Math.abs(mouthY(dip, a) - target) / tall + dip * 0.25 + Math.abs(a - 0.55) * 0.02;
+      const c = Math.abs(mouthY(dip, a) + shift[0] - target) / tall + dip * 0.25 + Math.abs(a - 0.55) * 0.02;
       if (c < cost) {
         cost = c;
-        best = { neck: a, dip };
+        best = { neck: a, dip, shift, rigid: biped };
       }
     }
   }
@@ -254,6 +290,10 @@ function solveGraze(p: Phenotype, parent: Int32Array, trunk: number[], neck: num
   const base = new Float64Array(n);
   for (let i = 0; i < n; i++) base[i] = pitchOf(i, best.dip, best.neck);
   const fk = planarFK(p, parent, base);
+  for (let i = 0; i < n; i++) {
+    fk.y[i] += best.shift[0];
+    fk.z[i] += best.shift[1];
+  }
   for (const l of legs) {
     l.graze = [0, 0, 0];
     const hip = l.nodes[0];
@@ -727,6 +767,8 @@ export function rigTemplate(p: Phenotype): RigTemplate {
     belly,
     graze: 0,
     grazeDip: 0,
+    grazeShift: [0, 0],
+    grazeRigid: false,
     rest: null,
     armPose: [],
   };
@@ -737,6 +779,8 @@ export function rigTemplate(p: Phenotype): RigTemplate {
   const g = solveGraze(p, parent, trunk, neck, legs, tmpl.armPose.some((a) => a.feed !== null));
   tmpl.graze = g.neck;
   tmpl.grazeDip = g.dip;
+  tmpl.grazeShift = g.shift;
+  tmpl.grazeRigid = g.rigid;
   if (tmpl.legless) tmpl.rest = restLine(p, parent, trunk, tails);
   TEMPLATES.set(p, tmpl);
   return tmpl;
@@ -1048,6 +1092,14 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
   // sprawler's planted feet hold the ground while the body wiggles between them
   if (r.trunkYaw.length !== nT) r.trunkYaw = new Array(nT).fill(0);
   r.trunkYaw[0] = restOn ? r.restT[0] : 0;
+  // (a two-legged feeder see-saws about its hips: the body is carried back as it tips — see solveGraze)
+  if (nT > 0) {
+    const rootBone = r.bones[T.trunk[0]];
+    const home = r.rest[T.trunk[0]];
+    const tip = inp.eat * awake;
+    rootBone.position.set(home.x, home.y + T.grazeShift[0] * tip, home.z + T.grazeShift[1] * tip);
+    if (!restOn) setRot(rootBone, T.grazeRigid ? T.grazeDip * tip : 0, 0, 0);
+  }
   for (let k = 1; k < nT; k++) {
     const u = k / Math.max(1, nT - 1);
     let yaw = 0;
@@ -1062,7 +1114,7 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
     const flex = k === Math.max(1, Math.floor(nT / 2)) ? 0.2 * gal * moving * Math.sin(P + 0.6) : 0;
     // feeding, a long-legged grazer tips its chest down toward the grass (spread over the trunk's
     // joints, so the back curves rather than kinking at one; the legs fold to keep their feet planted)
-    const dip = (T.grazeDip * inp.eat * awake) / Math.max(1, nT - 1);
+    const dip = T.grazeRigid ? 0 : (T.grazeDip * inp.eat * awake) / Math.max(1, nT - 1);
     const lie = restOn ? r.restT[k] : 0;
     setRot(r.bones[T.trunk[k]], flex * awake + dip, yaw * awake + lie, 0);
     r.trunkYaw[k] = r.trunkYaw[k - 1] + yaw * awake + lie;
