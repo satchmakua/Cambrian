@@ -144,6 +144,9 @@ export interface RenderQuality {
   heroSkin: 'high' | 'low';
   /** the hero's soft ground shadow, px a side (0: none) */
   contactShadow: number;
+  /** a coat's relief (scales, plates, feathers) is lit from its slope measured at every pixel — clean
+   *  edges, at three times the relief's cost — rather than once per 2x2 block of pixels */
+  fineRelief: boolean;
 }
 
 const FULL = { grass: 17000, flowers: 900, precipitation: 9000, stars: 2500 };
@@ -163,6 +166,7 @@ export function qualityOf(g: Omit<GraphicsSettings, 'preset'>): RenderQuality {
     fineSkins: detail === 'high',
     heroSkin: detail === 'low' ? 'low' : 'high',
     contactShadow: g.shadows ? (g.renderScale >= 1.5 ? 512 : 256) : 0,
+    fineRelief: detail !== 'low',
   };
 }
 

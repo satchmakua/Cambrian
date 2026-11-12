@@ -19,6 +19,7 @@ import * as THREE from 'three';
 import { coatAccent, coatBelly, coatMain, coatPattern } from './palette';
 import type { FaceMask } from './face';
 import type { Palette, Covering, CoveringType, PatternType } from '../engine/genome';
+import { getQuality, useSettings } from '../ui/settings';
 
 const COVERING_INDEX: Record<CoveringType, number> = {
   skin: 0,
@@ -90,6 +91,18 @@ export interface FurShell {
   /** eyes to keep the pile out of — body-space centre + radius, flat (x, y, z, r, …; up to 6) */
   eyes?: readonly number[];
 }
+
+/** Whether the relief's slope is measured at every pixel (two more evaluations of the relief each) or
+ *  taken from the GPU's per-block derivative. Shared by every creature material: see `setFineRelief`. */
+const FINE_RELIEF = { value: 1 };
+
+/** The graphics option behind the per-pixel relief (RenderQuality.fineRelief). */
+export function setFineRelief(on: boolean): void {
+  FINE_RELIEF.value = on ? 1 : 0;
+}
+// (it follows the settings: every coat already drawn changes with the option, no material is rebuilt)
+setFineRelief(getQuality().fineRelief);
+useSettings.subscribe(() => setFineRelief(getQuality().fineRelief));
 
 export function makeCreatureMaterial(
   pal: Palette,
@@ -167,6 +180,7 @@ export function makeCreatureMaterial(
     shader.uniforms.uFace = { value: face ? new THREE.Vector4(face.c[0], face.c[1], face.c[2], face.r) : new THREE.Vector4(0, 0, 0, 0) };
     shader.uniforms.uFaceCol = { value: new THREE.Color(face ? face.color : 0) };
     shader.uniforms.uSeam = { value: seam };
+    shader.uniforms.uFine = FINE_RELIEF; // (one object, shared: the graphics option switches every coat at once)
     // (unused slots keep r = 0, which clears nothing)
     shader.uniforms.uEyes = { value: Array.from({ length: 6 }, (_, i) => new THREE.Vector4(...(shell?.eyes?.slice(i * 4, i * 4 + 4) ?? []).concat([0, 0, 0, 0]).slice(0, 4))) };
 
@@ -204,8 +218,26 @@ export function makeCreatureMaterial(
         `#include <color_fragment>
         {
           vec3 bp = vBodyPos + uOff;
-          gFw = max(length(dFdx(vBodyPos)), length(dFdy(vBodyPos))) + 1e-5;
+          vec3 dPx = dFdx(vBodyPos);
+          vec3 dPy = dFdy(vBodyPos);
+          gFw = max(length(dPx), length(dPy)) + 1e-5;
+          // The relief's slope, for the bump: the height one pixel over, across and down, measured at
+          // THIS pixel. (The GPU's own derivative of the height is taken once per 2x2 block of pixels:
+          // wherever the relief is fine — a scale a few pixels across, the edge of a plate — every
+          // block took one slope and the hide broke into a mosaic of little squares, its plate edges
+          // into staircases. The fur's shells keep the cheap derivative: a strand hides it.)
+          float hX = 0.0;
+          float hY = 0.0;
+          if (uShellH < 0.0 && uFine > 0.5) {
+            surfaceHeight(bp + dPx, uCover);
+            hX = gHb;
+            surfaceHeight(bp + dPy, uCover);
+            hY = gHb;
+            gFine = 1.0;
+          }
           gH = surfaceHeight(bp, uCover);
+          gDhx = hX - gHb;
+          gDhy = hY - gHb;
           gM = muscle(bp);
           float up = clamp(vWNrm.y * 0.5 + 0.5, 0.0, 1.0);
           // countershading kept to the underside and the spine: the flanks carry the coat's true
@@ -226,6 +258,8 @@ export function makeCreatureMaterial(
           if (faceW > 0.0) {
             skin = mix(skin, uFaceCol * (0.9 + 0.2 * fbmA(bp * 9.0, 9.0)), faceW);
             gHb *= 1.0 - 0.85 * faceW;
+            gDhx *= 1.0 - 0.85 * faceW;
+            gDhy *= 1.0 - 0.85 * faceW;
           }
           // bare legs: the plumage ends in a soft cuff and the shank below is keratin scutes
           // (only on the legs themselves — vLeg — not a low belly or tail under the same height)
@@ -240,6 +274,9 @@ export function makeCreatureMaterial(
             gFw = fw0;
             gH = mix(gH, hs, bare);
             gHb = mix(hb, gHb * 0.6, bare);
+            // (a shank's scutes are a second relief, mixed in: there the bump falls back on the
+            // derivative of the mixed height)
+            gFine *= 1.0 - bare;
             skin = mix(skin, uBareCol * (0.72 + 0.36 * hs), bare);
           }
           // gentle sub-surface musculature shading (creases a touch darker → taut, not a balloon)
@@ -282,7 +319,11 @@ export function makeCreatureMaterial(
             float far = smoothstep(0.28, 1.15, gFw * uShellDen);
             if (u > 1.0 || dc > 0.62 * (1.0 - u) || far > hash13(cell + 5.0) || vFlesh > 0.05 || bare > 0.3 || faceW > 0.3) discard;
             // depth in the pile: shadowed at the root, catching light at the tips; each lock its own shade
-            diffuseColor.rgb *= mix(0.62, 1.12, uShellH) * (0.93 + 0.14 * hash13(cid + 9.0));
+            // — but only while the pile is dense. Where strands are thinning out toward a pixel's size
+            // the survivors take the coat's own tone: left with their root shadow, the last sparse
+            // strands of a bear seen whole were a scatter of dark specks, pepper on a smooth hide.
+            float shade = mix(0.62, 1.12, uShellH) * (0.93 + 0.14 * hash13(cid + 9.0));
+            diffuseColor.rgb *= mix(shade, 1.0, smoothstep(0.0, 0.55, far));
           }
           if (uDebug == 1) diffuseColor.rgb = vec3(pat);
           if (uDebug == 2) diffuseColor.rgb = vec3(gH);
@@ -307,12 +348,14 @@ export function makeCreatureMaterial(
         '#include <normal_fragment_begin>',
         `#include <normal_fragment_begin>
         {
-          float h = (gHb + gM * 0.02) * uBump;
+          // (the musculature is broad and smooth: its derivative is as good taken per block)
+          float hm = gM * 0.02 * uBump;
+          float h = gHb * uBump + hm;
           vec3 P = -vViewPosition;
           vec3 sx = dFdx(P);
           vec3 sy = dFdy(P);
-          float dhx = dFdx(h);
-          float dhy = dFdy(h);
+          float dhx = mix(dFdx(h), gDhx * uBump + dFdx(hm), gFine);
+          float dhy = mix(dFdy(h), gDhy * uBump + dFdy(hm), gFine);
           vec3 R1 = cross(sy, normal);
           vec3 R2 = cross(normal, sx);
           float det = dot(sx, R1);
@@ -361,6 +404,7 @@ uniform vec3 uOff;
 uniform int uDebug;
 uniform float uBareY; uniform float uBareBand; uniform vec3 uBareCol;
 uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6]; uniform vec4 uFace; uniform vec3 uFaceCol; uniform float uSeam;
+uniform float uFine;
 
 // Per-fragment globals, primed at the top of the colour stage and reused by the roughness + normal
 // stages (so the expensive relief is evaluated once per pixel, not three times).
@@ -368,6 +412,9 @@ float gFw = 0.01; // the pixel footprint in body units — what every AA fade be
 float gH = 0.0;   // covering relief, normalized [0,1] — drives grime + roughness
 float gHb = 0.0;  // the same relief as a PHYSICAL height in body units — drives the bump
 float gM = 0.0;   // musculature relief
+float gDhx = 0.0; // the relief's physical height one pixel across, less its height here …
+float gDhy = 0.0; // … and one pixel down (see the colour stage)
+float gFine = 0.0; // 1 where those are measured (else the bump takes the derivative of the height)
 
 // ANTI-ALIASING. A procedural texture aliases into "TV static" once its detail is finer than a pixel:
 // the old fur relief ran at 26 cycles/bu × 5 octaves, i.e. sub-pixel for any creature not filling

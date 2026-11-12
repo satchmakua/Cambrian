@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { makeCreatureMaterial } from '../../src/viewer/creatureMaterial';
+import { makeCreatureMaterial, setFineRelief } from '../../src/viewer/creatureMaterial';
+import { PRESETS, qualityOf } from '../../src/ui/settings';
 import { defaultGenome } from '../../src/engine/genome';
 
 /**
@@ -77,12 +78,54 @@ describe('creature material shader injection', () => {
     expect(s.fragmentShader).toContain('mix(0.42, 1.0, vAO)');
     // the bump perturbs by gHb (a height in body units), never the normalized 0..1 relief, which
     // saturated every normal into per-pixel noise
-    expect(s.fragmentShader).toContain('float h = (gHb + gM * 0.02) * uBump;');
+    expect(s.fragmentShader).toContain('float h = gHb * uBump + hm;');
     // the pixel footprint is measured before any AA'd noise is evaluated
-    const iFw = s.fragmentShader.indexOf('gFw = max(length(dFdx(vBodyPos))');
+    const iFw = s.fragmentShader.indexOf('gFw = max(length(dPx), length(dPy))');
     const iH = s.fragmentShader.indexOf('gH = surfaceHeight(bp, uCover);');
     expect(iFw).toBeGreaterThan(0);
     expect(iH).toBeGreaterThan(iFw);
+  });
+
+  it("the relief's slope is measured at every pixel, not once per 2x2 block of them", () => {
+    // (the GPU's derivative of the height is one value per 2x2 pixels: a scale a few pixels across,
+    // the edge of a plate, broke into a mosaic of little squares and staircases — a crocodile's hide
+    // and a turtle's shell read as a low-resolution texture)
+    const s = compileShaderStrings();
+    const f = s.fragmentShader;
+    // the height one pixel across and one down, each evaluated at this pixel, before the height here
+    const iX = f.indexOf('surfaceHeight(bp + dPx, uCover);');
+    const iY = f.indexOf('surfaceHeight(bp + dPy, uCover);');
+    const iC = f.indexOf('gH = surfaceHeight(bp, uCover);');
+    expect(iX).toBeGreaterThan(0);
+    expect(iY).toBeGreaterThan(iX);
+    expect(iC).toBeGreaterThan(iY);
+    expect(f).toContain('gDhx = hX - gHb;');
+    expect(f).toContain('gDhy = hY - gHb;');
+    // …and the bump reads those differences (the smooth musculature alone keeps the cheap derivative)
+    expect(f).toContain('float dhx = mix(dFdx(h), gDhx * uBump + dFdx(hm), gFine);');
+    expect(f).toContain('float dhy = mix(dFdy(h), gDhy * uBump + dFdy(hm), gFine);');
+    // not on the fur's shells (a dozen passes, their strands hide it), and only where the option is on
+    expect(f).toContain('if (uShellH < 0.0 && uFine > 0.5) {');
+    const fine = s.uniforms.uFine as { value: number };
+    setFineRelief(false);
+    expect(fine.value).toBe(0); // one shared switch: every coat already drawn follows it
+    setFineRelief(true);
+    expect(fine.value).toBe(1);
+    // on at Medium and High, off at Low (three evaluations of the relief a pixel instead of one)
+    expect(qualityOf(PRESETS.high).fineRelief).toBe(true);
+    expect(qualityOf(PRESETS.medium).fineRelief).toBe(true);
+    expect(qualityOf(PRESETS.low).fineRelief).toBe(false);
+  });
+
+  it('thinning fur takes the coat\'s own tone: no scatter of dark specks on an animal seen whole', () => {
+    // (the last sparse strands kept the shadow of a dense pile's roots: a bear seen whole wore pepper)
+    const f = compileShaderStrings().fragmentShader;
+    const iFar = f.indexOf('float far = smoothstep(0.28, 1.15, gFw * uShellDen);');
+    const iShade = f.indexOf('diffuseColor.rgb *= mix(shade, 1.0, smoothstep(0.0, 0.55, far));');
+    expect(iFar).toBeGreaterThan(0);
+    expect(iShade).toBeGreaterThan(iFar);
+    // (the pile's own shading, where it is dense, is as it was)
+    expect(f).toContain('float shade = mix(0.62, 1.12, uShellH) * (0.93 + 0.14 * hash13(cid + 9.0));');
   });
 
   it('wears the palette as sRGB: a coat is its own colour, with a belly of its own hue', () => {
