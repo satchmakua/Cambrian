@@ -10,7 +10,7 @@
  */
 import { mulberry32, range, type Rng } from './rng';
 import { GENE_BOUNDS, clamp } from './bounds';
-import { legSlots } from './grow';
+import { bipedSlot, legSlots } from './grow';
 import {
   GENOME_VERSION,
   type Genome,
@@ -264,7 +264,7 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
   // growth-time normalization agree (legs land where the attractor wants them).
   const lp = pick(rng, m.legPairs ?? ([2] as const));
   const legTerm = pick(rng, m.legTerm ?? (['foot'] as const));
-  const slots = lp === 1 && m.rear && m.rear[1] < -0.26 ? [0.06] : legSlots(lp);
+  const slots = lp === 1 && m.rear ? [bipedSlot(m.rear[1])] : legSlots(lp);
   for (let i = 0; i < lp; i++) {
     // a little slot jitter for individuality; the bauplan pass pulls it back toward the exact slot by
     // `coherence` (familiar ⇒ snapped, uncanny/wild ⇒ a touch looser — "coherent weird", M24)

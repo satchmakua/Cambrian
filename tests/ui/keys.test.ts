@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { typingIn } from '../../src/ui/keys';
-import { failureWords, fetching, isLoadFailure } from '../../src/ui/ScreenBoundary';
+import { failureWords, fetching, isLoadFailure, PartBoundary } from '../../src/ui/ScreenBoundary';
 
 describe('Esc opens the game menu from anywhere but a place text is typed', () => {
   const el = (tagName: string, type?: string, isContentEditable = false) => ({ tagName, type, isContentEditable });
@@ -61,5 +61,37 @@ describe('a screen that fails', () => {
     let once = 0;
     await fetching(async () => ++once, 1)();
     expect(once).toBe(1);
+  });
+});
+
+describe('a part of a screen that fails', () => {
+  // (no DOM here: the boundary's own logic, driven the way React drives it)
+  const boundary = (props: ConstructorParameters<typeof PartBoundary>[0]) => {
+    const b = new PartBoundary(props);
+    b.setState = ((s: { failed: boolean }) => void (b.state = { ...b.state, ...s })) as typeof b.setState;
+    return b;
+  };
+
+  it('is left out — the rest of the screen is drawn — and is tried again for another creature', () => {
+    // (the main menu's stage: the menu is where a player lands when a screen has failed, and when the
+    // failure was the creature being bred the menu drew that same creature — and failed too, with no
+    // way left to a new game or a saved one)
+    const b = boundary({ children: 'the stage', resetKey: 'fox' });
+    expect(b.render()).toBe('the stage');
+    b.state = PartBoundary.getDerivedStateFromError();
+    expect(b.render()).toBe(null); // nothing where the stage was; the menu around it stands
+    b.componentDidUpdate({ resetKey: 'fox' }); // an update for the same creature: still failed
+    expect(b.render()).toBe(null);
+    // another creature (a founder being chosen, a game loaded): tried afresh
+    const next = boundary({ children: 'the stage', resetKey: 'cat' });
+    next.state = PartBoundary.getDerivedStateFromError();
+    next.componentDidUpdate({ resetKey: 'fox' });
+    expect(next.render()).toBe('the stage');
+  });
+
+  it('shows what it is given to show instead, if anything', () => {
+    const b = boundary({ children: 'the stage', fallback: 'no picture', resetKey: 1 });
+    b.state = PartBoundary.getDerivedStateFromError();
+    expect(b.render()).toBe('no picture');
   });
 });

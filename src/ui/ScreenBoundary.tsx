@@ -33,6 +33,31 @@ export function fetching<T>(load: () => Promise<T>, waitMs = 700): () => Promise
   return () => load().catch(() => new Promise<T>((resolve, reject) => setTimeout(() => load().then(resolve, reject), waitMs)));
 }
 
+/**
+ * A part of a screen that may fail on its own — a stage drawing one creature — without taking the
+ * screen with it: on a fault it simply is not drawn (or `fallback` is). It tries again when
+ * `resetKey` changes (another creature).
+ */
+export class PartBoundary extends Component<{ children: ReactNode; fallback?: ReactNode; resetKey?: unknown }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown): void {
+    console.error('A part of the screen failed to draw:', error);
+  }
+
+  componentDidUpdate(prev: { resetKey?: unknown }): void {
+    if (this.state.failed && prev.resetKey !== this.props.resetKey) this.setState({ failed: false });
+  }
+
+  render(): ReactNode {
+    return this.state.failed ? (this.props.fallback ?? null) : this.props.children;
+  }
+}
+
 interface Props {
   children: ReactNode;
 }

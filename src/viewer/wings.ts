@@ -438,6 +438,15 @@ export function finKindOf(aim: THREE.Vector3, partKind: string | undefined): Fin
   return 'pectoral';
 }
 
+/** The direction a fin's chord runs: back along the body, squared off against the fin's aim (a
+ *  caudal fin's chord stands vertical). */
+export function finChord(kind: FinKind, aim: THREE.Vector3): THREE.Vector3 {
+  let chord = kind === 'caudal' ? v3(0, 1, 0) : v3(0, 0, -1);
+  chord.addScaledVector(aim, -chord.dot(aim));
+  if (chord.lengthSq() < 1e-6) chord = v3(0, 1, 0).addScaledVector(aim, -aim.y);
+  return chord.normalize();
+}
+
 /**
  * A fin built in the BODY frame: its span runs out along the fin's aim, its chord sweeps BACK along
  * the body (a caudal fin's chord stands vertical), and it is sized to the body's girth `g` — so a
@@ -445,14 +454,9 @@ export function finKindOf(aim: THREE.Vector3, partKind: string | undefined): Fin
  * fan, never the old billboards whose chord inherited an arbitrary axis from the growth quaternion.
  * Origin at the fin root (on the skin); the root edge tucks a little into the body.
  */
-export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 1, cut: FinCut = 'plain'): FinBuild {
+export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 1, cut: FinCut = 'plain', root?: (along: number) => number): FinBuild {
   const aim = aimIn.clone().normalize();
-  const back = v3(0, 0, -1);
-  // chord: the body-backward direction with the aim removed; a caudal's chord is vertical
-  let chord = kind === 'caudal' ? v3(0, 1, 0) : back.clone();
-  chord.addScaledVector(aim, -chord.dot(aim));
-  if (chord.lengthSq() < 1e-6) chord = v3(0, 1, 0).addScaledVector(aim, -aim.y);
-  chord.normalize();
+  const chord = finChord(kind, aim);
   const normal = new THREE.Vector3().crossVectors(aim, chord).normalize();
   const k = Math.min(1.5, Math.max(0.6, gene));
   // [span, chord, sweep (how far back the tip rakes, ×chord)] per kind, × girth
@@ -483,8 +487,10 @@ export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 
   // (the plain fin's rake has always been scaled by the girth as well as by the chord — kept, so no
   // fin that existed changes; the new cuts rake by the stated share of their chord)
   const sweep = dims[kind][2] * (cut === 'plain' ? g : 1);
+  // (`root`: how far the skin stands above or below the fin's root point, `along` its chord — a long
+  // fin's base follows the back it grows from instead of running straight out over a falling one)
   const P = (along: number, out: number, bulge = 0) =>
-    chord.clone().multiplyScalar(along).add(aim.clone().multiplyScalar(out)).add(normal.clone().multiplyScalar(bulge));
+    chord.clone().multiplyScalar(along).add(aim.clone().multiplyScalar(out + (root ? root(along) : 0))).add(normal.clone().multiplyScalar(bulge));
   const smooth = (a: number, b: number, x: number) => {
     const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
     return t * t * (3 - 2 * t);

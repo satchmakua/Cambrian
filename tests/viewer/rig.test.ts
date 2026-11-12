@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { grow } from '../../src/engine/grow';
-import { genomeOfMorphotype } from '../../src/engine/random';
+import { genomeOfMorphotype, randomGenome } from '../../src/engine/random';
 import { rigTemplate, createRig, ensureSkinWeights, poseRig, poseDead, gaitAmplitude, restPosed, SLEEP_DROP } from '../../src/viewer/rig';
 import { buildSmoothGeometry } from '../../src/viewer/smoothSkin';
 
@@ -257,6 +257,25 @@ describe('animation rig', () => {
         }
       }
     }
+    // …and on two splayed legs as well (one random body in seventy): tipped as a biped is — a full
+    // radian over its hips, as one piece — its legs, which no feeding pose refolds, swung up behind
+    // it with the body: both feet most of a leg's height off the ground while it ate
+    let seen = 0;
+    for (let seed = 1; seed <= 800; seed++) {
+      const ph = grow(randomGenome(seed));
+      const T = rigTemplate(ph);
+      if (T.legs.length === 0 || T.legs.length > 2 || !T.legs.some((l) => l.arched)) continue;
+      seen++;
+      expect(T.grazeDip, `random #${seed} no dip`).toBe(0);
+      expect(T.grazeShift, `random #${seed} no shift`).toEqual([0, 0]);
+      const r = createRig(ph);
+      poseRig(r, { dt: 0, speed: 0, cruise: 1, sleep: 0, eat: 1, swim: false, turn: 0 });
+      for (const l of T.legs) {
+        const f = l.nodes[l.nodes.length - 1];
+        expect(footWorld(r, f).distanceTo(new THREE.Vector3(...ph.nodes[f].pos)), `random #${seed} foot`).toBeLessThan(0.02);
+      }
+    }
+    expect(seen).toBeGreaterThan(5);
   });
 
   it('a two-legged feeder tips over its hips as one piece: beak to the ground, feet where they stood', () => {

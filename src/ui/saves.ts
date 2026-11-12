@@ -164,6 +164,22 @@ const NODE_ID = /^\d{1,15}$/;
 /** A menagerie cell is "column:row". */
 const CELL_KEY = /^\d{1,2}:\d{1,2}$/;
 const GENERATION_MAX = 1e9;
+/** The highest number a lineage read from a file may be counting from. No game the breeder makes
+ *  comes within a millionth of it; a file past it has had its numbering tampered with or damaged. */
+const COUNTER_MAX = 1e9;
+
+/** The same family tree numbered from 0, in the order its creatures were made (their ids' order). */
+function renumbered(nodes: LineageNodes, currentId: string): { nodes: LineageNodes; currentId: string } {
+  const order = Object.keys(nodes).sort((a, b) => Number(a) - Number(b) || (a < b ? -1 : 1));
+  const to = new Map(order.map((id, i) => [id, String(i)]));
+  const out: LineageNodes = {};
+  for (const id of order) {
+    const n = nodes[id];
+    const mine = to.get(id)!;
+    out[mine] = { ...n, id: mine, parentId: n.parentId === null ? null : to.get(n.parentId)! };
+  }
+  return { nodes: out, currentId: to.get(currentId)! };
+}
 
 function checkBreeder(v: unknown): BreederSave {
   if (!isObj(v) || !isObj(v.nodes)) return fail('This save has no lineage in it.');
@@ -218,9 +234,17 @@ function checkBreeder(v: unknown): BreederSave {
       }
     }
   }
-  // (the next id must clear every id in use, whatever the file claims — and stay a plain counter)
-  const counter = Math.max(Number.isSafeInteger(v.counter) && (v.counter as number) >= 0 ? (v.counter as number) : 0, top + 1);
-  return { nodes, currentId: v.currentId, counter, symmetryMode: mode, menagerie };
+  // The next id must clear every id in use, whatever the file claims. And it must stay a number ids
+  // can go on being minted from: an id may have 15 digits, so a lineage counting from up near that —
+  // by its counter or by an id — was one whose every creature bred after loading would be refused by
+  // this very check: the save written, listed, and never to open again. A counter that has run away
+  // is ignored; ids that have are renumbered from 0 (any ceiling on them would only move that edge).
+  const claimed = Number.isSafeInteger(v.counter) && (v.counter as number) >= 0 && (v.counter as number) <= COUNTER_MAX ? (v.counter as number) : 0;
+  if (top + 1 > COUNTER_MAX) {
+    const tidy = renumbered(nodes, v.currentId);
+    return { nodes: tidy.nodes, currentId: tidy.currentId, counter: ids.length, symmetryMode: mode, menagerie };
+  }
+  return { nodes, currentId: v.currentId, counter: Math.max(claimed, top + 1), symmetryMode: mode, menagerie };
 }
 
 function checkSummary(v: unknown, breeder: BreederSave): SaveSummary {

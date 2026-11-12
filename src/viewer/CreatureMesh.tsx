@@ -27,16 +27,17 @@ import { makeCreatureMaterial } from './creatureMaterial';
 import { bareLegsOf, footPlanOf, lastLinkOf, legWeights, toedFootGeometry, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finCutOf, finKindOf, finScaleOf } from './wings';
+import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finKindOf, finScaleOf, type FinBuild } from './wings';
 import { ensureSkinWeights, type RigInstance } from './rig';
-import { buildFieldPrims, fieldAt } from './bodyField';
+import { buildFieldPrims, fieldAt, projectToSurface } from './bodyField';
 import { eyeClearings, eyeSeat, isSwimmer } from './eyeSeat';
 import { coatDark, coatFin, coatMain, coatPattern } from './palette';
 import { faceMaskOf, isApe } from './face';
 import { clawGeometry } from './claw';
 import { frillGeometry, frillPlan } from './frill';
-import { getGeometry, retainGeometry, releaseGeometry } from './geometryCache';
-import { mouthCarves } from './mouthLine';
+import { getGeometry, retainGeometry, releaseGeometry, hasGeometry } from './geometryCache';
+import { mouthCarves, surfacePrims } from './mouthLine';
+import { gillCutOf, gillGeometry, gillMarks } from './gills';
 import { sampleTrajectory, type Trajectory } from '../physics/fitness';
 import type { SkinMode } from '../ui/store';
 
@@ -137,6 +138,12 @@ function shellGeometry(phenotype: Phenotype, quality: SkinQuality): THREE.Buffer
   });
 }
 
+/** The fineness of a carapace shell that is already built — the asked one, else any — or null. (The
+ *  World's stand-in kit draws a shell only if one is; it never builds one inside a render.) */
+export function builtShell(phenotype: Phenotype, quality: SkinQuality): SkinQuality | null {
+  return ([quality, 'far', 'low', 'high'] as const).find((q) => hasGeometry(phenotype, shellKey(q))) ?? null;
+}
+
 /**
  * Build (and cache) everything a creature's smooth skin needs, ahead of mounting it — the World
  * schedules these within a time budget each frame, so a burst of new genomes never stalls rendering.
@@ -162,6 +169,7 @@ export function CreatureMesh({
   detail = 'full',
   carved = true,
   fur = false,
+  lazyShell = false,
 }: {
   phenotype: Phenotype;
   skinMode?: SkinMode;
@@ -178,6 +186,9 @@ export function CreatureMesh({
   carved?: boolean;
   /** shell fur over a furred coat (close-up views: a dozen extra passes of the body) */
   fur?: boolean;
+  /** draw the carapace shell only if one is already built, never build it in this render (the World's
+   *  stand-in kit: the scheduler builds the shell with the skin the body is waiting for) */
+  lazyShell?: boolean;
 }) {
   const data = useMemo(() => buildMeshData(phenotype), [phenotype]);
   const pal = phenotype.genomeRef.palette;
@@ -224,13 +235,17 @@ export function CreatureMesh({
   // a conforming carapace shell (turtle / crab), built from the trunk's own field — shared + cached
   // like the skin. Drawn in every skin mode: it is a separate solid, not part of the body field.
   const hasShell = useMemo(() => hasCarapace(phenotype), [phenotype]);
-  const shellGeo = useMemo(() => (hasShell ? shellGeometry(phenotype, quality) : null), [hasShell, phenotype, quality]);
+  // (a World body still waiting for its first skin draws its kit bare-backed for those few frames:
+  // building a shell here stalled the render that mounted it — 7 ms, 27 at the worst — and where the
+  // skin then came at another fineness, that shell was thrown away and later built again)
+  const shellQ = useMemo(() => (!hasShell ? null : lazyShell ? builtShell(phenotype, quality) : quality), [hasShell, lazyShell, phenotype, quality]);
+  const shellGeo = useMemo(() => (shellQ ? shellGeometry(phenotype, shellQ) : null), [shellQ, phenotype]);
   useEffect(() => {
-    if (!shellGeo) return;
-    const key = shellKey(quality);
+    if (!shellGeo || !shellQ) return;
+    const key = shellKey(shellQ);
     retainGeometry(phenotype, key);
     return () => releaseGeometry(phenotype, key);
-  }, [shellGeo, phenotype, quality]);
+  }, [shellGeo, phenotype, shellQ]);
   // the shell wears hard scutes: plates (turtle) or the body's own chitin (crab), with a bold
   // reticulate seam pattern. A turtle's is a darker, browner horn than the leathery skin that comes
   // out from under it — in the body's own tone the dome had no edge and the scutes ran on over the
@@ -624,7 +639,7 @@ function Feature({
       ) : f.kind === 'frill' ? (
         <Frill f={f} color={finColor} phenotype={phenotype} />
       ) : (
-        <Fin f={f} color={finColor} lite={lite} phenotype={phenotype} />
+        <Fin f={f} color={finColor} lite={lite} phenotype={phenotype} surface={surface} />
       );
     case 'claw': {
       if (f.kind === 'horn') return <Horn f={f} color={footColor} />;
@@ -638,7 +653,7 @@ function Feature({
     case 'ear':
       return <Ear f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} />;
     case 'gill':
-      return <Gill f={f} color={footColor} />;
+      return <Gill f={f} color={footColor} phenotype={phenotype} surface={surface} />;
     case 'crest':
       return <Crest f={f} color={finColor} />;
     case 'carapace':
@@ -1101,21 +1116,8 @@ function Pincer({ f, color, skin, origin }: { f: MeshFeature; color: number; ski
 
 // A fin, built in the body frame from its aim (wings.ts buildFin): a raked dorsal sail, swept
 // pectoral and pelvic paddles lying along the flank, a forked caudal fan — sized to the body's girth.
-function Fin({ f, color, lite = false, phenotype }: { f: MeshFeature; color: number; lite?: boolean; phenotype: Phenotype }) {
-  const build = useMemo(() => {
-    const q = new THREE.Quaternion(f.quat[0], f.quat[1], f.quat[2], f.quat[3]);
-    const aim = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
-    // girth: the radius of the body node this fin grows from (walk up past the fin chain)
-    const parent = new Int32Array(phenotype.nodes.length).fill(-1);
-    for (const [a, b] of phenotype.edges) parent[b] = a;
-    let c = parent[f.idx];
-    while (c >= 0 && phenotype.nodes[c].kind !== 'spine') c = parent[c];
-    const girth = c >= 0 ? phenotype.nodes[c].radius : Math.max(f.radius, 0.2) * 2;
-    const kind = finKindOf(aim, f.kind);
-    // a caudal grows at the tail tip, where the body is thin — size it to the trunk instead
-    const g = kind === 'caudal' ? Math.max(girth, trunkGirth(phenotype) * 0.8) : girth;
-    return buildFin(kind, aim, g, finScaleOf(f.style), finCutOf(f.style));
-  }, [f, phenotype]);
+function Fin({ f, color, lite = false, phenotype, surface = 'hybrid' }: { f: MeshFeature; color: number; lite?: boolean; phenotype: Phenotype; surface?: SkinSurface }) {
+  const build = useMemo(() => finOf(f, phenotype, surface), [f, phenotype, surface]);
   useEffect(() => () => build.membrane.dispose(), [build]);
   const ray = useMemo(() => new THREE.Color(color).multiplyScalar(0.6).getHex(), [color]);
   const bones = useMemo(
@@ -1143,6 +1145,53 @@ function Fin({ f, color, lite = false, phenotype }: { f: MeshFeature; color: num
       ))}
     </group>
   );
+}
+
+/** A fin feature's geometry as its body wears it (body frame, origin at the fin's node). */
+export function finOf(f: MeshFeature, phenotype: Phenotype, surface: SkinSurface = 'hybrid'): FinBuild {
+  const q = new THREE.Quaternion(f.quat[0], f.quat[1], f.quat[2], f.quat[3]);
+  const aim = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+  // girth: the radius of the body node this fin grows from (walk up past the fin chain)
+  const parent = new Int32Array(phenotype.nodes.length).fill(-1);
+  for (const [a, b] of phenotype.edges) parent[b] = a;
+  let c = parent[f.idx];
+  while (c >= 0 && phenotype.nodes[c].kind !== 'spine') c = parent[c];
+  const girth = c >= 0 ? phenotype.nodes[c].radius : Math.max(f.radius, 0.2) * 2;
+  const kind = finKindOf(aim, f.kind);
+  // a caudal grows at the tail tip, where the body is thin — size it to the trunk instead
+  const g = kind === 'caudal' ? Math.max(girth, trunkGirth(phenotype) * 0.8) : girth;
+  const cut = finCutOf(f.style);
+  // a fin along the midline of a back or a belly (a bony fish's sail and keel are three body-girths
+  // long) stands on the skin all the way: its root is traced down the surface under its chord.
+  // Run straight out from its root point, a fish's sail hung in the air over the back's fall to the
+  // tail — a third of a body unit of daylight under its rear end, 0.7 at the worst.
+  const root = cut !== 'plain' && (kind === 'dorsal' || kind === 'anal') ? finRoot(phenotype, f.idx, kind, aim, g, surface) : undefined;
+  return buildFin(kind, aim, g, finScaleOf(f.style), cut, root);
+}
+
+/**
+ * The skin's height under a fin's chord: for a distance `along` back from the fin's root point (forward
+ * if negative), how far the surface stands along the fin's aim relative to where it stands at the root.
+ * Sampled along the chord and read off between the samples.
+ */
+function finRoot(p: Phenotype, idx: number, kind: 'dorsal' | 'anal', aim: THREE.Vector3, g: number, surface: SkinSurface): (along: number) => number {
+  const prims = surfacePrims(p, surface);
+  const o = p.nodes[idx].pos;
+  const chord = finChord(kind, aim);
+  const STEP = 0.4 * g;
+  const FROM = -4, TO = 7; // (covers a sail's whole base, 1.3 girths ahead of the root to 2 behind, with room)
+  const heights: number[] = [];
+  for (let i = FROM; i <= TO; i++) {
+    const a = i * STEP;
+    const hit = projectToSurface(prims, [], [o[0] + chord.x * a, o[1] + chord.y * a, o[2] + chord.z * a]);
+    heights.push((hit.p[0] - o[0]) * aim.x + (hit.p[1] - o[1]) * aim.y + (hit.p[2] - o[2]) * aim.z);
+  }
+  const h0 = heights[-FROM];
+  return (along: number) => {
+    const u = Math.min(TO - FROM, Math.max(0, along / STEP - FROM));
+    const i = Math.min(TO - FROM - 1, Math.floor(u));
+    return heights[i] + (heights[i + 1] - heights[i]) * (u - i) - h0;
+  };
 }
 
 /** An arthropod of tagmata: its legs hang from a section past the trunk (a thorax ahead of the abdomen). */
@@ -1433,40 +1482,21 @@ function Ear({ f, color, skin, origin }: { f: MeshFeature; color: number; skin?:
   );
 }
 
-// Gills on the side of the neck, by the part's style (+Z points outward, X runs along the body):
-// a bony fish's gill COVER — one curved edge, the rear rim of the plate over its gills; a rake of dark
-// bars (what every gilled body had); or a shark's SLITS — five thin creases lying in the skin. The
-// cover and the slits lie flush: standing proud as the bars do, they broke a fish's outline like vents.
-const GILL_ARC = (() => {
-  // an arc of thin tube, open toward the head: the trailing edge of a gill cover
-  const g = new THREE.TorusGeometry(1, 0.055, 6, 20, Math.PI * 0.9);
-  g.rotateZ(Math.PI * 0.55);
-  return g;
-})();
-function Gill({ f, color }: { f: MeshFeature; color: number }) {
+// Gills on the side of the neck, by the part's style: a bony fish's gill COVER — one curved edge, the
+// rear rim of the plate over its gills; a rake of dark bars (what every gilled body had); or a
+// shark's SLITS — five thin creases. The cover and the slits lie IN the skin (standing proud as the
+// bars do, they broke a fish's outline like vents): they are traced over the surface (gills.ts).
+function Gill({ f, color, phenotype, surface }: { f: MeshFeature; color: number; phenotype: Phenotype; surface: SkinSurface }) {
   const r = Math.max(f.radius, 0.06);
   const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.5).getHex(), [color]);
-  // which side of the body it is on: the cover's edge and the slits' lean both face the tail
-  const flip = phenotypeSide(f) < 0 ? -1 : 1;
-  if (f.style < 0.35) {
+  const cut = gillCutOf(f.style);
+  const marks = useMemo(() => (cut === 'bars' ? null : gillGeometry(gillMarks(phenotype, f.idx, surface, cut, r))), [cut, phenotype, f.idx, surface, r]);
+  useEffect(() => () => marks?.dispose(), [marks]);
+  if (marks) {
     return (
-      <group quaternion={f.quat}>
-        <mesh geometry={GILL_ARC} position={[0, 0, r * 0.02]} scale={[r * 1.15 * flip, r * 1.35, r * 0.6]}>
-          <meshStandardMaterial color={dark} roughness={0.6} />
-        </mesh>
-      </group>
-    );
-  }
-  if (f.style > 0.65) {
-    return (
-      <group quaternion={f.quat}>
-        {[-0.72, -0.36, 0, 0.36, 0.72].map((off, i) => (
-          <mesh key={i} position={[off * r, 0, r * 0.01]} rotation={[0, 0, 0.16 * flip]} scale={[r * 0.07, r * (1.05 - 0.12 * Math.abs(off)), r * 0.05]}>
-            <boxGeometry args={[1, 1, 1]} />
-            <meshStandardMaterial color={dark} roughness={0.6} />
-          </mesh>
-        ))}
-      </group>
+      <mesh geometry={marks}>
+        <meshStandardMaterial color={dark} roughness={0.6} />
+      </mesh>
     );
   }
   return (
@@ -1479,13 +1509,6 @@ function Gill({ f, color }: { f: MeshFeature; color: number }) {
       ))}
     </group>
   );
-}
-
-/** Which flank a feature sits on (+1 right, −1 left), from where its outward axis points. */
-function phenotypeSide(f: MeshFeature): number {
-  const q = f.quat;
-  // the local +Z axis in body space: its X component
-  return 2 * (q[0] * q[2] + q[3] * q[1]) >= 0 ? 1 : -1;
 }
 
 // A crest: a fan of thin feathered/membranous blades (songbird / basilisk).

@@ -176,6 +176,57 @@ describe('saved games', () => {
     expect(fixed.summary.creature).toEqual(fixed.breeder.nodes['2'].genome);
   });
 
+  it('a lineage whose numbering has run away is put right: whatever is bred after loading it can be saved and opened again', () => {
+    // (an id may have 15 digits, and the counter was believed up to 2^53: a file counting from 1e15
+    // loaded cleanly, and every creature bred from then on had a 16-digit id this check refuses —
+    // saves that were written, listed, and never opened again)
+    /** breed one more creature, save, and read the save back — as the game would */
+    const playOn = (b: BreederSave): BreederSave => {
+      const id = String(b.counter);
+      const next: BreederSave = { ...b, nodes: { ...b.nodes, [id]: { id, genome: b.nodes[b.currentId].genome, parentId: b.currentId, generation: b.nodes[b.currentId].generation + 1 } }, currentId: id, counter: b.counter + 1 };
+      return parseSave(serializeSave(game({ breeder: next }))).breeder;
+    };
+
+    // a counter far past anything the breeder reaches is not believed
+    for (const counter of [1e15, 2 ** 53 - 1, 1e9 + 1]) {
+      const g = JSON.parse(serializeSave(game())) as SavedGame;
+      g.breeder.counter = counter;
+      const read = checkSave(g).breeder;
+      expect(read.counter, `counter ${counter}`).toBe(3);
+      const on = playOn(read);
+      expect(on.currentId).toBe('3');
+      expect(Object.keys(on.nodes).sort()).toEqual(['0', '1', '2', '3']);
+    }
+    // (one the breeder could have reached is)
+    const far = JSON.parse(serializeSave(game())) as SavedGame;
+    far.breeder.counter = 5000;
+    expect(checkSave(far).breeder.counter).toBe(5000);
+
+    // ids up at the edge of what an id may be: the same family tree, numbered from 0 again
+    const g = JSON.parse(serializeSave(game())) as SavedGame;
+    const b = lineage();
+    const big = { '0': '7', '1': '999999999999998', '2': '999999999999999' } as Record<string, string>;
+    g.breeder.nodes = Object.fromEntries(Object.values(b.nodes).map((n) => [big[n.id], { ...n, id: big[n.id], parentId: n.parentId === null ? null : big[n.parentId] }]));
+    g.breeder.currentId = big['2'];
+    g.breeder.counter = 1e15;
+    const read = checkSave(g).breeder;
+    expect(Object.keys(read.nodes).sort()).toEqual(['0', '1', '2']);
+    expect(read.counter).toBe(3);
+    expect(read.currentId).toBe('2');
+    for (const id of ['0', '1', '2']) {
+      expect(read.nodes[id].id).toBe(id);
+      expect(read.nodes[id].genome).toEqual(b.nodes[id].genome);
+      expect(read.nodes[id].parentId).toBe(b.nodes[id].parentId);
+      expect(read.nodes[id].generation).toBe(b.nodes[id].generation);
+    }
+    // …and it can be played on from, and that game opened, for as long as anyone breeds
+    let on = read;
+    for (let i = 0; i < 5; i++) on = playOn(on);
+    expect(on.counter).toBe(8);
+    expect(on.currentId).toBe('7');
+    expect(on.nodes['7'].generation).toBe(7);
+  });
+
   it('a slot store keeps saves apart, lists the newest first, and hands back copies', async () => {
     const store = memoryStore();
     expect(await store.list()).toEqual([]);

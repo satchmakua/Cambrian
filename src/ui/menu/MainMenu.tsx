@@ -16,14 +16,21 @@ import type { Genome } from '../../engine/genome';
 import { grow } from '../../engine/grow';
 import { coherence } from '../../engine/morphospace';
 import { CreatureViewer } from '../../viewer/CreatureViewer';
+import { PartBoundary } from '../ScreenBoundary';
 import { continueGame, quitGame, startNewGame } from '../game';
-import { useStore } from '../store';
+import { useStore, type SkinMode } from '../store';
 import { ControlsPanel, NewGamePanel, SavesPanel, SettingsPanel } from './panels';
 import pkg from '../../../package.json';
 
 type Screen = 'home' | 'new' | 'load' | 'settings' | 'controls' | 'bye';
 
 const TITLES: Record<Exclude<Screen, 'home' | 'bye'>, string> = { new: 'New game', load: 'Load game', settings: 'Settings', controls: 'Controls' };
+
+/** The menu's backdrop: one creature on the turntable. (Grown here, inside the menu's boundary.) */
+function Stage({ genome, skinMode }: { genome: Genome; skinMode: SkinMode }) {
+  const phenotype = useMemo(() => grow(genome), [genome]);
+  return <CreatureViewer phenotype={phenotype} skinMode={skinMode} />;
+}
 
 export function MainMenu() {
   const [screen, setScreen] = useState<Screen>(() => {
@@ -39,8 +46,16 @@ export function MainMenu() {
   const onPreview = useCallback((g: Genome) => setPreview(g), []);
   // the stage: the founder being chosen, else the creature of the game in progress
   const shown = screen === 'new' && preview ? preview : current.genome;
-  const phenotype = useMemo(() => grow(shown), [shown]);
-  const kind = useMemo(() => coherence(grow(current.genome)).nearest, [current.genome]);
+  // (what the game's creature is, for the Continue line — left unsaid if it cannot be worked out: the
+  // menu must come up whatever that creature does. It is where a player lands when a screen has
+  // failed, and the failure may be this very creature's)
+  const kind = useMemo(() => {
+    try {
+      return coherence(grow(current.genome)).nearest;
+    } catch {
+      return '';
+    }
+  }, [current.genome]);
 
   // Esc backs out of a sub-screen
   useEffect(() => {
@@ -67,7 +82,11 @@ export function MainMenu() {
   return (
     <div className={`mainmenu${screen === 'home' ? '' : ' sub'}`}>
       <div className="mm-stage">
-        <CreatureViewer phenotype={phenotype} skinMode={skinMode} />
+        {/* (a stage that cannot be grown or drawn is left dark; another creature — a founder being
+            chosen, a game loaded — is tried afresh) */}
+        <PartBoundary resetKey={shown}>
+          <Stage genome={shown} skinMode={skinMode} />
+        </PartBoundary>
       </div>
       <div className="mm-shade" />
       <div className={`mm-panel${screen === 'home' ? '' : ' wide'}`}>

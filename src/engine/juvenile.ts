@@ -56,6 +56,13 @@ function babyPart(a: AppendageGene): void {
 /** the young wear these proportions until they are this far to maturity (by age) */
 export const JUVENILE_UNTIL = 0.6;
 
+/** a youngster's head is big for its body — grown ×1.42 — but only up to this ×its trunk's girth (the
+ *  genes'): a cat's, an ape's or a frog's skull is its trunk's girth already, and enlarged in full
+ *  its young was a head on legs, half again as wide as the body carrying it */
+export const HEAD_MAX = 1.2;
+/** … and it always grows at least this much: the young of a big-headed kind still read as young */
+export const HEAD_MIN = 1.12;
+
 const JUVENILE = new WeakMap<Genome, Genome>();
 
 /** The same creature with a youngster's proportions (cached per genome object). */
@@ -67,7 +74,13 @@ export function juvenileGenome(g: Genome): Genome {
   for (let s: SegmentGene | undefined = j.body; s; s = s.child) chain.push(s);
   const head = chain.length > 1 ? chain[chain.length - 1] : null;
   chain.forEach((seg, i) => {
-    if (seg === head) scaleSize(seg, 1.42, 1.42, 0.95); // a big round head, the snout shorter
+    if (seg === head) {
+      // a big round head, the snout shorter
+      const mine = (seg.size[0] + seg.size[1]) / 2;
+      const trunk = (chain[0].size[0] + chain[0].size[1]) / 2;
+      const k = Math.max(HEAD_MIN, Math.min(1.42, (HEAD_MAX * trunk) / Math.max(mine, 1e-6)));
+      scaleSize(seg, k, k, 0.95);
+    }
     else if (i === 0) scaleSize(seg, 1, 1, 0.9); // a shorter, rounder body
     else scaleSize(seg, 1, 1, 0.85); // a short neck
     for (const a of seg.appendages) babyPart(a);

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { grow, type Phenotype } from '../../src/engine/grow';
+import { bipedSlot, grow, rearedness, type Phenotype } from '../../src/engine/grow';
+import type { Genome, SegmentGene } from '../../src/engine/genome';
 import { genomeOfMorphotype, randomGenome } from '../../src/engine/random';
 
 const trunkOf = (p: Phenotype) => p.nodes.filter((n) => n.kind === 'spine' && n.segment === 0);
@@ -994,6 +995,105 @@ describe('body plans', () => {
       const trunk = trunkOf(p);
       if (head.length === 0) continue;
       expect(Math.min(...head.map((n) => n.radius)) / Math.max(...trunk.map((n) => n.radius)), `#${seed}`).toBeGreaterThan(0.4);
+    }
+  });
+});
+
+describe('bred bodies keep the rules their founders keep', () => {
+  const sections = (g: Genome) => {
+    const out: SegmentGene[] = [];
+    for (let s: SegmentGene | undefined = g.body; s; s = s.child) out.push(s);
+    return out;
+  };
+
+  it('an ear is one flap seated on the skull, however many links its gene asks for', () => {
+    // (founders' ears have one link; mutation jitters every part's link count, and one child in
+    // twenty of a cat, dog, mouse, deer or bear — a third of all litters — grew a two-link ear:
+    // a flap hovering a fifth of a body unit above the head, since ears are left out of the skin)
+    const ears = (p: Phenotype) => p.nodes.filter((n) => n.part?.kind === 'ear');
+    let seen = 0;
+    for (const id of ['felid', 'canid', 'rodent', 'ungulate', 'ursid']) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const g = genomeOfMorphotype(seed, id);
+        const one = ears(grow(g));
+        if (one.length === 0) continue;
+        seen++;
+        for (const links of [2, 3, 6]) {
+          const h = structuredClone(g);
+          for (const s of sections(h)) for (const a of s.appendages) if (a.terminal === 'ear') a.segments = links;
+          const many = ears(grow(h));
+          expect(many.length, `${id} #${seed} ×${links}`).toBe(one.length);
+          many.forEach((n, i) => {
+            expect(n.terminal, `${id} #${seed} ×${links}`).toBe('ear');
+            for (let k = 0; k < 3; k++) expect(n.pos[k], `${id} #${seed} ×${links}`).toBeCloseTo(one[i].pos[k], 9);
+          });
+        }
+      }
+    }
+    expect(seen).toBeGreaterThan(20);
+  });
+
+  it('a one-link trunk is not shrunk by a taper it has no chest to shape with', () => {
+    // (the four-legged runner's tuck read the taper gene of any trunk with two pairs of legs: a crab's
+    // single link lost a fifth of its radius — a quarter of its mass, a sixth of its health and its
+    // bite in the valley — as that idle gene drifted up, under an unchanged shell)
+    let seen = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const g = genomeOfMorphotype(seed, 'crab');
+      if (g.body.repeat !== 1) continue;
+      seen++;
+      const at = (taper: number) => {
+        const h = structuredClone(g);
+        h.body.taper = taper;
+        return trunkOf(grow(h))[0].radius;
+      };
+      for (const taper of [1.03, 1.06, 1.11, 1.15]) expect(at(taper), `crab #${seed} taper ${taper}`).toBeCloseTo(at(1), 9);
+    }
+    expect(seen).toBeGreaterThan(6);
+  });
+
+  it('a trunk rears by degrees: no one step of its lean takes the legs from mid-body to the rump', () => {
+    // (one threshold at −0.26, 0.005 from the most upright hawk: a tenth of all hawk chicks — one in
+    // every other litter — stood on two pegs under its back third)
+    expect(rearedness(-0.255)).toBe(0); // the most upright hawk: a level walker still
+    expect(rearedness(-0.34)).toBe(1); // the least upright ape: reared
+    expect(bipedSlot(-0.2)).toBeCloseTo(0.55, 9);
+    expect(bipedSlot(-0.4)).toBeCloseTo(0.06, 9);
+    for (let pitch = -0.2; pitch > -0.42; pitch -= 0.005) expect(bipedSlot(pitch - 0.005)).toBeLessThanOrEqual(bipedSlot(pitch));
+
+    // the hips' place along the trunk (0 its rear end … 1 its front), as the lean is swept
+    const hipsAt = (p: Phenotype) => {
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      const t = trunkOf(p);
+      const a = t[0].pos, b = t[t.length - 1].pos;
+      const ax = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const len2 = ax[0] ** 2 + ax[1] ** 2 + ax[2] ** 2;
+      const ts: number[] = [];
+      p.nodes.forEach((n, i) => {
+        const up = parent.get(i);
+        if (n.part?.kind !== 'leg' || up === undefined || p.nodes[up].part?.kind === 'leg') return;
+        ts.push(((n.pos[0] - a[0]) * ax[0] + (n.pos[1] - a[1]) * ax[1] + (n.pos[2] - a[2]) * ax[2]) / len2);
+      });
+      return ts.reduce((x, y) => x + y, 0) / ts.length;
+    };
+    for (const id of ['raptor', 'bird', 'wyvern', 'primate']) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const g = genomeOfMorphotype(seed, id);
+        const at = (pitch: number) => {
+          const h = structuredClone(g);
+          h.body.curve = [pitch, h.body.curve[1]];
+          return hipsAt(grow(h));
+        };
+        let was = at(-0.2);
+        for (let k = 1; k <= 22; k++) {
+          const now = at(-0.2 - 0.01 * k);
+          expect(Math.abs(now - was), `${id} #${seed} at ${(-0.2 - 0.01 * k).toFixed(2)}`).toBeLessThan(0.14);
+          was = now;
+        }
+        // a level body's legs under its middle, an upright one's under its pelvis
+        expect(at(-0.2), `${id} #${seed}`).toBeGreaterThan(0.35);
+        expect(at(-0.42), `${id} #${seed}`).toBeLessThan(0.2);
+      }
     }
   });
 });

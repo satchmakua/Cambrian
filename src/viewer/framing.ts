@@ -35,3 +35,13 @@ export function framingOf(p: Phenotype): Framing {
   }
   return { center, ext, size, groundY: -ext[1] / 2, face };
 }
+
+/**
+ * How far off a camera stands from a body it shows in more than one pose (as grown, and lying at
+ * rest): by the largest of them. A view framed on whichever pose was showing moved its camera each
+ * time the pose changed — a snake set slithering, or stopped, threw away the angle it was being
+ * looked at from.
+ */
+export function reachOf(...poses: Phenotype[]): number {
+  return Math.max(...poses.map((p) => framingOf(p).size));
+}

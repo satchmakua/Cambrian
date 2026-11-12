@@ -33,7 +33,7 @@ import { mouthVariant, eyeVariant } from './partStyles';
 import type { SkinQuality } from './smoothSkin';
 import { createRig, poseDead, poseRig, restPosed, SLEEP_DROP, type RigInstance } from './rig';
 import { dprOf, useQuality } from '../ui/settings';
-import { framingOf, type Framing } from './framing';
+import { framingOf, reachOf, type Framing } from './framing';
 import { juvenileGenome } from '../engine/juvenile';
 import { JawContext, type JawControl } from './mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from './flight';
@@ -334,18 +334,21 @@ function Plate({
 function MainView({
   phenotype,
   framing,
+  reach,
   skinMode,
   overlays,
   motion,
 }: {
   phenotype: Phenotype;
   framing: Framing;
+  /** the camera's stand-off scale: the same for every pose of this creature (see `reachOf`) */
+  reach: number;
   skinMode: SkinMode;
   overlays: Overlays;
   motion: Motion;
 }) {
   const track = useRef<HTMLDivElement>(null);
-  const d = framing.size * 1.9;
+  const d = reach * 1.9;
   // dev/headless: ?studiocam=side|front|top|face|headside|feet|eye for a canonical main-view angle
   const cam = import.meta.env.DEV && typeof location !== 'undefined' ? new URLSearchParams(location.search).get('studiocam') : null;
   const f = framing.face ?? { pt: [0, 0, framing.ext[2] / 2] as [number, number, number], r: framing.size * 0.25 };
@@ -380,8 +383,8 @@ function MainView({
   return (
     <div className="studio-main" ref={track}>
       <View className="studio-main-view" track={track as MutableRefObject<HTMLElement>}>
-        <PerspectiveCamera makeDefault position={camPos} fov={38} near={Math.max(0.02, framing.size * 0.01)} far={framing.size * 40} />
-        <OrbitControls makeDefault target={target} enablePan={false} minDistance={cam === 'eye' ? 0.01 : framing.size * 0.4} maxDistance={framing.size * 7} />
+        <PerspectiveCamera makeDefault position={camPos} fov={38} near={Math.max(0.02, reach * 0.01)} far={reach * 40} />
+        <OrbitControls makeDefault target={target} enablePan={false} minDistance={cam === 'eye' ? 0.01 : reach * 0.4} maxDistance={reach * 7} />
         <SpecimenContent phenotype={phenotype} framing={framing} skinMode={skinMode} overlays={overlays} motion={motion} />
       </View>
     </div>
@@ -492,10 +495,14 @@ function Bench({ genome, skinMode, overlays, motion }: { genome: Genome; skinMod
   // so it starts from the body as grown; and the inspector measures that body, not its pose.
   const phenotype = useMemo(() => (motion === 'still' ? restPosed(grown) : grown), [grown, motion]);
   const framing = useMemo(() => (phenotype === grown ? measured : framingOf(phenotype)), [phenotype, grown, measured]);
+  // (each pose is centred and its plates fitted on its own box — but the main view's camera stands off
+  // by one distance for both, or it was moved, and the angle it had been turned to lost, each time a
+  // snake was set moving or stopped)
+  const reach = useMemo(() => reachOf(grown, restPosed(grown)), [grown]);
   return (
     <div className="bench">
       <div className="bench-views">
-        <MainView phenotype={phenotype} framing={framing} skinMode={skinMode} overlays={overlays} motion={motion} />
+        <MainView phenotype={phenotype} framing={framing} reach={reach} skinMode={skinMode} overlays={overlays} motion={motion} />
         <div className="plates">
           {PLATES.map((pl) => (
             <Plate key={pl.kind} kind={pl.kind} label={pl.label} phenotype={phenotype} framing={framing} skinMode={skinMode} overlays={overlays} motion={motion} />

@@ -145,14 +145,17 @@ export function grow(genome: Genome): Phenotype {
     // carries no limbs) tapers straight, or a long muzzle and an ostrich's neck bulge like sausages
     // …and a REARED trunk (pitched up off its hips: an ape's) is a torso — chest over a narrower waist
     // and hips — not a belly swelling mid-way between them (a fusiform upright trunk was a pear)
-    const reared = depth === 0 && seg.curve[0] < UPRIGHT_PITCH;
+    // (by degrees: see `rearedness`)
+    const reared = depth === 0 ? rearedness(seg.curve[0]) : 0;
     // …and a four-legged RUNNER's trunk (it deepens toward the chest — taper above 1) is a wedge: deep
     // at the brisket, drawn up to the waist, the back near level. With the full swell on top of that
     // its middle was the deepest and highest part — a bean with a hump, a head hung off the front of
     // it — and every cat and dog stood hunched like a grazing fawn. The swell fades as the taper grows.
-    const runner = depth === 0 && seg.taper > 1 && seg.appendages.filter((a) => a.kind === 'leg').length >= 2;
+    // (a trunk of one link has no chest behind its hips to deepen: its taper shapes nothing, and must
+    // not shrink it — a crab's shell slimmed as that idle gene drifted up)
+    const runner = depth === 0 && seg.repeat >= 2 && seg.taper > 1 && seg.appendages.filter((a) => a.kind === 'leg').length >= 2;
     const swell = runner ? BODY_BULGE * clamp(1 - RUNNER_TUCK * (seg.taper - 1), [0.3, 1]) : BODY_BULGE;
-    const bulge = reared || (depth > 0 && (!seg.child || seg.appendages.length === 0)) ? 0 : swell;
+    const bulge = depth > 0 && (!seg.child || seg.appendages.length === 0) ? 0 : swell * (1 - reared);
     const profileAt = (i: number) => 1 + bulge * Math.sin(Math.PI * (seg.repeat > 1 ? i / (seg.repeat - 1) : 0.5));
     // A taper above 1 grows the chain toward its front (a chest deeper than the hips, a fish deepest
     // behind its head) — it moves the bulk forward, it doesn't add any: the peak link is held to the
@@ -541,9 +544,13 @@ export function grow(genome: Genome): Phenotype {
     // were inverted: every hind knee pointed backward like a bird's heel, under every quadruped.)
     const fore = app.kind === 'leg' && !arch && legPairsHere === 2 && app.attachT > 0.5 && dev.symmetry !== 'radial';
     let pitch = app.kind !== 'leg' ? app.curl[0] : fore ? 0.18 + 0.5 * Math.abs(app.curl[0]) : -app.curl[0];
-    for (let j = 0; j < app.segments; j++) {
+    // An EAR is one node on the skull, whatever its gene says of links: the flap is drawn whole from
+    // its root, and no stalk is meshed under it (see bodyField) — grown as a chain, a bred ear's flap
+    // would hang in the air a link's length off the head.
+    const segments = app.terminal === 'ear' ? 1 : app.segments;
+    for (let j = 0; j < segments; j++) {
       if (atCap()) break;
-      const last = j === app.segments - 1;
+      const last = j === segments - 1;
       let r = app.thickness * Math.pow(app.taper, j);
       // a real leg is a muscular haunch tapering to a slim shin/ankle (the broad foot comes from the
       // paw/hoof terminator, which spreads wider than its node) — so legs read as powerful, not vestigial.
@@ -661,8 +668,30 @@ function pullLegAzimuth(az: number, coh: number): number {
   return lerp(a, canon, coh);
 }
 
-/** Trunk pitch per link below which a one-pair body counts as reared upright (birds lean ≥ −0.22). */
-const UPRIGHT_PITCH = -0.26;
+/** Trunk pitch per link at which a body begins to count as reared upright, and at which it wholly is
+ *  (the most upright hawk leans −0.255; an ape −0.34 or more). */
+const UPRIGHT_FROM = -0.27;
+const UPRIGHT_FULL = -0.34;
+
+/**
+ * How reared a trunk of this pitch per link is: 0 a level body … 1 one standing upright off its hips.
+ * By degrees, not at a line: with a single threshold at −0.26, one small mutation of a hawk's lean
+ * (−0.255) took its legs from mid-body to its rump and its belly's swell away — a chick on two pegs
+ * under its back third in every other litter. Across the band the legs slide and the swell fades.
+ */
+export function rearedness(pitch: number): number {
+  const t = clamp((UPRIGHT_FROM - pitch) / (UPRIGHT_FROM - UPRIGHT_FULL), [0, 1]);
+  return t * t * (3 - 2 * t);
+}
+
+/** where the hips of a reared biped sit: its pelvis, the trunk's bottom end */
+const PELVIS_SLOT = 0.06;
+
+/** The canonical slot of a one-pair body's legs on a trunk of this pitch: a level walker's balance
+ *  point mid-body (a bird's, a raptor's), sliding to the pelvis as the trunk rears (an ape's). */
+export function bipedSlot(pitch: number): number {
+  return lerp(legSlots(1)[0], PELVIS_SLOT, rearedness(pitch));
+}
 /** how far under the body a radial creature's tentacles take root (the pull of their seat toward −Y) */
 const TENTACLE_ROOT = 1.2;
 
@@ -678,7 +707,7 @@ function normalizeSectionLegs(seg: SegmentGene, trunk: boolean, coh: number): vo
   // a REARED biped (the trunk pitched up off its hips: an ape, a kangaroo, a humanoid) stands on
   // its pelvis — the trunk's bottom end — not at a horizontal walker's balance point mid-body (a
   // bird's or a raptor's), where the legs sprouted from its belly
-  const slots = pairs === 1 && trunk && seg.curve[0] < UPRIGHT_PITCH ? [0.06] : legSlots(pairs);
+  const slots = pairs === 1 && trunk ? [bipedSlot(seg.curve[0])] : legSlots(pairs);
   legs.sort((x, y) => x.attachT - y.attachT); // front-to-back; assign slots in order
   legs.forEach((leg, i) => {
     leg.pair = true; // legs are always mirrored
