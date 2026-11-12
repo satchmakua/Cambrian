@@ -733,13 +733,35 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   numbering`, `keys.test.ts › a part that fails`; in a browser, `?failstage=1` → the failure card →
   Main menu → the menu.
 
+- [x] **M79 — Surfaces that read.** A shut mouth is one seam in the skin (no crossed strokes, no
+  cords past the cheeks); a relief's slope is measured at every pixel, so scales and plates no
+  longer break into squares (`fineRelief`, on at Medium and High); thinning fur keeps the coat's
+  tone; a trunk, a neck and a tail are curves, not cones with a crease ring at every node.
+  **Tests:** `tests/viewer/mouths/jawed.test.ts`, `mandibles.test.ts`, `mouthLine.test.ts`,
+  `creatureMaterial.test.ts › the relief's slope`, `bodyField.test.ts › chains`.
+- [x] **M80 — Cut stone, plumage, scales.** Crystal is the eighth covering: flat facets that meet in
+  sharp edges and mirror the sky face by face, shard clusters for horns and back spines, and a
+  crystal beast that wears them. Feathers and scales are overlapping scallops laid along the body.
+  **Tests:** `creatureMaterial.test.ts › a crystal hide`, `› plumage and scales`, `shards.test.ts`,
+  `tests/engine/plans/crystalline.test.ts`, `covering.test.ts › every covering is a gene`.
+- [x] **M81 — Crabs, fish and sharks.** A crab has pincers, arched legs and stalk eyes on its
+  shell's rim; a fish and a shark have heads that run on from the body, fins in their places, a gill
+  cover that crosses the flank, and their tail fins in the picture (`finBounds`). **Tests:**
+  `tests/engine/plans/fish.test.ts`, `tests/viewer/claw.test.ts`, `gills.test.ts`,
+  `framing.test.ts › a finned body`, `bodyplan.test.ts › crab`.
+- [x] **M82 — Plans reworked in parallel.** Weasels that arch, hawks that stand, apes with
+  shoulders, brows and fists, chimeras with raised wings and a mane — each fixed in its own checkout
+  against its audit notes, judged before/after by an independent viewer, and merged with a proof
+  that no other plan's founders moved. **Tests:** `tests/engine/plans/mustelid.test.ts`,
+  `raptor.test.ts`, `primate.test.ts`, `chimera.test.ts`, `bodyplan.test.ts › an ape's hips`.
+
 ### Next up (unchecked — pick from here)
 
-- [ ] **The plans the audit still marks down.** Crabs (claws that pinch, stalk eyes on the front
-  rim, legs that arch, a low wide shell); the many-legged alien (segments, a leg pair on each); the
-  crystalline creature (facets, shards — nothing crystalline about it yet); apes (a brow and a
-  muzzle, shoulders wider than the head, knuckles not rakes); frogs (forelegs with elbows, long hind
-  feet); and the coverings (feathers that read as scales, patchy fur, coarse pattern cells).
+- [ ] **The plans the audit still marks down.** Foxes and wolves, crocodiles, theropods and the
+  many-legged alien (being reworked); starfish (a face piled on the disc, four arms), lizards (post
+  legs, a helmet head), plain snakes, turtles (shoulders outside the shell), urchins (buried eyes),
+  frogs (a loaf of a head, forelegs with no elbows), bears (a capybara's muzzle) and deer (splayed
+  legs, a peg tail).
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.
 - [ ] **A lineage film.** A wild species' body changes over the generations, as a strip of portraits.

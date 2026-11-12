@@ -26,7 +26,7 @@ in-game menu (save, load, settings, exit) over any of its three screens:
   card with follow-cam, and a field journal narrate it; take any wild creature home to breed.
 
 Creatures are smooth organic bodies (an implicit round-cone field, welded and skinned) with
-anti-aliased procedural coverings — fur, scales, feathers, chitin, slime, plates. Full variety spec in
+anti-aliased procedural coverings — fur, scales, feathers, chitin, slime, plates, crystal. Full variety spec in
 [MORPHOLOGY.md](MORPHOLOGY.md); milestones in [ROADMAP.md](ROADMAP.md).
 
 **Saves and settings.** The game in progress is kept in the browser as you play (Continue returns to

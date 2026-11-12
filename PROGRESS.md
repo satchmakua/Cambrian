@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M76–M78: two reviews and the body plans reworked one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -44,9 +44,70 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Physics fitness (stretch) | `src/physics/fitness.ts`, `src/viewer/PhysicsPanel.tsx` | ✅ Rapier ragdoll + muscle drive + distance fitness; lazy-loaded, deterministic; **+ gait playback** |
 | World skins | `src/world/skinQueue.ts`, `lod.ts`, `src/viewer/geometryCache.ts` | ✅ three finenesses by distance, ordered and built off the render within a frame budget, kept once built (tested in node) |
 | Marks on the skin | `src/viewer/gills.ts`, `wings.ts` (`buildFin` root), `eyeSeat.ts` | ✅ gill covers / slits and midline fin bases traced over the drawn surface |
+| Cut stone | `src/viewer/creatureMaterial.ts` (`facets`), `shards.ts` | ✅ the crystal covering: flat faces meeting in sharp edges (a tetrahedral grid, cut twice), a coat that mirrors face by face, shard clusters for horns and back spines |
+| Imbricated coats | `src/viewer/creatureMaterial.ts` (`scallops`) | ✅ feathers and scales as overlapping scallops laid along a direction field on the skin (rest normal), relief sloped per pixel |
+| Ape limbs and brow | `src/viewer/apeLimbs.ts`, `face.ts`, `src/engine/grow.ts` (`knuckleArm`, `armWalker`) | ✅ shoulders, knuckle-walking fists, flat feet, a brow ridge traced on the skull |
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M79–M82 — A re-audit by eye, surfaces that read, plans reworked in parallel · 2026-11-12
+
+- **Ask people who did not make it, twice.** Every plan was rendered to a sheet (a three-quarter
+  view and four plates) and shown, with no code, to independent viewers: what does this read as,
+  what is wrong, and — given the sheets from before the rework — is it better. Recognisability rose
+  2.84 → 3.39 and craft 2.35 → 2.60 across the 31 plans; none was judged worse, 83 defects were
+  confirmed, and the same few causes ran through most of them. Those came first.
+- **A shut mouth is one seam.** Mouths were drawn as lips: two cords that crossed at the corners,
+  stood off the face and ran past its sides. A closed mouth is now a single fold in the skin, its
+  lower jaw and teeth drawn only once it opens; a mandibled mouth is as wide as its jaws, no wider.
+- **Measure the relief's slope where it is drawn.** The GPU's derivative of a height is one value
+  per 2×2 pixels. Wherever a scale or a plate's edge was a few pixels across, every block took one
+  slope and the hide broke into a mosaic of little squares. The slope is now the height one pixel
+  over, across and down, evaluated at this pixel (three reads of the relief instead of one: on at
+  Medium and High, `fineRelief`). Fur's last sparse strands keep the coat's tone instead of their
+  root shadow, so a bear seen whole no longer wears pepper.
+- **A chain is a curve.** A trunk, a neck and a tail were straight cones between their nodes, and
+  every node a crease that the sky's bounce lit as a ring round the belly. Each link is now three
+  cones along a spline through the nodes.
+- **Three tries at cut stone.** The crystal creature was a plated lump. Crystal is now a covering
+  like fur (any lineage can wear it). Cells with a random plane each: stained glass. The same
+  bevelled to a common floor so the faces could meet: pebbles in gutters. Heights at the corners of
+  a tetrahedral grid, blended flat inside each: true flat faces, sharp edges, no step — and a
+  regular wire net. The stone is cut twice, at two angles and sizes, and the higher cut shows: flat
+  faces of every shape. The clear coat takes each facet's tilt (three.js leaves a coat on the smooth
+  body under the bump: a glaze over the stone). Horns and back spines become clusters of shards.
+- **Feathers lie on feathers.** A cell per feather with straight borders is a crazed glaze: both
+  audits called it cobblestones. Each cell now roots a scallop — a ball whose height ramps from root
+  to tip along a lay direction — and the highest one over a point shows, so every tip lies on the
+  roots behind it and ends in a round, shadowed edge. The lay is a field on the skin: toward the
+  tail and a little down, projected flat from the body's rest normal, so plumage runs back along
+  the back and down a chest that faces forward, and does not turn when the animal does. Scales use
+  the same, smaller.
+- **A fin is part of the animal's outline.** Fins are drawn from their nodes, not grown as nodes,
+  so a body's bounds ended at its tail's last link and the side plate cut every fish's tail off.
+  Framing now reaches out to the fins as built. Fish and sharks got heads that run on from the
+  body's depth (a shark's began at half its shoulders': a neck, then a melon), level snouts,
+  pectorals behind the gills rather than beside the belly fins, and a gill cover sized to the flank
+  it lies on instead of to the gill part (where it was a comma).
+- **One plan, one worktree, one server — and a judge.** Eight of the lowest-rated plans went out
+  in parallel, each to its own checkout with its own dev server, its audit notes, a fingerprint
+  tool proving no other plan's founders moved, and an independent viewer to accept or reject the
+  before/after. Two things broke first: the checkouts shared one Vite dependency cache through a
+  symlinked `node_modules` (two copies of React, every page blank — the cache is per checkout now),
+  and worktrees were created at an old commit (each now pins the commit it must build on).
+- **Two right fixes can be wrong together.** The ape's fixer moved a reared trunk's hips to the
+  back of its pelvis, checking that no other plan leans that far. On the commit it built from, none
+  did; meanwhile the hawk's fixer had stood the hawk up. Merged, the hawk's legs slid back and it
+  stood ahead of its own feet. The proxy (how far the trunk leans) was not the reason (its arms
+  carry its front): the rule is keyed on the arms now, and a test grows the ape without arms and
+  the hawk with them.
+- **What the plans became.** Crabs: pincers with a gape, legs that arch, eyes on stalks at the
+  shell's front rim. Weasels: an arched back on short stout legs, a wedge of a head on a real neck.
+  Hawks: upright, chest out, a flat crown, a scowl, long wings down the back, talons. Apes: a small
+  browed head between broad shoulders, column arms to knuckle-walking fists, a dark bare face.
+  Chimeras: a feathered wing on four legs is carried raised and open (folded, it was saddlebags),
+  the frill a mane round the skull.
 
 ## M76–M78 — Two reviews, and the body plans one by one · 2026-11-12
 
