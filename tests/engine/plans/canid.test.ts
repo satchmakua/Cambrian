@@ -143,8 +143,9 @@ describe('canid', () => {
     expect(seen).toBeGreaterThan(12);
   });
 
-  it('keeps the brush and the stop to itself: no other founder grows either', () => {
-    for (const id of ['felid', 'ungulate', 'ursid', 'rodent', 'mustelid', 'primate', 'dragon', 'wyvern', 'crocodilian', 'shark', 'lizard']) {
+  it('keeps the brush to itself, and the stop to itself and the bear: no other founder grows either', () => {
+    // (a bear's skull has a stop too: see plans/ursid.test.ts)
+    for (const id of ['felid', 'ungulate', 'rodent', 'mustelid', 'primate', 'dragon', 'wyvern', 'crocodilian', 'shark', 'lizard']) {
       for (let seed = 1; seed <= 12; seed++) {
         const g = genomeOfMorphotype(seed, id);
         expect(headStop(...headOf(g)), `${id} #${seed} stop`).toBe(0);

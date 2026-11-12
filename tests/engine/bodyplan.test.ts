@@ -572,12 +572,16 @@ describe('body plans', () => {
       const spine = p.nodes.filter((n) => n.kind === 'spine');
       const last = Math.max(...spine.map((n) => n.segment ?? 0));
       const head = spine.filter((n) => n.segment === last);
-      // a cranium and one muzzle link (three links tapered evenly from brow to nose: a rodent's snout)
-      expect(head.length, `#${seed}`).toBe(2);
+      // a cranium and a muzzle: one muzzle link, or two hung from a braincase with a stop — never three
+      // links tapered evenly from brow to nose (a rodent's snout)
       const ry = (n: (typeof spine)[number]) => n.radius * (n.scale?.[1] ?? 1);
-      const tip = head[1];
+      if (head.length !== 2) {
+        expect(head.length, `#${seed}`).toBe(3);
+        expect(head[1].radius / head[0].radius, `#${seed} a muzzle hung from a braincase`).toBeLessThan(0.6);
+      }
+      const tip = head[head.length - 1];
       const len = tip.pos[2] + tip.radius * (tip.scale?.[2] ?? 1) - (head[0].pos[2] - head[0].radius);
-      expect(len / (2 * ry(head[0])), `#${seed} head length`).toBeLessThan(1.8);
+      expect(len / (2 * ry(head[0])), `#${seed} head length`).toBeLessThan(2.1);
       // the limb below the haunch stays thick: the thinnest link over a fifth of the chest's depth
       const t = trunkOf(p);
       const D = 2 * Math.max(...t.map(ry));
