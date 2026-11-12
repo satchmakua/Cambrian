@@ -8,12 +8,12 @@ describe('noses', () => {
     // (two in five of every kind had one, and a pink-nosed bear read as a giant rodent)
     for (let seed = 1; seed <= 12; seed++) {
       expect(pinkNoseChance(grow(genomeOfMorphotype(seed, 'ursid'))), `bear #${seed}`).toBe(0);
-      expect(pinkNoseChance(grow(genomeOfMorphotype(seed, 'canid'))), `dog #${seed}`).toBeLessThan(0.08);
-      expect(pinkNoseChance(grow(genomeOfMorphotype(seed, 'ungulate'))), `deer #${seed}`).toBeLessThan(0.08);
+      expect(pinkNoseChance(grow(genomeOfMorphotype(seed, 'canid'))), `dog #${seed}`).toBe(0);
+      expect(pinkNoseChance(grow(genomeOfMorphotype(seed, 'ungulate'))), `deer #${seed}`).toBe(0);
       const mouse = pinkNoseChance(grow(genomeOfMorphotype(seed, 'rodent')));
       expect(mouse, `mouse #${seed}`).toBeGreaterThan(0.25);
       expect(mouse, `mouse #${seed}`).toBeLessThanOrEqual(0.7);
-      expect(pinkNoseChance(grow(genomeOfMorphotype(seed, 'felid'))), `cat #${seed}`).toBeLessThan(0.4);
+      expect(pinkNoseChance(grow(genomeOfMorphotype(seed, 'felid'))), `cat #${seed}`).toBeLessThan(0.2);
     }
   });
 });

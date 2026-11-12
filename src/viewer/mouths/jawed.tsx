@@ -354,22 +354,19 @@ function dot(a: Vec3, b: Vec3): number {
 }
 
 /**
- * How likely a nose is to be pink rather than near-black: about even on a mouse, less on a cat,
- * rare at the end of a long muzzle (a dog's, a deer's), and never on anything the size of a bear.
- * Judged from the body itself — its girth, and whether its head runs to a third link, a long snout.
+ * How likely a nose is to be pink rather than near-black: the smaller the animal, the likelier —
+ * better than even on a mouse, nothing on anything that stands as tall as a cat, a dog or a bear.
+ * Judged from the body itself: how high its back stands above the lowest thing it has.
  */
 export function pinkNoseChance(p: Phenotype): number {
-  let girth = 0;
-  let headSegment = 0;
+  let top = -Infinity;
+  let floor = Infinity;
   for (const n of p.nodes) {
-    if (n.kind !== 'spine') continue;
-    if ((n.segment ?? 0) === 0) girth = Math.max(girth, n.radius);
-    headSegment = Math.max(headSegment, n.segment ?? 0);
+    floor = Math.min(floor, n.pos[1] - n.radius);
+    if (n.kind === 'spine' && (n.segment ?? 0) === 0) top = Math.max(top, n.pos[1] + n.radius * (n.scale?.[1] ?? 1));
   }
-  const headLinks = headSegment > 0 ? p.nodes.filter((n) => n.kind === 'spine' && n.segment === headSegment).length : 0;
-  const small = Math.min(1, Math.max(0, (0.66 - girth) / 0.2));
-  // (a small animal's long snout is a shrew's or a rat's: pink as often as not)
-  return 0.7 * small * (headLinks >= 3 && girth > 0.5 ? 0.15 : 1);
+  const height = top - floor;
+  return 0.7 * Math.min(1, Math.max(0, (2.0 - height) / 0.6));
 }
 
 export function JawedMouth({
