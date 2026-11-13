@@ -986,6 +986,23 @@ describe('body plans', () => {
     }
   });
 
+  it("a songbird's head is a round one, carried on a neck lost in its feathers — not a helmet on a stalk", () => {
+    // (a third of its skulls were drawn broad, a third wider than round and two-thirds as deep, and its
+    // neck was down to half the head's girth: a helmet set on a stalk, a crease under it)
+    for (let seed = 1; seed <= 16; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'bird'));
+      const spine = p.nodes.filter((n) => n.kind === 'spine');
+      const last = Math.max(...spine.map((n) => n.segment ?? 0));
+      const head = spine.filter((n) => n.segment === last)[0];
+      const sx = head.scale?.[0] ?? 1, sy = head.scale?.[1] ?? 1;
+      expect(sx / sy, `#${seed} round`).toBeLessThan(1.2);
+      expect(sy / sx, `#${seed} round`).toBeLessThan(1.2);
+      const R = (n: (typeof spine)[0]) => n.radius * Math.max(n.scale?.[0] ?? 1, n.scale?.[1] ?? 1);
+      const neck = Math.min(...spine.filter((n) => (n.segment ?? 0) > 0 && (n.segment ?? 0) < last).map(R));
+      expect(neck / R(head), `#${seed} neck`).toBeGreaterThan(0.7);
+    }
+  });
+
   it('a crab is wide and flat, its claws held out in front and four pairs of legs splayed to its sides', () => {
     // (a round domed body on three pairs of stubby legs read as a beetle)
     for (let seed = 1; seed <= 8; seed++) {
