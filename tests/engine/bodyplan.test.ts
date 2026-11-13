@@ -449,11 +449,14 @@ describe('body plans', () => {
       const g = genomeOfMorphotype(seed, 'shark');
       const p = grow(g);
       const head = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 1).sort((a, b) => a.pos[2] - b.pos[2]);
-      expect(head.length, `#${seed} head links`).toBe(3);
-      expect(head[2].radius / head[0].radius, `#${seed} pointed`).toBeLessThan(0.55);
+      // (four links: three, tapering no further than a gene allows, still ended in a cap a third of
+      // the head across — a melon)
+      expect(head.length, `#${seed} head links`).toBe(4);
+      const tip = head[head.length - 1];
+      expect(tip.radius / head[0].radius, `#${seed} pointed`).toBeLessThan(0.3);
       const mouth = p.nodes.find((n) => n.terminal === 'mouth')!;
       // the snout runs on past the mouth, and the mouth is on the underside
-      expect(head[2].pos[2] + head[2].radius - mouth.pos[2], `#${seed} snout past the mouth`).toBeGreaterThan(0.25 * head[0].radius);
+      expect(tip.pos[2] + tip.radius - mouth.pos[2], `#${seed} snout past the mouth`).toBeGreaterThan(0.25 * head[0].radius);
       expect(mouth.pos[1], `#${seed} mouth below the head's axis`).toBeLessThan(head[1].pos[1]);
       const eye = p.nodes.find((n) => n.terminal === 'eye')!;
       expect(eye.pos[1], `#${seed} eyes above the mouth`).toBeGreaterThan(mouth.pos[1]);

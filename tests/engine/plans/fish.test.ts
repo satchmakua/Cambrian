@@ -41,7 +41,7 @@ describe('fish and shark', () => {
       for (const seed of SEEDS) {
         const { trunk, head } = parts(id, seed);
         const shoulders = ry(trunk[trunk.length - 1]);
-        expect(head.length, `${id} #${seed}`).toBe(3);
+        expect(head.length, `${id} #${seed}`).toBe(id === 'shark' ? 4 : 3);
         expect(ry(head[0]) / shoulders, `${id} #${seed}: the head starts near the shoulders' depth`).toBeGreaterThan(0.7);
         expect(ry(head[0]) / shoulders, `${id} #${seed}: …and not above it`).toBeLessThan(1.12);
         // narrowing link by link to a snout well under half the shoulders
@@ -79,6 +79,19 @@ describe('fish and shark', () => {
       const sm = terminal(shark.p, 'mouth')[0];
       expect(sm.pos[1], `shark #${seed}: under the head`).toBeLessThan(shark.head[1].pos[1] - 0.5 * ry(shark.head[1]));
       expect(sm.pos[2], `shark #${seed}: set back from the tip`).toBeLessThan(shark.head[2].pos[2]);
+    }
+  });
+
+  it("a shark's snout runs out to a point, its head broader than deep, its eye a small bead", () => {
+    // (three links tapering no further than a gene allows ended in a cap a third of the head across: a
+    // round melon of a snout, a big ringed eye under it and a grin — a toy beluga)
+    for (const seed of SEEDS) {
+      const { p, head } = parts('shark', seed);
+      const tip = head[head.length - 1];
+      expect(ry(tip) / ry(head[0]), `shark #${seed}: a point`).toBeLessThan(0.3);
+      const rx = (n: BodyNode) => n.radius * (n.scale?.[0] ?? 1);
+      expect(rx(head[0]) / ry(head[0]), `shark #${seed}: flattened`).toBeGreaterThan(1.2);
+      for (const e of terminal(p, 'eye')) expect(e.radius / ry(head[0]), `shark #${seed}`).toBeLessThan(0.215);
     }
   });
 
