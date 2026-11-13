@@ -153,6 +153,8 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
     marking hue, and a plan's sober-markings flag was ignored on an uncanny one. The flag now holds
     whatever the cluster, and the theropod, the dragon and the wyvern ask for it: markings in the
     body's own hue, darker or paler, or umber.
+  - *Pale puffball paws* (cat, dog, bear, ape, weasel): a paw faces the ground, so countershading gave
+    it the belly's tone; a leg and its paw wear the flank's now.
 - **Still to do from it:** the weasel end on (its shoulder joints stand out past its flanks); ears
   that are spikes edge-on (the far ear, facing forward-out, from a three-quarter view: thicker ears
   didn't help — it is the angle); the frog a bun on its chin (its forelegs attach under the middle of
