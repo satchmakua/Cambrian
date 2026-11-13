@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { buildMembraneWing, buildFoldedMembraneWing, buildFeatheredWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface } from '../../src/viewer/wings';
+import { buildFin, buildMembraneWing, buildFoldedMembraneWing, buildFeatheredWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface } from '../../src/viewer/wings';
 
 function finite(g: THREE.BufferGeometry): boolean {
   const a = g.getAttribute('position').array as ArrayLike<number>;
@@ -97,6 +97,28 @@ describe('wings (shoulder-built, body frame)', () => {
     expect(b.min.z).toBeLessThan(-1.5); // primaries reach well behind the shoulder
     expect(b.max.z).toBeLessThan(0.3); // and nothing pokes forward of it
     expect(b.max.x - b.min.x).toBeLessThan(0.8); // folded flat against the side, not spread
+  });
+
+  it("a shark's tail is a broad crescent, its upper lobe sweeping up and back — not two thin spikes", () => {
+    // (drawn from the root to an outline that ran from the lower tip through a notch right behind the
+    // root to the upper tip, each lobe was a sliver of a triangle: a small fork on a long tube, a dolphin)
+    const fin = buildFin('caudal', new THREE.Vector3(0, 0, -1), 1, 1, 'shark');
+    const pos = fin.membrane.getAttribute('position');
+    const ix = fin.membrane.getIndex()!;
+    let area = 0;
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    for (let t = 0; t < ix.count; t += 3) {
+      a.fromBufferAttribute(pos, ix.getX(t));
+      b.fromBufferAttribute(pos, ix.getX(t + 1));
+      c.fromBufferAttribute(pos, ix.getX(t + 2));
+      area += b.sub(a).cross(c.sub(a)).length() / 2;
+    }
+    const box = new THREE.Box3().setFromBufferAttribute(pos as THREE.BufferAttribute);
+    const size = box.getSize(new THREE.Vector3());
+    // a crescent fills a good share of the box it spans
+    expect(area / (size.y * size.z)).toBeGreaterThan(0.3);
+    // its upper lobe reaches higher above the root than the lower reaches below it
+    expect(box.max.y).toBeGreaterThan(-box.min.y * 1.5);
   });
 
   it('a tail fan points back from the tail tip', () => {

@@ -77,9 +77,19 @@ describe('gills that lie in the skin', () => {
         expect(span(own) / (2 * half), `fish #${seed}: the part's own size is a scratch`).toBeLessThan(0.3);
         seen++;
       }
-      // a shark's slits are the size of the gill part: five short creases, not five long cuts
+      // a shark's slits each run about a third of the flank's depth: not a smudge (the gill part's own
+      // size, a twelfth of it), nor cuts across the whole flank
       const sh = body('shark', seed);
-      for (const f of gillsOf(sh)) expect(gillRadiusOf(sh, f.idx, 'slits', f.radius)).toBe(f.radius);
+      const shParent = new Map(sh.edges.map(([a, b]) => [b, a]));
+      for (const f of gillsOf(sh)) {
+        const link = sh.nodes[shParent.get(f.idx)!];
+        const half = link.radius * (link.scale?.[1] ?? 1);
+        const r = gillRadiusOf(sh, f.idx, 'slits', Math.max(f.radius, 0.06));
+        const lines = gillMarks(sh, f.idx, 'hybrid', 'slits', r).lines;
+        const tall = Math.max(...lines.map((l) => Math.max(...l.map((q) => q.y)) - Math.min(...l.map((q) => q.y))));
+        expect(tall / (2 * half), `shark #${seed}`).toBeGreaterThan(0.2);
+        expect(tall / (2 * half), `shark #${seed}`).toBeLessThan(0.45);
+      }
     }
     expect(seen).toBeGreaterThan(12);
   });

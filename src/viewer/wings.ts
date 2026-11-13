@@ -640,7 +640,9 @@ export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 
     pectoral: [1.85 * k, 1.05 * k, 0.85], // a long swept plane
     pelvic: [0.72 * k, 0.75 * k, 0.6],
     anal: [0.55 * k, 0.7 * k, 0.6],
-    caudal: [2.7 * k, 2.4 * k, 0],
+    // (a shark's tail is what says shark: a crescent whose upper lobe sweeps up and back further than
+    // the body is deep — at 2.7 girths, two thin spikes, it was a small fork on a long tube: a dolphin)
+    caudal: [3.2 * k, 2.8 * k, 0],
   };
   const dims = cut === 'fish' ? FISH : cut === 'shark' ? SHARK : PLAIN;
   const H = dims[kind][0] * g;
@@ -662,17 +664,25 @@ export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 
   const N = 14;
   let hubAlong = C * 0.3;
   if (kind === 'caudal' && cut === 'shark') {
-    // a shark's tail: the upper lobe runs up and far back, the lower is a short blade under it
-    // (`across` runs down → up the tail's depth; the notch between the lobes sits low)
-    const lo = -0.34 * C, hi = 0.66 * C;
-    const notch = -lo / (hi - lo);
-    for (let i = 0; i <= N; i++) {
-      const t = i / N;
-      const across = lo + (hi - lo) * t;
-      const lobe = t < notch ? (notch - t) / notch : (t - notch) / (1 - notch);
-      const reach = t < notch ? H * (0.2 + 0.26 * Math.pow(lobe, 0.8)) : H * (0.2 + 0.8 * Math.pow(lobe, 0.9));
-      outline.push(P(across, reach));
-    }
+    // a shark's tail, a deep crescent (`across` runs down → up the tail's depth, `reach` back from the
+    // root): the upper lobe's leading edge rises from the top of the tail stock, convex, up and far back
+    // to its tip; the trailing edge comes down, hollow, to a notch low on the fin; the lower lobe is a
+    // short blade under it, back to the bottom of the stock. (Drawn as an outline from the lower tip
+    // through a notch right behind the root to the upper tip, every lobe was a sliver of a triangle off
+    // the root: two thin spikes, a fork.)
+    const rootTop = 0.16 * C, rootBot = -0.12 * C;
+    const up = [0.7 * C, H], notch = [0.02 * C, 0.42 * H], low = [-0.36 * C, 0.5 * H];
+    const edge = (a0: number, r0: number, a1: number, r1: number, n: number, bowA: number, bowR: number) => {
+      for (let i = 1; i <= n; i++) {
+        const t = i / n, b = Math.sin(Math.PI * t);
+        outline.push(P(a0 + (a1 - a0) * t + bowA * b, r0 + (r1 - r0) * t + bowR * b));
+      }
+    };
+    outline.push(P(rootTop, 0));
+    edge(rootTop, 0, up[0], up[1], 7, 0.07 * C, 0); // the leading edge, convex
+    edge(up[0], up[1], notch[0], notch[1], 6, 0, -0.14 * H); // the trailing edge, hollow
+    edge(notch[0], notch[1], low[0], low[1], 4, 0, 0.04 * H); // the lower lobe's trailing edge
+    edge(low[0], low[1], rootBot, 0, 4, -0.03 * C, 0); // …and its leading edge, back to the stock
   } else if (kind === 'caudal') {
     // a forked tail: two lobes (up and down along the chord) reaching back along the aim
     // (a bony fish's fork is cut deeper than the plain fan's)
