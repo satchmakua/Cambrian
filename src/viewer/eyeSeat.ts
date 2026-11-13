@@ -16,7 +16,7 @@ import { eyeVariant } from './partStyles';
 import { armoured } from './scutes';
 
 /** how deep the ball's centre sits under the skin, in eye radii */
-export const SEAT_DEPTH = 0.42;
+export const SEAT_DEPTH = 0.52;
 /** …and a frog's: its eyes bulge from the crown, half the ball proud */
 export const BULGE_DEPTH = 0.06;
 
