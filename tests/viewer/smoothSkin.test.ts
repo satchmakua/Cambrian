@@ -276,6 +276,44 @@ describe('smooth skin (M15)', () => {
     expect(turtle.skirt).toBeGreaterThan(0.2);
   });
 
+  it("with the skin's own blend, no ring swells round a stretched trunk at each node (the maggot)", async () => {
+    // (an interior node's ellipsoid — kept for any trunk stretched past 1.15 — met the cones' skin at the
+    // node and swelled there by the blend: a shark banded in rings, a lizard's back bumped at every link.
+    // The test above runs with no blend, so it never saw them.)
+    const { buildFieldPrims, fieldAt } = await import('../../src/viewer/bodyField');
+    for (const [id, seed] of [['shark', 23], ['shark', 5], ['lizard', 23], ['crocodilian', 23]] as const) {
+      const p = grow(genomeOfMorphotype(seed, id));
+      const f = buildFieldPrims(p, 'hybrid');
+      f.k = 0.34 * f.meanR; // the hybrid skin's blend
+      const trunk = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 0);
+      // no ellipsoid sits on an interior trunk node
+      for (const n of trunk.slice(1, -1)) {
+        for (let e = 0; e < f.ne; e++) {
+          const d = Math.hypot(f.ec[e * 3] - n.pos[0], f.ec[e * 3 + 1] - n.pos[1], f.ec[e * 3 + 2] - n.pos[2]);
+          expect(d, `${id} #${seed}`).toBeGreaterThan(1e-6);
+        }
+      }
+      // and the back runs smooth: no ripple of a bump per node along it
+      const zs = trunk.map((n) => n.pos[2]).sort((a, b) => a - b);
+      const top = (z: number) => {
+        let lo = 0, hi = 4;
+        for (let i = 0; i < 40; i++) {
+          const m = (lo + hi) / 2;
+          if (fieldAt(f, 0, m, z) < 0) lo = m;
+          else hi = m;
+        }
+        return lo;
+      };
+      const ys: number[] = [];
+      for (let i = 0; i <= 60; i++) ys.push(top(zs[0] + ((zs[zs.length - 1] - zs[0]) * i) / 60));
+      const girth = Math.max(...trunk.map((n) => n.radius));
+      let bumps = 0;
+      for (let i = 1; i < ys.length - 1; i++) if (ys[i] > ys[i - 1] + girth * 0.002 && ys[i] >= ys[i + 1] + girth * 0.002) bumps++;
+      const legPairs = p.genomeRef.body.appendages.filter((a) => a.kind === 'leg').length;
+      expect(bumps, `${id} #${seed}`).toBeLessThanOrEqual(legPairs + 1);
+    }
+  });
+
   it('an anisotropic trunk is one smooth elliptical tube — no per-node bulges (the caterpillar)', async () => {
     const { buildFieldPrims, fieldAt } = await import('../../src/viewer/bodyField');
     for (const id of ['fish', 'felid', 'crocodilian']) {

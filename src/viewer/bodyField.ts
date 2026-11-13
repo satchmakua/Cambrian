@@ -324,15 +324,17 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   // anisotropic nodes carry their shape as an ellipsoid primitive — except interior spine nodes, whose
   // cross-section the elliptical cones on both sides already carry (see `an`)
   const shaped: BodyNode[] = [];
-  // A z-stretched interior node (a long croc/mustelid segment) keeps its ellipsoid: those overlap down
-  // the chain and blur the haunch bumps into one long smooth back.
+  // (however z-stretched: an interior node's ellipsoid has the cones' own cross-section at the node and
+  // narrows away from it, so it never widens the body — all it did, where its skin met theirs, was swell
+  // by the blend: a ring round the body at every node. A shark's trunk, stretched 1.15 and a hair, kept
+  // them and was a maggot banded in rings; a lizard's and a crocodile's backs were bumped at each link.)
   for (const n of included) {
     if (!n.scale) continue;
     // (a shaped limb link's cones carry its cross-section whole: an ellipsoid on top of them would
     // only swell the joint where the two surfaces blend)
     if (n.kind !== 'spine') continue;
     const interior = n.kind === 'spine' && (spineDeg.get(n) ?? 0) >= 2;
-    if (interior && n.scale[2] <= 1.15) continue;
+    if (interior) continue;
     shaped.push(n);
   }
   // …and the webs between a ring of webbed arms (an octopus's), each panel an ellipsoid too
