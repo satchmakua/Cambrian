@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Phenotype } from '../engine/grow';
 import { shankColor } from './keratin';
+import { coatMain } from './palette';
 import type { BareLegs } from './creatureMaterial';
 
 export type FootPlan = 'bird' | 'reptile' | 'frog' | 'theropod' | 'stump';
@@ -113,6 +114,9 @@ function legChains(p: Phenotype): number[][] {
   return out;
 }
 
+/** how much of the coat's own colour (darkened) a bare shank's keratin takes */
+export const SHANK_COAT = 0.4;
+
 /** A feathered body's bare-shank line: plumage covers the thigh and "drumstick", the lower ~55% of
  *  the standing leg is scaly keratin. Null for anything that isn't feathered with legs. */
 export function bareLegsOf(p: Phenotype): BareLegs | null {
@@ -129,8 +133,11 @@ export function bareLegsOf(p: Phenotype): BareLegs | null {
   foot /= chains.length;
   const span = hip - foot;
   if (span <= 0.05) return null;
-  // (a soft fringe where the plumage ends: drawn as a hard line, the shanks were stockings pulled up)
-  return { y: foot + span * 0.55, band: span * 0.12, color: shankColor(p.genomeRef.seed) };
+  // (a soft fringe where the plumage ends: drawn as a hard line, the shanks were stockings pulled up;
+  // and their keratin takes a little of the coat's own colour, darkened — a grey or a yellow unrelated
+  // to the body above it was a pair of stockings, a mint theropod's or a beige ostrich's)
+  const color = new THREE.Color(shankColor(p.genomeRef.seed)).lerp(coatMain(p.genomeRef.palette).multiplyScalar(0.6), SHANK_COAT).getHex();
+  return { y: foot + span * 0.55, band: span * 0.12, color };
 }
 
 /**
