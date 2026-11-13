@@ -788,6 +788,14 @@ const LID_SHUT = { upper: 0.16, lower: 0.1 } as const;
 // hid the top half of the iris from any view above it: a yellow half-disc with a dark bar along its top
 // edge, under a skin hood — a gaping mouth.)
 const LID_ROUND = { upper: -0.92, lower: 0.92 } as const;
+// …and a frog's, bulging from its crown, is round too, its lids a rim round it: in the almond, seen from
+// three-quarters the upper lid cut across the gold dome on a slant and left a wedge of it, a Pac-Man
+const LID_FROG = { upper: -0.86, lower: 0.88 } as const;
+/** How far an eye's lids stand open (their rotations from shut-over-the-equator): a radial body's eye or a
+ *  bulging frog's eye round, every other eye an almond. */
+export function lidOpening(radial: boolean, bulging: boolean): { upper: number; lower: number } {
+  return radial ? LID_ROUND : bulging ? LID_FROG : LID_OPEN;
+}
 
 // Iris and pupil: true spherical CAPS on the eyeball (a polar angle of the ball's own sphere), so
 // they curve with it like a cornea — a flat squashed disc parked in front read as a painted coin.
@@ -957,7 +965,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   const ballColor = useMemo(() => new THREE.Color(iris).multiplyScalar(0.16).lerp(new THREE.Color(0x1c120e), 0.5).getHex(), [iris]);
   const lidColor = useMemo(() => new THREE.Color(lid).multiplyScalar(0.82).getHex(), [lid]);
   const origin = phenotype?.nodes[f.idx].pos;
-  const open = phenotype?.genomeRef.symmetry === 'radial' ? LID_ROUND : LID_OPEN;
+  const open = lidOpening(phenotype?.genomeRef.symmetry === 'radial', frogEye);
   const lidGeo = useMemo(() => {
     if (!lidded || !skin || !origin) return null;
     return {
