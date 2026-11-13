@@ -11,7 +11,7 @@ import { create } from 'zustand';
 import { SOUND } from './audio';
 import { NARRATOR } from './narrator';
 import { loadWorld, saveWorld } from '../sim/persist';
-import { weatherAt, weatherWord } from '../sim/weather';
+import { droughtOf, weatherAt, weatherWord } from '../sim/weather';
 import { adoptWorld, chronicle, snapshotForChronicle, type Chronicle } from '../sim/fastForward';
 import type { Genome } from '../engine/genome';
 import { genomeOfMorphotype, randomGenome } from '../engine/random';
@@ -225,6 +225,8 @@ export interface TreeNode {
 export interface Snapshot {
   tree: TreeNode[];
   season: Season;
+  /** how dry this year is: 0 an ordinary year, 0.5 … 1 a drought */
+  dry: number;
   /** '' when fair, else 'overcast' / 'rain' / 'downpour' / 'snow' / 'heavy snow' */
   weather: string;
   time: number;
@@ -369,6 +371,7 @@ export function snapshotOf(w: World, selected: number | null): Snapshot {
   return {
     tree: w.species.map((sp) => ({ id: sp.id, name: sp.name, hue: sp.hue, parent: sp.parent, born: sp.firstSeen, extinctAt: sp.extinctAt, alive: sp.alive })),
     season: seasonOf(w.time),
+    dry: droughtOf(w.seed, w.time),
     weather: weatherWord(weatherAt(w.seed, w.time)),
     time: w.time,
     day: dayNumber(w.time),

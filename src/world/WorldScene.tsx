@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { stepWorld, STEP, dayPhase, isNight, climate, growthOf, type World } from '../sim/world';
 import { SOUND } from './audio';
 import { heightAt, WATER_LEVEL } from '../sim/terrain';
+import { droughtOf } from '../sim/weather';
 import { PAN_KEYS, keysToAxes, panDelta } from './keyPan';
 import { TerrainMesh, Water, Bushes, Decor, updateSeasonLook } from './Landscape';
 import { Grass } from './Flora';
@@ -38,7 +39,7 @@ function SimDriver() {
   useFrame((_, dtRaw) => {
     const { running, speed, refresh } = useWorldUi.getState();
     const w = getWorld();
-    updateSeasonLook(w.time);
+    updateSeasonLook(w.time, droughtOf(w.seed, w.time));
     updateWeatherLook(w, dtRaw);
     const dt = Math.min(dtRaw, 0.1);
     if (running) {

@@ -20,7 +20,7 @@
  * mulberry32 and the engine's seeded mutate(); a fixed step reproduces a run exactly (Pillar 3).
  */
 import { mulberry32State, mix32, unitHash, type StatefulRng } from '../engine/rng';
-import { weatherAt } from './weather';
+import { weatherAt, droughtOf } from './weather';
 import { grow, type Phenotype } from '../engine/grow';
 import type { Genome } from '../engine/genome';
 import { encodeGenome } from '../engine/share';
@@ -50,6 +50,12 @@ export const MAX_POP = 165;
  *  (a lake of fish, a pair of hunters) is never locked out of reproduction by a crowded world. */
 const SOFT_POP = 135;
 const RARE = 10;
+/** how much a dry year at its worst slows the grass and the fruit (×its severity) */
+const DROUGHT_GRASS = 0.55;
+const DROUGHT_FRUIT = 0.5;
+/** …how much of what a meadow can hold it loses, and how fast (/s) the standing grass above that withers */
+const DROUGHT_HOLD = 0.5;
+const DROUGHT_WITHER = 0.006;
 /** No one species may hold more than this share of the soft cap. */
 const SPECIES_SHARE = 0.3;
 /** each guild's share of the soft cap (they sum past 1: a guild that is absent leaves room to others,
@@ -186,7 +192,7 @@ export interface Egg {
 
 export interface WorldEvent {
   t: number;
-  kind: 'birth' | 'death' | 'speciation' | 'extinction' | 'release' | 'kill' | 'mutation';
+  kind: 'birth' | 'death' | 'speciation' | 'extinction' | 'release' | 'kill' | 'mutation' | 'climate';
   text: string;
   species?: number;
   creature?: number;
@@ -491,7 +497,12 @@ export function stepWorld(w: World, dt = STEP): void {
   const day = Math.floor(w.time / DAY_LENGTH);
   w.time += dt;
   w.stepCount++;
-  if (Math.floor(w.time / DAY_LENGTH) !== day) immigrate(w);
+  if (Math.floor(w.time / DAY_LENGTH) !== day) {
+    immigrate(w);
+    // a dry year is told at its first dawn
+    const d = day + 1;
+    if (d % YEAR_DAYS === 0 && droughtOf(w.seed, w.time) > 0) log(w, 'climate', droughtOf(w.seed, w.time) > 0.8 ? 'a hard drought: the rains have failed' : 'a dry year: the rains are failing');
+  }
   rebuildBuckets(w);
   for (const c of w.creatures) if (c.alive) live(w, c, dt);
   keepRoom(w, dt);
@@ -522,11 +533,18 @@ function growFields(w: World, dt: number): void {
   // a shower brings the grass on (snow doesn't)
   const sky = weatherAt(w.seed, w.time);
   const wet = 1 + (sky.snow ? 0 : 0.8 * sky.rain);
+  // …and a dry year holds the grass and the fruit back (the fewer showers do the rest)
+  const dry = droughtOf(w.seed, w.time);
+  const parched = 1 - DROUGHT_GRASS * dry;
+  const barren = 1 - DROUGHT_FRUIT * dry;
+  // (and what a meadow can hold falls: the standing grass above it withers away over a day or so — it
+  // was the cover that mattered, not the regrowth: a meadow near full fed a herd through any slow year)
+  const hold = 1 - DROUGHT_HOLD * dry;
   for (let k = 0; k < grass.length; k++) {
-    const K = grassCap[k];
+    const K = grassCap[k] * hold;
     if (K > 0) {
       const b = grass[k];
-      grass[k] = Math.min(K, b + (GRASS_REGROW * b * (1 - b / K) + 0.0004 * K) * cl.grass * wet * dt);
+      grass[k] = b > K ? b - (b - K) * Math.min(1, DROUGHT_WITHER * dt) : Math.min(K, b + (GRASS_REGROW * b * (1 - b / K) + 0.0004 * K) * cl.grass * wet * parched * dt);
     }
     const A = algaeCap[k];
     if (A > 0) {
@@ -534,7 +552,7 @@ function growFields(w: World, dt: number): void {
       algae[k] = Math.min(A, a + (GRASS_REGROW * 3 * a * (1 - a / A) + 0.001 * A) * dt);
     }
   }
-  for (const p of w.plants) p.fruit = Math.min(p.max, p.fruit + FRUIT_REGROW * cl.fruit * dt);
+  for (const p of w.plants) p.fruit = Math.min(p.max, p.fruit + FRUIT_REGROW * cl.fruit * barren * dt);
 }
 
 function sampleHistory(w: World): void {

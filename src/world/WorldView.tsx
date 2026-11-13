@@ -19,7 +19,7 @@ import { howItDiffers } from '../sim/lineage';
 import { usePortrait } from '../viewer/portrait';
 import { KeepPrograms, WarmShaders } from '../viewer/programs';
 import { NARRATOR, sentence } from './narrator';
-import { spell, weatherAt } from '../sim/weather';
+import { droughtOf, spell, weatherAt } from '../sim/weather';
 import { dprOf, useQuality, useSettings } from '../ui/settings';
 import { useStore } from '../ui/store';
 
@@ -246,6 +246,16 @@ export function WorldView({ founder, onExit, onAdopt, onMenu }: { founder: Genom
           }
         }
       }
+      // dry=1: jump the clock to the middle of the valley's first dry year (to inspect a drought)
+      if (q.get('dry') === '1') {
+        const year = DAY_LENGTH * YEAR_DAYS;
+        for (let y = 1; y < 64; y++) {
+          if (droughtOf(w.seed, (y + 0.5) * year) > 0) {
+            w.time = (y + 0.45) * year;
+            break;
+          }
+        }
+      }
       if (q.get('paused') === '1') setRunning(false);
       if (q.get('doc') === '1') setDocumentary(true);
       bumpVersion();
@@ -275,7 +285,7 @@ export function WorldView({ founder, onExit, onAdopt, onMenu }: { founder: Genom
         </nav>
         {snap && (
           <div className="clock">
-            <b>Day {snap.day}</b> <span className="season">{snap.season}</span>{snap.weather && <span className="weather">{snap.weather === 'overcast' ? '☁' : snap.weather.includes('snow') ? '❄' : '☂'} {snap.weather}</span>} <span>{clock(snap.phase)}</span> <span className="sky">{snap.night ? '☾ night' : '☀ day'}</span>
+            <b>Day {snap.day}</b> <span className="season">{snap.season}{snap.dry > 0 && <span className="dry" title="a dry year: fewer showers, and the grass and the fruit come back slower"> · {snap.dry > 0.8 ? 'drought' : 'dry year'}</span>}</span>{snap.weather && <span className="weather">{snap.weather === 'overcast' ? '☁' : snap.weather.includes('snow') ? '❄' : '☂'} {snap.weather}</span>} <span>{clock(snap.phase)}</span> <span className="sky">{snap.night ? '☾ night' : '☀ day'}</span>
           </div>
         )}
         <div className="transport">

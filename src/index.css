@@ -1363,6 +1363,12 @@ body,
 .journal .ev-death {
   color: #c9c0aa;
 }
+.journal .ev-climate {
+  color: #e2c27a;
+}
+.season .dry {
+  color: #e2c27a;
+}
 
 /* --- tree of life ------------------------------------------------------------------------------ */
 .census h3 .tol-toggle {

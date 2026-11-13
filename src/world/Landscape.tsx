@@ -92,9 +92,10 @@ export const SEASON_LOOK = {
   wet: { value: 0 }, // 0 … 1 rain-soaked ground (darker, glossier)
 };
 
-export function updateSeasonLook(time: number): void {
+export function updateSeasonLook(time: number, dry = 0): void {
   const look = yearLook(time);
-  SEASON_LOOK.tint.value.setRGB(...look.tint);
+  // a dry year bleaches the living green toward straw
+  SEASON_LOOK.tint.value.setRGB(look.tint[0] * (1 + 0.1 * dry), look.tint[1] * (1 - 0.1 * dry), look.tint[2] * (1 - 0.3 * dry));
   SEASON_LOOK.snow.value = look.snow;
 }
 
