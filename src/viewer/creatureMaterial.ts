@@ -372,6 +372,9 @@ export function makeCreatureMaterial(
             // ground as fuzz however far off the animal is (faded there too, a coat at a distance was a
             // smooth hide with a hard edge: bare rubber)
             float graze = 1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition)));
+            // (…but they keep the faded strands' tone, below: with their root shadow back, the fringe
+            // round a muzzle was a grainy dark stubble)
+            float tone = far;
             far *= 1.0 - 0.85 * smoothstep(0.6, 0.92, graze) * (1.0 - eyeClear);
             if (u > 1.0 || dc > 0.62 * (1.0 - u) || far > hash13(cell + 5.0) || vFlesh > 0.05 || bare > 0.3 || faceW > 0.3) discard;
             // depth in the pile: shadowed at the root, catching light at the tips; each lock its own shade
@@ -379,7 +382,7 @@ export function makeCreatureMaterial(
             // the survivors take the coat's own tone: left with their root shadow, the last sparse
             // strands of a bear seen whole were a scatter of dark specks, pepper on a smooth hide.
             float shade = mix(0.62, 1.12, uShellH) * (0.93 + 0.14 * hash13(cid + 9.0));
-            diffuseColor.rgb *= mix(shade, 1.0, smoothstep(0.0, 0.55, far));
+            diffuseColor.rgb *= mix(shade, 1.0, smoothstep(0.0, 0.55, tone));
           }
           if (uDebug == 1) diffuseColor.rgb = vec3(pat);
           if (uDebug == 2) diffuseColor.rgb = vec3(gH);

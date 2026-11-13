@@ -388,9 +388,15 @@ describe('creature material shader injection', () => {
     // (the last sparse strands kept the shadow of a dense pile's roots: a bear seen whole wore pepper)
     const f = compileShaderStrings().fragmentShader;
     const iFar = f.indexOf('float far = smoothstep(0.28, 1.15, gFw * uShellDen);');
-    const iShade = f.indexOf('diffuseColor.rgb *= mix(shade, 1.0, smoothstep(0.0, 0.55, far));');
+    const iShade = f.indexOf('diffuseColor.rgb *= mix(shade, 1.0, smoothstep(0.0, 0.55, tone));');
     expect(iFar).toBeGreaterThan(0);
     expect(iShade).toBeGreaterThan(iFar);
+    // …the tone the fade takes is the fade's own, read before the outline keeps its strands: with their
+    // root shadow back, the fringe round a muzzle was a grainy dark stubble
+    const iTone = f.indexOf('float tone = far;');
+    const iKeep = f.indexOf('far *= 1.0 - 0.85 * smoothstep(0.6, 0.92, graze)');
+    expect(iTone).toBeGreaterThan(iFar);
+    expect(iKeep).toBeGreaterThan(iTone);
     // (the pile's own shading, where it is dense, is as it was)
     expect(f).toContain('float shade = mix(0.62, 1.12, uShellH) * (0.93 + 0.14 * hash13(cid + 9.0));');
   });
