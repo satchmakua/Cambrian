@@ -47,6 +47,10 @@ const RING_POINT = 0.5;
 
 /** An eye stalk's links, ×the radius the eye's gene gives them. */
 const STALK_SLIM = 0.5;
+/** A claw-bearing arm's links (a crab's cheliped), ×the radius its gene gives them: the claw at its end
+ *  keeps the full girth, so the palm is the bulk of the limb. (All of one girth, arm and claw were one
+ *  bloated sausage with fingers on its end.) */
+export const CHELIPED_SLIM = 0.62;
 /** An eye stalk rises at least this steeply (the Y of its unit direction: about 51° above level). */
 const STALK_RISE = 0.78;
 
@@ -948,6 +952,7 @@ export function grow(genome: Genome): Phenotype {
       // an eye STALK is a stalk: slimmer than the eye it carries. (Its links were as thick as the
       // eyeball — a snail's feelers and a crab's eyes stood on chimneys.)
       if (!last && app.terminal === 'eye') r *= STALK_SLIM;
+      if (!last && app.kind === 'arm' && app.terminal === 'pincer') r *= CHELIPED_SLIM;
       // the eye is the emotional anchor — floor the grown bulb so even a tapered/stalked eye on a
       // small head always reads (M19/M24), regardless of how the gene tapered down its tip.
       if (last && app.terminal === 'eye') r = Math.max(r, EYE_R_MIN);

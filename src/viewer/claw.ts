@@ -52,6 +52,36 @@ export function clawPlan(r: number): ClawPlan {
   };
 }
 
+/** how far short of the midline a paired claw's fingertips stop, in claw radii */
+export const CHELA_GAP = 0.3;
+/** the fingers' reach along the claw's aim, in claw radii (the fixed finger's point: see clawPlan) */
+export const CLAW_REACH = 3.55;
+/** the most a claw is turned in across the face (rad from straight ahead) */
+export const CHELA_IN = 1.3;
+
+/**
+ * A paired claw's rest orientation, turned at the wrist about the body's vertical so its fingertips
+ * come to rest just short of the midline, in front of the mouth: a crab's claws are held folded,
+ * pointing in at each other. (Left at the arm's own heading, they crossed in an X before the face if
+ * the arm curled far in, and ran straight out ahead like a lobster's if it did not.) A claw on the
+ * midline itself (unpaired) keeps its aim.
+ */
+export function wristQuat(quat: readonly number[], origin: readonly number[], r: number): number[] {
+  const x0 = origin[0];
+  const gap = CHELA_GAP * r;
+  if (Math.abs(x0) <= gap) return [quat[0], quat[1], quat[2], quat[3]];
+  const side = Math.sign(x0);
+  const q = new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3]);
+  const aim = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+  const h = Math.hypot(aim.x, aim.z);
+  if (h < 1e-6) return [quat[0], quat[1], quat[2], quat[3]];
+  // the heading (about +Y, from +Z toward +X) that lands the tip `gap` short of the midline
+  const inward = Math.min(CHELA_IN, Math.asin(Math.min(1, (Math.abs(x0) - gap) / (CLAW_REACH * r * h))));
+  const turn = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -side * inward - Math.atan2(aim.x, aim.z));
+  const out = turn.multiply(q);
+  return [out.x, out.y, out.z, out.w];
+}
+
 /** Split a centreline at `cut` (fraction of its samples) → [base, tip], sharing the cut sample. */
 function split(path: Vec3[], cut: number): [Vec3[], Vec3[]] {
   const k = Math.round((path.length - 1) * cut);

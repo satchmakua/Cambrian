@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { clawPlan, clawGeometry } from '../../src/viewer/claw';
+import * as THREE from 'three';
+import { CHELA_GAP, CLAW_REACH, clawPlan, clawGeometry, wristQuat } from '../../src/viewer/claw';
+import { grow } from '../../src/engine/grow';
+import { genomeOfMorphotype } from '../../src/engine/random';
 
 describe('crab claw', () => {
   it('a swollen palm with two fingers that close on each other, the hinged one above', () => {
@@ -81,5 +84,38 @@ describe('crab claw', () => {
     const bb = g.tips.boundingBox!;
     expect(bb.max.x).toBeGreaterThan(0.3);
     expect(bb.max.z).toBeGreaterThan(0.3);
+  });
+
+  it("a crab's claws are folded in across its face, their points short of each other", () => {
+    // (the arm curled in until the claws' fingers crossed in an X before the face; uncurled, they ran
+    // out ahead side by side like a lobster's)
+    for (let seed = 1; seed <= 16; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'crab'));
+      const claws = p.nodes.filter((n) => n.terminal === 'pincer' && n.part?.kind === 'arm');
+      expect(claws.length, `crab #${seed}`).toBe(2);
+      for (const n of claws) {
+        const r = n.radius;
+        const q = new THREE.Quaternion(...(wristQuat(n.quat, n.pos, r) as [number, number, number, number]));
+        const aim = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+        const tip = n.pos[0] + aim.x * CLAW_REACH * r;
+        // on its own side of the midline, by the gap…
+        expect(tip * Math.sign(n.pos[0]), `crab #${seed}`).toBeGreaterThan(CHELA_GAP * r * 0.99);
+        // …pointing in across the face, 20° or more off straight ahead, and still forward
+        const inward = -Math.sign(n.pos[0]) * Math.atan2(aim.x, aim.z);
+        expect(inward, `crab #${seed}`).toBeGreaterThan(0.35);
+        expect(aim.z, `crab #${seed}`).toBeGreaterThan(0);
+      }
+      // and the arm is slim beside its claw: the palm stands half again the arm's girth
+      for (const n of claws) {
+        const i = p.nodes.indexOf(n);
+        const wrist = p.nodes[p.edges.find(([, b]) => b === i)![0]];
+        expect(clawPlan(n.radius).palm.r[1], `crab #${seed}`).toBeGreaterThan(1.5 * wrist.radius);
+      }
+    }
+  });
+
+  it('an unpaired claw on the midline keeps its aim', () => {
+    const q = [0, 0.2, 0, Math.sqrt(1 - 0.04)];
+    expect(wristQuat(q, [0, 0.3, 1], 0.2)).toEqual(q);
   });
 });

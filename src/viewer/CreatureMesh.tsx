@@ -35,7 +35,7 @@ import { BROW_TILT, eyeClearings, eyeSeat, eyeTilt, isSwimmer } from './eyeSeat'
 import { coatDark, coatFin, coatMain, coatPattern } from './palette';
 import { browRidgeGeometry, faceMaskOf, headMaskOf, isApe } from './face';
 import { apeFootGeometry, fistGeometry } from './apeLimbs';
-import { clawGeometry } from './claw';
+import { clawGeometry, wristQuat } from './claw';
 import { shardGeometry } from './shards';
 import { facetKeep, facetSizeOf, facetSkin } from './facets';
 import { quillGeometry } from './quills';
@@ -1395,12 +1395,14 @@ function Shards({ f, palette, seed }: { f: MeshFeature; palette: Phenotype['geno
 // A pincer: a crab's claw — a swollen palm in the creature's own skin, two curved fingers closing on
 // each other, dark at the points (claw.ts).
 function Pincer({ f, color, skin, origin }: { f: MeshFeature; color: number; skin?: THREE.Material; origin: readonly number[] }) {
+  // a claw on an arm (a crab's) is turned at the wrist to fold it in across the face (see claw.ts)
+  const arm = f.kind === 'arm';
   const r = Math.max(f.radius, 0.06);
   const geo = useMemo(() => {
-    const g = clawGeometry(r, f.quat);
+    const g = clawGeometry(r, arm ? wristQuat(f.quat, origin, r) : f.quat);
     bakeSkin(g.shell, origin);
     return g;
-  }, [r, f.quat, origin]);
+  }, [r, f.quat, origin, arm]);
   useEffect(() => () => {
     geo.shell.dispose();
     geo.tips.dispose();
