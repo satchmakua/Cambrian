@@ -113,6 +113,9 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   - *Kermit's smile on the insects*: a mandibled mouth has no lips, but its dark opening ran its whole
     span, a U under the eyes; only its middle shows now (a little over a quarter of it hidden at each
     end, behind the blades' roots), a small slot between the mandibles.
+  - *A theropod with one magenta arm and one mint*: its body is mirrored exactly, but its pattern was
+    sampled at the raw position, so the noise under each arm differed. Markings now mirror across the
+    midline (and the normal an eye-spot is laid on with them).
 - **Still to do from it:** the weasel end on (its shoulder joints stand out past its flanks); ears
   that are spikes edge-on (the far ear, facing forward-out, from a three-quarter view: thicker ears
   didn't help — it is the angle).
