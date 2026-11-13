@@ -155,6 +155,8 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
     body's own hue, darker or paler, or umber.
   - *Pale puffball paws* (cat, dog, bear, ape, weasel): a paw faces the ground, so countershading gave
     it the belly's tone; a leg and its paw wear the flank's now.
+  - *A cat's head a plush ball with no muzzle*: a short muzzle now wears two soft whisker pads either
+    side of the mouth, under the nose, in the coat's own material.
 - **Still to do from it:** the weasel end on (its shoulder joints stand out past its flanks); ears
   that are spikes edge-on (the far ear, facing forward-out, from a three-quarter view: thicker ears
   didn't help — it is the angle); the frog a bun on its chin (its forelegs attach under the middle of
