@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { mouthVariant } from '../../../src/viewer/partStyles';
 import * as THREE from 'three';
 import { grow, legBearer, type Phenotype } from '../../../src/engine/grow';
 import { genomeOfMorphotype } from '../../../src/engine/random';
@@ -175,6 +176,21 @@ describe('chimera', () => {
         expect(foot.pos[0] / halfWidth, `#${seed} feet under the body`).toBeLessThan(1.25);
         expect((2 * chain[1].radius) / D, `#${seed} shank`).toBeGreaterThan(0.18);
       }
+    }
+  });
+  it("its mouth is a jaw, fangs or a beak — never an insect's mandibles on its soft head", () => {
+    // (the mandibles' blades hung from the corners of a dark box like two tusks: a muppet's mouth)
+    for (let seed = 1; seed <= 24; seed++) {
+      const g = genomeOfMorphotype(seed, 'chimera');
+      let mouths = 0;
+      for (let s: typeof g.body | undefined = g.body; s; s = s.child) {
+        for (const a of s.appendages) {
+          if (a.terminal !== 'mouth') continue;
+          expect(['maw', 'fanged', 'beak'], `#${seed}`).toContain(mouthVariant(a.style));
+          mouths++;
+        }
+      }
+      expect(mouths, `#${seed}`).toBeGreaterThan(0);
     }
   });
 });
