@@ -844,16 +844,19 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   grid drawn as exact swept tubes, at their own girth at every fineness; a dragon's folded wing draped
   down its flank in pleats; an urchin a low round dome with pale-tipped spines; a crab's legs swept back,
   a spider's arcing out; a horror's crown mouth its own skin rolled over a rim, ringed by feelers; no
-  ring round a stretched trunk at each node; a fish's tail a broad fan. **Tests:**
+  ring round a stretched trunk at each node; a fish's tail a broad fan; a dog's and a bear's muzzle a
+  wedge under a straight bridge; a chimera's mouth a jaw or a beak; a cut stone's faces meeting in
+  creases, lit face by face. **Tests:**
   `tests/viewer/limbTubes.test.ts`, `tests/viewer/wings.test.ts`, `tests/engine/plans/urchin.test.ts`,
   `crab.test.ts`, `arachnid.test.ts`, `horror.test.ts`, `tests/viewer/mouths/ring.test.ts › rim`,
   `tests/viewer/smoothSkin.test.ts › the maggot`.
 
 ### Next up (unchecked — pick from here)
 
-- [ ] **What the tenth look left.** A bear's and a dog's muzzle a sock-puppet tube; the chimera's
-  black-outlined box of a mouth with tusk hooks; the cut stone's body a soft opaque loaf (only its back
-  shards are crystal); the frog's balloon head with its clamshell seam; the ostrich's scaly plumage.
+- [ ] **What the tenth look left.** The frog's balloon head with its clamshell seam and wedge-cut
+  eyelids; the ostrich's scaly plumage; the serpent's blunt tail with an upturned nub; the starfish's
+  sausage arms; the songbird's finger crest and slab wings; a cut stone's creases still step where two
+  faces meet at a shallow angle (the mesh is finer than the faces, so the choice of plane flickers).
 
 - [ ] **What the ninth look left.** Ears that are spikes edge-on (the far ear's angle); the weasel end
   on (its shoulder joints stand out past its flanks); the frog a bun resting on its chin (forelegs

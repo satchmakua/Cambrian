@@ -101,14 +101,25 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   - *Fish: a tail of two needle spikes* [3]. A fan from one point notched a third of its length; a bony
     fish's tail is now a broad fan on a base as deep as the stock, lobes flaring to rounded tips, a
     shallow fork.
-  - Not yet: a bear's and a dog's muzzle (a sock-puppet tube), the chimera's box mouth, the cut stone's
-    soft opaque body.
+  - *Bear and dog: a sock-puppet muzzle* [3]. The muzzle hung on a stopped skull narrowed by two more
+    of the head chain's ratio a link, and a dog's chain tapers 0.94: a tube half the skull's width ending
+    in the bulb of its nose. It now leaves the stop at 0.66 of the chain's girth and narrows to 0.72 of
+    that at the nose — from below: the bridge of the nose runs straight on from the stop while the jaw
+    line rises to the chin.
+  - *Chimera: a black-outlined box of a mouth with tusk hooks* [3]. An insect's mandibles on its soft
+    head; its mouth is now drawn from the jaw, fang and beak bands alone.
+  - *Cut stone: a soft opaque loaf patched with torn paper* [3]. Each vertex was laid onto its own
+    cell's plane, and neighbouring planes don't meet at the border: a ragged step at every one, shaded as
+    a zigzag. A vertex now lies on the first nearby face's plane along its normal (the faces meet where
+    their planes cross; edges across a border stretch 40% less), and where the cut laid the skin each
+    triangle is lit by its own plane, so a face is one shade to its edges.
 - **Tests:** `tests/viewer/limbTubes.test.ts` (a thin leg's own girth on a coarse skin; tube vertices on
   their cones; the field tucked in at a hand-over), `tests/viewer/wings.test.ts › folded along its own
   flank`, `› the cut of a fin`, `tests/engine/plans/urchin.test.ts › low dome`, `› pales`,
   `tests/engine/plans/crab.test.ts`, `tests/engine/plans/arachnid.test.ts`,
   `tests/engine/plans/horror.test.ts`, `tests/viewer/mouths/ring.test.ts › rolls over the cavity's rim`,
-  `tests/viewer/smoothSkin.test.ts › the maggot`.
+  `tests/viewer/smoothSkin.test.ts › the maggot`, `tests/engine/plans/canid.test.ts › has a stop`,
+  `tests/engine/plans/chimera.test.ts › its mouth`, `tests/viewer/facets.test.ts › faces that meet`.
 
 ## M94 — An eighth look, harder: a stone, a hawk's bill, an urchin's underside · 2026-11-13
 
