@@ -151,8 +151,13 @@ describe('creature material shader injection', () => {
         expect(d).toBeCloseTo(i === j ? 1 : 0, 12);
       }
     }
-    // each face its own shade of the one stone, its cut edges a touch lighter; and it glows from within
-    expect(f).toContain('if (uCover == 7) skin *= (0.7 + 0.58 * gFacet) * (1.0 + 0.18 * gSeam);');
+    // each face its own shade of the one stone, its cut edges a touch lighter; and it glows from within.
+    // A skin already cut into faces (facets.ts) only nudges each face's shade — its faces take the light
+    // by their own tilts — and lights its edges brighter …
+    expect(f).toContain('if (uCover == 7) skin *= (uCut > 0.5 ? 0.9 + 0.2 * gFacet : 0.7 + 0.58 * gFacet) * (1.0 + (uCut > 0.5 ? 0.45 : 0.18) * gSeam);');
+    // … and has no countershading: by its flat faces' normals whole faces snapped between the belly's,
+    // the flank's and the back's tones (a camouflage of pale and dark patches)
+    expect(f).toContain('float up = uCut > 0.5 ? 0.5 : clamp(vWNrm.y * 0.5 + 0.5, 0.0, 1.0);');
     expect(f).toMatch(/if \(uCover == 7\) totalEmissiveRadiance \+= uMain \* /);
     // the polish is the faces themselves: the clear coat takes each facet's tilt (three leaves a coat
     // on the smooth body under the relief — a glaze over the stone, the same mirror on every face)

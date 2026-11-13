@@ -261,7 +261,9 @@ export function makeCreatureMaterial(
           gDhx = hX - gHb;
           gDhy = hY - gHb;
           gM = muscle(bp);
-          float up = clamp(vWNrm.y * 0.5 + 0.5, 0.0, 1.0);
+          // (a cut stone has no countershading: by its flat faces' normals, whole faces snapped between
+          // the belly's, the flank's and the back's tones — pale and dark patches, a camouflage)
+          float up = uCut > 0.5 ? 0.5 : clamp(vWNrm.y * 0.5 + 0.5, 0.0, 1.0);
           // countershading kept to the underside and the spine: the flanks carry the coat's true
           // colour (a flank used to be 58% belly — fixed grey — and 42% darkened back, never the coat)
           vec3 skin = mix(uMain, uBelly, 1.0 - smoothstep(0.1, 0.4, up));
@@ -289,7 +291,9 @@ export function makeCreatureMaterial(
           // low-frequency tonal break-up so the surface never reads as flat plastic
           skin *= 0.92 + 0.16 * fbmA(bp * 2.2, 2.2);
           // a crystal's faces each take the light their own way: lighter and darker cuts of one stone
-          if (uCover == 7) skin *= (0.7 + 0.58 * gFacet) * (1.0 + 0.18 * gSeam);
+          // (a cut skin's faces already take the light by their own tilts: their shades only nudge it —
+          // spread from 0.7 to 1.28, the faces were pale and dark patches, a camouflage)
+          if (uCover == 7) skin *= (uCut > 0.5 ? 0.9 + 0.2 * gFacet : 0.7 + 0.58 * gFacet) * (1.0 + (uCut > 0.5 ? 0.45 : 0.18) * gSeam);
           // a beetle's wing-cases meet in a dark seam down the middle of the back
           if (uSeam > 0.0) skin = mix(skin, uPattern2 * 0.3, (1.0 - smoothstep(uSeam * 0.35, uSeam, abs(vBodyPos.x))) * smoothstep(0.45, 0.75, up));
           // a bare face (an ape's): the coat gives way to skin round the eyes and the muzzle, and the
@@ -435,7 +439,9 @@ export function makeCreatureMaterial(
           float soft = (uCover == 0 || uCover == 5) ? 1.0 : (uCover == 2 || uCover == 3) ? 0.5 : 0.2;
           totalEmissiveRadiance += uBlood * pow(1.0 - ndv, 2.5) * 0.09 * soft * noMouth * vAO;
           // a crystal holds light: a glow of its own colour from within, brightest at its edges
-          if (uCover == 7) totalEmissiveRadiance += uMain * ((0.1 + 0.3 * pow(1.0 - ndv, 2.0)) * (0.55 + 0.9 * gFacet) + 0.1 * gSeam) * noMouth;
+          // (a cut skin's faces glow alike, and its edges brightest: lit from within face by face at its
+          // own random strength, the stone was a patchwork of pale and dark)
+          if (uCover == 7) totalEmissiveRadiance += uMain * ((0.1 + 0.3 * pow(1.0 - ndv, 2.0)) * (uCut > 0.5 ? 0.85 + 0.3 * gFacet : 0.55 + 0.9 * gFacet) + (uCut > 0.5 ? 0.22 : 0.1) * gSeam) * noMouth;
         }`,
       );
   };
@@ -770,10 +776,14 @@ float surfaceHeight(vec3 p, int cover) {
     // of its own: on a face its normal is the same at every corner, so it neither varies across the
     // pixel nor between the face's pixels, and hashes to one value. (The uncut legs and face, whose
     // normals vary, stay the stone's own tone.)
+    // The narrow bevels between faces, where the normal swings from one face's to the next within a
+    // pixel or two, are the cut's EDGES: they catch the light as bright lines. (A curved, uncut skin
+    // turns its normal far more slowly than that.)
     vec3 fn = normalize(vBNrm);
-    float planar = 1.0 - smoothstep(0.0, 0.03, length(fwidth(fn)));
+    float bend = length(fwidth(fn));
+    float planar = 1.0 - smoothstep(0.0, 0.03, bend);
     gFacet = mix(0.5, hash13(floor(fn * 5.0 + 0.5) + 3.0), planar);
-    gSeam = 0.0;
+    gSeam = smoothstep(0.05, 0.16, bend);
     gHb = 0.0;
     return 0.3;
   }
