@@ -809,8 +809,8 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   seed 13: the crystal cut no longer tears (no turned faces; legs and face uncut), closed mouths no
   longer grin (the lip line sweeps about the head's vertical), the cat has a cat's face (slit eyes, a
   small rose nose, stripes over the brow), a dragon's folded wing is a great sail on slim bones, a crab's
-  claws fold in before its face, a songbird's head is round on a feathered neck, and a feathered tail
-  lies in a trough.
+  claws fold in before its face, a songbird's head is round on a feathered neck, a feathered tail
+  lies in a trough, and stripes are narrow and dark, giving out under the belly.
   **Tests:** `tests/viewer/facets.test.ts`, `tests/viewer/mouthLine.test.ts › a closed mouth doesn't
   grin`, `tests/engine/plans/felid.test.ts`, `tests/viewer/wings.test.ts › hangs from the wrist`.
 
@@ -818,7 +818,7 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
 
 - [ ] **What the sixth look left.** The crab's walking legs still arch high like a spider's; the bear's
   muzzle a hippo's (a tube ending in a bulb, a small nose on it); the ape's coat reads as bare rubber;
-  hoop stripes that ring a trunk like a toy's; round slipper feet on bears and apes.
+  round slipper feet on bears and apes.
 
 - [ ] **Hops that land in more than one basin.** A flipped cat, songbird or hawk lands as an urchin
   nearly every time (the coarse measure puts every radial sprawl nearest it). Spread them over the

@@ -98,6 +98,12 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   still cost the game's own identifier its songbirds, since the neck lowers the headedness it measures.
   A feathered tail lies in a shallow trough, the outer feathers lifted to either side, and runs longer:
   laid flat, from the side it was its own edge, a twig in a hawk's rump.
+- **A tiger's stripes were the wrong way about.** The stripe field laid the marking colour over two
+  thirds of each period and left the coat only in narrow lines, so every striped animal was a dark coat
+  ringed with thin pale hoops: the reviewer's "rings on a toy". The marking now lies in the narrow band
+  where the wave crosses zero, dark stripes on the coat, and stripes and bands run down from the back
+  and give out under the belly instead of wrapping the trunk at one width. (The hoop complaint had been
+  read for years as a matter of spacing; the render, zoomed, showed it was polarity.)
 
 ## M90 — Cut stone, a mouth of flesh, and hops that land · 2026-11-13
 
