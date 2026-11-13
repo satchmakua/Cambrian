@@ -44,7 +44,8 @@ export function clawPlan(r: number): ClawPlan {
     dactyl.push([0, r * (0.55 + 0.22 * u - 0.67 * u * u), r * (1.15 + 2.35 * u)]);
   }
   return {
-    palm: { c: [0, 0, r * 0.5], r: [r * 0.62, r * 1.02, r * 1.2] },
+    // (pressed flat side to side, as a crab's palm is: as wide as it was deep, it was a boxing glove)
+    palm: { c: [0, 0, r * 0.5], r: [r * 0.46, r * 1.0, r * 1.2] },
     fixed,
     dactyl,
     fixedR: (u) => r * (0.46 - 0.42 * Math.pow(u, 1.2)),
@@ -100,7 +101,8 @@ export function clawGeometry(r: number, quat: readonly number[]): { shell: THREE
     const pts: SweepPoint[] = path.map((p) => ({ p, n: side }));
     return sweepTube(pts, { radius: (u) => radius(u0 + (u1 - u0) * u), flatten: 0.75, radialSegments: 10 });
   };
-  const CUT = 0.55;
+  // (the fingers darken only toward their points: dark from half-way, each was a black thorn)
+  const CUT = 0.72;
   const [fb, ft] = split(plan.fixed, CUT);
   const [db, dt] = split(plan.dactyl, CUT);
   const palm = new THREE.SphereGeometry(1, 20, 14).deleteAttribute('uv'); // (the tubes carry no uv; merging needs one attribute set)
