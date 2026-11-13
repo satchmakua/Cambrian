@@ -19,10 +19,11 @@ function scan(arr: ArrayLike<number>) {
   return { finite, min, max };
 }
 
-/** The skin's separate pieces, largest first (triangles each), with vertices welded by position. */
+/** The polygonized skin's separate pieces, largest first (triangles each), with vertices welded by
+ *  position (the exact tubes of thin limbs that follow it in the buffers are pieces of their own). */
 function pieces(geo: ReturnType<typeof buildSmoothGeometry>): number[] {
   const pos = geo.getAttribute('position').array as ArrayLike<number>;
-  const idx = geo.getIndex()!.array as ArrayLike<number>;
+  const idx = (geo.getIndex()!.array as Uint32Array).subarray(0, geo.userData.tubeFrom.index);
   const key = new Map<string, number>();
   const id = new Int32Array(pos.length / 3);
   for (let i = 0; i < id.length; i++) {

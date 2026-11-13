@@ -392,6 +392,36 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   };
 }
 
+/** A copy of the field with only the cones `keep` passes (the ellipsoids, the blend and the measures
+ *  stay as they were) — the skin leaves its thin limbs out and draws them exact (limbTubes.ts). */
+export function withoutCones(f: FieldPrims, keep: (m: number) => boolean): FieldPrims {
+  const idx: number[] = [];
+  for (let m = 0; m < f.nc; m++) if (keep(m)) idx.push(m);
+  const nc = idx.length;
+  const pick = (a: Float64Array) => Float64Array.from(idx, (m) => a[m]);
+  const aq = new Float64Array(nc * 4);
+  idx.forEach((m, i) => aq.set(f.aq.subarray(m * 4, m * 4 + 4), i * 4));
+  const ch = Int32Array.from(idx, (m) => f.ch[m]);
+  return {
+    ax: pick(f.ax), ay: pick(f.ay), az: pick(f.az), bx: pick(f.bx), by: pick(f.by), bz: pick(f.bz),
+    pr: pick(f.pr), ra: pick(f.ra), rb: pick(f.rb), cx: pick(f.cx), cy: pick(f.cy), cz: pick(f.cz), hl: pick(f.hl),
+    an: Uint8Array.from(idx, (m) => f.an[m]), aq,
+    sx0: pick(f.sx0), sy0: pick(f.sy0), sx1: pick(f.sx1), sy1: pick(f.sy1),
+    nc, ia: Int32Array.from(idx, (m) => f.ia[m]), ib: Int32Array.from(idx, (m) => f.ib[m]),
+    ch, ord: Int32Array.from({ length: nc }, (_, i) => i).sort((a, b) => ch[a] - ch[b] || a - b),
+    ec: f.ec, eq: f.eq, er: f.er, ne: f.ne, k: f.k, excess: f.excess, meanR: f.meanR,
+  };
+}
+
+/** Move cone m's ends (and their radii), keeping its bounding sphere and mean radius in step. */
+export function setCone(f: FieldPrims, m: number, A: readonly number[], B: readonly number[], rA: number, rB: number): void {
+  f.ax[m] = A[0]; f.ay[m] = A[1]; f.az[m] = A[2];
+  f.bx[m] = B[0]; f.by[m] = B[1]; f.bz[m] = B[2];
+  f.ra[m] = rA; f.rb[m] = rB; f.pr[m] = (rA + rB) / 2;
+  f.cx[m] = (A[0] + B[0]) / 2; f.cy[m] = (A[1] + B[1]) / 2; f.cz[m] = (A[2] + B[2]) / 2;
+  f.hl[m] = Math.hypot(B[0] - A[0], B[1] - A[1], B[2] - A[2]) / 2;
+}
+
 // rotate v by the CONJUGATE of q (world → the prim's local frame), inlined, no allocation of q'
 function rotConj(qx: number, qy: number, qz: number, qw: number, vx: number, vy: number, vz: number, out: Vec3): void {
   // q* = (-x,-y,-z,w); v' = q* v q

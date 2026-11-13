@@ -34,6 +34,9 @@ export interface Polygonized {
   ao: Float32Array;
   /** the fine grid cell size actually used (max of dx, dy, dz) */
   cell: number;
+  /** the AO probe at any point and outward unit normal (1 open … 0 shut in) — for geometry drawn
+   *  beside the surface (limbTubes) to be shaded by the same occlusion */
+  aoAt: (x: number, y: number, z: number, nx: number, ny: number, nz: number) => number;
 }
 
 const STRIDE = 4;
@@ -196,6 +199,19 @@ export function polygonize(field: ScalarField, min: number[], max: number[], opt
   const ao = new Float32Array(nVerts).fill(1);
   const aoScale = opts.aoScale ?? 0;
   const aoSteps = aoScale > 0 ? [0.8, 1.8, 3.2, 5.0].map((m) => m * Math.max(aoScale, cell * 0.8)) : [];
+  const aoAt = (x: number, y: number, z: number, gx: number, gy: number, gz: number): number => {
+    if (aoSteps.length === 0) return 1;
+    let occ = 0;
+    let wsum = 0;
+    for (let s = 0; s < aoSteps.length; s++) {
+      const dist = aoSteps[s];
+      const d = sampleCoarse(x + gx * dist, y + gy * dist, z + gz * dist);
+      const w = 1 / (s + 1);
+      occ += w * Math.max(0, (dist - d) / dist);
+      wsum += w;
+    }
+    return Math.min(1, Math.max(0, 1 - 1.5 * (occ / wsum)));
+  };
   for (let v = 0; v < nVerts; v++) {
     let gx = grads[v * 3], gy = grads[v * 3 + 1], gz = grads[v * 3 + 2];
     const gl = Math.hypot(gx, gy, gz);
@@ -208,19 +224,9 @@ export function polygonize(field: ScalarField, min: number[], max: number[], opt
     normals[v * 3 + 1] = gy;
     normals[v * 3 + 2] = gz;
     if (aoSteps.length === 0) continue;
-    const x = pos[v * 3], y = pos[v * 3 + 1], z = pos[v * 3 + 2];
-    let occ = 0;
-    let wsum = 0;
-    for (let s = 0; s < aoSteps.length; s++) {
-      const dist = aoSteps[s];
-      const d = sampleCoarse(x + gx * dist, y + gy * dist, z + gz * dist);
-      const w = 1 / (s + 1);
-      occ += w * Math.max(0, (dist - d) / dist);
-      wsum += w;
-    }
-    ao[v] = Math.min(1, Math.max(0, 1 - 1.5 * (occ / wsum)));
+    ao[v] = aoAt(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2], gx, gy, gz);
   }
-  return { positions: pos, normals, indices: new Uint32Array(indices), ao, cell };
+  return { positions: pos, normals, indices: new Uint32Array(indices), ao, cell, aoAt };
 }
 
 type VertexOn = (ga: number, gb: number, va: number, vb: number) => number;

@@ -14,6 +14,9 @@
  * recess in the head with a soft lip rim, and every vertex gets an `aFlesh` weight (1 inside the
  * cavity → 0 at `band` outside it) that the covering shader turns into dark wet mouth-flesh.
  *
+ * A limb link too thin for the grid (a spider's leg, a tail's tip, an arm's last links) leaves the field
+ * and is drawn exact — round cones swept through their joints — in the same buffers (limbTubes.ts).
+ *
  * It's a *viewer* concern and gated behind the capsule path: `grow()` stays static, thumbnails
  * keep capsules, and the build is one-time per creature (off the render loop). Deterministic
  * from the phenotype; bounded & finite on any topology (asserted by the test).
@@ -22,6 +25,7 @@ import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
 import { buildFieldPrims, fieldAt, fieldAtCarved, carveDist, type Carve, type FieldPrims } from './bodyField';
 import { polygonize, gridCells } from './polygonize';
+import { splitThin, limbTubes, type Tubes } from './limbTubes';
 
 // Grid resolution, in cells along the creature's longest padded extent. The grid is sampled as a
 // NARROW BAND (exact field only near the skin — see polygonize) so resolution costs surface area.
@@ -36,27 +40,54 @@ function meanRadius(prims: FieldPrims): number {
  *  tail tip) always holds a sample inside it wherever it runs and can't be missed by the marching
  *  tets (M24). At 0.6 of a cell a thin tube slipped between the samples: a mouse's tail or a spider's
  *  legs came out as rows of dashes — a third of the thumbnails had such fragments. */
-function floorRadii(prims: FieldPrims, cell: number): void {
+function floorRadii(prims: FieldPrims, cell: number, handoff?: Uint8Array): void {
   const rFloor = 0.88 * cell;
   for (let m = 0; m < prims.nc; m++) {
     if (prims.pr[m] < rFloor) prims.pr[m] = rFloor;
-    if (prims.ra[m] < rFloor) prims.ra[m] = rFloor;
-    if (prims.rb[m] < rFloor) prims.rb[m] = rFloor;
+    // (an end that hands a limb on to an exact tube is tucked inside the tube's joint: floored, it would
+    // stand proud of it as a knob)
+    if (prims.ra[m] < rFloor && !(handoff && handoff[m] & 1)) prims.ra[m] = rFloor;
+    if (prims.rb[m] < rFloor && !(handoff && handoff[m] & 2)) prims.rb[m] = rFloor;
   }
 }
 
 function toGeometry(
   poly: ReturnType<typeof polygonize>,
   flesh?: Float32Array,
+  tubes?: Tubes | null,
 ): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(poly.positions, 3));
-  geo.setAttribute('normal', new THREE.BufferAttribute(poly.normals, 3));
-  geo.setIndex(new THREE.BufferAttribute(poly.indices, 1));
+  geo.userData.cell = poly.cell;
   const n = poly.positions.length / 3;
   // aFlesh — mouth-cavity weight (the covering shader's wet gum-flesh); zeros when there is none
-  geo.setAttribute('aFlesh', new THREE.BufferAttribute(flesh ?? new Float32Array(n), 1));
-  geo.setAttribute('aAO', new THREE.BufferAttribute(poly.ao, 1));
+  const fl = flesh ?? new Float32Array(n);
+  if (!tubes || tubes.indices.length === 0) {
+    geo.setAttribute('position', new THREE.BufferAttribute(poly.positions, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(poly.normals, 3));
+    geo.setIndex(new THREE.BufferAttribute(poly.indices, 1));
+    geo.setAttribute('aFlesh', new THREE.BufferAttribute(fl, 1));
+    geo.setAttribute('aAO', new THREE.BufferAttribute(poly.ao, 1));
+    geo.userData.tubeFrom = { vertex: n, index: poly.indices.length };
+    return geo;
+  }
+  // the exact tubes of the thin limbs follow the polygonized surface in the same buffers
+  const nt = tubes.positions.length / 3;
+  const cat = (a: Float32Array, b: Float32Array) => {
+    const o = new Float32Array(a.length + b.length);
+    o.set(a);
+    o.set(b, a.length);
+    return o;
+  };
+  const index = new Uint32Array(poly.indices.length + tubes.indices.length);
+  index.set(poly.indices);
+  for (let i = 0; i < tubes.indices.length; i++) index[poly.indices.length + i] = tubes.indices[i] + n;
+  geo.setAttribute('position', new THREE.BufferAttribute(cat(poly.positions, tubes.positions), 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(cat(poly.normals, tubes.normals), 3));
+  geo.setIndex(new THREE.BufferAttribute(index, 1));
+  geo.setAttribute('aFlesh', new THREE.BufferAttribute(cat(fl, new Float32Array(nt)), 1));
+  geo.setAttribute('aAO', new THREE.BufferAttribute(cat(poly.ao, tubes.ao), 1));
+  // where the tubes start (tests look at the polygonized surface on its own)
+  geo.userData.tubeFrom = { vertex: n, index: poly.indices.length };
   return geo;
 }
 
@@ -68,21 +99,24 @@ export function buildSmoothGeometry(
 ): THREE.BufferGeometry {
   // the shared body field as flat typed arrays — `full` (hybrid) meshes every part for full
   // definition; otherwise just the locomotor body (see bodyField for the filters + fallbacks).
-  const prims = buildFieldPrims(p, full ? 'hybrid' : 'body');
-  const np = prims.nc + prims.ne;
-  const meanR = meanRadius(prims);
-  prims.k = (full ? 0.34 : 0.5) * meanR; // hybrid blends tighter → keeps more part definition
+  const whole = buildFieldPrims(p, full ? 'hybrid' : 'body');
+  const np = whole.nc + whole.ne;
+  const meanR = meanRadius(whole);
+  whole.k = (full ? 0.34 : 0.5) * meanR; // hybrid blends tighter → keeps more part definition
 
   // grid bounds: the body bounds padded so the inflated surface stays inside — including any
   // ellipsoid node's overshoot past its scalar radius (a stretched snout, a broad slab body)
-  const pad = meanR * 1.5 + prims.k + prims.excess + 0.05;
+  const pad = meanR * 1.5 + whole.k + whole.excess + 0.05;
   const min = [p.bounds.min[0] - pad, p.bounds.min[1] - pad, p.bounds.min[2] - pad];
   const max = [p.bounds.max[0] + pad, p.bounds.max[1] + pad, p.bounds.max[2] + pad];
   // a very many-part creature steps the resolution down a touch so its per-sample cost stays bounded
   const res = SKIN_RES[quality] * (np > 160 ? 0.8 : 1);
   const g = gridCells(min, max, res);
   const cell = Math.max(g.dx, g.dy, g.dz);
-  floorRadii(prims, cell);
+  // limb links too thin for this grid are drawn exact (limbTubes) — the rest is polygonized
+  const split = splitThin(p, whole, cell);
+  const prims = split ? split.field : whole;
+  floorRadii(prims, cell, split?.handoff);
 
   // a carve rim thinner than a grid cell aliases into stair-steps — soften it to the cell size
   const carved: Carve[] =
@@ -109,7 +143,7 @@ export function buildSmoothGeometry(
       flesh[v] = w < 0 ? 0 : w > 1 ? 1 : w;
     }
   }
-  return toGeometry(poly, flesh);
+  return toGeometry(poly, flesh, split ? limbTubes(whole, split, cell, poly.aoAt) : null);
 }
 
 // =============================================================================
