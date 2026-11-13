@@ -13,7 +13,7 @@
  */
 import { mulberry32, mix32, range, type Rng } from './rng';
 import { GENE_BOUNDS, DEPTH_MAX, clamp } from './bounds';
-import type { Genome, SegmentGene, AppendageGene, Symmetry, Terminal, PartKind, CoveringType, PatternType } from './genome';
+import type { Genome, SegmentGene, AppendageGene, Terminal, PartKind, CoveringType, PatternType } from './genome';
 import { legBearer } from './grow';
 
 const OP_SALT = 0x9e3779b9;
@@ -165,6 +165,8 @@ function changeBauplan(g: Genome, rng: Rng): void {
     if (target === 0) {
       seg.repeat = clampInt(seg.repeat + LEGLESS_LINKS, B.repeat);
       seg.size = [clamp(seg.size[0] * LEGLESS_SLIM, B.size), clamp(seg.size[1] * LEGLESS_SLIM, B.size), clamp(seg.size[2] * LEGLESS_LONG, B.size)];
+      // …and lies along the ground: a bird's reared trunk, legless, stood on end like a penguin
+      if (seg.curve[0] < 0) seg.curve[0] *= 0.25;
     }
   } else {
     if (seg.appendages.length >= GENE_BOUNDS.segment.appendageCount[1]) return;
@@ -298,9 +300,14 @@ function removeChild(g: Genome, rng: Rng): void {
   chain[k - 1].child = chain[k].child;
 }
 
+// A body turned inside out — bilateral to radial or back — is the rarest of hops: a third of the times
+// it is drawn, and never to "none". (Unmirrored, every paired part went one-sided: a fox on two legs
+// down one flank, a lump that could not stand; one saltation child in five flipped. A radial plan
+// — an octopus, a star — is still a "radial" litter away.)
+const FLIP_CHANCE = 0.34;
 function flipSymmetry(g: Genome, rng: Rng): void {
-  const opts: Symmetry[] = (['bilateral', 'radial', 'none'] as const).filter((x) => x !== g.symmetry);
-  g.symmetry = pick(rng, opts);
+  if (rng() >= FLIP_CHANCE) return;
+  g.symmetry = g.symmetry === 'radial' ? 'bilateral' : 'radial';
 }
 
 // --- duplication -------------------------------------------------------------

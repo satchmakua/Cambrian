@@ -191,5 +191,22 @@ describe('bred offspring stay coherent', () => {
       }
     }
   });
+
+  it('a child is never unmirrored, and turning radial is a rare hop', () => {
+    // (unmirrored, every paired part went one-sided — a fox on two legs down one flank — and one
+    // saltation child in five flipped its symmetry)
+    let flips = 0, n = 0;
+    for (const id of ['canid', 'felid', 'ungulate', 'ursid', 'bird', 'lizard', 'primate', 'mustelid']) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const p = genomeOfMorphotype(seed, id);
+        for (const c of breederLitter(p, 5000 + seed * 7, 9)) {
+          n++;
+          expect(c.symmetry).not.toBe('none');
+          if (c.symmetry !== p.symmetry) flips++;
+        }
+      }
+    }
+    expect(flips / n).toBeLessThan(0.04);
+  });
 });
 
