@@ -177,6 +177,8 @@ export interface JawedBuild {
   interior: THREE.BufferGeometry;
   /** a muzzled mouth's nose pad (node-relative), else null */
   nose: THREE.BufferGeometry | null;
+  /** a short muzzle's whisker pads (node-relative, baked body space: they wear the coat), else null */
+  pads: THREE.BufferGeometry | null;
   /** …and its two nostrils, dark commas on the pad's front */
   nostrils: THREE.BufferGeometry | null;
   muzzled: boolean;
@@ -320,6 +322,7 @@ export function buildJawed(
   // glossy black olive stuck on the face.
   let nose: THREE.BufferGeometry | null = null;
   let nostrils: THREE.BufferGeometry | null = null;
+  let pads: THREE.BufferGeometry | null = null;
   if (line.nose) {
     const n = norm3(line.nose.n);
     const upHint = norm3([spec.up[0] - n[0] * dot(spec.up, n), spec.up[1] - n[1] * dot(spec.up, n), spec.up[2] - n[2] * dot(spec.up, n)], [0, 1, 0]);
@@ -358,9 +361,29 @@ export function buildJawed(
     }
     nostrils = mergeGeometries(holes) ?? null;
     for (const h of holes) h.dispose();
+    // a short muzzle's WHISKER PADS: two soft lobes either side of the mouth's middle, under the nose
+    // (without them a cat's face was a plush ball with a nose on it: no muzzle at all)
+    if (muzzled && snoutReach(phenotype, idx) < SNOUT_SHORT) {
+      const lobes: THREE.BufferGeometry[] = [];
+      for (const side of [-1, 1]) {
+        const lobe = new THREE.SphereGeometry(1, 16, 12);
+        const local = new THREE.Matrix4()
+          .makeTranslation(side * r * PAD_SPREAD, -r * PAD_DROP, -r * 0.1)
+          .multiply(new THREE.Matrix4().makeScale(r * 0.32, r * 0.26, r * 0.24));
+        lobe.applyMatrix4(frame.clone().setPosition(at).multiply(local));
+        lobes.push(lobe.toNonIndexed());
+        lobe.dispose();
+      }
+      pads = mergeGeometries(lobes) ?? null;
+      for (const l of lobes) l.dispose();
+      if (pads) {
+        pads.computeVertexNormals();
+        bakeBodySpace(pads, o);
+      }
+    }
   }
 
-  return { r, aim: spec.aim, upper, lower, muzzle, upperFold, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior, nose, nostrils, muzzled, sealed };
+  return { r, aim: spec.aim, upper, lower, muzzle, upperFold, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior, nose, nostrils, pads, muzzled, sealed };
 }
 
 /** The covering shader's per-vertex inputs for a node-relative feature mesh (rest body space = local + o). */
@@ -398,6 +421,10 @@ export function snoutReach(p: Phenotype, mouthIdx: number): number {
 /** a muzzle reaching no further than this ahead of its braincase is a short one: a cat's */
 export const SNOUT_SHORT = 1.85;
 const SNOUT_LONG = 2.4;
+/** a whisker pad's offset from the nose, sideways and down (×the mouth's radius) */
+const PAD_SPREAD = 0.3;
+const PAD_DROP = 0.3;
+
 /** …and a long muzzle's nose pad against the mouth's size */
 const NOSE_LONG = 1.5;
 /** the nose pad's size against the mouth's, by the muzzle's reach: 0.75 on a cat's short muzzle, half
@@ -507,6 +534,7 @@ export function JawedMouth({
         built.lowerLip.dispose();
         built.interior.dispose();
         built.nose?.dispose();
+        built.pads?.dispose();
         built.nostrils?.dispose();
       }
     },
@@ -554,6 +582,7 @@ export function JawedMouth({
           does a toothless seam — a frog's, a fish's — where it jutted ahead of the snout as a hook) */}
       {!muzzled && built.upperTeeth.length > 0 && <mesh geometry={built.upperFold} material={shut ? coatMat : mats.lip} castShadow />}
       {built.nose && <mesh geometry={built.nose} material={mats.nose} castShadow />}
+      {built.pads && <mesh geometry={built.pads} material={coatMat} castShadow />}
       {built.nostrils && <mesh geometry={built.nostrils} material={mats.nostril} />}
       {built.upperTeeth.length > 0 && (
         <instancedMesh
