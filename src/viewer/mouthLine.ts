@@ -250,6 +250,50 @@ function spareTheEyes(p: Phenotype, c: Carve): Carve {
  * (radians below the aim; positive = downward), each traced to the skin. `carves` lets the lower
  * lip land on the carved cavity rim instead of the pristine skin.
  */
+/** a seam mouth's half-gape at its least (rad): parted enough to read as a mouth, not to arch */
+const SEAM_GAPE = 0.05;
+/** …and how far its corners fall below its middle (× the mouth's size): a hair, not a frown */
+const SEAM_DROP = 0.04;
+
+/**
+ * Trace a lip at the pitches `pitch` gives, then nudge each sample's pitch (secant steps: a point at
+ * distance d from the origin moves about d·Δpitch) until its height along `up` is `target(t, the
+ * middle's height)`. The middle sample keeps its pitch.
+ */
+function levelCurve(
+  f: FieldPrims,
+  carves: readonly Carve[],
+  s: MouthSpec,
+  origin: Vec3,
+  samples: number,
+  pitch: (t: number) => number,
+  up: Vec3,
+  target: (t: number, midH: number) => number,
+): MouthSample[] {
+  const mid = samples >> 1;
+  const offs = new Float64Array(samples);
+  const at = (t: number) => pitch(t) + offs[Math.round(((t + 1) / 2) * (samples - 1))];
+  let out = traceCurve(f, carves, s, origin, samples, at);
+  for (let it = 0; it < 6; it++) {
+    const mh = dot3(out[mid].p, up);
+    let worst = 0;
+    for (let i = 0; i < samples; i++) {
+      if (i === mid) continue;
+      const t = -1 + (2 * i) / (samples - 1);
+      const err = dot3(out[i].p, up) - target(t, mh); // too high: pitch further down
+      const q = out[i].p;
+      const d = Math.hypot(q[0] - origin[0], q[1] - origin[1], q[2] - origin[2]);
+      offs[i] = Math.max(-LEVEL_MAX, Math.min(LEVEL_MAX, offs[i] + err / Math.max(d, 1e-3)));
+      worst = Math.max(worst, Math.abs(err));
+    }
+    if (worst < 1e-3 * s.r) break;
+    out = traceCurve(f, carves, s, origin, samples, at);
+  }
+  return out;
+}
+/** the most a sample's pitch is nudged to level it (rad) */
+const LEVEL_MAX = 0.7;
+
 /** a mouth aimed closer than this (cosine) to the head's vertical sweeps about its own up instead */
 const SWEEP_ALONG = 0.9;
 
@@ -356,6 +400,10 @@ export function buildMouthLine(
   // apart on a typical head — a hairline that swallowed its own interior and teeth. Opened up so
   // the dark throat and the tooth rows actually have room to show.
   let gapeHalf = 0.5 * s.gape + 0.14;
+  // …but a jawed mouth that shuts as a seam (a reptile's, a frog's, a fish's, a slug's) parts only a
+  // sliver: its lips split the gape about the line, so the upper one arched up in the middle by as
+  // much as a fifth of a radian and more, and from in front the seam was a frown on every such face
+  if (!s.muzzled && JAWED.has(s.variant)) gapeHalf = SEAM_GAPE + 0.08 * s.gape;
   // a muzzle's upper lip is part of the skull: it sits a little below the muzzle's midline and only
   // the mandible drops to open (the whole gape opens downward); everything else splits the gape
   // about the mouth line
@@ -408,6 +456,20 @@ export function buildMouthLine(
       upper = traceCurve(f, [], s, origin, samples, upperPitch);
       lower = traceCurve(f, carves, s, origin, samples, lowerPitch);
     }
+  }
+
+  // A SEAM lies level across the face. Swept at one pitch, a ray to the side of a narrow snout met the
+  // skin sooner and dropped less than the one down the middle, so the corners rose (a theropod's grin),
+  // and on a broad round head they fell (a frog's frown). Each sample's pitch is nudged until it sits at
+  // the middle's height on the head's own vertical, less a hair at the corners; the lower lip runs
+  // below the upper by the gape in the middle and meets it at the corners.
+  if (headed && !s.muzzled && JAWED.has(s.variant)) {
+    const headUp = norm3(qRotateV(s.anchor.quat, [0, 1, 0]));
+    const h = (q: Vec3) => dot3(q, headUp);
+    const drop = (t: number) => SEAM_DROP * s.r * Math.abs(t);
+    upper = levelCurve(f, [], s, origin, samples, upperPitch, headUp, (t, mh) => mh - drop(t));
+    const uMid = h(upper[mid].p);
+    lower = levelCurve(f, carves, s, origin, samples, lowerPitch, headUp, (t, mh) => uMid - drop(t) - (uMid - mh) * Math.cos((t * Math.PI) / 2));
   }
 
   // weld the corners exactly (shared start/end), then fix `away` signs: the top lip's `away`

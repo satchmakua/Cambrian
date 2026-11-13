@@ -135,6 +135,10 @@ describe('mouth line (mouth overhaul)', () => {
         const u = line.upper;
         const lift = Math.max(h(u[0].p), h(u[u.length - 1].p)) - h(u[u.length >> 1].p);
         expect(lift / spec.r, `${id} #${seed}`).toBeLessThan(0.2);
+        // …nor, shut as a seam (not a muzzle), a frown: its corners no lower than its middle, near enough
+        // (its lips split a wide gape about the line, and the upper one arched up in the middle — from
+        // in front every frog, fish and slug was sulking)
+        if (!spec.muzzled) expect(lift / spec.r, `${id} #${seed} frown`).toBeGreaterThan(-0.1);
       }
     }
     expect(seen).toBeGreaterThan(50);
