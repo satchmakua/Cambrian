@@ -57,9 +57,11 @@ export const FACE_VIEW: readonly [number, number, number] = (() => {
   return [v[0] / l, v[1] / l, v[2] / l] as const;
 })();
 
-/** …and onto a radial body's crown: from well above, over the arms (see faceCamera). */
+/** …and onto a radial body: from above and to the side, over the arms, at its middle (see faceCamera).
+ *  (Straight down onto its face — a sea star's mouth under its disc, an urchin's under its spines — the
+ *  plate showed a meaningless close-up of the crown, a hole among spines.) */
 export const CROWN_VIEW: readonly [number, number, number] = (() => {
-  const v = [0.36, 0.8, 0.48];
+  const v = [0.42, 0.62, 0.66];
   const l = Math.hypot(v[0], v[1], v[2]);
   return [v[0] / l, v[1] / l, v[2] / l] as const;
 })();
@@ -74,7 +76,9 @@ const CROWN_REACH = 1.15;
  * inside an arm, or among the spines.)
  */
 export function faceCamera(framing: Framing, want: number): { at: [number, number, number]; from: [number, number, number] } {
-  const f = framing.face ?? { pt: [0, 0, framing.ext[2] / 2] as [number, number, number], r: framing.size * 0.25 };
+  const f = framing.radial
+    ? { pt: [0, 0, 0] as [number, number, number], r: framing.size * 0.5 }
+    : (framing.face ?? { pt: [0, 0, framing.ext[2] / 2] as [number, number, number], r: framing.size * 0.25 });
   const view = framing.radial ? CROWN_VIEW : FACE_VIEW;
   const margin = framing.size * 0.08;
   // the least distance along the view at which it leaves the box (it may leave through any face)
