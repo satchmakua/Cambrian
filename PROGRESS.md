@@ -38,6 +38,7 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Covering | `src/engine/genome.ts` (`Covering`) | ✅ type/pattern/scale/contrast/sheen, per-morphotype, mutated, `CAM2:`-shared |
 | Procedural motion | `src/viewer/animation.ts` | ✅ 8 motion styles (walk/swim/slither/scuttle/flap/drift/ooze) by morphology, role-based (unit-tested) |
 | Smooth skin | `src/viewer/smoothSkin.ts` | ✅ SDF smooth-union of capsules → marching tetrahedra; toggled, gated behind capsules (unit-tested) |
+| Exact thin limbs | `src/viewer/limbTubes.ts` | ✅ limb links too thin for the skin's grid drawn as round cones swept through their joints, in the skin's own buffers (true girth at every fineness) |
 | UI / store | `src/ui/App.tsx`, `store.ts` | ✅ Zustand: lineage + current + litter + pressure, localStorage |
 | Test invariants | `tests/engine/invariants.ts` | ✅ shared phenotype + genome-bounds asserts |
 | glTF export (stretch) | `src/viewer/exportGltf.ts`, `src/viewer/ShareBar.tsx` | ✅ bakes capsule/smooth + features → binary `.glb` via GLTFExporter |
@@ -54,6 +55,60 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M95 — Thin limbs drawn exact, and a tenth look · 2026-11-13
+
+- **Thin limbs drawn exact** (`src/viewer/limbTubes.ts`). A limb link not much thicker than the skin's
+  grid cell is more than marching tets can resolve: a spider's legs, an octopus's arm tips and a tail's
+  last links came out beaded (the outline wobbling with every cell crossed), and floored at 0.88 of a
+  cell to keep them whole they came out too thick as well — a cat's tail tip at twice its girth, and on
+  the World's coarser skins every leg of a cat two or three times over. Doubling the grid cured it at
+  3.6× the cost; settling the vertices onto the field (a Newton step) changed nothing to the eye. Such
+  links (at most 1.6 cells thick) now leave the polygonized field and are drawn as what the field says
+  they are: round cones, swept as one tube through gently bent joints, with a ball at each sharp joint,
+  fork and tip, less what lies buried in the links it joins. They are appended to the skin's own
+  buffers, so the covering, the rig's skin weights and the fur shells take them as skin; where the
+  field hands a limb on to a tube its cone is tucked under the joint's ball (shortened if it tapers
+  gently, slimmed if steeply), so two skins never lie at one girth. Skin builds got cheaper (31 plans:
+  high 3.07 → 2.31 s, low 0.81 → 0.51 s, far 0.31 → 0.19 s) at about the same vertex count.
+- **A tenth look** (the same brief and seed as the ninth, on the renders of f76fe54) scored 3.26 again:
+  nine plans at 4, twenty-one at 3, one at 2 (the urchin). Its worst ten, and what was done:
+  - *Dragon and wyvern wings: flags on a rod, stacked like shelves; a dowel peg at the root* [3]. The
+    folded membrane's first finger ran back nearly level from a high wrist to past the rump, the skin a
+    taut sheet hung from it. The wrist is now a peak just over the shoulder and the fingers rake back
+    and down in a steeper, shorter fan (the top edge falls from the wrist, the tips end along the
+    flank); the skin is gathered in pleats and its edges scalloped deeper; and the folded upper arm,
+    which stood out of the shoulder as a round-ended dowel, is buried (it shapes the skin, isn't drawn).
+  - *Urchin: an upside-down pear through the floor; sparse identical cones* [3]. With no limb of its own
+    to mesh, the skin fell back on every link but the quills — including those to the eyes and the
+    mouth underneath, a bulb hung from the test. The fallback now leaves out every part that draws
+    itself. The test is a low dome as deep as it is wide (it was a ball, a fifth narrower front to
+    back), and each spine pales from a dark root to its point, each its own shade.
+  - *Crab: a spider's outline from above* [3]. Its walking legs fanned evenly fore and aft (±28°); they
+    now sweep back as a set, the first pair barely forward of square, the last well behind it.
+  - *Spider: a skewer through the head* [3]. Its shins dropped near plumb from high knees, so the near
+    leg seen down its own plane was one pole; the last links now reach out to a foot planted far out.
+  - *Horror: a broken eggshell crown; a pencil across the face* [3]. Its sucker's lip was traced on the
+    carved skin, so it lay at the bottom of the hole and the cut edge was the rim; and the wet flesh
+    shading ran half the mouth's size out over the rim. A ring mouth's lip is now traced on the uncut
+    skin, each sample searched to the cavity's rim, rolled fuller, and worn in the body's own covering;
+    the flesh stays in the hole. Its thin upper feelers root round the crown, about the mouth.
+  - *Shark: a maggot banded in rings* [3]. A trunk node stretched past 1.15 kept a field ellipsoid of its
+    own; an interior node's ellipsoid never widens the body, it only swelled by the blend where its skin
+    met the cones' — a ring at every node (the shark's trunk is stretched 1.154). Interior trunk nodes
+    carry none now: lizards' and crocodiles' backs lose their bumps too (lumpiness down six and two
+    times). The no-blend caterpillar test never saw them; a new one runs with the skin's own blend.
+  - *Fish: a tail of two needle spikes* [3]. A fan from one point notched a third of its length; a bony
+    fish's tail is now a broad fan on a base as deep as the stock, lobes flaring to rounded tips, a
+    shallow fork.
+  - Not yet: a bear's and a dog's muzzle (a sock-puppet tube), the chimera's box mouth, the cut stone's
+    soft opaque body.
+- **Tests:** `tests/viewer/limbTubes.test.ts` (a thin leg's own girth on a coarse skin; tube vertices on
+  their cones; the field tucked in at a hand-over), `tests/viewer/wings.test.ts › folded along its own
+  flank`, `› the cut of a fin`, `tests/engine/plans/urchin.test.ts › low dome`, `› pales`,
+  `tests/engine/plans/crab.test.ts`, `tests/engine/plans/arachnid.test.ts`,
+  `tests/engine/plans/horror.test.ts`, `tests/viewer/mouths/ring.test.ts › rolls over the cavity's rim`,
+  `tests/viewer/smoothSkin.test.ts › the maggot`.
 
 ## M94 — An eighth look, harder: a stone, a hawk's bill, an urchin's underside · 2026-11-13
 
