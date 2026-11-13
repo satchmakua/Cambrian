@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M94: an eighth look, harder; M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -54,6 +54,47 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M94 — An eighth look, harder: a stone, a hawk's bill, an urchin's underside · 2026-11-13
+
+- **An eighth look, briefed as a demanding art director** (seed 23, on the code after M93). Its mean,
+  3.19, is not comparable with the seventh's 4.29: the brief was harsher, and it named something on
+  every plan. Its worst ten and its recurring problems were the work list; what was done:
+  - *Crystalline: a soft camouflage-patched blob* [4]. Countershading picks the belly's, the flank's
+    or the back's tone by the surface normal, and on a skin cut into flat faces each face took one of
+    the three: the patchwork. A cut skin has none now; its faces' own shades and inner glow only nudge
+    the colour, and the narrow bevels between faces are lit as the cut's edges.
+  - *Dragon: no tail, a winged horse* [4]; *rodent: no tail, a guinea pig* [3]. Both drew a tail 95
+    and 90 times in 100; both always do.
+  - *Hawk: a straight cone beak* [3]. The hook dropped the bill's centreline 0.6 of the mouth's radius
+    while the bill tapered from 0.72 of it, so the upper mandible's underside ran level to the point. A
+    hooked bill now stays deep, tapers late, hooks 0.84–0.94 down near its tip, over a shorter lower
+    mandible: its point lies below the lower mandible's.
+  - *Urchin: canister feet tied on with black strings* [3]. A radial body grows its central maw once
+    per arm; aimed not quite straight down, an urchin's eight traced eight seams round its underside
+    (the strings), a sea star's five a swirl of dark arcs, a horror's crown overlapping funnels. A
+    radial body now draws and carves the first copy of each mouth gene (the sim keeps its copies). Its
+    tube feet stood it on stilts and are gone (their draws still made); without them the hybrid skin's
+    fallback skinned its quills as beaded rods, and now leaves them out. Its mouth is a small round one,
+    straight down.
+  - *Octopus: gold emoji goggles* [3]. Its eye was one metallic gold dome: it is now a dark wet
+    eyeball with a fibred iris darkening to its rim round a bolder bar, a fifth smaller.
+  - *Tortoise: legs poking above the shell like periscopes* [3]. Its legs run out level to a knee just
+    outside the shell's wall, then down; the horn shell now swells out over each leg's root and knee.
+  - *Crab: balloon boxing gloves with black thorns, in raw-flesh latex* [3]. The palm is pressed flat,
+    the fingers dark only over their last quarter, the shell a darker red-brown.
+  - *Feathers like fish scales* (songbird, hawk, ostrich, chimera). The head and the underside are now
+    smooth plumage; the feathers' edges show on the back and wings, in a softer shadow.
+  - *Cartoon faces from the front*: a shut mouth's crease was near-black, a line in ink under two eyes.
+    It is a deep shade of the creature's own hide.
+- **And from looking at the World and the studio between:** a rat's tail is naked (the bird's
+  bare-shank gate generalised to any part), its ears pink inside, and a tailless rodent bare-pawed too;
+  a coat keeps a fringe of fur along its outline however far off (the shells fade elsewhere); mood
+  bubbles stay small when the camera comes close (a world-sized tag hid a mouse).
+- **Still to do from it:** the dog's and the bear's ball of a skull with a tube of a muzzle; the
+  ape's pads with no hands; the weasel end on; stiff fan wings (dragon, wyvern, songbird); black
+  "stockings" on bare shanks; hard-edged bands on dragons; an arachnid's dipped abdomen; ears that are
+  spikes edge-on; one cone for every horn.
 
 ## M93 — What the seventh look left: tails, claws, paws and eyes · 2026-11-13
 
