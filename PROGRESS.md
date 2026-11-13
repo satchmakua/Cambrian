@@ -72,6 +72,61 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   the whole overlap up to its cap, and standing animals' deep overlaps fall from up to 0.44 a snapshot
   to 0–0.11. One walking past another still passes through it for a moment.
 
+- **Dry years.** Every year was the same year, and a valley settled into one balance and stayed
+  there. Now, like the weather, a pure function of the seed and the year makes one year in four dry
+  (never a valley's first), with a severity of a half to all. Its wet spells come that much less often,
+  grass and fruit come back slower, and what a meadow can hold falls by up to half, the standing grass
+  above that withering over a day or so (slower regrowth alone did nothing: a meadow near full fed a
+  herd through any slow year). The journal tells of it at the year's first dawn, the season reads "dry
+  year" or "drought", and the green bleaches toward straw. Over six valleys run three years a dry
+  year's lowest population falls 12–20% while ordinary years are unchanged, and every valley ends with
+  five to seven kinds of seven.
+- **A fifth look, by someone else's eye.** All 31 plans at a fresh seed (8) went to an independent
+  look that judged the pictures alone, with no code. What it confirmed, fixed in order of how badly
+  each misread:
+  - *Five plans floated.* The ground is the bounds' lowest point, and that counted a mouth or an eye
+    hung under the body (a sea star's mouth, an octopus's beak) and took every node as a ball of its
+    radius, though a flat disc or a shell reaches less far down. A creature now rests on its body and
+    limbs, as drawn: the sea star sat 0.22 bu off the floor, the octopus's arms 0.23. The slug's sole
+    now lies level, and an octopus has eight arms.
+  - *Wings were a pole and a paddle.* A dragon's membrane wing was only ever built spread and raised,
+    so it walked the valley with its wings held open: edge on, a pole; head on, a crucifix. It now
+    folds at rest as a bat's does (the wrist and its thumb claw over the shoulder, the fingers back
+    down the flank, the skin pleated between them) and opens from the fold to fly.
+  - *An emu stood knock-kneed.* A two-legged bird's legs were yawed toward each other at every joint:
+    an emu's feet came down at an eighth of its hips' spread, crossed. They now stay in the fore-aft
+    plane, feet under hips.
+  - *A hawk wore a pigeon's bill.* Its hook dipped only at the very tip of a pale wedge. A stout bill
+    now curves down its whole culmen into a deep hook, painted from a yellow cere where it leaves the
+    face (found by marching the bill's spine out of the skin) through blue-grey horn to a dark tip.
+    Painting it showed a second fault: a tall blade rooted up the face stood its buried root's top edge
+    out above the brow, a plate fixed upright on the forehead. Every ring of a bill still inside the
+    head is now drawn back under the skin. Ratites draw only slim bills.
+  - *The dragon was a llama, once a duck.* A domed cranium over a dropped mammal muzzle, a horn
+    standing up off the crown like an ear, and a flat cyan disc for an eye (three dragons in five drew
+    an insect's facets or a glowing eye). Its eye is now a reptile's slit under a scowling brow, its
+    skull low and broad, its jaw running out level, its horns swept back along the skull. The duck
+    was a colour fault: a band's edge across the face painted the snout like a bill. A banded or
+    striped coat now leaves the head one tone, a capsule from braincase to snout tip in the shader.
+  - *The shark was a toy beluga.* Three head links, tapering no further than a gene allows, ended in a
+    cap a third of the head across, and a bony fish's silver-ringed eye looked out over a grin. Four
+    links bring the snout to a point over the mouth, the skull is broader than deep, and a swimmer in
+    bare skin has a dark eye.
+  - *The crab was a spider or a tick.* A small shell slung between long, thin, high-kneed legs, its
+    claws the size of their tips. Its legs are shorter and stouter, reaching about twice the shell's
+    half-width, and its claws heavier.
+  - *The face plate looked out from inside an arm.* A sea star's or an urchin's face is its middle, and
+    the portrait camera stood a head's distance in front of it. It now stands outside the body, and a
+    radial animal's crown is looked down on from far enough back to see all of it.
+- **Keep a bad fix from moving another plan.** A plan's change is checked against a fingerprint of
+  every plan's founders, and each change above moved only its own plan (and random genomes drawn as
+  it). One reached further: a thicker dragon snout made the dragon's headedness descriptor drop toward
+  the chimera's, and the classifier began reading eight chimeras in forty as dragons (four before). A
+  snout a little slimmer keeps the dragon's look and puts the count back at four.
+- **What the look left.** A weasel seen end on is a ball behind a small head (its head is about 0.65 of
+  its body's width; a ferret's 0.8), mammal muzzles are much alike, the crystalline beast is smooth
+  where it should be cut, and the horror's mouth on its crown reads as a drain grate.
+
 ## M88 — A fourth look, and breeding that stays coherent · 2026-11-13
 
 - **A fourth look by eye.** All 31 plans rendered at a fresh seed (5) read as their animals. What

@@ -787,13 +787,26 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   share of themselves. **Tests:** `tests/viewer/iris.test.ts`, `tests/engine/random.test.ts › a
   familiar frog`, `tests/engine/mutate.test.ts › bred offspring stay coherent`.
 
+- [x] **M89 — A faster valley, and a fifth look.** A simulated year 40% faster (plants gridded,
+  heights sampled onto tiles), one year in four dry; from an independent look at seed 8: nothing
+  floats, dragons fold their wings at rest and wear reptile heads, birds' feet under their hips, a
+  hawk's hooked two-toned bill, heads kept one tone under bands, a shark's pointed snout and dark eye,
+  a crab's stout legs and heavy claws, face portraits from outside the body.
+  **Tests:** `tests/sim/weather.test.ts › dry years`, `tests/engine/ground.test.ts`,
+  `tests/viewer/wings.test.ts › folded`, `tests/viewer/mouths/beak.test.ts › a hawk's bill`,
+  `tests/engine/plans/wyvern.test.ts › a dragon's head`, `tests/viewer/face.test.ts › a plain head`,
+  `tests/engine/plans/fish.test.ts › a shark's snout`, `tests/engine/bodyplan.test.ts › a crab's legs`,
+  `tests/viewer/framing.test.ts › a face's portrait`.
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **Saltation that lands.** A basin hop (a litter's saltation children) still often lands between
   plans: a bird swollen to a sausage, a cat on a crab's legs. Hop toward the nearest attractor's
   proportions, not just its limb count.
 
-- [ ] **Richer world.** Drought years, burrows and nests, a second lake.
+- [ ] **Richer world.** Burrows and nests, a second lake.
+- [ ] **What the fifth look left.** A weasel end on is a ball behind a small head; mammal muzzles much
+  alike; the crystalline beast smooth where it should be cut; the horror's crown mouth a drain grate.
 - [ ] **A lineage film.** A wild species' body changes over the generations, as a strip of portraits.
 - [ ] **More headroom.** Skin builds off the main thread (a worker for the marching tetrahedra); the
   flowers as cells like the grass; level-of-detail crowns for far trees.
