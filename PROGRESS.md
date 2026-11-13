@@ -148,6 +148,11 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
     link, was 0.6–0.85): no lollipop stick under the crescent.
   - *A frog's goggle eyes*: a round eye bulging from a bare crown has a gold or bronze iris across nearly
     the whole ball, round a black horizontal pupil.
+  - *Paint smears and stained glass* (a theropod's magenta snout on mint, a dragon's purple bands, a
+    wyvern's crack network, a sea star's navy polka dots): feathers and uncanny plans could wear any
+    marking hue, and a plan's sober-markings flag was ignored on an uncanny one. The flag now holds
+    whatever the cluster, and the theropod, the dragon and the wyvern ask for it: markings in the
+    body's own hue, darker or paler, or umber.
 - **Still to do from it:** the weasel end on (its shoulder joints stand out past its flanks); ears
   that are spikes edge-on (the far ear, facing forward-out, from a three-quarter view: thicker ears
   didn't help — it is the angle); the frog a bun on its chin (its forelegs attach under the middle of
