@@ -800,15 +800,16 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
 
 - [x] **M90 — Cut stone, a mouth of flesh, and hops that land.** The crystalline beast's hide cut into
   flat faces, outline and all; the horror's crown mouth a funnel of flesh with a knobbed rasp; a
-  saltation child that comes down near no plan takes back its lineage's proportions (structure kept).
+  saltation child that comes down near no plan takes back its lineage's proportions (structure kept),
+  and one that flipped symmetry lands whole in the nearest plan of its own, in its lineage's colours.
   **Tests:** `tests/viewer/facets.test.ts`, `tests/viewer/mouths/ring.test.ts › a sucker's throat`,
   `tests/engine/landing.test.ts`.
 
 ### Next up (unchecked — pick from here)
 
-- [ ] **Hops to radial that land.** A bilateral lineage's child flipped radial is a sprawl (a cat's
-  legs round a disc). Land it in the radial basin it is nearest: that plan's body in the lineage's
-  coat, rather than leaving it.
+- [ ] **Hops that land in more than one basin.** A flipped cat, songbird or hawk lands as an urchin
+  nearly every time (the coarse measure puts every radial sprawl nearest it). Spread them over the
+  radial plans (octopus, sea star, horror) by what the child kept: its eyes, its limbs' length.
 
 - [ ] **Richer world.** Burrows and nests, a second lake.
 - [ ] **What the fifth look left.** A weasel end on is a ball behind a small head (its shoulder joints

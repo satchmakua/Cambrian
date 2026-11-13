@@ -88,7 +88,13 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   out long and low as a shark does. The measure is ruled by structure (counts of legs, wings, tails and
   eyes; radial or not), so it can't say what proportions a body should have; the lineage's own plan
   can. The same reason is why the measure barely moves (21% → 20% in a valley): landing keeps the
-  structure. What it doesn't mend is a hop to radial, a cat flipped into a sprawl, which it leaves.
+  structure.
+- **A hop to the other symmetry lands whole.** One saltation child in twelve flipped symmetry, and
+  every one came down near nothing: a cat's legs splayed round a disc, a hawk a heap of feathers.
+  Bilateral proportions can't mend a radial body, so such a child now becomes a founder of the nearest
+  plan that shares its symmetry, in its lineage's colours and with its own seed: a sea urchin or an
+  octopus in the cat's coat colours. (The coarse measure's nearest plan for a flipped cat is usually a
+  bilateral one, so the search runs down the ranked list to the first of the child's symmetry.)
 
 ## M89 — A faster valley, and a fifth look · 2026-11-13
 
