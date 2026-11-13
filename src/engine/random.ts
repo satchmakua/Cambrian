@@ -232,7 +232,7 @@ const MORPHOTYPES: readonly Morpho[] = [
   // broad skull and a muzzle held out level from it. (Level from rump to shoulders, with the muzzle
   // hung from the brow at a hound's droop, it was a tapir — a hippo, in a pink coat.)
   // (its muzzle tapers to the nose, and runs no longer than a dog's: an even tube ending in a round bulb was a hippo's)
-  { id: 'ursid', cluster: 'familiar', weight: 0.6, taper: [1.11, 1.15], rear: [-0.09, -0.05], eyeEl: [0.85, 0.98], girth: [0.54, 0.68], repeat: [3, 4], height: [1.0, 1.12], neck: [0.62, 0.72], neckLift: [-0.25, -0.1], headSize: [0.7, 0.82], muzzle: [0.62, 0.7], muzzleDrop: [0.12, 0.2], legPairs: [2], posture: 'plantigrade', legAz: [4.32, 4.5], legLen: [0.95, 1.15], legThick: [0.68, 0.82], legTerm: ['paw'], snout: [0.46, 0.53], stop: [0.9, 0.915], tail: 0.25, tailSegs: [1, 2], tailLen: [0.25, 0.4], tailThick: [0.26, 0.34], ears: 0.9, earStyle: [0.7, 1], earSize: [0.65, 0.85], whiskers: 0, headShape: ['broad'], headWide: [1.1, 1.32], headDome: [0.82, 1.02], eyeStyle: [0.22, 0.36], mouthStyle: [0.07, 0.12], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.06, 0.09], sat: [0.3, 0.55], light: [0.2, 0.38] }, // brown to near-black (a light coat on a redder hue was salmon pink)
+  { id: 'ursid', cluster: 'familiar', weight: 0.6, taper: [1.11, 1.15], rear: [-0.09, -0.05], eyeEl: [0.85, 0.98], girth: [0.54, 0.68], repeat: [3, 4], height: [1.0, 1.12], neck: [0.62, 0.72], neckLift: [-0.25, -0.1], headSize: [0.7, 0.82], muzzle: [0.62, 0.7], muzzleDrop: [0.12, 0.2], legPairs: [2], posture: 'plantigrade', legAz: [4.32, 4.5], legLen: [0.95, 1.15], legThick: [0.68, 0.82], legTerm: ['paw'], snout: [0.46, 0.53], stop: [0.9, 0.915], tail: 0.25, tailSegs: [1, 2], tailLen: [0.25, 0.4], tailThick: [0.26, 0.34], ears: 1, earStyle: [0.7, 1], earSize: [0.65, 0.85], whiskers: 0, headShape: ['broad'], headWide: [1.1, 1.22], headDome: [0.86, 1.02], eyeStyle: [0.22, 0.36], mouthStyle: [0.07, 0.12], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.06, 0.09], sat: [0.3, 0.55], light: [0.2, 0.38] }, // brown to near-black (a light coat on a redder hue was salmon pink)
   { id: 'lizard', cluster: 'familiar', weight: 0.6, tailTaper: [0.76, 0.82], tailAz: [4.6, 4.8], tailCurl: [0.04, 0.08], tailDroop: [-1.52, -1.4], tailLen: [0.92, 1.12], tailSegs: [6, 6], tailThick: [0.5, 0.62], eyeT: [0.45, 0.6], head: 1, girth: [0.32, 0.46], repeat: [4, 6], height: [0.6, 0.8], elong: [1.2, 1.5], neck: [0.6, 0.7], taper: [0.97, 1.0], neckLift: [-0.24, -0.14], headSize: [0.66, 0.8], headWide: [0.86, 0.98], headDome: [0.66, 0.8], headLong: [1.3, 1.55], legPairs: [2], posture: 'sprawling', legLen: [0.58, 0.88], legAz: [3.66, 3.86], legTerm: ['claw'], headShape: ['flat', 'wedge'], snout: [0.4, 0.65], tail: 0.95, frill: 0.25, eyeStyle: [0.4, 0.6], mouthStyle: [0.07, 0.18], covering: ['scales'], pattern: ['bands', 'reticulate', 'mottle'], hue: [0.22, 0.42], sat: [0.5, 0.85] },
   { id: 'crocodilian', cluster: 'familiar', weight: 0.5, tailTaper: [0.78, 0.81], tailAz: [4.6, 4.8], tailCurl: [-0.05, -0.02], tailDroop: [-1.52, -1.4], tailLen: [1.6, 1.9], tailSegs: [6, 6], tailThick: [0.68, 0.8], tailStyle: [0.82, 0.97], eyeT: [0.02, 0.14], eyeEl: [0.45, 0.65], head: 1, girth: [0.4, 0.55], repeat: [5, 7], height: [0.66, 0.8], elong: [1.3, 1.6], taper: [0.95, 1.0], rear: [-0.012, 0.008], neck: [0.64, 0.72], neckLift: [0, 0.03], legPairs: [2], posture: 'sprawling', legLen: [0.5, 0.72], legThick: [0.44, 0.58], legAz: [3.55, 3.78], legTerm: ['claw'], headShape: ['flat'], headLinks: 4, headTaper: [0.75, 0.8], headSize: [0.6, 0.68], headWide: [1.15, 1.3], headDome: [0.58, 0.7], headCurve: [0.0, 0.04], mouthT: [0.3, 0.42], mouthEl: [1.2, 1.28], snout: [0.8, 1.0], tail: 1, eyeStyle: [0.4, 0.6], eyeAz: [0.62, 0.76], eyeSize: 1.35, mouthStyle: [0.14, 0.24], covering: ['scales'], pattern: ['mottle', 'mottle', 'plain'], patternScale: [3.5, 6], soberMarks: true, hue: [0.14, 0.28], sat: [0.24, 0.48], light: [0.3, 0.5] },
   { id: 'serpent', cluster: 'familiar', weight: 0.6, tailTaper: [0.79, 0.84], tailAz: [4.71, 4.71], tailCurl: [0, 0.02], tailDroop: [-1.57, -1.53], tailThick: [0.86, 0.95], tailLen: [1.45, 1.8], tailSegs: [6, 6], rear: [-0.004, 0.004], taper: [0.985, 1.0], head: 1, girth: [0.22, 0.32], repeat: [17, 24], elong: [1.3, 1.5], headShape: ['wedge'], headWide: [1.05, 1.25], headDome: [0.62, 0.74], headLong: [1.25, 1.5], headTaper: [0.74, 0.82], eyeT: [0.32, 0.46], eyeAz: [0.3, 0.45], eyeEl: [0.55, 0.75], wind: 0.9, legPairs: [0], tail: 1, eyeStyle: [0.4, 0.6], mouthStyle: [0.14, 0.24], covering: ['scales'], pattern: ['bands', 'stripes', 'reticulate'], hue: [0.1, 0.4], sat: [0.5, 0.85] },
@@ -726,10 +726,18 @@ function scaffold(rng: Rng, seed: number, symmetry: Symmetry, radialCount: numbe
   const cov = covering(rng, m);
   // a rare vivid morph: rarer on a familiar animal (a magenta crocodile read as a toy), rarest on a pelt
   const exotic = rng() < (m.cluster !== 'familiar' ? 0.14 : cov.type === 'fur' ? 0.04 : 0.07);
-  const hueA = exotic ? rng() : rg(rng, m.hue, [0, 1]);
-  const sat = exotic ? range(rng, 0.7, 0.95) : rg(rng, m.sat, [0.32, 0.9]);
-  const light = rg(rng, m.light, [0.3, 0.7]);
-  const hueB = markingHue(hueA, rng(), m.soberMarks ? 'fur' : cov.type, exotic || m.cluster === 'uncanny');
+  // …but a familiar pelt's rare morph is one a mammal has: melanistic (a black panther's) or
+  // leucistic (a white bear's), in its own hue. (Any vivid hue, it was a hot-pink bear: a plush toy.)
+  // The draws are as they were, only what they set is changed.
+  const morph = exotic && m.cluster === 'familiar' && cov.type === 'fur';
+  const pick = exotic ? rng() : rg(rng, m.hue, [0, 1]);
+  const hueA = morph ? (m.hue ? (m.hue[0] + m.hue[1]) / 2 : 0.08) : pick;
+  const satDraw = exotic ? range(rng, 0.7, 0.95) : rg(rng, m.sat, [0.32, 0.9]);
+  const lightDraw = rg(rng, m.light, [0.3, 0.7]);
+  // (at the gene's own bounds: a dark charcoal, a pale cream)
+  const sat = morph ? (pick < 0.5 ? 0.12 : 0.14) : satDraw;
+  const light = morph ? (pick < 0.5 ? 0.2 : 0.8) : lightDraw;
+  const hueB = markingHue(hueA, rng(), m.soberMarks ? 'fur' : cov.type, (exotic && !morph) || m.cluster === 'uncanny');
   return { version: GENOME_VERSION, seed, symmetry, radialCount, coherence, covering: cov, palette: { hueA, hueB, sat, light }, body };
 }
 

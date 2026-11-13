@@ -178,4 +178,18 @@ describe('mouth bands', () => {
       }
     }
   });
+
+  it("a familiar pelt's rare colour morph is a mammal's: dark charcoal or pale cream in its own hue, never a vivid one", () => {
+    // (any vivid hue, it was a hot-pink bear: a plush toy)
+    let morphs = 0;
+    for (const id of ['felid', 'canid', 'rodent', 'ungulate', 'ursid', 'primate', 'mustelid']) {
+      for (let seed = 1; seed <= 80; seed++) {
+        const p = genomeOfMorphotype(seed, id).palette;
+        expect(p.hueA, `${id} #${seed}`).toBeGreaterThanOrEqual(0.04);
+        expect(p.hueA, `${id} #${seed}`).toBeLessThanOrEqual(0.12);
+        if ((p.light <= 0.2 || p.light >= 0.8) && p.sat < 0.15) morphs++;
+      }
+    }
+    expect(morphs).toBeGreaterThan(5); // the morphs are still there, a few in a hundred
+  });
 });

@@ -45,4 +45,12 @@ describe('ursid', () => {
       expect((muzzle.pos[1] - brain.pos[1]) / brain.radius, `#${seed} level muzzle`).toBeGreaterThan(-0.55);
     }
   });
+
+  it('always has ears: small and round, on the top of its head', () => {
+    // (one bear in ten drew none: a smooth domed skull on a tube of a muzzle, a seal's head)
+    for (let seed = 1; seed <= 60; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'ursid'));
+      expect(p.nodes.filter((n) => n.terminal === 'ear').length, `#${seed}`).toBe(2);
+    }
+  });
 });
