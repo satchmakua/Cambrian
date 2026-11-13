@@ -544,7 +544,10 @@ export function JawedMouth({
       {/* the throat stays with the skull; when the jaw nearly shuts there is no opening to show it
           through (and swinging it with the jaw pushed its upper edge out through the face) */}
       <mesh ref={throat} geometry={built.interior} material={mats.interior} />
-      <mesh geometry={built.muzzle} material={coatMat} castShadow />
+      {/* (a seam's upper jaw mass is a sliver lying on the skin, a twentieth of a radius proud of it: drawn
+          in the hide's own material it fought the skin for the same pixels, a dashed line along the mouth
+          — a zipper. A seam's skull is its upper jaw.) */}
+      {!sealed && <mesh geometry={built.muzzle} material={coatMat} castShadow />}
       <mesh geometry={built.upperLip} material={mats.lip} castShadow />
       {/* (a mammal's mouth wears no fold: with only its canines/incisors there are no tooth roots to
           hide, and draped under the lip line in the coat it hung below the chin as a pale band; nor
