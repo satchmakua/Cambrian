@@ -779,6 +779,10 @@ const LOWER_LID = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, Math.PI / 
 // (wider read as a startled stare); shut: they meet a little below centre
 const LID_OPEN = { upper: -0.54, lower: 0.62 } as const;
 const LID_SHUT = { upper: 0.16, lower: 0.1 } as const;
+// …but an octopus's eye is round, open ~52° all about its bar of a pupil. (In the almond, the upper lid
+// hid the top half of the iris from any view above it: a yellow half-disc with a dark bar along its top
+// edge, under a skin hood — a gaping mouth.)
+const LID_ROUND = { upper: -0.92, lower: 0.92 } as const;
 
 // Iris and pupil: true spherical CAPS on the eyeball (a polar angle of the ball's own sphere), so
 // they curve with it like a cornea — a flat squashed disc parked in front read as a painted coin.
@@ -914,13 +918,14 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   const ballColor = useMemo(() => new THREE.Color(iris).multiplyScalar(0.16).lerp(new THREE.Color(0x1c120e), 0.5).getHex(), [iris]);
   const lidColor = useMemo(() => new THREE.Color(lid).multiplyScalar(0.82).getHex(), [lid]);
   const origin = phenotype?.nodes[f.idx].pos;
+  const open = phenotype?.genomeRef.symmetry === 'radial' ? LID_ROUND : LID_OPEN;
   const lidGeo = useMemo(() => {
     if (!lidded || !skin || !origin) return null;
     return {
-      upper: lidGeometry(UPPER_LID, r * 0.97, LID_OPEN.upper, sink, seat.quat, origin),
-      lower: lidGeometry(LOWER_LID, r * 0.96, LID_OPEN.lower, sink, seat.quat, origin),
+      upper: lidGeometry(UPPER_LID, r * 0.97, open.upper, sink, seat.quat, origin),
+      lower: lidGeometry(LOWER_LID, r * 0.96, open.lower, sink, seat.quat, origin),
     };
-  }, [lidded, skin, origin, r, sink, seat.quat]);
+  }, [lidded, skin, origin, r, sink, seat.quat, open]);
   useEffect(() => () => {
     lidGeo?.upper.dispose();
     lidGeo?.lower.dispose();
@@ -947,8 +952,8 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
     const close = Math.max(lids ? lids.shut : 0, lids?.blink === false ? 0 : blinkAt(st.clock.elapsedTime, phase));
     // open: the upper margin rides ~35° above the eye's equator, the lower ~42° below; shut: they meet
     // a little below centre
-    upper.current.rotation.x = LID_OPEN.upper + close * (LID_SHUT.upper - LID_OPEN.upper);
-    lower.current.rotation.x = LID_OPEN.lower + close * (LID_SHUT.lower - LID_OPEN.lower);
+    upper.current.rotation.x = open.upper + close * (LID_SHUT.upper - open.upper);
+    lower.current.rotation.x = open.lower + close * (LID_SHUT.lower - open.lower);
   });
   return (
     <>
@@ -958,16 +963,16 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
       {lidded && lidGeo && skin ? (
         <>
           {/* (geometry pre-scaled; the open rotation is baked into aBodyPos only — the mesh rotates) */}
-          <mesh ref={upper} geometry={lidGeo.upper} material={skin} rotation-x={LID_OPEN.upper} />
-          <mesh ref={lower} geometry={lidGeo.lower} material={skin} rotation-x={LID_OPEN.lower} />
+          <mesh ref={upper} geometry={lidGeo.upper} material={skin} rotation-x={open.upper} />
+          <mesh ref={lower} geometry={lidGeo.lower} material={skin} rotation-x={open.lower} />
           {browGeo && <mesh geometry={browGeo} material={skin} castShadow />}
         </>
       ) : lidded ? (
         <>
-          <mesh ref={upper} geometry={UPPER_LID} scale={r * 0.97} rotation-x={LID_OPEN.upper}>
+          <mesh ref={upper} geometry={UPPER_LID} scale={r * 0.97} rotation-x={open.upper}>
             <meshStandardMaterial color={lidColor} roughness={0.72} side={THREE.DoubleSide} />
           </mesh>
-          <mesh ref={lower} geometry={LOWER_LID} scale={r * 0.96} rotation-x={LID_OPEN.lower}>
+          <mesh ref={lower} geometry={LOWER_LID} scale={r * 0.96} rotation-x={open.lower}>
             <meshStandardMaterial color={lidColor} roughness={0.72} side={THREE.DoubleSide} />
           </mesh>
         </>
@@ -1029,7 +1034,8 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
         // slit — a reptile vertical-pupil eye sunk under a brow; the whole visible ball is iris, so it
         // takes a reptile's colours (gold, amber, olive, copper, stone) — a blue marble read as a toy.
         // On a radial body the slit lies flat and short: an octopus's pupil is a rounded bar across the
-        // middle of its eye (a sliver from rim to rim, laid flat, was a pair of sunglasses).
+        // middle of its eye (a sliver from rim to rim, laid flat, was a pair of sunglasses; an oval half
+        // as tall as it was wide, on a big yellow eye, was a gaping mouth).
         <>
           <mesh position={[0, 0, -r * 0.02]}>
             <sphereGeometry args={[r * 0.9, 18, 14]} />
@@ -1039,11 +1045,11 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
             position={[0, 0, -r * 0.02]}
             rotation-z={phenotype?.genomeRef.symmetry === 'radial' ? Math.PI / 2 : 0}
             scale={r * 0.9 * 1.014}
-            geometry={phenotype?.genomeRef.symmetry === 'radial' ? capGeometry(0.44, false, 0.38) : capGeometry(0.66, false, 0.16)}
+            geometry={phenotype?.genomeRef.symmetry === 'radial' ? capGeometry(0.4, false, 0.2) : capGeometry(0.66, false, 0.16)}
           >
             <meshStandardMaterial color={0x040406} roughness={0.06} polygonOffset polygonOffsetFactor={-2} />
           </mesh>
-          <mesh position={[r * 0.12, r * 0.24, r * 0.78]}>
+          <mesh position={[r * 0.12, r * 0.24, r * 0.86]}>
             <sphereGeometry args={[r * 0.045, 8, 8]} />
             <meshBasicMaterial color={0xdce4f0} />
           </mesh>
