@@ -102,8 +102,15 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
     little narrower than the ground between them.
   - *One cone for every horn*: a horn is a keratin sheath swept back along a curve from its root, ridged
     toward its base, dark at the root and pale at the point.
-- **Still to do from it:** the ape's pads with no hands; the weasel end on; stiff fan wings (dragon,
-  wyvern, songbird); ears that are spikes edge-on.
+  - *The ape on round pads with bead toes*: its toes were stubs in black skin; they are long, like
+    fingers, the big toe stands off like a thumb, in the face's own skin a shade darker.
+  - *A songbird's wings as smooth clamshell slabs*: the folded wing's coverts were one flat pale field;
+    two more shingled rows of lesser coverts lie above the first.
+  - *A slug's mouth as a mail slot*: a mouth on a headless trunk is held to 1.5 of its radii (was 2.4,
+    half the body's breadth), and a slime body shows no teeth along its seam.
+- **Still to do from it:** the weasel end on (its shoulder joints stand out past its flanks); ears
+  that are spikes edge-on (the far ear, facing forward-out, from a three-quarter view: thicker ears
+  didn't help — it is the angle); a seam's thin upper lip half-buried in the skin, in dashes.
 
 ## M93 — What the seventh look left: tails, claws, paws and eyes · 2026-11-13
 
