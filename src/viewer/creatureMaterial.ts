@@ -56,19 +56,21 @@ interface Preset {
   coat: number; // clearcoat weight (scaled up by the genome sheen)
   coatRough: number;
   irid: number; // max iridescence at sheen = 1
+  muscle: number; // how strongly the sub-surface musculature shows (a shark's skin is taut: under the
+  //                full relief its flanks were lumpy, a stuffed sock)
 }
 const PRESET: Record<CoveringType, Preset> = {
-  skin: { rough: 0.62, metal: 0.0, bump: 1.0, velvet: 0.25, velvetRough: 0.7, coat: 0.1, coatRough: 0.4, irid: 0 },
-  scales: { rough: 0.48, metal: 0.04, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 0.3, coatRough: 0.3, irid: 0.5 },
-  fur: { rough: 0.9, metal: 0.0, bump: 1.0, velvet: 1.0, velvetRough: 0.45, coat: 0, coatRough: 0.5, irid: 0 },
-  feathers: { rough: 0.72, metal: 0.0, bump: 1.0, velvet: 0.55, velvetRough: 0.35, coat: 0, coatRough: 0.5, irid: 0.35 },
+  skin: { rough: 0.62, metal: 0.0, bump: 1.0, velvet: 0.25, velvetRough: 0.7, coat: 0.1, coatRough: 0.4, irid: 0, muscle: 0.3 },
+  scales: { rough: 0.48, metal: 0.04, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 0.3, coatRough: 0.3, irid: 0.5, muscle: 0.6 },
+  fur: { rough: 0.9, metal: 0.0, bump: 1.0, velvet: 1.0, velvetRough: 0.45, coat: 0, coatRough: 0.5, irid: 0, muscle: 1 },
+  feathers: { rough: 0.72, metal: 0.0, bump: 1.0, velvet: 0.55, velvetRough: 0.35, coat: 0, coatRough: 0.5, irid: 0.35, muscle: 1 },
   // (a lacquered shell, a satin one: under a near-mirror coat with an oil-slick shimmer, a crab, a beetle
   // and a spider were vinyl toys)
-  chitin: { rough: 0.45, metal: 0.06, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 0.45, coatRough: 0.24, irid: 0.5 },
-  slime: { rough: 0.3, metal: 0.0, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 1.0, coatRough: 0.04, irid: 0.25 },
-  plates: { rough: 0.58, metal: 0.02, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 0.15, coatRough: 0.35, irid: 0.2 },
+  chitin: { rough: 0.45, metal: 0.06, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 0.45, coatRough: 0.24, irid: 0.5, muscle: 0.5 },
+  slime: { rough: 0.3, metal: 0.0, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 1.0, coatRough: 0.04, irid: 0.25, muscle: 0.4 },
+  plates: { rough: 0.58, metal: 0.02, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 0.15, coatRough: 0.35, irid: 0.2, muscle: 1 },
   // a cut stone: glassy under a hard polish, a thin-film shimmer on its faces
-  crystal: { rough: 0.2, metal: 0.0, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 1.0, coatRough: 0.05, irid: 0.7 },
+  crystal: { rough: 0.2, metal: 0.0, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 1.0, coatRough: 0.05, irid: 0.7, muscle: 0.5 },
 };
 
 /** Dev-only shading channel (`?dbg=N`): 1 pattern · 2 relief · 3 musculature · 4 AO · 5 pixel footprint.
@@ -204,6 +206,7 @@ export function makeCreatureMaterial(
     shader.uniforms.uHeadB = { value: new THREE.Vector3(...(head ? head.b : [0, 0, 0])) };
     shader.uniforms.uSeam = { value: seam };
     shader.uniforms.uCut = { value: cut ? 1 : 0 };
+    shader.uniforms.uMuscle = { value: preset.muscle };
     shader.uniforms.uFine = FINE_RELIEF; // (one object, shared: the graphics option switches every coat at once)
     // (unused slots keep r = 0, which clears nothing)
     shader.uniforms.uEyes = { value: Array.from({ length: 6 }, (_, i) => new THREE.Vector4(...(shell?.eyes?.slice(i * 4, i * 4 + 4) ?? []).concat([0, 0, 0, 0]).slice(0, 4))) };
@@ -275,7 +278,7 @@ export function makeCreatureMaterial(
           gH = surfaceHeight(bp, uCover);
           gDhx = hX - gHb;
           gDhy = hY - gHb;
-          gM = muscle(bp);
+          gM = muscle(bp) * uMuscle;
           // (a cut stone has no countershading: by its flat faces' normals, whole faces snapped between
           // the belly's, the flank's and the back's tones — pale and dark patches, a camouflage)
           float up = uCut > 0.5 ? 0.5 : clamp(vWNrm.y * 0.5 + 0.5, 0.0, 1.0);
@@ -492,7 +495,7 @@ uniform float uPScale; uniform float uContrast; uniform float uSheen; uniform fl
 uniform vec3 uOff;
 uniform int uDebug;
 uniform float uBareY; uniform float uBareBand; uniform vec3 uBareCol;
-uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6]; uniform vec4 uFace; uniform vec3 uFaceCol; uniform vec4 uHeadA; uniform vec3 uHeadB; uniform float uSeam; uniform float uCut;
+uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6]; uniform vec4 uFace; uniform vec3 uFaceCol; uniform vec4 uHeadA; uniform vec3 uHeadB; uniform float uSeam; uniform float uCut; uniform float uMuscle;
 uniform float uFine;
 
 // Per-fragment globals, primed at the top of the colour stage and reused by the roughness + normal
