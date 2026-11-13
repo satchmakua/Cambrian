@@ -82,6 +82,13 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   step log-normally, and link counts half as freely (four links is a cat's leg, six an insect's): a
   dimension doubled or halved in 0% of conservative children (from 18%) and 11% of exploratory ones
   (from 61%). The saltation children, the basin hops, still hop.
+- **A hop should land.** A body that loses its last legs now becomes a legless one: two more links,
+  slimmer, longer and level (a bird without legs or wings had been a feathered sausage standing on
+  end). A body that gains a pair grows a link to carry it, and a part is copied only if it is
+  decorative: a copied leg had been a third pair crowded under a cat's belly, and a copied eye pair a
+  second face over the first. A symmetry flip went to "none" a third of the time, which leaves every
+  paired part one-sided (a fox on two legs down one flank), and one saltation child in five flipped.
+  A flip is now bilateral ↔ radial only, and rare (2–3% of children).
 
 ## M87 — Octopuses, webbed feet, bears · 2026-11-13
 
