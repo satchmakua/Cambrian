@@ -40,6 +40,7 @@ import { hornGeometry } from './horn';
 import { shardGeometry } from './shards';
 import { facetKeep, facetSizeOf, facetSkin } from './facets';
 import { quillGeometry } from './quills';
+import { whiskerFan } from './whiskers';
 import { frillGeometry, frillPlan } from './frill';
 import { getGeometry, retainGeometry, releaseGeometry, hasGeometry } from './geometryCache';
 import { drawnMouths, mouthCarves, surfacePrims } from './mouthLine';
@@ -2040,20 +2041,17 @@ function Crest({ f, color, feathered }: { f: MeshFeature; color: number; feather
 }
 const CREST_BLADES = 5;
 
-// Whiskers: a small fan of fine pale filaments off the snout.
+// Whiskers: a fan of fine pale filaments set out level from the pad (whiskers.ts).
 function Whisker({ f, color }: { f: MeshFeature; color: number }) {
   const r = Math.max(f.radius, 0.06);
   const pale = useMemo(() => new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.45).getHex(), [color]);
+  const geo = useMemo(() => whiskerFan(f.quat, r).geometry, [f.quat, r]);
+  useEffect(() => () => geo.dispose(), [geo]);
   return (
     <group quaternion={f.quat}>
-      {[-0.35, 0, 0.35].map((ang, i) => (
-        <group key={i} rotation={[0, ang, 0]}>
-          <mesh position={[0, -r * 0.1, r * 1.5]} rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[r * 0.03, r * 0.07, r * 3.0, 4]} />
-            <meshStandardMaterial color={pale} roughness={0.5} />
-          </mesh>
-        </group>
-      ))}
+      <mesh geometry={geo}>
+        <meshStandardMaterial color={pale} roughness={0.5} />
+      </mesh>
     </group>
   );
 }
