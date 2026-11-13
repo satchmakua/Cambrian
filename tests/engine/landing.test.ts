@@ -50,7 +50,8 @@ describe('a basin hop lands', () => {
 
   it('a hop that lands nowhere keeps its structure — its sections and its parts, where they were', () => {
     expect(valley.length).toBeGreaterThan(20);
-    for (const { child, home } of valley) {
+    for (const { parent, child, home } of valley) {
+      if (child.symmetry !== parent.symmetry) continue; // (a hop to the other symmetry lands whole: below)
       const landed = land(child, home);
       expect(landed.symmetry).toBe(child.symmetry);
       expect(structure(landed)).toEqual(structure(child));
@@ -71,13 +72,20 @@ describe('a basin hop lands', () => {
     expect(after).toBeLessThan(before * 0.5);
   });
 
-  it("a hop to another symmetry is left as it is: its lineage's proportions don't mend it", () => {
-    // a cat's child that flipped radial and came down near nothing
-    const cat = genomeOfMorphotype(2, 'felid');
-    const child = mutate(cat, 5 * 7919 + 2, 6, SALTATION);
-    expect(child.symmetry).toBe('radial');
-    expect(coherence(grow(child)).score).toBeLessThan(LAND_BELOW);
-    expect(land(child, lineagePlan(cat))).toBe(child);
+  it('a hop to the other symmetry lands whole: a founder of the nearest plan of its own symmetry, in its lineage\'s colours', () => {
+    // (flipped radial, a cat was its legs splayed round a disc, a hawk a heap of feathers: near no plan)
+    let seen = 0;
+    for (const { parent, child, home } of all) {
+      if (child.symmetry === parent.symmetry) continue;
+      seen++;
+      const landed = land(child, home);
+      expect(landed.symmetry, 'keeps the symmetry it hopped to').toBe(child.symmetry);
+      expect(landed.palette, "in its lineage's colours").toEqual(child.palette);
+      expect(landed.seed).toBe(child.seed);
+      // …and comes down in a basin: a plan of its symmetry now reads it as one of its own
+      expect(coherence(grow(landed)).score, `${parent.seed}`).toBeGreaterThan(0.5);
+    }
+    expect(seen).toBeGreaterThan(2);
   });
 
   it("the breeder's litter lands its saltation children, and only those", () => {

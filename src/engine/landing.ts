@@ -11,13 +11,13 @@
  * first leg toward the first leg, and so on), its length, thickness, link count, taper and bend.
  * (Drawn toward the plan the child itself was nearest, it took that plan's proportions on its own
  * body: a ballooned deer, nearest a shark by the coarse measure, lay out long and low as a shark
- * does.) A child already near a plan is left as it is, and so is one whose symmetry its lineage's
- * plan doesn't share (a hop to radial: bilateral proportions don't mend it). Pure and deterministic:
- * the founder is drawn from the child's own seed.
+ * does.) A child already near a plan is left as it is; one whose symmetry its lineage's plan doesn't
+ * share (a hop to radial) lands whole in the nearest plan of its own symmetry (hopAcross). Pure and
+ * deterministic: the founders are drawn from the child's own seed.
  */
 import { grow } from './grow';
-import { coherence } from './morphospace';
-import { genomeOfMorphotype } from './random';
+import { coherence, nearestKinds } from './morphospace';
+import { genomeOfMorphotype, MORPHOTYPE_IDS } from './random';
 import { mix32 } from './rng';
 import { clamp, GENE_BOUNDS } from './bounds';
 import type { AppendageGene, Genome, SegmentGene } from './genome';
@@ -76,17 +76,40 @@ function pullSection(s: SegmentGene, q: SegmentGene, t: number): void {
   }
 }
 
+/** each plan's symmetry, as its founders are drawn (found once) */
+let SYMMETRY: Map<string, Genome['symmetry']> | null = null;
+function symmetryOf(id: string): Genome['symmetry'] {
+  SYMMETRY ??= new Map(MORPHOTYPE_IDS.map((k) => [k, genomeOfMorphotype(1, k).symmetry]));
+  return SYMMETRY.get(id)!;
+}
+
+/**
+ * A hop to the other symmetry lands whole: it becomes a founder of the nearest plan that shares its
+ * symmetry, in its lineage's colours (its palette and seed). Bilateral proportions don't mend a
+ * radial body: flipped radial, a cat was its legs splayed round a disc, a hawk a heap of feathers —
+ * one saltation child in twelve, near no plan at all. As a basin hop should, it now comes down in a
+ * basin: a sea urchin, an octopus, in the cat's coat colours.
+ */
+function hopAcross(child: Genome, body: ReturnType<typeof grow>): Genome {
+  const there = nearestKinds(body, MORPHOTYPE_IDS.length).find((k) => symmetryOf(k.id) === child.symmetry);
+  if (!there) return child;
+  const founder = genomeOfMorphotype(mix32(child.seed, 0x40b), there.id);
+  return { ...founder, seed: child.seed, palette: structuredClone(child.palette) };
+}
+
 /** The plan a lineage belongs to: the one its parent is nearest. */
 export function lineagePlan(parent: Genome): string {
   return coherence(grow(parent)).nearest;
 }
 
 /** Land a basin hop: the child as it is if it is near a plan, else drawn back toward its lineage's
- *  plan's proportions (`home`, or the parent's nearest plan, found when needed). */
+ *  plan's proportions (`home`, or the parent's nearest plan, found when needed) — or, if it hopped to
+ *  the other symmetry, landed whole in that symmetry's nearest plan (see hopAcross). */
 export function land(child: Genome, home: string | (() => string)): Genome {
-  if (coherence(grow(child)).score >= LAND_BELOW) return child;
+  const body = grow(child);
+  if (coherence(body).score >= LAND_BELOW) return child;
   const founder = genomeOfMorphotype(mix32(child.seed, 0x1a4d), typeof home === 'function' ? home() : home);
-  if (founder.symmetry !== child.symmetry) return child;
+  if (founder.symmetry !== child.symmetry) return hopAcross(child, body);
   const out = structuredClone(child);
   const mine = sections(out);
   const theirs = sections(founder);
