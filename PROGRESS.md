@@ -104,6 +104,14 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   where the wave crosses zero, dark stripes on the coat, and stripes and bands run down from the back
   and give out under the belly instead of wrapping the trunk at one width. (The hoop complaint had been
   read for years as a matter of spacing; the render, zoomed, showed it was polarity.)
+- **A long muzzle's nose.** A dog's, a bear's and a deer's nose pad covered a third of the muzzle's
+  front, a dot on the end of a hippo's snout; it now grows with the muzzle's reach to about half (a
+  cat's stays small), and a bear's muzzle runs a little shorter and tapers to it. The end of a bear's
+  muzzle still bulges from the side.
+- **A pelt at a distance, not yet.** Fur reads up close (its shells, its per-pixel relief) and as
+  smooth rubber at the distance most views see it from. Streaks of tone along the way the hair lies
+  were tried and taken out: squeezing the noise along a direction that turns across the body warps it
+  into swirls, and the pelt read as wood grain, worse than rubber.
 
 ## M90 — Cut stone, a mouth of flesh, and hops that land · 2026-11-13
 
