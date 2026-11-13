@@ -142,6 +142,12 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
     its skin, from the brow down onto the muzzle's first link: the top line slopes onto the nose.
   - *Glossy vinyl arthropods*: chitin wore a near-mirror coat with an oil-slick shimmer; it is a satin
     lacquer now (a 0.45 coat at 0.24 roughness, half the shimmer).
+  - *A shark's skin like a stuffed sock*: every covering wore the same sub-surface musculature, which
+    rumpled taut skin. It shows by covering now: a third on bare skin, under half on slime, six tenths
+    on scales, full on fur, feathers and plates. And its tail stock is short (0.44–0.6 of the girth a
+    link, was 0.6–0.85): no lollipop stick under the crescent.
+  - *A frog's goggle eyes*: a round eye bulging from a bare crown has a gold or bronze iris across nearly
+    the whole ball, round a black horizontal pupil.
 - **Still to do from it:** the weasel end on (its shoulder joints stand out past its flanks); ears
   that are spikes edge-on (the far ear, facing forward-out, from a three-quarter view: thicker ears
   didn't help — it is the angle); the frog a bun on its chin (its forelegs attach under the middle of
