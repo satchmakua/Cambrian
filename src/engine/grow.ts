@@ -128,6 +128,25 @@ export function headStop(seg: SegmentGene, depth: number): number {
   return t * t * (3 - 2 * t) * d * d * (3 - 2 * d);
 }
 
+/**
+ * How far a node reaches along each world axis: its radius, or — for a SHAPED node (an ellipsoid:
+ * a flat disc, a sole, a shell, a deep fish) — the extent of that ellipsoid as it is turned. (Taken
+ * as a ball of the node's radius, a sea star's flat disc, a slug's sole and a crab's shell reached
+ * below what is drawn: the ground was set under nothing, and they floated.)
+ */
+export function nodeReach(n: { radius: number; scale?: Vec3; quat: readonly number[] }): Vec3 {
+  if (!n.scale) return [n.radius, n.radius, n.radius];
+  const [x, y, z, w] = n.quat;
+  // rotation matrix rows (unit quaternion)
+  const R = [
+    [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+    [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+    [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+  ];
+  const s = n.scale;
+  return [0, 1, 2].map((a) => n.radius * Math.hypot(R[a][0] * s[0], R[a][1] * s[1], R[a][2] * s[2])) as Vec3;
+}
+
 /** A spine part whose style gene is at or past this is a QUILL (an urchin's): one smooth cone from root
  *  to point, kept out of the skin and drawn whole (viewer/quills). Every other spine is drawn in 0..0.4. */
 export const QUILL_STYLE = 0.9;
@@ -582,7 +601,9 @@ export function grow(genome: Genome): Phenotype {
     let belly = Infinity;
     for (const n of nodes) {
       if (n.kind !== 'spine') continue;
-      belly = Math.min(belly, n.pos[1] - n.radius * (n.scale?.[1] ?? 1));
+      // (the body's true underside, as it is turned: see nodeReach — a crab's tilted shell reached
+      // below its scaled radius, and its legs were planted above the floor its belly lay on)
+      belly = Math.min(belly, n.pos[1] - nodeReach(n)[1]);
     }
     const groundY = Math.min(...feet.map((i) => nodes[i].pos[1]), belly - 0.04);
     const parentOf = new Int32Array(nodes.length).fill(-1);
@@ -669,11 +690,18 @@ export function grow(genome: Genome): Phenotype {
     min[0] = min[1] = min[2] = Infinity;
     max[0] = max[1] = max[2] = -Infinity;
     for (const n of nodes) {
+      // A creature RESTS on its body and limbs, never on a mouth or an eye: the floor is the lowest of
+      // those. (A sea star's mouth, an octopus's beak, an urchin's, a slug's under its front, a crab's
+      // eyes on the rim of its shell: their nodes hung below the arms and the sole, the ground was set
+      // under them, and the animal floated a hand's breadth over it.)
+      const face = n.terminal === 'mouth' || n.terminal === 'eye';
+      const reach = nodeReach(n);
       for (let a = 0; a < 3; a++) {
-        min[a] = Math.min(min[a], n.pos[a] - n.radius);
-        max[a] = Math.max(max[a], n.pos[a] + n.radius);
+        if (!(face && a === 1)) min[a] = Math.min(min[a], n.pos[a] - reach[a]);
+        max[a] = Math.max(max[a], n.pos[a] + reach[a]);
       }
     }
+    if (min[1] === Infinity) min[1] = Math.min(...nodes.map((n) => n.pos[1] - n.radius)); // (all face: unlikely)
   }
 
   /** How far an arm is an ape's — the limb it walks on its knuckles with: a paired, hand-tipped arm
