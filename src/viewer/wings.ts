@@ -292,6 +292,13 @@ function plumageAt(t: Tiers, a: number, b: number, hand: number, nCov: number, n
   // shadow lines: just under each overlapping edge (the covert tips; between secondaries and between
   // primaries, running along their shafts)
   let shade = 1 - 0.32 * Math.exp(-(((b - covEdge - 0.035) / 0.03) ** 2));
+  // …and the lesser coverts above them, two more shingled rows of smaller feathers, each row's tips a
+  // half-step along from the row below (one row alone left the shoulder a flat pale slab: a clam's
+  // shell, a beetle's wing-case from above)
+  for (const [row, n, off] of [[0.16, 1.9, 0.5], [0.28, 1.45, 0]] as const) {
+    const edge = row + 0.045 * (1 - scallop((a + off / (nCov * n)) % 1, nCov * n));
+    shade *= 1 - 0.34 * (1 - handW) * Math.exp(-(((b - edge - 0.022) / 0.03) ** 2));
+  }
   shade *= 1 - 0.22 * (1 - handW) * (1 - inCov) * scallop(a, nSec) ** 6;
   shade *= 1 - 0.28 * handW * scallop(b, nPrim * 0.5) ** 8;
   // a soft sheen down the middle of the sheet, darker at the trailing tips
