@@ -116,6 +116,27 @@ const SMOOTH_LIMBS = new Set(['tail', 'tentacle']);
 export const JAW_DROP: readonly [number, number] = [0.48, 0.42];
 export const JAW_GIRTH: readonly [number, number] = [0.58, 0.85];
 
+/** The bridge cone over a stopped skull's stop (see buildFieldPrims): from the brow, forward and up on
+ *  the braincase, to the top of the muzzle's first link. */
+export function bridgeOf(p: Phenotype): { a: Vec3; b: Vec3; ra: number; rb: number } | null {
+  const j = jawOf(p);
+  if (!j) return null;
+  const c = p.nodes[j.i0];
+  let m: BodyNode | null = null;
+  for (const [a, b] of p.edges) if (a === j.i0 && p.nodes[b].kind === 'spine') m = p.nodes[b];
+  if (!m) return null;
+  const fwd = norm3([m.pos[0] - c.pos[0], m.pos[1] - c.pos[1], m.pos[2] - c.pos[2]]);
+  const uu = fwd[1];
+  const up = norm3([0 - fwd[0] * uu, 1 - fwd[1] * uu, 0 - fwd[2] * uu], [0, 1, 0]);
+  const at = (q: readonly number[], f: number, u: number): Vec3 => [q[0] + fwd[0] * f + up[0] * u, q[1] + fwd[1] * f + up[1] * u, q[2] + fwd[2] * f + up[2] * u];
+  return {
+    a: at(c.pos, 0.42 * c.radius, 0.28 * c.radius),
+    b: at(m.pos, 0.1 * m.radius, 0.18 * m.radius),
+    ra: 0.55 * c.radius,
+    rb: 0.78 * m.radius,
+  };
+}
+
 /** The jaw cone under a furred skull with a stop (see buildFieldPrims), or null. */
 export function jawOf(p: Phenotype): { a: Vec3; b: Vec3; ra: number; rb: number; i0: number; i1: number; edge: number } | null {
   if (p.genomeRef.covering.type !== 'fur') return null;
@@ -269,7 +290,14 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     // (Without it the head was a ball with a tube half its girth plugged into its front — a sausage in
     // an orange — its lower outline stepping up sharply where the muzzle began.)
     const jaw = jawOf(p);
-    if (jaw) cone(jaw.edge, jaw.i0, jaw.i1, jaw.a, jaw.b, jaw.ra, jaw.rb, null, [1, 1], [1, 1]);
+    if (jaw) {
+      cone(jaw.edge, jaw.i0, jaw.i1, jaw.a, jaw.b, jaw.ra, jaw.rb, null, [1, 1], [1, 1]);
+      // …and a BRIDGE over the stop, from the brow down onto the muzzle: the step from braincase to
+      // muzzle is sharper than the skin's blend can round, and it left a crease round the top of the
+      // muzzle where it met the skull (a bulb stuck on the front of a ball)
+      const br = bridgeOf(p);
+      if (br) cone(jaw.edge, jaw.i0, jaw.i1, br.a, br.b, br.ra, br.rb, null, [1, 1], [1, 1]);
+    }
   } else {
     for (let i = 0; i < p.nodes.length; i++) {
       const n = p.nodes[i];

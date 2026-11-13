@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { grow, type Phenotype } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { buildFieldPrims, CHAIN_CUTS, type FieldPrims, jawOf, fieldAt } from '../../src/viewer/bodyField';
+import { buildFieldPrims, CHAIN_CUTS, type FieldPrims, jawOf, fieldAt, bridgeOf } from '../../src/viewer/bodyField';
 
 const body = (id: string, seed: number) => grow(genomeOfMorphotype(seed, id));
 
@@ -116,5 +116,24 @@ describe('body field chains', () => {
     }
     // a cat's short face has no muzzle hung on it, and wears none
     for (let seed = 1; seed <= 6; seed++) expect(jawOf(grow(genomeOfMorphotype(seed, 'felid'))), `felid #${seed}`).toBeNull();
+  });
+
+  it("…and a bridge over its stop: the brow slopes down onto the muzzle, no crease round its top", () => {
+    // (the step from braincase to muzzle was sharper than the skin's blend could round: a bulb stuck on
+    // the front of a ball)
+    for (let seed = 1; seed <= 6; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'canid'));
+      expect(bridgeOf(p), `canid #${seed}`).not.toBeNull();
+      const j = jawOf(p)!;
+      const c = p.nodes[j.i0], t = p.nodes[j.i1];
+      const m = p.nodes[p.edges.find(([a, b]) => a === j.i0 && p.nodes[b].kind === 'spine')![1]];
+      const prims = buildFieldPrims(p, 'hybrid');
+      // the top line where the stop was, under half-way from the braincase to the nose: the skin stands
+      // well over the muzzle there (without the bridge it dipped to within 1.04 of its girth)
+      const q = [0, 1, 2].map((k) => c.pos[k] + (t.pos[k] - c.pos[k]) * 0.45);
+      let s = 0;
+      while (s < 2 && fieldAt(prims, q[0], q[1] + s, q[2]) < 0) s += 0.002;
+      expect(s / m.radius, `canid #${seed}`).toBeGreaterThan(1.15);
+    }
   });
 });
