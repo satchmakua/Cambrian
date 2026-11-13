@@ -30,8 +30,8 @@ import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
 import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, longWingFold, trunkGirth, wingCarriage, LONG_WING, type FinBuild } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
-import { fieldAt, projectToSurface } from './bodyField';
-import { BROW_TILT, eyeClearings, eyeSeat, eyeTilt, isSwimmer } from './eyeSeat';
+import { fieldAt, projectToSurface, qRotateV } from './bodyField';
+import { BROW_TILT, bulgingEye, eyeClearings, eyeSeat, eyeTilt, isSwimmer } from './eyeSeat';
 import { coatDark, coatFin, coatMain, coatPattern } from './palette';
 import { browRidgeGeometry, faceMaskOf, headMaskOf, isApe } from './face';
 import { apeFootGeometry, fistGeometry } from './apeLimbs';
@@ -835,6 +835,8 @@ const FISH_IRIS = [0xc9cdd2, 0xb9bfc4, 0xd2b062, 0xbf9a4a, 0xa9b49c];
 /** a shark's iris (a swimmer in bare skin): dark all through, a slate or bottle-green glint at most.
  *  (A bony fish's silver or brass ring round a big pupil, on a grey shark, was a toy's googly eye.) */
 const SHARK_IRIS = [0x2c3336, 0x283330, 0x34383a];
+/** a frog's iris: gold, bronze, copper, an olive gold */
+const FROG_IRIS = [0xc9a23a, 0xb8862e, 0xb06a2a, 0xa6a04a];
 
 /** One eye's lids in the body's own covering: the shared hemispheres scaled to the eye, with the
  *  covering shader's body-space coordinates baked at the open pose (so the coat runs onto the lids
@@ -944,6 +946,10 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   }, [seed, furred]);
   const sharkEye = fishEye && phenotype?.genomeRef.covering.type === 'skin';
   const radialEye = phenotype?.genomeRef.symmetry === 'radial';
+  // a frog's eye (round, bulging from its crown): a gold or bronze iris round a black horizontal pupil
+  // (a dark iris round a round pupil, in green lids, was a marble in an egg-cup: goggles)
+  const frogEye = useMemo(() => (v === 'round' || v === 'beady') && onFace && !!phenotype && bulgingEye(phenotype, qRotateV(f.quat, [0, 0, 1])), [v, onFace, phenotype, f.quat]);
+  const frogIris = useMemo(() => FROG_IRIS[Math.floor(unitHash(seed, 0xf20) * FROG_IRIS.length)], [seed]);
   const fishIris = useMemo(() => (sharkEye ? SHARK_IRIS : FISH_IRIS)[Math.floor(unitHash(seed, 0xf15) * (sharkEye ? SHARK_IRIS : FISH_IRIS).length)], [seed, sharkEye]);
   const seat = useMemo(() => (vertebrate && onFace && phenotype ? eyeSeat(phenotype, f.idx, f.quat, r) : { quat: f.quat, sink: 0, centre: null }), [vertebrate, onFace, phenotype, f.idx, f.quat, r]);
   const sink = seat.sink;
@@ -1059,10 +1065,15 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
             <meshStandardMaterial color={v === 'round' ? ballColor : 0x070709} roughness={0.12} metalness={0.0} />
           </mesh>
           {/* iris + pupil: caps of the ball's own sphere (see capGeometry), a hair proud of it */}
-          <mesh position={[0, 0, -r * 0.04]} scale={r * 0.9 * 1.012} geometry={capGeometry(v === 'round' ? 0.7 : 0.56, true)}>
-            <meshStandardMaterial color={iris} vertexColors roughness={0.16} metalness={0.1} polygonOffset polygonOffsetFactor={-1} />
+          <mesh position={[0, 0, -r * 0.04]} scale={r * 0.9 * 1.012} geometry={capGeometry(frogEye ? 0.95 : v === 'round' ? 0.7 : 0.56, true)}>
+            <meshStandardMaterial color={frogEye ? frogIris : iris} vertexColors roughness={0.16} metalness={frogEye ? 0.25 : 0.1} polygonOffset polygonOffsetFactor={-1} />
           </mesh>
-          <mesh position={[0, 0, -r * 0.04]} scale={r * 0.9 * 1.024} geometry={capGeometry(v === 'round' ? 0.3 : 0.5, false)}>
+          <mesh
+            position={[0, 0, -r * 0.04]}
+            rotation-z={frogEye ? Math.PI / 2 : 0}
+            scale={r * 0.9 * 1.024}
+            geometry={frogEye ? capGeometry(0.42, false, 0.5) : capGeometry(v === 'round' ? 0.3 : 0.5, false)}
+          >
             <meshStandardMaterial color={0x030304} roughness={0.05} polygonOffset polygonOffsetFactor={-2} />
           </mesh>
           {/* a small, sharp catchlight — a wet glint, not a cartoon sticker */}
