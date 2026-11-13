@@ -36,6 +36,7 @@ import { coatDark, coatFin, coatMain, coatPattern } from './palette';
 import { browRidgeGeometry, faceMaskOf, headMaskOf, isApe } from './face';
 import { apeFootGeometry, fistGeometry } from './apeLimbs';
 import { clawGeometry, wristQuat } from './claw';
+import { hornGeometry } from './horn';
 import { shardGeometry } from './shards';
 import { facetKeep, facetSizeOf, facetSkin } from './facets';
 import { quillGeometry } from './quills';
@@ -735,7 +736,7 @@ function Feature({
       if ((f.kind === 'horn' || f.kind === 'spine') && phenotype.genomeRef.covering.type === 'crystal') {
         return <Shards f={f} palette={phenotype.genomeRef.palette} seed={phenotype.genomeRef.seed} />;
       }
-      if (f.kind === 'horn') return <Horn f={f} color={footColor} />;
+      if (f.kind === 'horn') return <Horn f={f} color={footColor} seed={phenotype.genomeRef.seed} />;
       const reach = phenotype.nodes[f.idx].pos[1] - phenotype.bounds.min[1];
       if (f.kind === 'leg' && arthropodLegs(phenotype)) return <LegTip f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} reach={reach} />;
       const plan = f.kind === 'leg' ? footPlanOf(phenotype) : null;
@@ -1460,17 +1461,17 @@ function LegTip({ f, color, skin, origin, reach }: { f: MeshFeature; color: numb
   );
 }
 
-// A horn: a smooth tapering spike along the part's aim.
-function Horn({ f, color }: { f: MeshFeature; color: number }) {
+// A horn: a keratin sheath sweeping back from its root, ringed toward its base (horn.ts).
+function Horn({ f, color, seed }: { f: MeshFeature; color: number; seed: number }) {
   const r = Math.max(f.radius, 0.06);
   const keratin = useMemo(() => new THREE.Color(color).lerp(new THREE.Color(0xcfc3a0), 0.4).getHex(), [color]);
+  // (each creature's horns their own curve; a mammal's ringed, a reptile's smooth)
+  const geo = useMemo(() => hornGeometry(r, f.quat, unitHash(seed, 0x40e), true), [r, f.quat, seed]);
+  useEffect(() => () => geo.dispose(), [geo]);
   return (
-    <group quaternion={f.quat}>
-      <mesh position={[0, 0, r * 1.8]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-        <coneGeometry args={[r * 0.9, r * 3.6, 10]} />
-        <meshStandardMaterial color={keratin} roughness={0.5} metalness={0.05} />
-      </mesh>
-    </group>
+    <mesh geometry={geo} castShadow>
+      <meshStandardMaterial color={keratin} vertexColors roughness={0.5} metalness={0.05} />
+    </mesh>
   );
 }
 
