@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { grow, type Phenotype } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { buildFieldPrims, CHAIN_CUTS, type FieldPrims, jawOf, fieldAt, bridgeOf } from '../../src/viewer/bodyField';
+import { buildFieldPrims, CHAIN_CUTS, type FieldPrims, jawOf, fieldAt, bridgeOf, withoutCones } from '../../src/viewer/bodyField';
 
 const body = (id: string, seed: number) => grow(genomeOfMorphotype(seed, id));
 
@@ -128,12 +128,16 @@ describe('body field chains', () => {
       const c = p.nodes[j.i0], t = p.nodes[j.i1];
       const m = p.nodes[p.edges.find(([a, b]) => a === j.i0 && p.nodes[b].kind === 'spine')![1]];
       const prims = buildFieldPrims(p, 'hybrid');
-      // the top line where the stop was, under half-way from the braincase to the nose: the skin stands
-      // well over the muzzle there (without the bridge it dipped to within 1.04 of its girth)
+      // the top line where the stop was, under half-way from the braincase to the nose: the bridge lifts
+      // the skin there well over where it dipped without it (the bridge is the field's last cone)
       const q = [0, 1, 2].map((k) => c.pos[k] + (t.pos[k] - c.pos[k]) * 0.45);
-      let s = 0;
-      while (s < 2 && fieldAt(prims, q[0], q[1] + s, q[2]) < 0) s += 0.002;
-      expect(s / m.radius, `canid #${seed}`).toBeGreaterThan(1.15);
+      const top = (f: typeof prims) => {
+        let s = 0;
+        while (s < 2 && fieldAt(f, q[0], q[1] + s, q[2]) < 0) s += 0.002;
+        return s;
+      };
+      const bare = withoutCones(prims, (k) => k !== prims.nc - 1);
+      expect((top(prims) - top(bare)) / m.radius, `canid #${seed}`).toBeGreaterThan(0.04);
     }
   });
 });

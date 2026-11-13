@@ -592,7 +592,9 @@ describe('body plans', () => {
       const ry = (n: (typeof spine)[number]) => n.radius * (n.scale?.[1] ?? 1);
       if (head.length !== 2) {
         expect(head.length, `#${seed}`).toBe(3);
-        expect(head[1].radius / head[0].radius, `#${seed} a muzzle hung from a braincase`).toBeLessThan(0.6);
+        expect(head[1].radius / head[0].radius, `#${seed} a muzzle hung from a braincase`).toBeLessThan(0.66);
+        // …narrowing to its nose (a tube that held its girth to a round end was a hippo's, a sock puppet's)
+        expect(head[2].radius / head[1].radius, `#${seed} narrowing to the nose`).toBeLessThan(0.8);
       }
       const tip = head[head.length - 1];
       const len = tip.pos[2] + tip.radius * (tip.scale?.[2] ?? 1) - (head[0].pos[2] - head[0].radius);

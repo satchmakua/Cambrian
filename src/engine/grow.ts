@@ -116,8 +116,23 @@ const STOP_FULL = 0.9;
  *  (a dog's skull is 0.7 and more as deep as wide; a crocodile's 0.6 and less) */
 const STOP_FLAT = 0.6;
 const STOP_DOMED = 0.68;
-const STOP_MUZZLE = 0.58;
-const STOP_TAPER = 2;
+const STOP_MUZZLE = 0.66;
+/** …narrowing to this share of its girth at the nose (whatever the chain's own ratio: by two more of
+ *  that ratio a link, a dog's muzzle — its chain tapering 0.94 — barely narrowed, a hose half the skull's
+ *  width ending in the bulb of its nose, a sock puppet's) */
+const STOP_NOSE = 0.72;
+/** …and the bridge of its nose held straight as it narrows: each link ahead raised by this share of
+ *  what it gives up in girth */
+const NOSE_RISE = 0.85;
+
+/** The share of a head chain's girth its link `i` carries, of `links` past the braincase, with `stop`
+ *  of a stop: the braincase whole; the muzzle STOP_MUZZLE of it at the stop, narrowing to STOP_NOSE of
+ *  that at the nose. */
+export function muzzleShare(i: number, links: number, stop: number): number {
+  if (i <= 0 || stop <= 0) return 1;
+  const t = links > 1 ? Math.min(1, (i - 1) / (links - 1)) : 0;
+  return 1 - stop * (1 - STOP_MUZZLE * (1 - (1 - STOP_NOSE) * t));
+}
 const STOP_STRIDE = 0.62;
 const STOP_LOW = 0.55;
 
@@ -363,11 +378,11 @@ export function grow(genome: Genome): Phenotype {
 
     // (a head — the chain's last section — may have a stop: see headStop)
     const stop = !seg.child && dev.symmetry === 'bilateral' ? headStop(seg, depth) : 0;
-    const muzzle = 1 - stop * (1 - STOP_MUZZLE);
-    // (…and its muzzle narrows to the nose by STOP_TAPER more of the chain's ratio at each link; a
-    // myriapod's rings draw in to its rump: see isRinged)
+    // (…its muzzle broad at the stop and narrowing to the nose: see muzzleShare; a myriapod's rings draw
+    // in to its rump: see isRinged)
     const radiusAt = (i: number) =>
-      girth * Math.pow(seg.taper, i + (i > 0 ? stop * STOP_TAPER * (i - 1) : 0)) * profileAt(i) * norm * (i > 0 ? muzzle : 1) * ringAt(i);
+      girth * Math.pow(seg.taper, i) * profileAt(i) * norm * muzzleShare(i, seg.repeat - 1, stop) * ringAt(i);
+    const muzzle = muzzleShare(1, seg.repeat - 1, stop); // the muzzle's girth at the stop (it sets how low it hangs)
     // (a ring's slim nodes — its two rims, the joint ahead of it — share the links' cross-section;
     // parts seat on the rings' centres alone)
     const ringNode = (at: Vec3, q: Quat, r: number): void => {
@@ -430,6 +445,13 @@ export function grow(genome: Genome): Phenotype {
         const up = qRotate([0, 1, 0], quat);
         const low = stop * STOP_LOW * radius * csy * (1 - seg.taper * muzzle);
         pos = [pos[0] - up[0] * low, pos[1] - up[1] * low, pos[2] - up[2] * low];
+      } else if (stop > 0 && i + 1 < seg.repeat) {
+        // the muzzle narrows from below — its jaw line rising to the chin — while the bridge of the nose
+        // runs on straight from the stop: the link ahead rises by what it gives up in girth (narrowed about
+        // its axis, the bridge fell away to the nose with it, and the brow no longer stood over it)
+        const up = qRotate([0, 1, 0], quat);
+        const rise = stop * NOSE_RISE * (radiusAt(1) - radiusAt(i + 1));
+        pos = [pos[0] + up[0] * rise, pos[1] + up[1] * rise, pos[2] + up[2] * rise];
       }
     }
 
@@ -1221,7 +1243,7 @@ function ensureBilateralFace(g: Genome): void {
   for (let s = g.body; s.child; s = s.child) depth++;
   const stop = headStop(head, depth);
   const links = Math.max(0, head.repeat - 1);
-  const frontR = girth * Math.pow(head.taper, links + stop * STOP_TAPER * Math.max(0, links - 1)) * (1 - stop * (1 - STOP_MUZZLE));
+  const frontR = girth * Math.pow(head.taper, links) * muzzleShare(links, links, stop);
   ensureFace(head.appendages, girth, frontR, head.repeat > 1 && !!g.body.child);
 }
 

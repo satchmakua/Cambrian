@@ -112,9 +112,9 @@ export const CHAIN_CUTS = 3;
 const SMOOTH_LIMBS = new Set(['tail', 'tentacle']);
 
 /** how far below a stopped skull's axis its jaw runs (×the braincase's and the nose's radii), and its
- *  girth there (the same) */
+ *  girth there (the same) — the chin a little fuller against a nose that narrows to it */
 export const JAW_DROP: readonly [number, number] = [0.48, 0.42];
-export const JAW_GIRTH: readonly [number, number] = [0.58, 0.85];
+export const JAW_GIRTH: readonly [number, number] = [0.58, 0.92];
 
 /** The bridge cone over a stopped skull's stop (see buildFieldPrims): from the brow, forward and up on
  *  the braincase, to the top of the muzzle's first link. */

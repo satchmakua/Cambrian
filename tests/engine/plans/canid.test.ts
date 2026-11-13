@@ -57,10 +57,12 @@ describe('canid', () => {
       // the brow falls away from the crown far more steeply than the bridge of the nose then runs on
       const fall = (a: Node, b: Node) => deg(Math.atan2(a.pos[1] + ry(a) - (b.pos[1] + ry(b)), b.pos[2] - a.pos[2]));
       expect(fall(skull, muzzle) - fall(muzzle, nose), `#${seed} step at the brow`).toBeGreaterThan(15);
-      // the muzzle is well under the braincase's girth where it leaves it (it was 0.62–0.71 of it)…
-      expect(muzzle.radius / skull.radius, `#${seed} muzzle against skull`).toBeLessThan(0.6);
-      // …and holds most of that to the nose (it lost a third again)
-      expect(nose.radius / muzzle.radius, `#${seed} nose against muzzle`).toBeGreaterThan(0.74);
+      // the muzzle is under the braincase's girth where it leaves it — the brow steps down to it…
+      expect(muzzle.radius / skull.radius, `#${seed} muzzle against skull`).toBeLessThan(0.66);
+      // …and narrows to the nose as a wedge, not to a point: holding its girth to the nose, it was a hose
+      // half the skull's width with the bulb of its nose on the end — a sock puppet
+      expect(nose.radius / muzzle.radius, `#${seed} nose against muzzle`).toBeGreaterThan(0.64);
+      expect(nose.radius / muzzle.radius, `#${seed} nose against muzzle`).toBeLessThan(0.8);
       // the muzzle is round in section, however broad and flat the skull behind it
       expect(Math.abs(rx(muzzle) / ry(muzzle) - 1), `#${seed} muzzle section`).toBeLessThan(0.02);
       expect(rx(skull) / ry(skull), `#${seed} skull section`).toBeGreaterThan(1.15);
