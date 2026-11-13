@@ -1036,6 +1036,20 @@ describe('body plans', () => {
     }
   });
 
+  it("a crab's legs reach about twice its shell's half-width, stout — a spider's reach further on thin ones — and its claws stay the biggest thing on it", () => {
+    // (on legs reaching out 2.2–2.4 half-widths, its claws the size of their tips, the crab read as a
+    // spider or a tick)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'crab'));
+      const body = trunkOf(p)[0];
+      const halfW = body.radius * (body.scale ?? [1, 1, 1])[0];
+      const feet = p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg');
+      for (const f of feet) expect(Math.abs(f.pos[0]) / halfW, `#${seed} reach`).toBeLessThan(2.12);
+      const legR = Math.max(...p.nodes.filter((n) => n.part?.kind === 'leg').map((n) => n.radius));
+      for (const c of p.nodes.filter((n) => n.terminal === 'pincer')) expect(c.radius / legR, `#${seed} claw`).toBeGreaterThan(1.6);
+    }
+  });
+
   it("a crab's eyes stand on slender stalks at the front rim of its shell — every crab's", () => {
     // (one crab in twenty had no stalks and its eyes were buried under the shell: no face at all;
     // the rest wore thick chimneys rising from the middle of the dome, splayed like horns)
