@@ -88,6 +88,16 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   pose most dragons are drawn in. (Draped against the flank instead, it read as a pattern on the skin.)
 - **Check the check.** A "fails on the old code" check that stashed an already-committed file stashed
   nothing and ran the new code twice. The old file is now taken from the commit before, not the stash.
+- **More from the same look.** The shark, its grin gone with the lip-line fix, reads from the side and
+  face as a pointed-snouted shark. A crab now folds its claws in before its face, a joint more to fold
+  at (the curl gene's bound stopped three joints short: every mutant is checked against it), so the
+  claws curl round the front of the shell and all but meet; they ran straight out ahead, a scorpion's.
+  A funnel mouth's rim rounds over (a sharper cut stair-stepped and caught the light, a torn rim) and
+  its rasp's knobs are thick enough to read as knobs. A songbird's skull is always round (a third were
+  drawn broad, a helmet) on a neck near its girth (it was half: a ball on a stalk); a thicker neck
+  still cost the game's own identifier its songbirds, since the neck lowers the headedness it measures.
+  A feathered tail lies in a shallow trough, the outer feathers lifted to either side, and runs longer:
+  laid flat, from the side it was its own edge, a twig in a hawk's rump.
 
 ## M90 — Cut stone, a mouth of flesh, and hops that land · 2026-11-13
 
