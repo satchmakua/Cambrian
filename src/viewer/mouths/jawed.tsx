@@ -297,8 +297,10 @@ export function buildJawed(
     ...s,
     p: [s.p[0] - spec.aim[0] * r * 0.06, s.p[1] - spec.aim[1] * r * 0.06, s.p[2] - spec.aim[2] * r * 0.06] as Vec3,
   }));
-  const upperTeeth: ToothXform[] = params.upper ? toothRow(upperTucked, params.upper, r, seed) : [];
-  const lowerTeeth: ToothXform[] = params.lower ? toothRow(lower, params.lower, r, seed, true) : [];
+  // (a slug has no teeth to show: a row of them along its seam was a zipper)
+  const toothless = phenotype.genomeRef.covering.type === 'slime';
+  const upperTeeth: ToothXform[] = params.upper && !toothless ? toothRow(upperTucked, params.upper, r, seed) : [];
+  const lowerTeeth: ToothXform[] = params.lower && !toothless ? toothRow(lower, params.lower, r, seed, true) : [];
 
 
   // the interior — a sheet spanning the opening: recessed into the real carve on smooth skin,

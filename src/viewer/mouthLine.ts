@@ -399,8 +399,9 @@ const LONG_SNOUT = 1.3;
 /** a mandibled mouth is at most this many of its own radii from corner to corner */
 const MANDIBLE_SPAN = 2.0;
 /** …and so is a mouth set on a headless body's trunk (a slug's): its line's span is an angle about the
- *  whole body there, and it ran from flank to flank — a grin across the front of the animal */
-const TRUNK_MOUTH_SPAN = 2.4;
+ *  whole body there, and it ran from flank to flank — a grin across the front of the animal. (At 2.4 of
+ *  its radii it was still half the body's breadth: a long double slot, a mail slot.) */
+export const TRUNK_MOUTH_SPAN = 1.5;
 
 export function buildMouthLine(
   p: Phenotype,
