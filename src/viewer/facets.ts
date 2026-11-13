@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
 import { unitHash } from '../engine/rng';
+import { legWeights } from './feet';
 
 /** a face's size, × the trunk's girth (its largest spine radius): about nine faces round a trunk */
 export const FACET_SPAN = 0.62;
@@ -20,6 +21,8 @@ export const FACET_SPAN = 0.62;
  *  far off the face's plane it may lie (× the face's size) */
 const FACET_AGREE = 0.7;
 const FACET_REACH = 0.3;
+/** …and the least a triangle may keep facing the way it did (the cosine of the most it may turn) */
+const FACET_TURN = 0.2;
 
 /** The size of the faces a crystal creature is cut into. */
 export function facetSizeOf(p: Phenotype): number {
@@ -28,8 +31,40 @@ export function facetSizeOf(p: Phenotype): number {
   return Math.max(0.08, r * FACET_SPAN);
 }
 
-/** Cut a skin (indexed, with normals) into flat faces of about `size` across, in place. */
-export function facetSkin(geo: THREE.BufferGeometry, size: number, seed: number): void {
+/** how far round an eye or a mouth the skin is left uncut (× its radius): what sits on the skin there
+ *  — the lids, the socket, the lips — was seated on the uncut surface */
+const FACE_CLEAR = 1.6;
+
+/**
+ * The vertices a cut leaves as they were: the legs (a face is wider than a shin: its plane cut a notch
+ * into the leg's outline, the background showing through it), and round the eyes and the mouth (the
+ * dark lip seam and the sockets were seated on the uncut skin; where the cut sank it, they stood out
+ * of it in black flecks).
+ */
+export function facetKeep(p: Phenotype, geo: THREE.BufferGeometry): Uint8Array {
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+  const keep = new Uint8Array(pos.count);
+  const legs = legWeights(p, pos.array, pos.count);
+  const face = p.nodes.filter((n) => n.terminal === 'eye' || n.terminal === 'mouth');
+  for (let v = 0; v < pos.count; v++) {
+    if (legs[v] > 0.2) {
+      keep[v] = 1;
+      continue;
+    }
+    const x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
+    for (const n of face) {
+      if (Math.hypot(x - n.pos[0], y - n.pos[1], z - n.pos[2]) < n.radius * FACE_CLEAR + 0.04) {
+        keep[v] = 1;
+        break;
+      }
+    }
+  }
+  return keep;
+}
+
+/** Cut a skin (indexed, with normals) into flat faces of about `size` across, in place; vertices
+ *  marked in `keep` stay as they were. */
+export function facetSkin(geo: THREE.BufferGeometry, size: number, seed: number, keep?: Uint8Array): void {
   const pos = geo.getAttribute('position') as THREE.BufferAttribute;
   const nrm = geo.getAttribute('normal') as THREE.BufferAttribute;
   const n = pos.count;
@@ -87,9 +122,13 @@ export function facetSkin(geo: THREE.BufferGeometry, size: number, seed: number)
   }
   const arr = pos.array as Float32Array;
   const nar = nrm.array as Float32Array;
+  // the mouth's carved cavity, and its rim, stay as they were: laid onto the face's planes, the wet
+  // flesh inside came up through the hide in orange flecks, and the dark of the cavity in black ones
+  const flesh = geo.getAttribute('aFlesh') as THREE.BufferAttribute | undefined;
   for (let v = 0; v < n; v++) {
     const cell = cells.get(cellOf[v])!;
     if (cell.k === 0) continue;
+    if ((flesh && flesh.getX(v) > 0) || keep?.[v]) continue;
     const [nx, ny, nz] = cell.m;
     // a vertex turned well away from its cell's plane, or far off it, stays as it was: where a cell
     // spans a crease (a leg into the body) laying it flat folded the skin over itself, a black tear
@@ -103,19 +142,34 @@ export function facetSkin(geo: THREE.BufferGeometry, size: number, seed: number)
     nar[v * 3 + 1] = ny;
     nar[v * 3 + 2] = nz;
   }
-  // …and a triangle the cut turned over (its face against its corners' normals) is put back as it was
+  // …and a triangle the cut turned over — its face swung more than FACET_TURN from where it faced
+  // before — is put back as it was, until none is. (Tested only against its corners' new normals, a
+  // bevel between two faces passed while it faced into the body: a black speck in the hide.)
   const index = geo.getIndex();
   if (index) {
     const ix = index.array;
-    for (let pass = 0; pass < 3; pass++) {
+    const face = (P: Float32Array, a: number, b: number, c: number, out: number[]): void => {
+      const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
+      const vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+      out[0] = uy * vz - uz * vy;
+      out[1] = uz * vx - ux * vz;
+      out[2] = ux * vy - uy * vx;
+    };
+    const f0 = [0, 0, 0], f1 = [0, 0, 0];
+    for (let pass = 0; pass < 8; pass++) {
       let undone = 0;
       for (let t = 0; t < ix.length; t += 3) {
         const a = ix[t] * 3, b = ix[t + 1] * 3, c = ix[t + 2] * 3;
-        const ux = arr[b] - arr[a], uy = arr[b + 1] - arr[a + 1], uz = arr[b + 2] - arr[a + 2];
-        const vx = arr[c] - arr[a], vy = arr[c + 1] - arr[a + 1], vz = arr[c + 2] - arr[a + 2];
-        const fx = uy * vz - uz * vy, fy = uz * vx - ux * vz, fz = ux * vy - uy * vx;
-        const mx = nar[a] + nar[b] + nar[c], my = nar[a + 1] + nar[b + 1] + nar[c + 1], mz = nar[a + 2] + nar[b + 2] + nar[c + 2];
-        if (fx * mx + fy * my + fz * mz >= 0) continue;
+        face(p0, a, b, c, f0);
+        face(arr, a, b, c, f1);
+        const l0 = Math.hypot(f0[0], f0[1], f0[2]), l1 = Math.hypot(f1[0], f1[1], f1[2]);
+        if (l0 < 1e-12) continue;
+        const kept = l1 > 1e-12 && f0[0] * f1[0] + f0[1] * f1[1] + f0[2] * f1[2] >= FACET_TURN * l0 * l1;
+        // …nor may it come to face against its corners' normals, when it didn't before (it would be lit
+        // as if it faced the other way)
+        const lit = (N: Float32Array, f: number[]) =>
+          f[0] * (N[a] + N[b] + N[c]) + f[1] * (N[a + 1] + N[b + 1] + N[c + 1]) + f[2] * (N[a + 2] + N[b + 2] + N[c + 2]) >= 0;
+        if (kept && (lit(nar, f1) || !lit(n0, f0))) continue;
         for (const o of [a, b, c]) {
           for (let q = 0; q < 3; q++) {
             arr[o + q] = p0[o + q];

@@ -37,7 +37,7 @@ import { browRidgeGeometry, faceMaskOf, headMaskOf, isApe } from './face';
 import { apeFootGeometry, fistGeometry } from './apeLimbs';
 import { clawGeometry } from './claw';
 import { shardGeometry } from './shards';
-import { facetSizeOf, facetSkin } from './facets';
+import { facetKeep, facetSizeOf, facetSkin } from './facets';
 import { quillGeometry } from './quills';
 import { frillGeometry, frillPlan } from './frill';
 import { getGeometry, retainGeometry, releaseGeometry, hasGeometry } from './geometryCache';
@@ -128,7 +128,7 @@ export const skinKey = (full: boolean, quality: SkinQuality, carved = true) => `
 function buildSkin(phenotype: Phenotype, full: boolean, carves: readonly Carve[], quality: SkinQuality): THREE.BufferGeometry {
   const g = buildSmoothGeometry(phenotype, full, carves, quality);
   // a crystal hide is cut into flat faces, outline and all (facets.ts)
-  if (phenotype.genomeRef.covering.type === 'crystal') facetSkin(g, facetSizeOf(phenotype), phenotype.genomeRef.seed);
+  if (phenotype.genomeRef.covering.type === 'crystal') facetSkin(g, facetSizeOf(phenotype), phenotype.genomeRef.seed, facetKeep(phenotype, g));
   // smooth mesh is untransformed, so its local position *is* the body-space coord (M17)
   g.setAttribute('aBodyPos', (g.getAttribute('position') as THREE.BufferAttribute).clone());
   bakeLegs(g, phenotype);
