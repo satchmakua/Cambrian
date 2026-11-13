@@ -814,7 +814,18 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   **Tests:** `tests/viewer/facets.test.ts`, `tests/viewer/mouthLine.test.ts › a closed mouth doesn't
   grin`, `tests/engine/plans/felid.test.ts`, `tests/viewer/wings.test.ts › hangs from the wrist`.
 
+- [x] **M92 — A seventh look: the scores rise.** Mean 4.06 → 4.29 between looks. Bears always eared,
+  pelts' rare morphs a mammal's; folded wings without a peg; side-set eyes on the ostrich and the
+  songbird; a cut crystal shaded by its own faces; a standing crest; level seam mouths; the World card's
+  portrait drawn first. **Tests:** `tests/engine/plans/ursid.test.ts › always has ears`,
+  `tests/engine/random.test.ts › a familiar pelt's rare colour morph`, `tests/viewer/mouthLine.test.ts
+  › frown`, `tests/engine/plans/ratite.test.ts › looks out of the sides`, `tests/viewer/portraitQueue.test.ts`.
+
 ### Next up (unchecked — pick from here)
+
+- [ ] **What the seventh look left.** The shark a dolphin from the side (no mouth seen); a weasel's
+  hamster face; an octopus's slit eyes read as mouths; a mouse on stilts; a crab's claws crossing in an
+  X; flat glowing disc eyes on the uncanny plans; tack-like caps on arthropods' leg tips.
 
 - [ ] **What the sixth look left.** The crab's walking legs still arch high like a spider's; the bear's
   muzzle a hippo's (a tube ending in a bulb, a small nose on it); the ape's coat reads as bare rubber;

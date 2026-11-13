@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -54,6 +54,37 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M92 — A seventh look: the scores rise, and what they found · 2026-11-13
+
+- **A seventh look, at a fresh seed (17), on the code as it stands.** The mean score rose from 4.06 (the
+  sixth look, seed 13) to 4.29: the cat, the crab, the horror and the chimera from 3 to 4, nine plans
+  now 5. Two looks at different seeds by different readers are noisy, but the plans fixed between them
+  are the ones that rose. Its worst ten, and what was done:
+  - *An earless bear in hot pink.* The bear drew ears nine times in ten; now always. A familiar pelt's
+    rare vivid morph (4% of founders) took any hue; it is now one a mammal has, a dark charcoal or a
+    pale cream in the plan's own hue.
+  - *Wings bolted on with a pole*, on the dragon, the wyvern and the chimera: the folded wing's
+    humerus, its radius a share of a span now built a third bigger, was a round-ended peg 0.09 units
+    thick on a big dragon. The folded arm is now a finger ray's weight, the membrane's leading edge.
+  - *An owl's face on the ostrich.* An eye's elevation, unset, aims it straight ahead (right for a hawk,
+    an ape); the ostrich and the songbird now look out to the sides, the ostrich's eyes on its crown
+    behind the bill instead of beside it, where they were two-thirds as wide as the skull.
+  - *Crystal facets like two skins flickering.* The skin was cut into faces (M90) and the shader went
+    on cutting its own, elsewhere. A cut skin now has a material that cuts nothing and shades each
+    geometric face its own tone (a face's normal is the same at its corners, so it hashes to one value).
+  - *A crest like a paper hat.* Its blades were thin along the crest's aim, which points up: they lay
+    flat on the crown. It is now a tuft standing in the plane of the head, sweeping back.
+  - *Sad cartoon mouths* on the fish, the frog and the slug. A seam mouth split a wide gape about its
+    line, its upper lip arching up in the middle: a frown. It now parts a sliver, and its lips are
+    levelled across the face (each sample's pitch nudged until it sits at the middle's height), since
+    a sweep at one pitch rises at the corners on a narrow snout and falls on a round head.
+- **The card you are looking at.** In the World, a creature's card showed an empty dark square for a
+  portrait: portraits are drawn one at a time, first come first served, and the card's waited behind
+  every census icon. The portrait queue now takes urgent requests first.
+- **What it left:** the shark still a dolphin from the side (no mouth seen, a beak of a snout); a
+  weasel's hamster face; an octopus's slit eyes read as mouths; a mouse on stilts; a crab's claws
+  crossing in an X; flat glowing disc eyes on the uncanny plans; tack-like caps on arthropods' legs.
 
 ## M91 — A sixth look: grins, a cat's face, a dragon's folded wing · 2026-11-13
 
