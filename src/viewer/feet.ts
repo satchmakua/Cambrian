@@ -48,7 +48,8 @@ export function footPlanOf(p: Phenotype): FootPlan | null {
   return null;
 }
 
-/** A RAT-LIKE body: a small furred animal standing on paws and trailing a thin tail — a mouse, a rat.
+/** A RAT-LIKE body: a small furred animal standing on paws and trailing a thin tail, or none — a mouse,
+ *  a rat, a hamster.
  *  Its paws are bare pink skin with slender toes (in the coat, a mouse's paw was a fuzzy slipper).
  *  Small: the back stands under RAT_HEIGHT above the lowest thing on it (a rat ~1, a weasel ~1.3, a cat
  *  ~2.5). Thin-tailed: the tail's root under RAT_TAIL of the trunk's radius (a rat's ~0.12, a cat's
@@ -76,7 +77,9 @@ export function ratLike(p: Phenotype): boolean {
     if (n.kind === 'spine' && (n.segment ?? 0) === 0) top = Math.max(top, n.pos[1] + n.radius * (n.scale?.[1] ?? 1));
     if (n.terminal === 'paw' && n.part?.kind === 'leg') paws = true;
   }
-  return paws && top - floor < RAT_HEIGHT && tailRootRatio(p) < RAT_TAIL;
+  // (no tail at all counts: a hamster's, a guinea pig's)
+  const tail = tailRootRatio(p);
+  return paws && top - floor < RAT_HEIGHT && (tail < RAT_TAIL || !Number.isFinite(tail));
 }
 
 /** a rat's naked tail: a pinkish grey skin of fine rings (in the coat, a mouse trailed a furred rope) */

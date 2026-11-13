@@ -29,6 +29,12 @@ describe('feet', () => {
       expect(ratLike(p), `rodent #${seed}`).toBe(true);
       for (const id of ['felid', 'canid', 'ursid', 'mustelid']) expect(ratLike(grow(genomeOfMorphotype(seed, id))), `${id} #${seed}`).toBe(false);
     }
+    // a tailless one too (a hamster's): one rodent in ten grows no tail
+    for (let seed = 1; seed <= 60; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'rodent'));
+      if (p.nodes.some((n) => n.part?.kind === 'tail')) continue;
+      expect(ratLike(p), `tailless rodent #${seed}`).toBe(true);
+    }
   });
 
   it("a rat's tail is naked from root to tip; its body and a weasel's brush keep their coat", () => {

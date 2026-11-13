@@ -744,7 +744,7 @@ function Feature({
     case 'barb':
       return <Barb f={f} color={footColor} />;
     case 'ear':
-      return <Ear f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} />;
+      return <Ear f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} bare={ratLike(phenotype)} />;
     case 'gill':
       return <Gill f={f} color={footColor} phenotype={phenotype} surface={surface} />;
     case 'crest':
@@ -1887,7 +1887,7 @@ function bakeSkin(g: THREE.BufferGeometry, origin: readonly number[]): THREE.Buf
   return g;
 }
 
-function Ear({ f, color, skin, origin }: { f: MeshFeature; color: number; skin?: THREE.Material; origin: readonly number[] }) {
+function Ear({ f, color, skin, origin, bare = false }: { f: MeshFeature; color: number; skin?: THREE.Material; origin: readonly number[]; bare?: boolean }) {
   const r = Math.max(f.radius, 0.06);
   const v = earVariant(f.style);
   const geo = useMemo(() => {
@@ -1899,7 +1899,9 @@ function Ear({ f, color, skin, origin }: { f: MeshFeature; color: number; skin?:
     geo.outer.dispose();
     geo.inner.dispose();
   }, [geo]);
-  const innerColor = useMemo(() => new THREE.Color(color).lerp(new THREE.Color(0x8a5552), 0.55).multiplyScalar(0.8).getHex(), [color]);
+  // (a mouse's ear is bare pink skin inside, like its paws: the dusky inner ear every mammal wears was,
+  // in the shadow of a mouse's big round cup, a dark slot)
+  const innerColor = useMemo(() => (bare ? new THREE.Color(BARE_PAW).lerp(new THREE.Color(0xe8b4b0), 0.35).getHex() : new THREE.Color(color).lerp(new THREE.Color(0x8a5552), 0.55).multiplyScalar(0.8).getHex()), [color, bare]);
   return (
     <group>
       {skin ? (
