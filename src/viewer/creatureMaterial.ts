@@ -99,6 +99,10 @@ export interface FurShell {
  *  taken from the GPU's per-block derivative. Shared by every creature material: see `setFineRelief`. */
 const FINE_RELIEF = { value: 1 };
 
+/** a cut crystal skin's clear coat, and how rough it is (see makeCreatureMaterial) */
+export const CUT_COAT = 0.35;
+export const CUT_COAT_ROUGH = 0.3;
+
 /** The graphics option behind the per-pixel relief (RenderQuality.fineRelief). */
 export function setFineRelief(on: boolean): void {
   FINE_RELIEF.value = on ? 1 : 0;
@@ -158,6 +162,15 @@ export function makeCreatureMaterial(
     iridescenceIOR: 1.35,
     iridescenceThicknessRange: [180, 520],
   });
+  // A skin already cut into faces (facets.ts) takes a satin polish, not a mirror: each of its faces
+  // mirrored the sky or the dark ground its own way, white or deep blue, and the faces' borders — which
+  // follow the mesh, ragged — drew a torn-paper patchwork over the stone.
+  if (cut) {
+    mat.clearcoat = Math.min(mat.clearcoat, CUT_COAT);
+    mat.clearcoatRoughness = Math.max(mat.clearcoatRoughness, CUT_COAT_ROUGH);
+    mat.iridescence = Math.min(mat.iridescence, 0.25);
+    mat.roughness = Math.max(mat.roughness, 0.3);
+  }
 
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uMain = { value: main };
@@ -300,7 +313,7 @@ export function makeCreatureMaterial(
           // a crystal's faces each take the light their own way: lighter and darker cuts of one stone
           // (a cut skin's faces already take the light by their own tilts: their shades only nudge it —
           // spread from 0.7 to 1.28, the faces were pale and dark patches, a camouflage)
-          if (uCover == 7) skin *= (uCut > 0.5 ? 0.9 + 0.2 * gFacet : 0.7 + 0.58 * gFacet) * (1.0 + (uCut > 0.5 ? 0.45 : 0.18) * gSeam);
+          if (uCover == 7) skin *= (uCut > 0.5 ? 0.9 + 0.2 * gFacet : 0.7 + 0.58 * gFacet) * (1.0 + (uCut > 0.5 ? 0.25 : 0.18) * gSeam);
           // a beetle's wing-cases meet in a dark seam down the middle of the back
           if (uSeam > 0.0) skin = mix(skin, uPattern2 * 0.3, (1.0 - smoothstep(uSeam * 0.35, uSeam, abs(vBodyPos.x))) * smoothstep(0.45, 0.75, up));
           // a bare face (an ape's): the coat gives way to skin round the eyes and the muzzle, and the
@@ -451,7 +464,7 @@ export function makeCreatureMaterial(
           // a crystal holds light: a glow of its own colour from within, brightest at its edges
           // (a cut skin's faces glow alike, and its edges brightest: lit from within face by face at its
           // own random strength, the stone was a patchwork of pale and dark)
-          if (uCover == 7) totalEmissiveRadiance += uMain * ((0.1 + 0.3 * pow(1.0 - ndv, 2.0)) * (uCut > 0.5 ? 0.85 + 0.3 * gFacet : 0.55 + 0.9 * gFacet) + (uCut > 0.5 ? 0.22 : 0.1) * gSeam) * noMouth;
+          if (uCover == 7) totalEmissiveRadiance += uMain * ((0.1 + 0.3 * pow(1.0 - ndv, 2.0)) * (uCut > 0.5 ? 0.85 + 0.3 * gFacet : 0.55 + 0.9 * gFacet) + (uCut > 0.5 ? 0.12 : 0.1) * gSeam) * noMouth;
         }`,
       );
   };

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { makeCreatureMaterial, setFineRelief } from '../../src/viewer/creatureMaterial';
+import { makeCreatureMaterial, setFineRelief, CUT_COAT, CUT_COAT_ROUGH } from '../../src/viewer/creatureMaterial';
 import { PRESETS, qualityOf } from '../../src/ui/settings';
 import { defaultGenome, type CoveringType } from '../../src/engine/genome';
 
@@ -154,7 +154,7 @@ describe('creature material shader injection', () => {
     // each face its own shade of the one stone, its cut edges a touch lighter; and it glows from within.
     // A skin already cut into faces (facets.ts) only nudges each face's shade — its faces take the light
     // by their own tilts — and lights its edges brighter …
-    expect(f).toContain('if (uCover == 7) skin *= (uCut > 0.5 ? 0.9 + 0.2 * gFacet : 0.7 + 0.58 * gFacet) * (1.0 + (uCut > 0.5 ? 0.45 : 0.18) * gSeam);');
+    expect(f).toContain('if (uCover == 7) skin *= (uCut > 0.5 ? 0.9 + 0.2 * gFacet : 0.7 + 0.58 * gFacet) * (1.0 + (uCut > 0.5 ? 0.25 : 0.18) * gSeam);');
     // … and has no countershading: by its flat faces' normals whole faces snapped between the belly's,
     // the flank's and the back's tones (a camouflage of pale and dark patches)
     expect(f).toContain('float up = uCut > 0.5 ? 0.5 : clamp(vWNrm.y * 0.5 + 0.5, 0.0, 1.0);');
@@ -435,5 +435,18 @@ describe('creature material shader injection', () => {
     // the normal is mirrored just before the pattern reads it, and restored just after
     expect(f.lastIndexOf('gNb.x *= sx;', i)).toBeGreaterThan(f.indexOf('float sx = vBodyPos.x < 0.0 ? -1.0 : 1.0;'));
     expect(f.indexOf('gNb.x *= sx;', i)).toBeGreaterThan(i);
+  });
+
+  it('a cut crystal takes a satin polish, not a mirror', () => {
+    // (each face mirrored the sky or the dark ground its own way, white or deep blue: a torn-paper
+    // patchwork over the stone, along the faces' ragged borders)
+    const g = defaultGenome();
+    const cut = makeCreatureMaterial(g.palette, { ...g.covering, type: 'crystal', sheen: 1 }, g.seed, null, null, null, 0, null, true) as THREE.MeshPhysicalMaterial;
+    const whole = makeCreatureMaterial(g.palette, { ...g.covering, type: 'crystal', sheen: 1 }, g.seed) as THREE.MeshPhysicalMaterial;
+    expect(cut.clearcoat).toBeLessThanOrEqual(CUT_COAT);
+    expect(cut.clearcoatRoughness).toBeGreaterThanOrEqual(CUT_COAT_ROUGH);
+    expect(whole.clearcoat).toBeGreaterThan(cut.clearcoat);
+    cut.dispose();
+    whole.dispose();
   });
 });

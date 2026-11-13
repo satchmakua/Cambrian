@@ -16,7 +16,7 @@ import { unitHash } from '../engine/rng';
 import { legWeights } from './feet';
 
 /** a face's size, × the trunk's girth (its largest spine radius): about nine faces round a trunk */
-export const FACET_SPAN = 0.62;
+export const FACET_SPAN = 0.75;
 /** how far a vertex's own normal may turn from its face's and still be laid onto it (cosine), and how
  *  far off the face's plane it may lie (× the face's size) */
 const FACET_AGREE = 0.7;
