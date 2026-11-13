@@ -116,6 +116,7 @@ export function makeCreatureMaterial(
   face: FaceMask | null = null,
   seam = 0, // a beetle's wing-cases: the half-width of the dark suture down the back's midline (0 = none)
   head: HeadMask | null = null, // where bands and stripes stop: the head takes one tone
+  cut = false, // a crystal skin already cut into flat faces (facets.ts): the shader cuts none of its own
 ): THREE.MeshPhysicalMaterial {
   // A moodier base than the raw palette: real integument is rarely a bright, saturated toy. We
   // desaturate and darken a touch so creatures read as living tissue, not painted plastic.
@@ -187,6 +188,7 @@ export function makeCreatureMaterial(
     shader.uniforms.uHeadA = { value: head ? new THREE.Vector4(head.a[0], head.a[1], head.a[2], head.r) : new THREE.Vector4(0, 0, 0, 0) };
     shader.uniforms.uHeadB = { value: new THREE.Vector3(...(head ? head.b : [0, 0, 0])) };
     shader.uniforms.uSeam = { value: seam };
+    shader.uniforms.uCut = { value: cut ? 1 : 0 };
     shader.uniforms.uFine = FINE_RELIEF; // (one object, shared: the graphics option switches every coat at once)
     // (unused slots keep r = 0, which clears nothing)
     shader.uniforms.uEyes = { value: Array.from({ length: 6 }, (_, i) => new THREE.Vector4(...(shell?.eyes?.slice(i * 4, i * 4 + 4) ?? []).concat([0, 0, 0, 0]).slice(0, 4))) };
@@ -454,7 +456,7 @@ uniform float uPScale; uniform float uContrast; uniform float uSheen; uniform fl
 uniform vec3 uOff;
 uniform int uDebug;
 uniform float uBareY; uniform float uBareBand; uniform vec3 uBareCol;
-uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6]; uniform vec4 uFace; uniform vec3 uFaceCol; uniform vec4 uHeadA; uniform vec3 uHeadB; uniform float uSeam;
+uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6]; uniform vec4 uFace; uniform vec3 uFaceCol; uniform vec4 uHeadA; uniform vec3 uHeadB; uniform float uSeam; uniform float uCut;
 uniform float uFine;
 
 // Per-fragment globals, primed at the top of the colour stage and reused by the roughness + normal
@@ -756,6 +758,19 @@ float surfaceHeight(vec3 p, int cover) {
     float h = mix(0.75, smoothstep(0.0, 0.13 + gFw * 2.2, F.y - F.x), aaW(2.2));
     gHb = h * 0.03;
     return h;
+  }
+  if (cover == 7 && uCut > 0.5) {                               // crystal, its skin already cut
+    // the geometry's own flat faces carry the cut; cut again here, at other places, the two sets of
+    // faces showed through each other — torn patches, two skins flickering. Each face takes a shade
+    // of its own: on a face its normal is the same at every corner, so it neither varies across the
+    // pixel nor between the face's pixels, and hashes to one value. (The uncut legs and face, whose
+    // normals vary, stay the stone's own tone.)
+    vec3 fn = normalize(vBNrm);
+    float planar = 1.0 - smoothstep(0.0, 0.03, length(fwidth(fn)));
+    gFacet = mix(0.5, hash13(floor(fn * 5.0 + 0.5) + 3.0), planar);
+    gSeam = 0.0;
+    gHb = 0.0;
+    return 0.3;
   }
   if (cover == 7) {                                             // crystal — cut facets
     // A cut stone: flat faces, each tilted its own way, meeting in sharp edges — see facets(). One

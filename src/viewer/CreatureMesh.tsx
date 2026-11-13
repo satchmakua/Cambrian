@@ -224,6 +224,10 @@ export function CreatureMesh({
   const headMask = useMemo(() => headMaskOf(phenotype), [phenotype]);
   const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed, bareLegsOf(phenotype), null, face, 0, headMask), [pal, cov, seed, phenotype, face, headMask]);
   useEffect(() => () => bodyMat.dispose(), [bodyMat]);
+  // a crystal's smooth skin is cut into faces (buildSkin), and its material cuts none of its own
+  const cutMat = useMemo(() => (cov.type === 'crystal' ? makeCreatureMaterial(pal, cov, seed, bareLegsOf(phenotype), null, face, 0, headMask, true) : null), [pal, cov, seed, phenotype, face, headMask]);
+  useEffect(() => () => cutMat?.dispose(), [cutMat]);
+  const skinMat = cutMat ?? bodyMat;
   // shell fur: FUR_SHELLS layers of the body out to a pile scaled to the creature
   const furMats = useMemo(() => {
     if (!fur || cov.type !== 'fur' || skinMode === 'capsules') return [];
@@ -478,7 +482,7 @@ export function CreatureMesh({
   const skinned = useMemo(() => {
     if (!rigged || !rig || !smoothGeo) return null;
     ensureSkinWeights(smoothGeo, phenotype);
-    const sm = new THREE.SkinnedMesh(smoothGeo, bodyMat);
+    const sm = new THREE.SkinnedMesh(smoothGeo, skinMat);
     sm.castShadow = true;
     sm.receiveShadow = true;
     sm.add(rig.root);
@@ -491,7 +495,7 @@ export function CreatureMesh({
       sm.add(sh);
     }
     return sm;
-  }, [rigged, rig, smoothGeo, bodyMat, phenotype, furMats]);
+  }, [rigged, rig, smoothGeo, skinMat, phenotype, furMats]);
   useEffect(
     () => () => {
       if (skinned && rig) skinned.remove(rig.root);
@@ -603,7 +607,7 @@ export function CreatureMesh({
       {showSmooth && smoothGeo ? (
         // M15: a single welded organic surface replaces the capsule kit
         <>
-          <mesh geometry={smoothGeo} material={bodyMat} castShadow receiveShadow />
+          <mesh geometry={smoothGeo} material={skinMat} castShadow receiveShadow />
           {furMats.map((m, i) => (
             <mesh key={`fur${i}`} geometry={smoothGeo} material={m} receiveShadow />
           ))}
