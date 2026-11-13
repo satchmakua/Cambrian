@@ -885,6 +885,33 @@ function browGeometry(r: number, sink: number, quat: readonly number[], origin: 
   return g;
 }
 
+/** A glowing eye's rim: a ring of the body's own hide round the ball, in the eye's frame (baked like
+ *  the lids, so the coat runs onto it). (A dark ring a quarter of the eye thick round a flat lit disc
+ *  was a pair of spectacles.) */
+function rimGeometry(r: number, quat: readonly number[], origin: readonly number[]): THREE.BufferGeometry {
+  const g = new THREE.TorusGeometry(r * 1.06, r * 0.2, 10, 28);
+  g.translate(0, 0, -r * 0.12);
+  const m = new THREE.Matrix4().compose(new THREE.Vector3(origin[0], origin[1], origin[2]), new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3]), new THREE.Vector3(1, 1, 1));
+  const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  const body = new Float32Array(pos.count * 3);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).applyMatrix4(m);
+    body[i * 3] = v.x;
+    body[i * 3 + 1] = v.y;
+    body[i * 3 + 2] = v.z;
+  }
+  g.setAttribute('aBodyPos', new THREE.BufferAttribute(body, 3));
+  g.setAttribute('aFlesh', new THREE.BufferAttribute(new Float32Array(pos.count), 1));
+  g.setAttribute('aAO', new THREE.BufferAttribute(new Float32Array(pos.count).fill(0.6), 1));
+  return g;
+}
+
+/** an insect's compound eye: dark bronze, rust, bottle green, slate */
+const COMPOUND = [0x3a2614, 0x4a1a12, 0x1e3420, 0x23252e];
+/** a glowing eye's light: a sickly teal, a bile green, an amber, a violet */
+const GLOW = [0x3fd8a8, 0x9fd84a, 0xe0a030, 0xb070e8];
+
 function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; socket: number; iris: number; lid: number; seed: number; skin?: THREE.Material; phenotype?: Phenotype }) {
   const r = Math.max(f.radius, 0.06);
   const v = eyeVariant(f.style);
@@ -936,6 +963,10 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
     return browGeometry(r, sink, seat.quat, origin);
   }, [lidded, onFace, skin, origin, phenotype, f.quat, r, sink, seat.quat]);
   useEffect(() => () => browGeo?.dispose(), [browGeo]);
+  // a glowing eye sits in a rim of the hide; an insect's compound eye needs none
+  const rim = useMemo(() => (v === 'glowing' && skin && origin ? rimGeometry(r, seat.quat, origin) : null), [v, skin, origin, r, seat.quat]);
+  useEffect(() => () => rim?.dispose(), [rim]);
+  const glow = useMemo(() => GLOW[Math.floor(unitHash(seed, 0x61c) * GLOW.length)], [seed]);
   // an ape's brow ridge over the eye (face.ts) — skin, in the body frame (it does not turn with the ball)
   const brow = useMemo(() => {
     if (!lidded || !skin || !origin || !phenotype) return null;
@@ -987,12 +1018,16 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
           than the 0.9r ball or the torus drives straight through the sclera as a hard ridge. It also
           sits back along −Z so it rings the eye's equator like an orbit rather than a hoop in front. */}
       {/* (a lidded eye needs no ring: its coat-covered lids set it into the face) */}
-      {!vertebrate && (
-        <mesh position={[0, 0, -r * 0.18]}>
-          <torusGeometry args={[r * 1.2, r * 0.26, 12, 28]} />
+      {/* (only a glowing eye wears a rim, and in the hide's own covering: see rimGeometry; an insect's
+          compound eye is a bare dome on the head — ringed in dark, it was a pair of goggles) */}
+      {v === 'glowing' && (rim && skin ? (
+        <mesh geometry={rim} material={skin} />
+      ) : (
+        <mesh position={[0, 0, -r * 0.12]}>
+          <torusGeometry args={[r * 1.06, r * 0.2, 10, 28]} />
           <meshStandardMaterial color={socketDark} roughness={0.85} metalness={0.0} />
         </mesh>
-      )}
+      ))}
       {fishEye ? (
         // a fish's eye: a flattened dark ball flush in the head, a broad metallic iris ring (silver,
         // brass or gold) round a big round pupil — no lids, no white
@@ -1055,21 +1090,29 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
           </mesh>
         </>
       ) : v === 'compound' ? (
-        // compound — a dark faceted dome (insect)
+        // compound — an insect's: a big glossy dome of fine facets, dark with a tint of bronze, rust or
+        // bottle green (coarse facets were a disco ball; jet black, a marble)
         <mesh position={[0, 0, r * 0.08]}>
-          <icosahedronGeometry args={[r * 0.98, 1]} />
-          <meshStandardMaterial color={0x121620} roughness={0.22} metalness={0.65} flatShading />
+          <icosahedronGeometry args={[r * 0.98, 3]} />
+          <meshStandardMaterial color={COMPOUND[Math.floor(unitHash(seed, 0xc0e) * COMPOUND.length)]} roughness={0.3} metalness={0.45} flatShading />
         </mesh>
       ) : (
-        // glowing — a dim, sickly emissive alien eye with a dark pupil, sunk in the socket (no flashlight)
+        // glowing — an alien eye: a dark wet ball, a lit iris (darkening to its rim, fibred like any
+        // iris) round a slit of a pupil. (A flat lit disc with a dot of a pupil was a lamp, not an eye.)
         <>
-          <mesh position={[0, 0, r * 0.06]}>
-            <sphereGeometry args={[r * 0.9, 16, 12]} />
-            <meshStandardMaterial color={0x0a1410} emissive={0x3fd8a8} emissiveIntensity={1.15} roughness={0.35} />
+          <mesh position={[0, 0, r * 0.02]}>
+            <sphereGeometry args={[r * 0.9, 18, 14]} />
+            <meshStandardMaterial color={0x060908} roughness={0.12} />
           </mesh>
-          <mesh position={[0, 0, r * 0.6]}>
-            <sphereGeometry args={[r * 0.3, 10, 10]} />
-            <meshStandardMaterial color={0x02120c} roughness={0.1} />
+          <mesh position={[0, 0, r * 0.02]} scale={r * 0.9 * 1.012} geometry={capGeometry(0.8, true)}>
+            <meshStandardMaterial color={glow} vertexColors emissive={glow} emissiveIntensity={0.4} roughness={0.25} polygonOffset polygonOffsetFactor={-1} />
+          </mesh>
+          <mesh position={[0, 0, r * 0.02]} scale={r * 0.9 * 1.024} geometry={capGeometry(0.62, false, 0.22)}>
+            <meshStandardMaterial color={0x020302} roughness={0.05} polygonOffset polygonOffsetFactor={-2} />
+          </mesh>
+          <mesh position={[r * 0.14, r * 0.24, r * 0.86]}>
+            <sphereGeometry args={[r * 0.05, 8, 8]} />
+            <meshBasicMaterial color={0xdce4f0} />
           </mesh>
         </>
       )}
