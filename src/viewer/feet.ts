@@ -48,6 +48,31 @@ export function footPlanOf(p: Phenotype): FootPlan | null {
   return null;
 }
 
+/** A RAT-LIKE body: a small furred animal standing on paws and trailing a thin tail — a mouse, a rat.
+ *  Its paws are bare pink skin with slender toes (in the coat, a mouse's paw was a fuzzy slipper).
+ *  Small: the back stands under RAT_HEIGHT above the lowest thing on it (a rat ~1, a weasel ~1.3, a cat
+ *  ~2.5). Thin-tailed: the tail's root under RAT_TAIL of the trunk's radius (a rat's ~0.12, a cat's
+ *  ~0.2 — but a cat is tall — a weasel's brush ~0.37). */
+export const RAT_HEIGHT = 1.6;
+export const RAT_TAIL = 0.26;
+export function ratLike(p: Phenotype): boolean {
+  if (p.genomeRef.covering.type !== 'fur') return false;
+  let paws = false;
+  let trunk = 0;
+  let tail = Infinity;
+  let top = -Infinity;
+  let floor = Infinity;
+  for (const n of p.nodes) {
+    floor = Math.min(floor, n.pos[1] - n.radius);
+    if (n.kind === 'spine') {
+      trunk = Math.max(trunk, n.radius);
+      if ((n.segment ?? 0) === 0) top = Math.max(top, n.pos[1] + n.radius * (n.scale?.[1] ?? 1));
+    } else if (n.part?.kind === 'tail' && !Number.isFinite(tail)) tail = n.radius; // (its root: grown first)
+    if (n.terminal === 'paw' && n.part?.kind === 'leg') paws = true;
+  }
+  return paws && top - floor < RAT_HEIGHT && Number.isFinite(tail) && tail < trunk * RAT_TAIL;
+}
+
 /** The leg chains: [hip node, …, foot node] for every leg that reaches a terminal. */
 function legChains(p: Phenotype): number[][] {
   const parent = new Int32Array(p.nodes.length).fill(-1);

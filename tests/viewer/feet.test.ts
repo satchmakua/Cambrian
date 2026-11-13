@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { bareLegsOf, footPlanOf, isHindFoot, legWeights, toedFootGeometry } from '../../src/viewer/feet';
+import { bareLegsOf, footPlanOf, isHindFoot, legWeights, ratLike, toedFootGeometry } from '../../src/viewer/feet';
 import { buildSmoothGeometry } from '../../src/viewer/smoothSkin';
 import { randomGenome } from '../../src/engine/random';
 
@@ -18,6 +18,16 @@ describe('feet', () => {
       const trunk = p.nodes.filter((n) => n.kind === 'spine');
       expect(bare!.y).toBeLessThan(Math.min(...trunk.map((n) => n.pos[1])));
       expect(footPlanOf(p)).toBe('bird');
+    }
+  });
+
+  it("a mouse stands on bare pink paws; a cat, a dog, a bear and a weasel on furred ones", () => {
+    // (a mouse in a dark disc of a foot, then in a fuzzy coat-coloured mitten, stood on stilts in slippers)
+    for (let seed = 1; seed <= 16; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'rodent'));
+      expect(p.nodes.some((n) => n.part?.kind === 'leg' && n.terminal === 'paw'), `rodent #${seed}`).toBe(true);
+      expect(ratLike(p), `rodent #${seed}`).toBe(true);
+      for (const id of ['felid', 'canid', 'ursid', 'mustelid']) expect(ratLike(grow(genomeOfMorphotype(seed, id))), `${id} #${seed}`).toBe(false);
     }
   });
 

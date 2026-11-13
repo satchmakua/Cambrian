@@ -25,7 +25,7 @@ import { Mouth } from './mouths';
 import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
-import { bareLegsOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, legWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
+import { bareLegsOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, legWeights, ratLike, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
 import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, longWingFold, trunkGirth, wingCarriage, LONG_WING, type FinBuild } from './wings';
@@ -752,7 +752,7 @@ function Feature({
     case 'whisker':
       return <Whisker f={f} color={footColor} />;
     case 'paw':
-      return <Paw f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} leg={f.kind === 'leg'} fur={fur} />;
+      return <Paw f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} leg={f.kind === 'leg'} fur={fur} bare={f.kind === 'leg' && ratLike(phenotype)} />;
     case 'hoof':
       return <Hoof f={f} color={footColor} />;
     case 'hand':
@@ -1099,15 +1099,41 @@ const PAW_TOES: readonly [number, number][] = [
   [0.23, 1.0],
   [0.66, 0.82],
 ];
-function pawGeometry(r: number, origin: readonly number[]): { fur: THREE.BufferGeometry; claws: THREE.BufferGeometry } {
+function pawGeometry(r: number, origin: readonly number[], slender = false): { fur: THREE.BufferGeometry; claws: THREE.BufferGeometry } {
   const parts: THREE.BufferGeometry[] = [];
   const sole = new THREE.SphereGeometry(1, 18, 12);
-  // the sole's underside sits on the ground plane (the foot node's own bottom, −r)
-  sole.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(0, -r * 0.2, r * 0.42), new THREE.Quaternion(), new THREE.Vector3(r * 1.5, r * 0.8, r * 1.7)));
+  // the sole's underside sits on the ground plane (the foot node's own bottom, −r); a mouse's is a
+  // narrow palm, its toes long and thin and spread (as a cat's soft lobes, at a mouse's size, they
+  // were one round button)
+  sole.applyMatrix4(
+    new THREE.Matrix4().compose(
+      new THREE.Vector3(0, -r * (slender ? 0.45 : 0.2), r * 0.42),
+      new THREE.Quaternion(),
+      slender ? new THREE.Vector3(r * 0.78, r * 0.42, r * 1.3) : new THREE.Vector3(r * 1.5, r * 0.8, r * 1.7),
+    ),
+  );
   parts.push(sole);
   const claws: THREE.BufferGeometry[] = [];
   for (const [x, z] of PAW_TOES) {
     const toe = new THREE.SphereGeometry(1, 12, 8);
+    if (slender) {
+      // a finger: a long thin capsule fanned out from the palm's front edge
+      const yaw = x * 0.55;
+      const at = new THREE.Vector3(x * r * 0.6, -r * 0.74, r * 0.42 + z * r * 1.3);
+      toe.applyMatrix4(new THREE.Matrix4().compose(at, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)), new THREE.Vector3(r * 0.2, r * 0.18, r * 0.62)));
+      parts.push(toe);
+      const claw = new THREE.ConeGeometry(1, 1, 6);
+      const tip = at.clone().add(new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(r * 0.62));
+      claw.applyMatrix4(
+        new THREE.Matrix4().compose(
+          tip,
+          new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2 + 0.4, yaw, 0, 'YXZ')),
+          new THREE.Vector3(r * 0.06, r * 0.2, r * 0.06),
+        ),
+      );
+      claws.push(claw);
+      continue;
+    }
     toe.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x * r * 1.1, -r * 0.55, r * 0.42 + z * r * 1.5), new THREE.Quaternion(), new THREE.Vector3(r * 0.44, r * 0.45, r * 0.52)));
     parts.push(toe);
     const claw = new THREE.ConeGeometry(1, 1, 6);
@@ -1126,21 +1152,36 @@ function pawGeometry(r: number, origin: readonly number[]): { fur: THREE.BufferG
   return { fur, claws: clawGeo };
 }
 
+/** a mouse's bare paw: a pale flesh pink (in the coat's own colour it was a felt slipper) */
+const BARE_PAW = new THREE.Color().setHSL(0.99, 0.4, 0.5).getHex();
+
 const NO_FUR: readonly THREE.Material[] = [];
 
-function Paw({ f, color, skin, origin, leg = false, fur = NO_FUR }: { f: MeshFeature; color: number; skin?: THREE.Material; origin: readonly number[]; leg?: boolean; fur?: readonly THREE.Material[] }) {
+function Paw({ f, color, skin, origin, leg = false, fur = NO_FUR, bare = false }: { f: MeshFeature; color: number; skin?: THREE.Material; origin: readonly number[]; leg?: boolean; fur?: readonly THREE.Material[]; bare?: boolean }) {
   const r = Math.max(f.radius, 0.06);
   const geo = useMemo(() => {
-    const g = pawGeometry(r, origin);
+    const g = pawGeometry(r, origin, bare);
     // a paw ending a leg is all leg: below a bare-shank line it wears the shank's keratin, like toes
     if (leg) g.fur.setAttribute('aLeg', new THREE.BufferAttribute(new Float32Array(g.fur.getAttribute('position').count).fill(1), 1));
     return g;
-  }, [r, origin, leg]);
+  }, [r, origin, leg, bare]);
   useEffect(() => () => {
     geo.fur.dispose();
     geo.claws.dispose();
   }, [geo]);
-  const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.45).getHex(), [color]);
+  const dark = useMemo(() => new THREE.Color(bare ? 0x8a6a5c : color).multiplyScalar(bare ? 1 : 0.45).getHex(), [color, bare]);
+  if (bare) {
+    return (
+      <group>
+        <mesh geometry={geo.fur} castShadow>
+          <meshStandardMaterial color={BARE_PAW} roughness={0.55} />
+        </mesh>
+        <mesh geometry={geo.claws}>
+          <meshStandardMaterial color={dark} roughness={0.4} />
+        </mesh>
+      </group>
+    );
+  }
   return (
     <group>
       {skin ? (
