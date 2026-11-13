@@ -29,10 +29,12 @@ describe('feet', () => {
       expect(ratLike(p), `rodent #${seed}`).toBe(true);
       for (const id of ['felid', 'canid', 'ursid', 'mustelid']) expect(ratLike(grow(genomeOfMorphotype(seed, id))), `${id} #${seed}`).toBe(false);
     }
-    // a tailless one too (a hamster's): one rodent in ten grows no tail
-    for (let seed = 1; seed <= 60; seed++) {
-      const p = grow(genomeOfMorphotype(seed, 'rodent'));
-      if (p.nodes.some((n) => n.part?.kind === 'tail')) continue;
+    // a tailless one too (a hamster's, a guinea pig's: a bred mouse can lose its tail)
+    for (let seed = 1; seed <= 8; seed++) {
+      const g = genomeOfMorphotype(seed, 'rodent');
+      for (let s: typeof g.body | undefined = g.body; s; s = s.child) s.appendages = s.appendages.filter((a) => a.kind !== 'tail');
+      const p = grow(g);
+      expect(p.nodes.some((n) => n.part?.kind === 'tail'), `tailless rodent #${seed}`).toBe(false);
       expect(ratLike(p), `tailless rodent #${seed}`).toBe(true);
     }
   });

@@ -336,6 +336,17 @@ describe('body plans', () => {
     }
   });
 
+  it('a dragon and a rat always have a tail', () => {
+    // (one dragon in twenty ended in a round rump behind its wings — a winged horse — and one rat in
+    // ten in a hamster's)
+    for (let seed = 1; seed <= 40; seed++) {
+      for (const id of ['dragon', 'rodent']) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        expect(p.nodes.some((n) => n.part?.kind === 'tail'), `${id} #${seed}`).toBe(true);
+      }
+    }
+  });
+
   it('a weasel is a slim tube barely wider than its head, with a tail thinner than its body', () => {
     // (a fat sausage three times the width of a rat's face, carried on into a body-thick nub)
     for (let seed = 1; seed <= 12; seed++) {
