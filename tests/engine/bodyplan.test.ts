@@ -336,7 +336,7 @@ describe('body plans', () => {
     }
   });
 
-  it('a weasel is a slim tube barely wider than its short blunt head, with a tail thinner than its body', () => {
+  it('a weasel is a slim tube barely wider than its head, with a tail thinner than its body', () => {
     // (a fat sausage three times the width of a rat's face, carried on into a body-thick nub)
     for (let seed = 1; seed <= 12; seed++) {
       const p = grow(genomeOfMorphotype(seed, 'mustelid'));
@@ -345,7 +345,8 @@ describe('body plans', () => {
       const head = spine.filter((n) => n.segment === last);
       const t = trunkOf(p);
       const girth = Math.max(...t.map((n) => n.radius));
-      expect(head.length, `#${seed} short head`).toBe(2);
+      // (a cranium and a muzzle of two links, narrowing to the nose: see the mustelid plan's tests)
+      expect(head.length, `#${seed} head`).toBe(3);
       expect(girth / head[0].radius, `#${seed} body vs head`).toBeLessThan(1.9);
       const tail = p.nodes.filter((n) => n.part?.kind === 'tail');
       if (tail.length) expect(tail[0].radius / girth, `#${seed} tail`).toBeLessThan(0.45);

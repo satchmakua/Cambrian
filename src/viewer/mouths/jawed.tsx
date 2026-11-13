@@ -21,6 +21,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { coatMain } from '../palette';
 import { faceMaskOf } from '../face';
+import { tailRootRatio } from '../feet';
 import type { Phenotype } from '../../engine/grow';
 import type { Vec3 } from '../../engine/genome';
 import type { Carve } from '../bodyField';
@@ -420,8 +421,15 @@ export function pinkNoseChance(p: Phenotype): number {
     if (n.kind === 'spine' && (n.segment ?? 0) === 0) top = Math.max(top, n.pos[1] + n.radius * (n.scale?.[1] ?? 1));
   }
   const height = top - floor;
-  return 0.7 * Math.min(1, Math.max(0, (2.0 - height) / 0.6));
+  // …and a small animal with a brush of a tail (a weasel's) has a dark nose more often than not: a pink
+  // button on a small furred face, with whiskers, is a rat's or a hamster's
+  const tail = tailRootRatio(p);
+  const brush = tail > BRUSH_TAIL && Number.isFinite(tail);
+  return 0.7 * Math.min(1, Math.max(0, (2.0 - height) / 0.6)) * (brush ? 0.3 : 1);
 }
+/** a tail's root this thick against the trunk (×its radius) is a brush: a weasel's (~0.37), not a rat's
+ *  (~0.12), a cat's (~0.2) or a dog's (~0.16) */
+const BRUSH_TAIL = 0.3;
 
 export function JawedMouth({
   f,

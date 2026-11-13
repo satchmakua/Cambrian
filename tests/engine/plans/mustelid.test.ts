@@ -115,8 +115,10 @@ describe('mustelid', () => {
   it('has a small flat wedge of a head, narrower than its shoulders', () => {
     for (const seed of SEEDS) {
       const { head, shoulders } = parts(seed);
-      // a cranium and one muzzle link
-      expect(head.length, `#${seed}`).toBe(2);
+      // a cranium and a muzzle of two links narrowing to the nose (on one blunt link, with a round
+      // cranium and a pink button nose, the seventh look saw a hamster's face)
+      expect(head.length, `#${seed}`).toBe(3);
+      expect(head[2].radius / head[1].radius, `#${seed} narrows to the nose`).toBeLessThan(0.75);
       // (the skull was up to 1.13 of the shoulders' width: a hamster's block on the end of a tube)
       expect(rx(head[0]) / shoulders, `#${seed} narrower than the shoulders`).toBeLessThan(0.92);
       // flat: wider than it is tall
@@ -124,7 +126,7 @@ describe('mustelid', () => {
       // a wedge: the muzzle well under the skull's girth, the head longer than before (it was
       // 1.5–1.72 skull depths from occiput to nose)
       expect(head[1].radius / head[0].radius, `#${seed} muzzle`).toBeLessThan(0.7);
-      const tip = head[1];
+      const tip = head[head.length - 1];
       const len = tip.pos[2] + tip.radius * (tip.scale?.[2] ?? 1) - (head[0].pos[2] - head[0].radius * (head[0].scale?.[2] ?? 1));
       expect(len / (2 * ry(head[0])), `#${seed} head length`).toBeGreaterThan(1.68);
     }

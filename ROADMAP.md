@@ -821,11 +821,19 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   `tests/engine/random.test.ts › a familiar pelt's rare colour morph`, `tests/viewer/mouthLine.test.ts
   › frown`, `tests/engine/plans/ratite.test.ts › looks out of the sides`, `tests/viewer/portraitQueue.test.ts`.
 
+- [x] **M93 — What the seventh look left.** A shark's crescent tail and deep gill slits; an octopus's
+  round eye; a mouse low on bare pink paws; a crab's claws folded in on slim arms, fingers short of
+  each other; alien eyes with a lit iris round a slit, in a rim of hide, and ringless compound domes;
+  arthropod legs that taper to points; a weasel's narrow head tapering to a dark nose. **Tests:**
+  `tests/viewer/wings.test.ts › crescent`, `tests/viewer/gills.test.ts`, `tests/viewer/feet.test.ts ›
+  bare pink paws`, `tests/viewer/claw.test.ts › folded in across its face`, `tests/engine/juvenile.test.ts`,
+  `tests/engine/plans/mustelid.test.ts › wedge of a head`, `tests/viewer/nose.test.ts › weasel`.
+
 ### Next up (unchecked — pick from here)
 
-- [ ] **What the seventh look left.** The shark a dolphin from the side (no mouth seen); a weasel's
-  hamster face; an octopus's slit eyes read as mouths; a mouse on stilts; a crab's claws crossing in an
-  X; flat glowing disc eyes on the uncanny plans; tack-like caps on arthropods' leg tips.
+- [ ] **An eighth look.** An independent review at a fresh seed, after M93.
+- [ ] **A rat's naked tail.** A thin-tailed small furred body (see feet.ts ratLike) wears its coat to
+  the tail's tip; a real rat's or mouse's is bare, scaled, pinkish grey.
 
 - [ ] **What the sixth look left.** The crab's walking legs still arch high like a spider's; the bear's
   muzzle a hippo's (a tube ending in a bulb, a small nose on it); the ape's coat reads as bare rubber;

@@ -55,22 +55,28 @@ export function footPlanOf(p: Phenotype): FootPlan | null {
  *  ~0.2 — but a cat is tall — a weasel's brush ~0.37). */
 export const RAT_HEIGHT = 1.6;
 export const RAT_TAIL = 0.26;
+/** The tail's root radius against the trunk's (Infinity with no tail): a rat's ~0.12, a cat's ~0.2, a
+ *  weasel's brush ~0.37. */
+export function tailRootRatio(p: Phenotype): number {
+  let trunk = 0;
+  let tail = Infinity;
+  for (const n of p.nodes) {
+    if (n.kind === 'spine') trunk = Math.max(trunk, n.radius);
+    else if (n.part?.kind === 'tail' && !Number.isFinite(tail)) tail = n.radius; // (its root: grown first)
+  }
+  return trunk > 0 ? tail / trunk : Infinity;
+}
 export function ratLike(p: Phenotype): boolean {
   if (p.genomeRef.covering.type !== 'fur') return false;
   let paws = false;
-  let trunk = 0;
-  let tail = Infinity;
   let top = -Infinity;
   let floor = Infinity;
   for (const n of p.nodes) {
     floor = Math.min(floor, n.pos[1] - n.radius);
-    if (n.kind === 'spine') {
-      trunk = Math.max(trunk, n.radius);
-      if ((n.segment ?? 0) === 0) top = Math.max(top, n.pos[1] + n.radius * (n.scale?.[1] ?? 1));
-    } else if (n.part?.kind === 'tail' && !Number.isFinite(tail)) tail = n.radius; // (its root: grown first)
+    if (n.kind === 'spine' && (n.segment ?? 0) === 0) top = Math.max(top, n.pos[1] + n.radius * (n.scale?.[1] ?? 1));
     if (n.terminal === 'paw' && n.part?.kind === 'leg') paws = true;
   }
-  return paws && top - floor < RAT_HEIGHT && Number.isFinite(tail) && tail < trunk * RAT_TAIL;
+  return paws && top - floor < RAT_HEIGHT && tailRootRatio(p) < RAT_TAIL;
 }
 
 /** The leg chains: [hip node, …, foot node] for every leg that reaches a terminal. */

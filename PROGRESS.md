@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -54,6 +54,46 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M93 — What the seventh look left: tails, claws, paws and eyes · 2026-11-13
+
+- **A shark's tail is a crescent.** Its fin was a fan from the root to an outline that ran through a
+  notch right behind the root: each lobe a sliver, two thin spikes (0.14 of the box they spanned). It
+  is now a crescent, the upper lobe's leading edge rising convex far back to its tip, the trailing edge
+  hollow down to a notch low on the fin, a short lower lobe; the tail stock is slimmer before it. The
+  five gill slits, drawn at the gill part's own tiny size, are each a third of the flank's depth.
+- **An octopus's eye is round.** The almond lids every vertebrate wears hid the top half of its yellow
+  iris from any view above: a half-disc under a skin hood with a dark bar along its top edge, read as a
+  gaping mouth. A radial body's lids now open about 52° all round, and the bar is slimmer.
+- **A mouse stands low on bare pink paws.** Its row never named a foot, so it took the default felt pad:
+  a flat dark disc. It now has paws, and a rat-like body (small, furred, on paws, with a thin tail —
+  its root under a quarter of the trunk's radius tells a rat from a weasel, its height a rat from a
+  cat) wears them bare: flesh pink, a narrow palm, four long fanned toes. (In the coat they were fuzzy
+  slippers.) Its legs are three links, not three or four, so they stand 1.2–1.5 trunk radii below the
+  belly, not 1.1–2.0. Shortening the length gene alone ran the links into its floor (0.2), where a
+  youngster's legs could no longer be shorter than its parent's.
+- **A crab's claws fold in before its face on slim arms.** The arm's links were as thick as the claw at
+  its end, four balls a gene's length apart: one bloated sausage with fingers on. A claw-bearing arm's
+  links are now 0.62 of its girth and the claw keeps the full girth, so the palm is the bulk. The
+  claws crossed in an X because the arm curled in until each pointed across the face; the wrist now
+  sets each claw's heading so its fingertips stop just short of the midline (20–46° in).
+- **Alien eyes are eyes, not lamps; an insect's are bare domes.** Every non-vertebrate eye sat in a dark
+  torus a quarter of its radius thick: round a flat lit disc with a dot of a pupil it was a pair of
+  spectacles, round a coarse black faceted dome a pair of goggles. A glowing eye is now a dark wet ball,
+  a lit iris (darkening to its rim, fibred) round a slit pupil, a catchlight, in a thinner rim of the
+  body's own covering; teal, bile green, amber or violet. A compound eye is a ringless dome of fine
+  facets, tinted dark bronze, rust, bottle green or slate.
+- **An arthropod's legs run on into points.** A chitin leg ended in the generic claw, a dark cone as
+  wide as the leg's end set on its last node: a tack pushed into the leg. It now tapers on along its
+  last link in the body's own covering, from inside the node so no collar shows, to a slim dark point
+  on the ground.
+- **A weasel's face, not a hamster's.** Its head was a round cranium and one blunt muzzle link with a
+  pink button nose. The skull is now narrower and flatter, and the muzzle two links narrowing to the
+  nose (its snout gene just past the line where a mammal's muzzle grows its second link — the weasel's
+  own tests had pinned it at one). A small animal with a brush of a tail (its root over 0.3 of the
+  trunk's radius) is pink-nosed a third as often: a weasel's nose is mostly dark, a rat's still pink.
+- **Still to look at:** the bear's muzzle (a tube ending in a bulb), the ape's coat at a distance (bare
+  rubber), a rat's furred tail (a real one is naked).
 
 ## M92 — A seventh look: the scores rise, and what they found · 2026-11-13
 

@@ -16,4 +16,11 @@ describe('noses', () => {
       expect(pinkNoseChance(grow(genomeOfMorphotype(seed, 'felid'))), `cat #${seed}`).toBeLessThan(0.2);
     }
   });
+
+  it("a weasel's nose is dark more often than not, small as it is: a mouse's pink", () => {
+    // (a pink button on a small furred face with whiskers was a hamster's)
+    for (let seed = 1; seed <= 12; seed++) {
+      expect(pinkNoseChance(grow(genomeOfMorphotype(seed, 'mustelid'))), `weasel #${seed}`).toBeLessThan(0.25);
+    }
+  });
 });
