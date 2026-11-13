@@ -126,7 +126,7 @@ describe('beak mouth (mouth overhaul)', () => {
     }
   });
 
-  it('the bill runs out mostly ahead of the face (not down at the ground), under 1.7r, with an accelerating 0.25r–0.6r hook', () => {
+  it('the bill runs out mostly ahead of the face (not down at the ground), under 1.7r, with an accelerating 0.25r–0.6r hook (0.95r hooked)', () => {
     let checked = 0;
     for (const p of [grow(defaultGenome()), grow(randomGenome(2)), grow(randomGenome(7))]) {
       const built = beakOn(p);
@@ -145,7 +145,9 @@ describe('beak mouth (mouth overhaul)', () => {
       const tip = built.upperPath[built.upperPath.length - 1];
       expect(dot3(sub3(tip, seat.p), dir)).toBeGreaterThan(0.5 * r);
       expect(built.hook).toBeGreaterThanOrEqual(0.25 * r - 1e-9);
-      expect(built.hook).toBeLessThanOrEqual(0.6 * r + 1e-9);
+      // (a hooked bill — a hawk's — drops by more than half its depth: at 0.6r its underside ran near
+      // level to the point, a straight cone)
+      expect(built.hook).toBeLessThanOrEqual((built.hooked ? 0.95 : 0.6) * r + 1e-9);
       // acceleration: half-way along the spine the drop is still well under half the full hook
       const dropAt = (k: number): number => -dot3(sub3(built.upperPath[k], built.upperPath[0]), up);
       expect(dropAt(8)).toBeCloseTo(built.hook, 6);
@@ -156,14 +158,15 @@ describe('beak mouth (mouth overhaul)', () => {
     expect(checked).toBeGreaterThan(1);
   });
 
-  it('the lower mandible is a 0.75-scale counter-piece resting just open below the upper', () => {
+  it('the lower mandible is a 0.75-scale counter-piece resting just open below the upper (0.64 under a hook)', () => {
     const p = grow(defaultGenome());
     const built = beakOn(p);
     expect(built).not.toBeNull();
     if (!built) return;
     expect(built.upperPath.length).toBe(9);
     expect(built.lowerPath.length).toBe(9);
-    expect(built.lowerLen).toBeCloseTo(0.75 * built.upperLen, 9);
+    // (under a hooked bill it is shorter, so the hook overhangs it)
+    expect(built.lowerLen).toBeCloseTo((built.hooked ? 0.64 : 0.75) * built.upperLen, 9);
     const up = built.up;
     // roots below the upper's, spine pitched a hair down off the bill axis — closed, but two parts
     expect(dot3(sub3(built.lowerPath[0], built.upperPath[0]), up)).toBeLessThan(0);
@@ -277,6 +280,13 @@ describe('beak mouth (mouth overhaul)', () => {
       const hawk = bill(seed, 'raptor');
       expect(hawk.hooked, `raptor #${seed}`).toBe(true);
       expect(hawk.hook, `raptor #${seed}`).toBeGreaterThan(0.48 * hawk.r);
+      // the hook turns the tip down past the lower mandible: the upper mandible's point lies below the
+      // lower's, and below its own root by more than the root's half-depth
+      const tipU = hawk.upperPath[hawk.upperPath.length - 1];
+      const tipL = hawk.lowerPath[hawk.lowerPath.length - 1];
+      const upOf = (v: number[]) => v[0] * hawk.up[0] + v[1] * hawk.up[1] + v[2] * hawk.up[2];
+      expect(upOf(tipU), `raptor #${seed} overhangs`).toBeLessThan(upOf(tipL));
+      expect(upOf(hawk.upperPath[0]) - upOf(tipU), `raptor #${seed} hooks down`).toBeGreaterThan(0.6 * hawk.r);
       // painted: yellow at the face, darker toward the hook
       const col = hawk.upper.getAttribute('color');
       expect(col, `raptor #${seed}`).toBeTruthy();

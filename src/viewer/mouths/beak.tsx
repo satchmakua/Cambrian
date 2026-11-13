@@ -86,17 +86,21 @@ export function buildBeak(
   // bird's length it hung off the chin like a thorn; at half the mouth's size it was sunk in the
   // snout and the turtle had no mouth at all)
   const shelled = phenotype.nodes.some((n) => n.terminal === 'carapace');
-  const upperLen = r * (shelled ? 0.8 + 0.15 * sPos : 1.05 + 0.5 * sPos + 0.12 * (hash01(seed, idx + 13) - 0.5));
-  const lowerLen = upperLen * 0.75;
+  const upperLen = r * (shelled ? 0.8 + 0.15 * sPos : (sPos < HOOKED_BILL ? 0.97 : 1.05) + 0.5 * sPos + 0.12 * (hash01(seed, idx + 13) - 0.5));
+  // (under a hooked bill the lower mandible is shorter: the hook overhangs it)
+  const lowerLen = upperLen * (!shelled && sPos < HOOKED_BILL ? 0.64 : 0.75);
   // the hook goes with the build: a short stout bill is a hawk's or a parrot's, curving down along its
   // whole culmen into a deep hook that overhangs the lower mandible; a long slim one a dove's or a
   // wader's, near straight, dipping only at its tip. (It went the other way, plus a coin toss — so a
   // bird of prey was as likely to wear a pigeon's bill as its own; and hooked only at the very tip, a
   // hawk's bill was still a pale candy-corn wedge under its eyes.)
-  const hook = r * (shelled ? 0.24 : 0.6 - 0.35 * sPos);
-  const hookCurve = shelled ? 2.7 : 1.6 + 1.1 * sPos;
   // …and a stout bill is two-toned: yellow at its root (where a hawk's cere is), darkening to the tip
   const hooked = !shelled && sPos < HOOKED_BILL;
+  // A hawk's hook drops by more than half the bill's depth, and most of it near the tip: the tip turns
+  // down past the lower mandible. (At 0.6 of the radius, against a bill that tapers from 0.72 of it,
+  // the upper mandible's underside ran near level to the point: a straight grey cone, a finch's.)
+  const hook = r * (shelled ? 0.24 : hooked ? 0.95 - 0.6 * sPos : 0.6 - 0.35 * sPos);
+  const hookCurve = shelled ? 2.7 : hooked ? 2.6 : 1.6 + 1.1 * sPos;
   const slim = 1 - 0.22 * sPos + 0.06 * (hash01(seed, idx + 47) - 0.5);
   // a bill is broad at the root — it spans the front of the face — and tapers to the tip (thin
   // cones from a narrow root hung below the face like a walrus's tusks)
@@ -148,7 +152,9 @@ export function buildBeak(
   const flatN = shelled ? bup : spec.right;
   const upper = sweepTube(
     upperPath.map((p) => ({ p, n: flatN })),
-    { radius: (u) => Math.max(r * 0.03, upperR0 * Math.pow(1 - u, 0.95)), flatten: shelled ? 0.42 : 0.3 + 0.2 * sPos, radialSegments: 10 },
+    // (a hooked bill stays deep most of its length and tapers late, into the hook: a cone's even taper
+    // left no depth for the hook to turn down from)
+    { radius: (u) => Math.max(r * 0.03, upperR0 * (hooked ? 1 - Math.pow(u, 1.5) : Math.pow(1 - u, 0.95))), flatten: shelled ? 0.42 : 0.3 + 0.2 * sPos, radialSegments: 10 },
   );
   const lower = sweepTube(
     lowerPath.map((p) => ({ p, n: flatN })),
