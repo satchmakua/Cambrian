@@ -282,6 +282,9 @@ export function makeCreatureMaterial(
           // (a cut stone has no countershading: by its flat faces' normals, whole faces snapped between
           // the belly's, the flank's and the back's tones — pale and dark patches, a camouflage)
           float up = uCut > 0.5 ? 0.5 : clamp(vWNrm.y * 0.5 + 0.5, 0.0, 1.0);
+          // (a leg, and a paw on it, wears the flank's tone: facing the ground, a paw took the belly's —
+          // pale puffballs under a dark animal)
+          up = mix(up, 0.5, vLeg);
           // countershading kept to the underside and the spine: the flanks carry the coat's true
           // colour (a flank used to be 58% belly — fixed grey — and 42% darkened back, never the coat)
           vec3 skin = mix(uMain, uBelly, 1.0 - smoothstep(0.1, 0.4, up));
