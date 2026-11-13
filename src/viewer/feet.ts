@@ -129,7 +129,8 @@ export function bareLegsOf(p: Phenotype): BareLegs | null {
   foot /= chains.length;
   const span = hip - foot;
   if (span <= 0.05) return null;
-  return { y: foot + span * 0.55, band: span * 0.06, color: shankColor(p.genomeRef.seed) };
+  // (a soft fringe where the plumage ends: drawn as a hard line, the shanks were stockings pulled up)
+  return { y: foot + span * 0.55, band: span * 0.12, color: shankColor(p.genomeRef.seed) };
 }
 
 /**
