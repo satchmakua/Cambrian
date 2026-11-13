@@ -516,21 +516,21 @@ export function CreatureMesh({
 
   // an urchin's quills, one smooth cone each, root to point — all of them one mesh, kept at every
   // distance (they are its outline: without them it was a bare ball), riding the trunk
-  const quillGeo = useMemo(() => quillGeometry(phenotype, detail === 'full' ? 8 : 5), [phenotype, detail]);
+  // (dark at the root, paling toward the point — toward the coat's own light — each its own shade)
+  const quillGeo = useMemo(() => quillGeometry(phenotype, detail === 'full' ? 8 : 5, coatDark(pal), coatMain(pal).lerp(new THREE.Color(1, 1, 1), 0.35)), [phenotype, detail, pal]);
   useEffect(() => () => quillGeo?.dispose(), [quillGeo]);
-  const quillColor = useMemo(() => coatDark(pal).getHex(), [pal]);
   const quillMount = useMemo(() => (rig && quillGeo ? { bone: rig.bones[0] ?? rig.root, at: phenotype.nodes[0].pos } : null), [rig, quillGeo, phenotype]);
   const quillNode = quillGeo ? (
     quillMount ? (
       createPortal(
         <mesh geometry={quillGeo} position={[-quillMount.at[0], -quillMount.at[1], -quillMount.at[2]]} castShadow>
-          <meshStandardMaterial color={quillColor} roughness={0.38} metalness={0.05} />
+          <meshStandardMaterial vertexColors roughness={0.38} metalness={0.05} />
         </mesh>,
         quillMount.bone,
       )
     ) : (
       <mesh geometry={quillGeo} castShadow>
-        <meshStandardMaterial color={quillColor} roughness={0.38} metalness={0.05} />
+        <meshStandardMaterial vertexColors roughness={0.38} metalness={0.05} />
       </mesh>
     )
   ) : null;

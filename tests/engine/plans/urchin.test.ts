@@ -4,6 +4,8 @@ import { genomeOfMorphotype, MORPHOTYPE_IDS } from '../../../src/engine/random';
 import { buildMeshData } from '../../../src/viewer/meshData';
 import { buildFieldPrims, fieldAt } from '../../../src/viewer/bodyField';
 import { quillGeometry, quillNodes, quillsOf } from '../../../src/viewer/quills';
+import { buildSmoothGeometry } from '../../../src/viewer/smoothSkin';
+import * as THREE from 'three';
 
 const SEEDS = Array.from({ length: 10 }, (_, i) => i + 1);
 const urchin = (seed: number) => grow(genomeOfMorphotype(seed, 'urchin'));
@@ -60,6 +62,43 @@ describe('urchin', () => {
       }
       geo.dispose();
     }
+  });
+
+  it('its test is a low dome, round seen from above — and nothing hangs from its underside', () => {
+    // (a ball as tall as it was wide, squeezed front to back — and under it, the links to its eyes and
+    // mouth skinned into a bulb: an upside-down pear, its lower lobe through the floor)
+    for (const seed of SEEDS) {
+      const p = urchin(seed);
+      const body = p.nodes[0];
+      const [sx, sy, sz] = body.scale ?? [1, 1, 1];
+      expect(sy / Math.max(sx, sz), `#${seed} low`).toBeLessThan(0.75);
+      expect(Math.abs(sx - sz) / Math.max(sx, sz), `#${seed} round`).toBeLessThan(0.06);
+      // the skin's underside is the test's own: no lower than the dome's bottom
+      const pos = buildSmoothGeometry(p, true).getAttribute('position');
+      let low = Infinity;
+      for (let v = 0; v < pos.count; v++) low = Math.min(low, pos.getY(v));
+      expect(low, `#${seed} underside`).toBeGreaterThan(body.pos[1] - body.radius * sy * 1.12);
+    }
+  });
+
+  it('each spine pales from a dark root to its point, each its own shade', () => {
+    // (one flat dark colour for every spine read as a cushion of nails)
+    const p = urchin(3);
+    const geo = quillGeometry(p, 8, new THREE.Color(0.1, 0.05, 0.15), new THREE.Color(0.8, 0.75, 0.85))!;
+    const pos = geo.getAttribute('position');
+    const col = geo.getAttribute('color');
+    expect(col).toBeDefined();
+    const per = 4 * 9; // a lathe's vertices per spine (see the cone test)
+    const lum = (v: number) => col.getX(v) + col.getY(v) + col.getZ(v);
+    const shades = new Set<string>();
+    for (let q = 0; q < quillsOf(p).length; q++) {
+      const root = lum(q * per);
+      const tip = lum(q * per + 3); // the lathe runs root → point along each meridian
+      expect(tip, `spine ${q}`).toBeGreaterThan(root * 1.5);
+      shades.add(root.toFixed(3));
+    }
+    expect(shades.size).toBeGreaterThan(5);
+    expect(pos.count).toBe(col.count);
   });
 
   it('rests on its spines, not on a fringe of tube feet', () => {

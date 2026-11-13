@@ -182,8 +182,12 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   const stalkTip = (a: BodyNode, b: BodyNode) => mode === 'hybrid' && b.terminal === 'eye' && a.kind === 'limb' && a.part?.kind === 'eyestalk';
   let bodyEdges = p.edges.filter(([a, b]) => include(p.nodes[a]) && (include(p.nodes[b]) || stalkTip(p.nodes[a], p.nodes[b])));
   // (a body with no limb of its own but its quills — an urchin without tube feet — falls back on every
-  // link but those: on every link, its quills were skinned as beaded rods)
-  if (bodyEdges.length === 0) bodyEdges = p.edges.filter(([a, b]) => !quills.has(p.nodes[a]) && !quills.has(p.nodes[b]));
+  // link but those and the parts that draw themselves: on every link, its quills were skinned as beaded
+  // rods, and the links to the eyes and the mouth under it hung a bulb from its underside — the urchin a
+  // pear, its lower lobe through the floor)
+  const quillSet = mode === 'hybrid' ? quills : new Set([...quillNodes(p)].map((i) => p.nodes[i]));
+  const ownDrawn = (n: BodyNode) => quillSet.has(n) || n.terminal === 'eye' || n.terminal === 'mouth';
+  if (bodyEdges.length === 0) bodyEdges = p.edges.filter(([a, b]) => !ownDrawn(p.nodes[a]) && !ownDrawn(p.nodes[b]));
   const edges = bodyEdges.length > 0 ? bodyEdges : null;
 
   // A CHAIN IS A CURVE. A trunk, a neck, a tail is a row of nodes, and a straight cone from each to
@@ -299,9 +303,14 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
       if (br) cone(jaw.edge, jaw.i0, jaw.i1, br.a, br.b, br.ra, br.rb, null, [1, 1], [1, 1]);
     }
   } else {
+    // (one ball per node — but not the parts that draw themselves, where there is anything else; and a
+    // shaped node's ball no bigger than its narrowest girth, so the ellipsoid it carries gives the shape)
+    const some = p.nodes.some((n) => !ownDrawn(n));
     for (let i = 0; i < p.nodes.length; i++) {
       const n = p.nodes[i];
-      cone(i, i, i, n.pos, n.pos, n.radius, n.radius, null, [1, 1], [1, 1]);
+      if (some && ownDrawn(n)) continue;
+      const r = n.scale ? n.radius * Math.min(n.scale[0], n.scale[1], n.scale[2], 1) : n.radius;
+      cone(i, i, i, n.pos, n.pos, r, r, null, [1, 1], [1, 1]);
       girth += n.radius;
       included.add(n);
     }
@@ -388,7 +397,7 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     ax: f64(ax), ay: f64(ay), az: f64(az), bx: f64(bx), by: f64(by), bz: f64(bz), pr, ra: f64(ra), rb: f64(rb), cx, cy, cz, hl,
     an, aq, sx0: f64(sx0), sy0: f64(sy0), sx1: f64(sx1), sy1: f64(sy1), nc, ia: Int32Array.from(ia), ib: Int32Array.from(ib),
     ch, ord, ec, eq, er, ne, k: 0, excess,
-    meanR: girth / Math.max(edges ? edges.length : p.nodes.length, 1),
+    meanR: girth / Math.max(edges ? edges.length : included.size, 1),
   };
 }
 

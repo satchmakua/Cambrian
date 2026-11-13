@@ -69,8 +69,15 @@ export function quillsOf(p: Phenotype): Quill[] {
   });
 }
 
-/** All of a body's quills as one mesh, in the body frame; null if it has none. */
-export function quillGeometry(p: Phenotype, radial = 8): THREE.BufferGeometry | null {
+/** how far a quill pales from its root to its point (the tip colour's share), and how much each quill's
+ *  own shade wanders */
+export const QUILL_PALE = 0.55;
+const QUILL_JITTER = 0.16;
+
+/** All of a body's quills as one mesh, in the body frame; null if it has none. Given a root and a tip
+ *  colour, each quill is vertex-coloured from one to the other — darkest at the root, paling to the
+ *  point, each its own shade (one flat colour for every spine read as a cushion of nails). */
+export function quillGeometry(p: Phenotype, radial = 8, root?: THREE.Color, tip?: THREE.Color): THREE.BufferGeometry | null {
   const qs = quillsOf(p);
   if (!qs.length) return null;
   const up = new THREE.Vector3(0, 1, 0);
@@ -92,6 +99,20 @@ export function quillGeometry(p: Phenotype, radial = 8): THREE.BufferGeometry | 
       new THREE.Vector2(q.r * 0.05, full),
     ];
     const g = new THREE.LatheGeometry(prof, radial);
+    if (root && tip) {
+      const pos = g.getAttribute('position');
+      const col = new Float32Array(pos.count * 3);
+      const k = parts.length;
+      const own = 1 - QUILL_JITTER / 2 + QUILL_JITTER * (((k * 2654435761) >>> 0) % 1000) / 1000;
+      for (let v = 0; v < pos.count; v++) {
+        const t = Math.max(0, Math.min(1, pos.getY(v) / full));
+        const w = QUILL_PALE * t * t;
+        col[v * 3] = (root.r + (tip.r - root.r) * w) * own;
+        col[v * 3 + 1] = (root.g + (tip.g - root.g) * w) * own;
+        col[v * 3 + 2] = (root.b + (tip.b - root.b) * w) * own;
+      }
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    }
     g.applyMatrix4(new THREE.Matrix4().compose(start, new THREE.Quaternion().setFromUnitVectors(up, dir), new THREE.Vector3(1, 1, 1)));
     g.deleteAttribute('uv');
     parts.push(g); // (the lathe's own smooth normals, carried through the transform)
