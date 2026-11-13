@@ -110,6 +110,9 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
     half the body's breadth), and a slime body shows no teeth along its seam. The dashed dark line along
     every seam (a zipper) was not the lip but the seam's upper jaw mass, a sliver a twentieth of a radius
     proud of the skin, in the hide's own material, fighting it for the same pixels; it is not drawn.
+  - *Kermit's smile on the insects*: a mandibled mouth has no lips, but its dark opening ran its whole
+    span, a U under the eyes; only its middle shows now (a little over a quarter of it hidden at each
+    end, behind the blades' roots), a small slot between the mandibles.
 - **Still to do from it:** the weasel end on (its shoulder joints stand out past its flanks); ears
   that are spikes edge-on (the far ear, facing forward-out, from a three-quarter view: thicker ears
   didn't help — it is the angle).
