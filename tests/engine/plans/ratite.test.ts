@@ -44,4 +44,21 @@ describe('ratite', () => {
       }
     }
   });
+
+  it('looks out of the sides of its head, from its crown behind the bill — and so does a songbird', () => {
+    // (looking straight ahead from beside the bill, eyes as wide as the skull there: an owl's face)
+    for (const id of ['ratite', 'bird']) {
+      for (let seed = 1; seed <= 8; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+        p.nodes.forEach((e, i) => {
+          if (e.terminal !== 'eye') return;
+          const h = p.nodes[parent.get(i)!];
+          const d = [e.pos[0] - h.pos[0], e.pos[1] - h.pos[1], e.pos[2] - h.pos[2]];
+          const l = Math.hypot(d[0], d[1], d[2]);
+          expect(Math.abs(d[0]) / l, `${id} #${seed} to the side`).toBeGreaterThan(0.75);
+        });
+      }
+    }
+  });
 });
