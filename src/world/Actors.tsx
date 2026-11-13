@@ -61,6 +61,10 @@ export function useSkinScheduler(): void {
 
 /** Count this body as a user of a skin it has built (and of that skin's shell, if it has one), so
  *  neither is swept while the body may wear it again. Returns the cache keys actually retained. */
+/** a mood bubble's largest size against the camera's distance from it (≈ a 14th of the view's height) */
+const BUBBLE_NEAR = 0.06;
+const BUBBLE_AT = new THREE.Vector3();
+
 function hold(p: Phenotype, q: Skin): string[] {
   return [KEY[q], shellKey(q)].filter((k) => retainGeometry(p, k));
 }
@@ -271,7 +275,7 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
     [],
   );
 
-  useFrame((_, dt) => {
+  useFrame((st, dt) => {
     const g = ref.current;
     if (!g) return;
     if (young && !youngNow()) (growUp.current ??= skinOrder(bodyOf(c.genome).phenotype, () => setYoung(false))).ask(plainSkin(distant.current));
@@ -397,7 +401,10 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
       bubble.current.visible = sh.e !== null;
       if (sh.e) {
         sh.pop = Math.min(1, sh.pop + dt * 5);
-        const size = (0.7 + 0.18 * place.height * s) / s;
+        // (a world-sized tag was as big as a mouse once the camera came close, and hid the animal it
+        // spoke for: near, it is held to a share of the camera's distance — a small tag over the head)
+        const near = st.camera.position.distanceTo(BUBBLE_AT.set(P.x, y + place.height * s, P.z)) * BUBBLE_NEAR;
+        const size = Math.min(0.7 + 0.18 * place.height * s, near) / s;
         const pop = sh.pop < 1 ? 1 + 0.25 * Math.sin(sh.pop * Math.PI) : 1;
         bubble.current.scale.setScalar(size * pop * THREE.MathUtils.smoothstep(sh.pop, 0, 0.4));
         bubble.current.position.set(0, place.height - place.lift + size * 0.75 + Math.sin(world.time * 2.2 + c.id) * 0.05 / s, 0);
