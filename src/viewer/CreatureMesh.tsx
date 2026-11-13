@@ -733,7 +733,8 @@ function Feature({
         return <Shards f={f} palette={phenotype.genomeRef.palette} seed={phenotype.genomeRef.seed} />;
       }
       if (f.kind === 'horn') return <Horn f={f} color={footColor} />;
-      if (f.kind === 'leg' && pointedLegs(phenotype.genomeRef)) return <LegPoint f={f} color={footColor} reach={phenotype.nodes[f.idx].pos[1] - phenotype.bounds.min[1]} />;
+      const reach = phenotype.nodes[f.idx].pos[1] - phenotype.bounds.min[1];
+      if (f.kind === 'leg' && arthropodLegs(phenotype)) return <LegTip f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} reach={reach} />;
       const plan = f.kind === 'leg' ? footPlanOf(phenotype) : null;
       return plan ? <ToedFoot f={f} plan={plan} skin={skin} phenotype={phenotype} /> : <Claw f={f} color={footColor} />;
     }
@@ -1386,20 +1387,59 @@ function Claw({ f, color }: { f: MeshFeature; color: number }) {
   );
 }
 
-// A myriapod's leg ends in a POINT: a slim dark spike running on from its last link down to the
-// ground `reach` below the leg's last node. (A clawed foot's blunt cone, as wide as a leg this thin
-// and set in the middle of its last node, showed only as a dark collar round a blunt end.)
-function LegPoint({ f, color, reach }: { f: MeshFeature; color: number; reach: number }) {
-  const r = Math.max(f.radius, 0.06) * 1.4; // (a little wider than the leg's end, which it caps)
-  const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.55).getHex(), [color]);
-  // the node's +Z is its last link's run: how steeply that falls sets how long a spike reaches the ground
+/** An ARTHROPOD's legs (a chitin body's, a myriapod's, or anything on three or more pairs): jointed
+ *  rods that run on into points. */
+function arthropodLegs(p: Phenotype): boolean {
+  if (pointedLegs(p.genomeRef) || p.genomeRef.covering.type === 'chitin') return true;
+  let legs = 0;
+  for (const n of p.nodes) if (n.kind === 'terminal' && n.part?.kind === 'leg') legs++;
+  return legs >= 6;
+}
+
+/** An arthropod leg's tip, in the node's frame (+Z its last link's run): the link tapering on as the
+ *  body's own covering (`shell`), then a hardened point (`point`) reaching `len` along it. */
+function legTipGeometry(r: number, len: number, quat: readonly number[], origin: readonly number[]): { shell: THREE.BufferGeometry; point: THREE.BufferGeometry } {
+  const q = new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3]);
+  const cut = len * 0.5;
+  // (it starts inside the leg's last node: the taper grows out of the skin with no collar)
+  const shell = new THREE.CylinderGeometry(r * 0.46, r * 0.86, cut + r * 0.5, 10, 1, true);
+  shell.rotateX(Math.PI / 2);
+  shell.translate(0, 0, (cut - r * 0.5) / 2);
+  shell.applyQuaternion(q);
+  shell.computeVertexNormals();
+  bakeSkin(shell, origin);
+  const point = new THREE.ConeGeometry(r * 0.47, len - cut, 10);
+  point.rotateX(Math.PI / 2);
+  point.translate(0, 0, cut + (len - cut) / 2);
+  point.applyQuaternion(q);
+  return { shell, point };
+}
+
+// A leg that runs on into a POINT (an insect's tarsus, a spider's, a crab's dactyl, a myriapod's): the
+// last link tapers on in the body's own covering to a slim dark point on the ground `reach` below the
+// leg's last node. (A dark cone as wide as the leg or wider, capping its end, was a tack pushed into it.)
+function LegTip({ f, color, skin, origin, reach }: { f: MeshFeature; color: number; skin?: THREE.Material; origin: readonly number[]; reach: number }) {
+  const r = Math.max(f.radius, 0.04);
+  const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.5).getHex(), [color]);
+  // the node's +Z is its last link's run: how steeply that falls sets how long a point reaches the ground
   const fall = useMemo(() => -new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(f.quat[0], f.quat[1], f.quat[2], f.quat[3])).y, [f.quat]);
-  const len = Math.min(Math.max(reach, 0.06) / Math.max(fall, 0.45), 0.6) + r * 0.7;
+  const len = Math.min(Math.max(reach, 0.04) / Math.max(fall, 0.45), 0.6) + r * 0.9;
+  const geo = useMemo(() => legTipGeometry(r, len, f.quat, origin), [r, len, f.quat, origin]);
+  useEffect(() => () => {
+    geo.shell.dispose();
+    geo.point.dispose();
+  }, [geo]);
   return (
-    <group quaternion={f.quat}>
-      <mesh position={[0, 0, len / 2 - r * 0.7]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-        <coneGeometry args={[r, len, 9]} />
-        <meshStandardMaterial color={dark} roughness={0.45} metalness={0.05} />
+    <group>
+      {skin ? (
+        <mesh geometry={geo.shell} material={skin} castShadow />
+      ) : (
+        <mesh geometry={geo.shell} castShadow>
+          <meshStandardMaterial color={color} roughness={0.5} />
+        </mesh>
+      )}
+      <mesh geometry={geo.point} castShadow>
+        <meshStandardMaterial color={dark} roughness={0.35} metalness={0.05} />
       </mesh>
     </group>
   );
