@@ -137,7 +137,10 @@ export function buildMandibles(
   // the interior — recessed into the real carve on smooth skin, a hair proud of the capsule kit
   // as a dark throat backdrop (depth by shading, not geometry)
   const inset = recessed ? -0.34 * r : 0.012 * r;
-  const interior = interiorSheet(upper, lower, inset, recessed ? -0.5 * r : 0);
+  // (only the middle of the opening shows, between the blades' roots: across the mouth's whole span its
+  // dark was a U of a smile under the eyes — Kermit's)
+  const mid = <T,>(row: T[]): T[] => row.slice(Math.floor(row.length * OPENING_FROM), Math.ceil(row.length * (1 - OPENING_FROM)));
+  const interior = interiorSheet(mid(upper), mid(lower), inset, recessed ? -0.5 * r : 0);
 
   return {
     spec,
@@ -148,6 +151,9 @@ export function buildMandibles(
     interior,
   };
 }
+
+/** the share of the opening hidden at each end, behind the blades' roots */
+const OPENING_FROM = 0.28;
 
 /**
  * A SPIDER's mouth: its mandibled face sits on the leg-bearing cephalothorax (it has no separate
