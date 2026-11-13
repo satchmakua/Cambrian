@@ -22,6 +22,8 @@ describe('ursid', () => {
       const brain = skull[0];
       const muzzle = skull[skull.length - 1];
       expect(muzzle.radius / brain.radius, `#${seed} narrower`).toBeLessThan(0.55);
+      // …and tapering on to the nose: an even tube ending in a round bulb was a hippo's
+      expect(muzzle.radius / skull[1].radius, `#${seed} tapers`).toBeLessThan(0.8);
       // round in section: not the braincase's broad flat shape carried down to the nose
       expect(muzzle.scale?.[0] ?? 1, `#${seed} round`).toBeLessThan(1.05);
       // and no whiskers: a bear has none to speak of

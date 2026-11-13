@@ -35,8 +35,12 @@ describe('felid', () => {
       expect(cat.reach, `cat #${seed}`).toBeLessThan(SNOUT_SHORT);
       expect(dog.reach, `dog #${seed}`).toBeGreaterThan(SNOUT_SHORT);
       expect(cat.w, `#${seed}`).toBeLessThan(dog.w * 0.85);
+      // a dog's pad is wider than its mouth is deep (at a cat's size it was three-quarters of that)
+      expect(dog.w, `dog #${seed}`).toBeGreaterThan(1.0);
     }
     expect(noseScaleOf(1.6)).toBeCloseTo(0.75, 9);
-    expect(noseScaleOf(2.4)).toBe(1);
+    // …and a dog's or a bear's covers most of its muzzle's front (at a cat's size it was a dot on the
+    // end of a hippo's snout)
+    expect(noseScaleOf(2.4)).toBe(1.5);
   });
 });

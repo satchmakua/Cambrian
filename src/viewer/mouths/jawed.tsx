@@ -329,7 +329,7 @@ export function buildJawed(
     const ns = noseScaleOf(snoutReach(phenotype, idx));
     // wider across the top than at the bottom: a rounded triangle, the classic mammal rhinarium (the
     // smaller, the more a triangle)
-    const flare = 0.32 + 1.0 * (1 - ns);
+    const flare = 0.32 + 1.0 * Math.max(0, 1 - ns);
     const pos = g.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) {
       const y = pos.getY(i);
@@ -395,10 +395,13 @@ export function snoutReach(p: Phenotype, mouthIdx: number): number {
 /** a muzzle reaching no further than this ahead of its braincase is a short one: a cat's */
 export const SNOUT_SHORT = 1.85;
 const SNOUT_LONG = 2.4;
-/** the nose pad's size against a full one, by the muzzle's reach: 0.75 on a cat's, whole on a dog's
- *  (at 0.6 a cat's was a pink speck, gone at any distance) */
+/** …and a long muzzle's nose pad against the mouth's size */
+const NOSE_LONG = 1.5;
+/** the nose pad's size against the mouth's, by the muzzle's reach: 0.75 on a cat's short muzzle, half
+ *  as big again on a dog's or a bear's, where the pad covers most of the muzzle's front (at 0.6 a
+ *  cat's was a pink speck; at the cat's size a bear's was a dot on the end of a hippo's snout) */
 export function noseScaleOf(reach: number): number {
-  return Math.min(1, Math.max(0.75, 0.75 + (0.25 * (reach - 1.6)) / (SNOUT_LONG - 1.6)));
+  return Math.min(NOSE_LONG, Math.max(0.75, 0.75 + ((NOSE_LONG - 0.75) * (reach - 1.6)) / (SNOUT_LONG - 1.6)));
 }
 
 /**
