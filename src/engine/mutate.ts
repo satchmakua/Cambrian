@@ -156,14 +156,28 @@ function changeBauplan(g: Genome, rng: Rng): void {
   const grow = rng() < 0.5 ? -1 : 1;
   const target = clampInt(legs.length + grow, [0, 5]);
   if (target === legs.length) return;
+  const B = GENE_BOUNDS.segment;
   if (target < legs.length) {
     const idx = seg.appendages.indexOf(legs[Math.floor(rng() * legs.length)]);
     if (idx >= 0) seg.appendages.splice(idx, 1);
+    // A body that loses its last legs LANDS as a legless one: long and slim, a snake's or an eel's or
+    // a worm's. (On the trunk it had stood on, a bird without legs or wings was a feathered sausage.)
+    if (target === 0) {
+      seg.repeat = clampInt(seg.repeat + LEGLESS_LINKS, B.repeat);
+      seg.size = [clamp(seg.size[0] * LEGLESS_SLIM, B.size), clamp(seg.size[1] * LEGLESS_SLIM, B.size), clamp(seg.size[2] * LEGLESS_LONG, B.size)];
+    }
   } else {
     if (seg.appendages.length >= GENE_BOUNDS.segment.appendageCount[1]) return;
     seg.appendages.push(legs.length > 0 ? structuredClone(legs[0]) : freshLeg(rng));
+    // …and one that gains a pair grows a link to carry it (three pairs crowded under a cat's belly
+    // made a crab of it)
+    if (legs.length > 0) seg.repeat = clampInt(seg.repeat + 1, B.repeat);
   }
 }
+/** a body that loses its last legs grows this many links, this much slimmer and this much longer */
+const LEGLESS_LINKS = 2;
+const LEGLESS_SLIM = 0.82;
+const LEGLESS_LONG = 1.2;
 
 function freshLeg(rng: Rng): AppendageGene {
   const A = GENE_BOUNDS.appendage;
@@ -296,13 +310,19 @@ function applyDuplication(g: Genome, rng: Rng): void {
   else duplicateSegment(g, rng);
 }
 
+// Copy a DECORATIVE part (a horn, a spine, a fin, a tail…) — never a leg or the face. A copied leg was
+// a third pair crowded under a cat's belly, round the body-plan rules that space the pairs out on a
+// trunk grown to carry them (changeBauplan); a copied eye pair or mouth sat on the first, a second
+// face drawn over the face.
 function duplicateAppendage(g: Genome, rng: Rng): void {
+  const decor = (a: AppendageGene) => !isLeg(a) && !isFace(a);
   const withApps = segments(g).filter(
-    (s) => s.appendages.length > 0 && s.appendages.length < GENE_BOUNDS.segment.appendageCount[1],
+    (s) => s.appendages.some(decor) && s.appendages.length < GENE_BOUNDS.segment.appendageCount[1],
   );
   if (withApps.length === 0) return;
   const seg = pick(rng, withApps);
-  const src = seg.appendages[Math.floor(rng() * seg.appendages.length)];
+  const parts = seg.appendages.filter(decor);
+  const src = parts[Math.floor(rng() * parts.length)];
   seg.appendages.push(structuredClone(src));
 }
 

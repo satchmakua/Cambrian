@@ -179,4 +179,17 @@ describe('bred offspring stay coherent', () => {
     expect(doubled.exploratory / counts.exploratory).toBeGreaterThan(0.05);
     expect(doubled.exploratory / counts.exploratory).toBeLessThan(0.4);
   });
+
+  it('a child never has more eyes or mouths than its parent, nor a leg pair copied on beside the others', () => {
+    // (a copied eye pair or mouth sat on the first — a second face drawn over the face; a copied leg
+    // was a third pair crowded under a cat's belly, round the rules that space the pairs on a trunk)
+    const faces = (g: Genome) => sections(g).reduce((n, s) => n + s.appendages.filter((a) => isFace(a.terminal)).length, 0);
+    for (const id of ['canid', 'felid', 'bird', 'lizard', 'ungulate', 'primate', 'ursid', 'anuran']) {
+      for (let seed = 1; seed <= 10; seed++) {
+        const p = genomeOfMorphotype(seed, id);
+        for (const c of breederLitter(p, 3000 + seed, 9)) expect(faces(c), `${id} #${seed}`).toBeLessThanOrEqual(faces(p));
+      }
+    }
+  });
 });
+
