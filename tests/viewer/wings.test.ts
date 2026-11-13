@@ -56,8 +56,18 @@ describe('wings (shoulder-built, body frame)', () => {
       expect(hum.b.z).toBeLessThan(-0.15 * S);
       expect(fore.b.y).toBeGreaterThan(hum.b.y);
       for (const f of fingers) {
-        expect(f.b.z).toBeLessThan(f.a.z - 0.25 * S);
+        expect(f.b.z).toBeLessThan(f.a.z - 0.15 * S);
         expect(f.b.y).toBeLessThanOrEqual(f.a.y + 1e-9);
+      }
+      // the top edge FALLS from the wrist (run back level, the first finger was a rod with the skin
+      // hung from it like a flag), and the tips end along the flank, not past the rump
+      const top = fingers[0];
+      expect(top.a.y - top.b.y).toBeGreaterThan(0.3 * (top.a.z - top.b.z));
+      expect(b.min.z).toBeGreaterThan(-0.62 * S);
+      // the skin is gathered: the finger tips stand out from the flank and in toward it by turns
+      const outOf = (v: { x: number }) => v.x * side;
+      for (let i = 1; i < fingers.length; i++) {
+        expect(Math.sign(outOf(fingers[i].b) - outOf(fingers[i - 1].b))).toBe(i % 2 ? -1 : 1);
       }
       // mirror-exact
       const o = buildFoldedMembraneWing(-side, S).surface.getAttribute('position');

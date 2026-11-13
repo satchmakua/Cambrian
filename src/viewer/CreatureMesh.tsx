@@ -1721,12 +1721,12 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
         pts.dispose();
       }
     }
-    const boneOf = (b: { a: THREE.Vector3; b: THREE.Vector3; r0: number; r1: number }) => {
+    const boneOf = (b: { a: THREE.Vector3; b: THREE.Vector3; r0: number; r1: number; buried?: boolean }) => {
       const d = b.b.clone().sub(b.a);
       const len = Math.max(d.length(), 1e-4);
       const q = new THREE.Quaternion().setFromUnitVectors(UP, d.normalize());
       const mid = b.a.clone().add(b.b).multiplyScalar(0.5);
-      return { pos: [mid.x, mid.y, mid.z] as [number, number, number], quat: [q.x, q.y, q.z, q.w] as [number, number, number, number], len, r0: b.r0, r1: b.r1 };
+      return { pos: [mid.x, mid.y, mid.z] as [number, number, number], quat: [q.x, q.y, q.z, q.w] as [number, number, number, number], len, r0: b.r0, r1: b.r1, buried: b.buried };
     };
     const openBones = open ? open.bones.map(boneOf) : [];
     const bones = w.bones.map(boneOf);
@@ -1793,7 +1793,7 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
   );
 }
 
-type WingBoneMesh = { pos: [number, number, number]; quat: [number, number, number, number]; len: number; r0: number; r1: number };
+type WingBoneMesh = { pos: [number, number, number]; quat: [number, number, number, number]; len: number; r0: number; r1: number; buried?: boolean };
 // A membrane wing as drawn: its skin, the arm and finger bones in the wing's own skin a shade deeper,
 // and the thumb claw at the wrist.
 function MembraneWing({ surface, bones, wrist, skin, bone, lite }: { surface: THREE.BufferGeometry; bones: WingBoneMesh[]; wrist: THREE.Vector3 | null; skin: number; bone: number; lite: boolean }) {
@@ -1802,7 +1802,7 @@ function MembraneWing({ surface, bones, wrist, skin, bone, lite }: { surface: TH
       <mesh geometry={surface} castShadow>
         <meshPhysicalMaterial color={skin} roughness={0.62} sheen={0.3} sheenRoughness={0.5} side={THREE.DoubleSide} transparent opacity={0.93} />
       </mesh>
-      {!lite && bones.map((b, i) => (
+      {!lite && bones.map((b, i) => b.buried ? null : (
         <group key={i} position={b.pos} quaternion={b.quat}>
           <mesh castShadow>
             <cylinderGeometry args={[b.r1, b.r0, b.len, 10]} />
