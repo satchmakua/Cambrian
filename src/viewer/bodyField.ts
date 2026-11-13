@@ -111,6 +111,41 @@ export const CHAIN_CUTS = 3;
 /** limb chains that are smooth curves (a spine's are too); a leg's or an arm's links meet at joints */
 const SMOOTH_LIMBS = new Set(['tail', 'tentacle']);
 
+/** how far below a stopped skull's axis its jaw runs (×the braincase's and the nose's radii), and its
+ *  girth there (the same) */
+export const JAW_DROP: readonly [number, number] = [0.48, 0.42];
+export const JAW_GIRTH: readonly [number, number] = [0.58, 0.85];
+
+/** The jaw cone under a furred skull with a stop (see buildFieldPrims), or null. */
+export function jawOf(p: Phenotype): { a: Vec3; b: Vec3; ra: number; rb: number; i0: number; i1: number; edge: number } | null {
+  if (p.genomeRef.covering.type !== 'fur') return null;
+  let last = -1;
+  for (const n of p.nodes) if (n.kind === 'spine') last = Math.max(last, n.segment ?? 0);
+  if (last < 1) return null;
+  const head: number[] = [];
+  p.nodes.forEach((n, i) => {
+    if (n.kind === 'spine' && n.segment === last) head.push(i);
+  });
+  if (head.length < 3) return null;
+  const c = p.nodes[head[0]], m = p.nodes[head[1]], t = p.nodes[head[head.length - 1]];
+  // a stop: the muzzle well under the braincase's girth (a plain tapering chain steps far less)
+  if (m.radius > 0.7 * c.radius) return null;
+  const fwd = norm3([t.pos[0] - c.pos[0], t.pos[1] - c.pos[1], t.pos[2] - c.pos[2]]);
+  const dd = -fwd[1];
+  const down = norm3([0 - fwd[0] * dd, -1 - fwd[1] * dd, 0 - fwd[2] * dd], [0, -1, 0]);
+  const at = (q: readonly number[], d: number, back: number): Vec3 => [q[0] + down[0] * d - fwd[0] * back, q[1] + down[1] * d - fwd[1] * back, q[2] + down[2] * d - fwd[2] * back];
+  const edge = p.edges.findIndex(([a, b]) => a === head[0] && b === head[1]);
+  return {
+    a: at(c.pos, JAW_DROP[0] * c.radius, 0.05 * c.radius),
+    b: at(t.pos, JAW_DROP[1] * t.radius, 0.25 * t.radius),
+    ra: JAW_GIRTH[0] * c.radius,
+    rb: JAW_GIRTH[1] * t.radius,
+    i0: head[0],
+    i1: head[head.length - 1],
+    edge: edge < 0 ? 0 : edge,
+  };
+}
+
 /** Catmull–Rom through p1 → p2 (p0 and p3 the neighbours), at t in [0, 1]. */
 function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): number {
   const t2 = t * t;
@@ -229,6 +264,12 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
         A = B;
       }
     }
+    // A furred skull with a STOP (a braincase with a muzzle hung on its front: see grow's headStop)
+    // has a JAW under both: from the angle of the jaw, below the braincase, to the chin under the nose.
+    // (Without it the head was a ball with a tube half its girth plugged into its front — a sausage in
+    // an orange — its lower outline stepping up sharply where the muzzle began.)
+    const jaw = jawOf(p);
+    if (jaw) cone(jaw.edge, jaw.i0, jaw.i1, jaw.a, jaw.b, jaw.ra, jaw.rb, null, [1, 1], [1, 1]);
   } else {
     for (let i = 0; i < p.nodes.length; i++) {
       const n = p.nodes[i];

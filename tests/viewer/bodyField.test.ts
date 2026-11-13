@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { grow, type Phenotype } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { buildFieldPrims, CHAIN_CUTS, type FieldPrims } from '../../src/viewer/bodyField';
+import { buildFieldPrims, CHAIN_CUTS, type FieldPrims, jawOf, fieldAt } from '../../src/viewer/bodyField';
 
 const body = (id: string, seed: number) => grow(genomeOfMorphotype(seed, id));
 
@@ -95,5 +95,26 @@ describe('body field chains', () => {
       expect(f.meanR, id).toBeCloseTo(sum / seen.size, 9);
       expect(f.nc, id).toBeGreaterThanOrEqual(seen.size);
     }
+  });
+
+  it("a dog's and a bear's skull has a jaw: the skin runs on under the muzzle from the cheek to the chin", () => {
+    // (a braincase with a muzzle half its girth plugged into its front was a sausage in an orange, its
+    // lower outline stepping up where the muzzle began)
+    for (const id of ['canid', 'ursid']) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const jaw = jawOf(p);
+        expect(jaw, `${id} #${seed}`).not.toBeNull();
+        const prims = buildFieldPrims(p, 'hybrid');
+        // half-way along the muzzle, below its line by its own girth and a sixth more, is skin
+        const head = p.nodes.filter((n) => n.kind === 'spine' && n.segment === p.nodes[jaw!.i0].segment);
+        const m = head[1], t = head[head.length - 1];
+        const mid = [0, 1, 2].map((k) => (m.pos[k] + t.pos[k]) / 2);
+        const r = (m.radius + t.radius) / 2;
+        expect(fieldAt(prims, mid[0], mid[1] - 1.15 * r, mid[2]), `${id} #${seed}`).toBeLessThan(0);
+      }
+    }
+    // a cat's short face has no muzzle hung on it, and wears none
+    for (let seed = 1; seed <= 6; seed++) expect(jawOf(grow(genomeOfMorphotype(seed, 'felid'))), `felid #${seed}`).toBeNull();
   });
 });
