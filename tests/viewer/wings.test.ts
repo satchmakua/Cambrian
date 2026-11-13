@@ -77,6 +77,18 @@ describe('wings (shoulder-built, body frame)', () => {
     }
   });
 
+  it("a folded membrane wing hangs from the wrist like a cape, on slim bones — not a little fan on a peg", () => {
+    // (fingers run back nearly level stood the fold on the back as a dorsal sail the size of the head,
+    // and a humerus a thirtieth of the span thick stood out of the shoulder like a peg)
+    const S = 2;
+    const w = buildFoldedMembraneWing(1, S);
+    const [hum, fore, ...fingers] = w.bones;
+    const lowest = Math.min(...fingers.map((f) => f.b.y));
+    expect(w.wrist!.y - lowest).toBeGreaterThan(0.33 * S);
+    expect(hum.r0).toBeLessThan(0.02 * S);
+    expect(fore.r0).toBeLessThan(hum.r0);
+  });
+
   it('a folded feathered wing lies back along the flank, vertex-coloured', () => {
     const w = buildFeatheredWing(1, 2, new THREE.Color(0.6, 0.5, 0.3), new THREE.Color(0.1, 0.3, 0.8));
     expect(finite(w.surface)).toBe(true);
