@@ -475,8 +475,12 @@ export function JawedMouth({
   const sealed = built?.sealed ?? false;
   const shut = muzzled || sealed;
   const mats = useMemo(() => {
-    // a mammal's lip line and a reptile's seam are a dark crease; a fish's rim a darker tone of its hide
-    const lip = shut ? new THREE.Color(dark).multiplyScalar(0.55) : new THREE.Color(dark).lerp(new THREE.Color(LIP), 0.2).multiplyScalar(0.85);
+    // a mammal's lip line and a reptile's seam are a dark crease; a fish's rim a darker tone of its hide.
+    // (A shut mouth's crease is a deep shade of the creature's own hide: near-black — its dark tone at
+    // half strength — it was a line drawn in ink under the eyes, a smiley face from the front.)
+    const lip = shut
+      ? new THREE.Color(coat).multiplyScalar(0.42).lerp(new THREE.Color(dark).multiplyScalar(0.55), 0.45)
+      : new THREE.Color(dark).lerp(new THREE.Color(LIP), 0.2).multiplyScalar(0.85);
     return {
       lip: new THREE.MeshStandardMaterial({ color: lip, roughness: 0.52 }),
       // the jaw masses wear the body's own dark skin tone so they read as part of the head — a
