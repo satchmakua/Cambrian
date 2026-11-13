@@ -116,9 +116,29 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   - *A theropod with one magenta arm and one mint*: its body is mirrored exactly, but its pattern was
     sampled at the raw position, so the noise under each arm differed. Markings now mirror across the
     midline (and the normal an eye-spot is laid on with them).
+- **A ninth look: the same seed and the same brief, on the code with the fixes above** (a comparable
+  read). Mean 3.26, from 3.19: up on the mouse, the hawk, the spider, the tortoise, the octopus, the
+  sea star, the chimera and the dragon; down on the cat, the deer, the snake, the frog, the slug and the
+  urchin (a reader's noise is half a point either way). It caught two regressions of this round, both
+  fixed:
+  - *The urchin a pear on its narrow end, a red band round it like a grin*: its new round mouth's
+    funnel carved its bottom away. It is a seam again, drawn once, straight down, out of sight.
+  - *Grainy dark stubble on muzzles* (cat, dog, mouse, deer, bear): the outline's fur fringe brought
+    back the strands' dark roots the distance fade had toned out. The tone follows the fade again;
+    only whether a strand is drawn follows the outline.
+  …and, from its list:
+  - *The crystal still a patchwork*: the patches were the clear coat, each face mirroring the white sky
+    or the dark ground. A cut skin takes a satin polish now, in bigger faces (0.75 of the girth across),
+    its edges lit more softly.
+  - *A snake's tail hooked up*: a legless body has no feet, so the step that lays a tail on the floor
+    never ran; it does now for a body that lies on its belly, and each link settles as the tail thins.
+  - *Stockings, still*: bare shanks take four tenths of the coat's own colour, darkened.
+  - *The far eye out of the outline, marble eyes*: a face's eyes sit a little deeper (0.52 of their
+    radius under the skin, was 0.42).
 - **Still to do from it:** the weasel end on (its shoulder joints stand out past its flanks); ears
   that are spikes edge-on (the far ear, facing forward-out, from a three-quarter view: thicker ears
-  didn't help — it is the angle).
+  didn't help — it is the angle); a dog's muzzle still creased where it meets the skull; the frog a
+  bun on its chin; the deer's horns rising out of its ears.
 
 ## M93 — What the seventh look left: tails, claws, paws and eyes · 2026-11-13
 
