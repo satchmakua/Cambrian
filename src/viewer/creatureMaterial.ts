@@ -62,7 +62,9 @@ const PRESET: Record<CoveringType, Preset> = {
   scales: { rough: 0.48, metal: 0.04, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 0.3, coatRough: 0.3, irid: 0.5 },
   fur: { rough: 0.9, metal: 0.0, bump: 1.0, velvet: 1.0, velvetRough: 0.45, coat: 0, coatRough: 0.5, irid: 0 },
   feathers: { rough: 0.72, metal: 0.0, bump: 1.0, velvet: 0.55, velvetRough: 0.35, coat: 0, coatRough: 0.5, irid: 0.35 },
-  chitin: { rough: 0.38, metal: 0.1, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 0.7, coatRough: 0.12, irid: 0.85 },
+  // (a lacquered shell, a satin one: under a near-mirror coat with an oil-slick shimmer, a crab, a beetle
+  // and a spider were vinyl toys)
+  chitin: { rough: 0.45, metal: 0.06, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 0.45, coatRough: 0.24, irid: 0.5 },
   slime: { rough: 0.3, metal: 0.0, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 1.0, coatRough: 0.04, irid: 0.25 },
   plates: { rough: 0.58, metal: 0.02, bump: 1.0, velvet: 0.0, velvetRough: 0.5, coat: 0.15, coatRough: 0.35, irid: 0.2 },
   // a cut stone: glassy under a hard polish, a thin-film shimmer on its faces
