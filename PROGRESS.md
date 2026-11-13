@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -54,6 +54,40 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M91 — A sixth look: grins, a cat's face, a dragon's folded wing · 2026-11-13
+
+- **A sixth look, by another's eye.** All 31 plans at a fresh seed (13), cropped to the creature
+  alone (no classifier labels in frame), went to an independent reviewer judging only the pictures.
+  Most plans now read as their animal (4 or 5 of 5); five scored 3: the cat (a striped dog), the
+  shark (a smiling dolphin), the crab (a spider in three-quarter view), the horror and the chimera.
+  It also found faults across plans: cartoon smiles on many faces, hoop stripes, slipper feet.
+- **My own cut, torn.** The crystal hide's facets (M90) showed dark slivers and gaps. Three causes,
+  each found by elimination with before/after renders and a debug channel: triangles turned over
+  (the undo test compared a triangle with its corners' new normals, and a bevel could pass while it
+  faced into the body: 40–48 a skin; it now compares with the triangle's own original face, and none
+  turns), notches in thin legs (a face is wider than a shin; the legs are left uncut), and black
+  flecks round the mouth (the lip seam and the sockets were seated on the uncut surface; the skin
+  round the eyes and the mouth is left uncut). The mesh was watertight all along: the specks that
+  survived a colour override were other meshes standing out of a sunken skin.
+- **Closed mouths stop grinning.** The lip line was swept across the face about the mouth's own up,
+  and a mouth aims down onto the face, so that up leans forward: the line was a circle on a tilted
+  plane, and from in front its corners rose above its middle by up to two-thirds of the mouth's size
+  (a shark's). It now sweeps about the head's own vertical, and the worst lift across every plan falls
+  to 0.12. A seam's corners now fall only a little; a muzzle's lip line falls well back to its corners,
+  as a dog's or an ape's does, since a level line wrapped round a muzzle reads as a grin from above.
+- **A cat's face.** The cat wore a dog's: a big black nose, round brown eyes, and a pale hood that
+  stopped dead at the neck. It now looks out of slit eyes (a slit eye in fur takes a cat's gold, amber,
+  green or pale blue, not a reptile's russet); its nose pad scales with how far the muzzle reaches
+  ahead of the braincase (a cat's about 1.6 radii, a dog's 2.4) and is rose two times in three on a
+  short muzzle; and the plain-head mask (M89) now covers bands only, since a tiger's or a tabby's
+  stripes run on over its face.
+- **A dragon's folded wing.** The resting fold (M89) was a fan the size of the head standing on the
+  back, its arm a peg. It is now built at a third more than the open span, its fingers raked back and
+  down from the wrist like a cape, its bones slim: a great half-raised sail over the back, the resting
+  pose most dragons are drawn in. (Draped against the flank instead, it read as a pattern on the skin.)
+- **Check the check.** A "fails on the old code" check that stashed an already-committed file stashed
+  nothing and ran the new code twice. The old file is now taken from the commit before, not the stash.
 
 ## M90 — Cut stone, a mouth of flesh, and hops that land · 2026-11-13
 

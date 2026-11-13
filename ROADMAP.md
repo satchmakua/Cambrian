@@ -805,7 +805,18 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   **Tests:** `tests/viewer/facets.test.ts`, `tests/viewer/mouths/ring.test.ts › a sucker's throat`,
   `tests/engine/landing.test.ts`.
 
+- [x] **M91 — A sixth look: grins, a cat's face, a dragon's folded wing.** From an independent review at
+  seed 13: the crystal cut no longer tears (no turned faces; legs and face uncut), closed mouths no
+  longer grin (the lip line sweeps about the head's vertical), the cat has a cat's face (slit eyes, a
+  small rose nose, stripes over the brow), and a dragon's folded wing is a great sail on slim bones.
+  **Tests:** `tests/viewer/facets.test.ts`, `tests/viewer/mouthLine.test.ts › a closed mouth doesn't
+  grin`, `tests/engine/plans/felid.test.ts`, `tests/viewer/wings.test.ts › hangs from the wrist`.
+
 ### Next up (unchecked — pick from here)
+
+- [ ] **What the sixth look left.** The shark from the front still a smiling dolphin's beak; the crab's
+  walking legs arch like a spider's; the horror's maw rim reads as torn; a songbird's head sits on its
+  neck like a helmet; the bear's muzzle a hippo's; a hawk's tail a twig; hoop stripes and slipper feet.
 
 - [ ] **Hops that land in more than one basin.** A flipped cat, songbird or hawk lands as an urchin
   nearly every time (the coarse measure puts every radial sprawl nearest it). Spread them over the
