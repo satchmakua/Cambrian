@@ -23,4 +23,25 @@ describe('ratite', () => {
       if (tail.length) expect(tail[tail.length - 1].pos[1], `#${seed} drooping`).toBeLessThan(tail[0].pos[1] + 0.02);
     }
   });
+
+  it('stands with its feet under its hips — and so do a songbird and a hawk', () => {
+    // (legs bent toward each other at every joint, an emu stood knock-kneed on one crossed foot: its
+    // feet came down at an eighth of its hips' spread)
+    for (const id of ['ratite', 'bird', 'raptor']) {
+      for (let seed = 1; seed <= 8; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const parent = new Int32Array(p.nodes.length).fill(-1);
+        for (const [a, b] of p.edges) parent[b] = a;
+        const feet = p.nodes.map((n, i) => ({ n, i })).filter(({ n }) => n.kind === 'terminal' && n.part?.kind === 'leg');
+        expect(feet.length, `${id} #${seed}`).toBe(2);
+        for (const { n, i } of feet) {
+          let j = i;
+          while (parent[j] >= 0 && p.nodes[parent[j]].part?.kind === 'leg') j = parent[j];
+          const hip = p.nodes[j];
+          const ratio = (n.pos[0] * Math.sign(hip.pos[0])) / Math.abs(hip.pos[0]);
+          expect(ratio, `${id} #${seed}`).toBeGreaterThan(0.9);
+        }
+      }
+    }
+  });
 });

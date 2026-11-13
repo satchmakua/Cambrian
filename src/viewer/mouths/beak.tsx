@@ -19,7 +19,7 @@ import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import type { Phenotype } from '../../engine/grow';
 import type { Vec3 } from '../../engine/genome';
-import { buildFieldPrims, norm3, projectToSurface, qRotateV, type Carve } from '../bodyField';
+import { buildFieldPrims, fieldAtCarved, norm3, projectToSurface, qRotateV, type Carve } from '../bodyField';
 import type { MeshFeature } from '../meshData';
 import { billColor } from '../keratin';
 import { buildMouthRing, hash01, mouthSpec, type MouthSample, type MouthSpec, type SkinSurface } from '../mouthLine';
@@ -39,7 +39,8 @@ export interface BeakBuild {
   lowerPath: Vec3[];
   upperLen: number; // forward run along the bill axis (world units)
   lowerLen: number;
-  hook: number; // tip pull-down (world units) — 0.25r..0.45r
+  hook: number; // tip pull-down (world units) — 0.25r..0.6r
+  hooked: boolean; // a stout, hooked bill: two-toned, yellow at the root to slate at the tip
   /** the bill's own frame: `dir` runs out along the beak (mostly the head's forward, a little down
    *  toward the mouth aim), `up` is its top side */
   dir: Vec3;
@@ -78,19 +79,24 @@ export function buildBeak(
   ringR /= ringW.length;
 
   // style position inside the beak band [0.25, 0.375): high-band beaks run longer and slimmer;
-  // the raptor draw deepens the hook. All bounds keep the tip inside the 1.5r protrusion budget.
+  // the raptor draw deepens the hook. All bounds keep the tip inside the 1.7r protrusion budget.
   const style = spec.node.part?.style ?? 0.3;
   const sPos = Math.min(1, Math.max(0, (style - 0.25) / 0.125));
   // a turtle's beak is a short, blunt horny sheath over the jaws, not a bird's bill (run out to a
   // bird's length it hung off the chin like a thorn; at half the mouth's size it was sunk in the
   // snout and the turtle had no mouth at all)
   const shelled = phenotype.nodes.some((n) => n.terminal === 'carapace');
-  const upperLen = r * (shelled ? 0.8 + 0.15 * sPos : 1.15 + 0.4 * sPos + 0.12 * (hash01(seed, idx + 13) - 0.5));
+  const upperLen = r * (shelled ? 0.8 + 0.15 * sPos : 1.05 + 0.5 * sPos + 0.12 * (hash01(seed, idx + 13) - 0.5));
   const lowerLen = upperLen * 0.75;
-  // the hook goes with the build: a short stout bill is a hawk's or a parrot's, deeply hooked; a long
-  // slim one a dove's or a wader's, near straight. (It went the other way, plus a coin toss — so a
-  // bird of prey was as likely to wear a pigeon's bill as its own, and the two plans looked alike.)
-  const hook = r * (shelled ? 0.24 : 0.45 - 0.2 * sPos);
+  // the hook goes with the build: a short stout bill is a hawk's or a parrot's, curving down along its
+  // whole culmen into a deep hook that overhangs the lower mandible; a long slim one a dove's or a
+  // wader's, near straight, dipping only at its tip. (It went the other way, plus a coin toss — so a
+  // bird of prey was as likely to wear a pigeon's bill as its own; and hooked only at the very tip, a
+  // hawk's bill was still a pale candy-corn wedge under its eyes.)
+  const hook = r * (shelled ? 0.24 : 0.6 - 0.35 * sPos);
+  const hookCurve = shelled ? 2.7 : 1.6 + 1.1 * sPos;
+  // …and a stout bill is two-toned: yellow at its root (where a hawk's cere is), darkening to the tip
+  const hooked = !shelled && sPos < HOOKED_BILL;
   const slim = 1 - 0.22 * sPos + 0.06 * (hash01(seed, idx + 47) - 0.5);
   // a bill is broad at the root — it spans the front of the face — and tapers to the tip (thin
   // cones from a narrow root hung below the face like a walrus's tusks)
@@ -115,7 +121,7 @@ export function buildBeak(
   const baseL: Vec3 = [c0.p[0] - bup[0] * (0.2 * r - lift) - dir[0] * back * 0.9, c0.p[1] - bup[1] * (0.2 * r - lift) - dir[1] * back * 0.9, c0.p[2] - bup[2] * (0.2 * r - lift) - dir[2] * back * 0.9];
   void cu;
   void cl;
-  const upperPathW = loftPath(baseU, dir, upperLen, bup, (u) => hook * Math.pow(u, 2.7));
+  const upperPathW = loftPath(baseU, dir, upperLen, bup, (u) => hook * Math.pow(u, hookCurve));
   // the lower mandible rests closed under the upper (a hair of gape, so the bill reads as two parts)
   const phi = 0.07;
   const dirL = norm3([
@@ -148,6 +154,30 @@ export function buildBeak(
     lowerPath.map((p) => ({ p, n: flatN })),
     { radius: (u) => Math.max(r * 0.025, upperR0 * 0.72 * Math.pow(1 - u, 1.05)), flatten: shelled ? 0.42 : 0.3, radialSegments: 10 },
   );
+  // the buried root stays buried: where a ring's spine point is still inside the head, any of its
+  // vertices that poke out are drawn back under the skin. (A tall blade-bill rooted up the face stood
+  // its root's top edge out above a sloping brow — a plate fixed upright on the forehead.)
+  sinkRoot(upper, upperPathW, o, f, carves, 10, r);
+  sinkRoot(lower, lowerPathW, o, f, carves, 10, r);
+  if (hooked) {
+    // painted by how far along the bill a vertex lies: a band of bare yellow skin where the bill leaves
+    // the face (a hawk's cere), then blue-grey horn darkening to the hook. (Painted from the bill's
+    // root, the yellow lay buried in the head and the visible bill was all slate, lost against brown.)
+    const out = emergence(f, carves, upperPathW);
+    const cere = Math.min(0.7, out + 0.1);
+    const pos = upper.getAttribute('position');
+    const col = new Float32Array(pos.count * 3);
+    const root = upperPath[0];
+    const c = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const u = ((pos.getX(i) - root[0]) * dir[0] + (pos.getY(i) - root[1]) * dir[1] + (pos.getZ(i) - root[2]) * dir[2]) / upperLen;
+      c.copy(CERE).lerp(BILL_GREY, smooth(cere - 0.02, cere + 0.06, u)).lerp(BILL_TIP, smooth(Math.max(cere + 0.12, 0.6), 1, u));
+      col[i * 3] = c.r;
+      col[i * 3 + 1] = c.g;
+      col[i * 3 + 2] = c.b;
+    }
+    upper.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  }
 
   // the interior wedge: rim near the skin, throat point sunk — into the real carve when recessed,
   // a hair proud (+0.012r..0.015r) otherwise so the dark backdrop never hides inside the body
@@ -157,7 +187,7 @@ export function buildBeak(
   const centerInset = recessed ? -0.65 * r : 0.012 * r;
   const interior = interiorWedge(seat.p, seat.n, spec.right, spec.up, w, h, rimInset, centerInset);
 
-  return { spec, r, collar, upper, lower, interior, ring, seat, upperPath, lowerPath, upperLen, lowerLen, hook, dir, up: bup };
+  return { spec, r, collar, upper, lower, interior, ring, seat, upperPath, lowerPath, upperLen, lowerLen, hook, hooked, dir, up: bup };
 }
 
 /** Loft spine: `len` forward along `dir` from `base`, pulled down along `up` by `drop(u)`. */
@@ -234,6 +264,9 @@ export function BeakMouth({
     return {
       upper: new THREE.MeshStandardMaterial({ color: horn, roughness: 0.38 }),
       lower: new THREE.MeshStandardMaterial({ color: hornLo, roughness: 0.42 }),
+      // (a hooked bill's colour is painted along it; its lower mandible is the bill's blue-grey)
+      upperPainted: new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.34 }),
+      lowerSlate: new THREE.MeshStandardMaterial({ color: 0x5f6776, roughness: 0.4 }),
       cere: new THREE.MeshStandardMaterial({ color: cere, roughness: 0.62 }),
       interior: new THREE.MeshStandardMaterial({ color: INTERIOR, roughness: 0.3, side: THREE.DoubleSide }),
     };
@@ -260,10 +293,65 @@ export function BeakMouth({
       {/* (the cere ring is built — it anchors the socket — but no longer drawn: around a bill's broad
           root it read as a hoop) */}
       <mesh geometry={built.interior} material={mats.interior} />
-      <mesh geometry={built.upper} material={mats.upper} castShadow />
-      <mesh geometry={built.lower} material={mats.lower} castShadow />
+      <mesh geometry={built.upper} material={built.hooked ? mats.upperPainted : mats.upper} castShadow />
+      <mesh geometry={built.lower} material={built.hooked ? mats.lowerSlate : mats.lower} castShadow />
     </group>
   );
+}
+
+/** a bill this low in the beak band (its style position) is a stout, hooked one: a hawk's, a parrot's */
+const HOOKED_BILL = 0.4;
+const CERE = new THREE.Color(0xe8b830);
+const BILL_GREY = new THREE.Color(0x7a8494);
+const BILL_TIP = new THREE.Color(0x2e3137);
+
+function smooth(a: number, b: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Draw back under the skin every vertex of a swept tube whose ring's spine point is inside the body
+ * (`spine` in world space, the geometry node-relative to `o`), by bisection toward that spine point.
+ */
+function sinkRoot(geo: THREE.BufferGeometry, spine: readonly Vec3[], o: Vec3, f: ReturnType<typeof buildFieldPrims>, carves: readonly Carve[], radial: number, r: number): void {
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+  const below = -0.02 * r;
+  let moved = false;
+  for (let i = 0; i < spine.length; i++) {
+    const s = spine[i];
+    if (fieldAtCarved(f, carves, s[0], s[1], s[2]) > below) break; // the spine is out: the rest is bill
+    for (let j = 0; j < radial; j++) {
+      const k = i * radial + j;
+      const v: Vec3 = [pos.getX(k) + o[0], pos.getY(k) + o[1], pos.getZ(k) + o[2]];
+      if (fieldAtCarved(f, carves, v[0], v[1], v[2]) <= below) continue;
+      let lo = 0, hi = 1; // lo: inside (the spine point), hi: outside (the vertex)
+      for (let it = 0; it < 12; it++) {
+        const t = (lo + hi) / 2;
+        const d = fieldAtCarved(f, carves, s[0] + (v[0] - s[0]) * t, s[1] + (v[1] - s[1]) * t, s[2] + (v[2] - s[2]) * t);
+        if (d <= below) lo = t;
+        else hi = t;
+      }
+      pos.setXYZ(k, s[0] + (v[0] - s[0]) * lo - o[0], s[1] + (v[1] - s[1]) * lo - o[1], s[2] + (v[2] - s[2]) * lo - o[2]);
+      moved = true;
+    }
+  }
+  if (moved) {
+    pos.needsUpdate = true;
+    geo.computeVertexNormals();
+  }
+}
+
+/** how far along a spine (0 at its root, 1 at its tip) it leaves the skin */
+function emergence(f: ReturnType<typeof buildFieldPrims>, carves: readonly Carve[], spine: readonly Vec3[]): number {
+  let prev = fieldAtCarved(f, carves, spine[0][0], spine[0][1], spine[0][2]);
+  if (prev > 0) return 0;
+  for (let i = 1; i < spine.length; i++) {
+    const d = fieldAtCarved(f, carves, spine[i][0], spine[i][1], spine[i][2]);
+    if (d > 0) return (i - 1 + prev / (prev - d)) / (spine.length - 1);
+    prev = d;
+  }
+  return 1;
 }
 
 function meanP(samples: readonly MouthSample[]): Vec3 {
