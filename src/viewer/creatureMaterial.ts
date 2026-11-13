@@ -268,7 +268,14 @@ export function makeCreatureMaterial(
           // colour (a flank used to be 58% belly — fixed grey — and 42% darkened back, never the coat)
           vec3 skin = mix(uMain, uBelly, 1.0 - smoothstep(0.1, 0.4, up));
           skin = mix(skin, uBack, smoothstep(0.64, 0.96, up));
-          float pat = patternField(bp, uPType, uPScale);
+          // a body's markings mirror across its midline: sampled where they lay, the noise under them
+          // differed left and right, and one arm wore a band the other didn't (a magenta arm and a mint
+          // one). (The skin's normal is mirrored with it: an eye-spot is laid on it.)
+          float sx = vBodyPos.x < 0.0 ? -1.0 : 1.0;
+          vec3 bpP = vec3(abs(vBodyPos.x), vBodyPos.y, vBodyPos.z) + uOff;
+          gNb.x *= sx;
+          float pat = patternField(bpP, uPType, uPScale);
+          gNb.x *= sx;
           // stripes and bands run down from the back, stripes thinning as they go, and give out under the
           // belly — a tiger's, a lizard's crossbands, a fish's bars. (Wrapped right round the trunk at one
           // width, they were hoops on a toy.) A band keeps half its tone on the belly.

@@ -380,7 +380,7 @@ describe('creature material shader injection', () => {
     expect(figure(0.32, 0.42)).toBe(0);
     for (let dn = 0.22; dn <= 0.42; dn += 0.02) expect(figure(0.32, dn) / Math.max(figure(0, dn), 1e-9)).toBeLessThanOrEqual(0.9 + 1e-9);
     // (the normal the figure is laid on is set before the pattern is read)
-    expect(f.indexOf('gNb = normalize(vBNrm);')).toBeLessThan(f.indexOf('float pat = patternField(bp, uPType, uPScale);'));
+    expect(f.indexOf('gNb = normalize(vBNrm);')).toBeLessThan(f.indexOf('float pat = patternField(bpP, uPType, uPScale);'));
     expect(f.indexOf('gNb = normalize(vBNrm);')).toBeGreaterThan(0);
   });
 
@@ -418,5 +418,16 @@ describe('creature material shader injection', () => {
       expect(belly.l).toBeGreaterThan(main.l);
       expect(belly.s).toBeGreaterThan(main.s * 0.5);
     }
+  });
+
+  it("a body's markings mirror across its midline, and so does the normal an eye-spot is laid on", () => {
+    // (sampled where they lay, the noise under a theropod's two arms differed: one magenta, one mint)
+    const f = compileShaderStrings().fragmentShader;
+    expect(f).toContain('vec3 bpP = vec3(abs(vBodyPos.x), vBodyPos.y, vBodyPos.z) + uOff;');
+    const i = f.indexOf('float pat = patternField(bpP, uPType, uPScale);');
+    expect(i).toBeGreaterThan(0);
+    // the normal is mirrored just before the pattern reads it, and restored just after
+    expect(f.lastIndexOf('gNb.x *= sx;', i)).toBeGreaterThan(f.indexOf('float sx = vBodyPos.x < 0.0 ? -1.0 : 1.0;'));
+    expect(f.indexOf('gNb.x *= sx;', i)).toBeGreaterThan(i);
   });
 });
