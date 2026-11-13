@@ -942,6 +942,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
     return pal[Math.floor(unitHash(seed, 0x511) * pal.length)];
   }, [seed, furred]);
   const sharkEye = fishEye && phenotype?.genomeRef.covering.type === 'skin';
+  const radialEye = phenotype?.genomeRef.symmetry === 'radial';
   const fishIris = useMemo(() => (sharkEye ? SHARK_IRIS : FISH_IRIS)[Math.floor(unitHash(seed, 0xf15) * (sharkEye ? SHARK_IRIS : FISH_IRIS).length)], [seed, sharkEye]);
   const seat = useMemo(() => (vertebrate && onFace && phenotype ? eyeSeat(phenotype, f.idx, f.quat, r) : { quat: f.quat, sink: 0, centre: null }), [vertebrate, onFace, phenotype, f.idx, f.quat, r]);
   const sink = seat.sink;
@@ -1075,16 +1076,27 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
         // On a radial body the slit lies flat and short: an octopus's pupil is a rounded bar across the
         // middle of its eye (a sliver from rim to rim, laid flat, was a pair of sunglasses; an oval half
         // as tall as it was wide, on a big yellow eye, was a gaping mouth).
+        // (An octopus's is not one metallic gold dome — a pair of goggles — but a dark wet eyeball with a
+        // fibred iris, darkening to its rim, round a bolder bar.)
         <>
           <mesh position={[0, 0, -r * 0.02]}>
             <sphereGeometry args={[r * 0.9, 18, 14]} />
-            <meshStandardMaterial color={slitIris} roughness={0.28} metalness={0.22} />
+            {radialEye ? (
+              <meshStandardMaterial color={ballColor} roughness={0.12} />
+            ) : (
+              <meshStandardMaterial color={slitIris} roughness={0.28} metalness={0.22} />
+            )}
           </mesh>
+          {radialEye && (
+            <mesh position={[0, 0, -r * 0.02]} scale={r * 0.9 * 1.008} geometry={capGeometry(0.86, true)}>
+              <meshStandardMaterial color={slitIris} vertexColors roughness={0.42} polygonOffset polygonOffsetFactor={-1} />
+            </mesh>
+          )}
           <mesh
             position={[0, 0, -r * 0.02]}
-            rotation-z={phenotype?.genomeRef.symmetry === 'radial' ? Math.PI / 2 : 0}
+            rotation-z={radialEye ? Math.PI / 2 : 0}
             scale={r * 0.9 * 1.014}
-            geometry={phenotype?.genomeRef.symmetry === 'radial' ? capGeometry(0.4, false, 0.2) : capGeometry(0.66, false, 0.16)}
+            geometry={radialEye ? capGeometry(0.42, false, 0.3) : capGeometry(0.66, false, 0.16)}
           >
             <meshStandardMaterial color={0x040406} roughness={0.06} polygonOffset polygonOffsetFactor={-2} />
           </mesh>
