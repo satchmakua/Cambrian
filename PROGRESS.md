@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -54,6 +54,34 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M88 — A fourth look, and breeding that stays coherent · 2026-11-13
+
+- **A fourth look by eye.** All 31 plans rendered at a fresh seed (5) read as their animals. What
+  stood out was colour, not shape. Every animal's iris is hashed from its seed alone, and the palette
+  had no brown, the commonest mammal eye. An animal's eye (round or beady) now takes a natural colour:
+  dark brown above all, then amber, hazel, gold, a cat's green, a rare pale blue. An alien's glowing
+  eye keeps the striking accents. A familiar frog, lizard or snake took any marking hue a third to
+  half of the time, plus a complementary flash: a green frog with purple spots, a yellow snake banded
+  in violet. Its markings are now mostly its own hue, darker or paler, or umber; birds keep the most
+  colour. Dragons always have wings, and a mouth on a headless trunk (a slug's) is capped at a mouth's
+  width, where before its seam ran across the whole front of the animal.
+- **Measure the litter, not one child.** The breeder's wilder children read as jumbles. Over five
+  generations down the exploratory and saltation lines of six familiar founders (1,026 offspring),
+  52% carried a part whose tip didn't fit its kind (a horn ending in a hoof, a leg in an eye) or a
+  head's part grown off the head (an ear on the rump). Each kind now has its tips, taken from the plan
+  library; a part that changes kind is re-tipped; a fresh ear, horn, crest, whisker or feeler grows on
+  the head, near its crown: 3.6%.
+- **A protection can be a ratchet.** The face is never removed, so a lineage keeps its face; but a
+  fresh maw or eye-stalk counted as the face, and a mouth sprouted on a flank stayed for good. 17% of
+  offspring had a second face. Mutation no longer creates face parts or duplicates the head (grow
+  guarantees the face itself): 0.
+- **Step a scale gene by a share of itself.** Point mutation stepped every gene by a share of its
+  whole range: a size by about ±0.28 bu (half a fox's trunk), a link count by about ±3. A fox's
+  exploratory child was a worm curled up on a sliver of a trunk. Sizes, lengths and thicknesses now
+  step log-normally, and link counts half as freely (four links is a cat's leg, six an insect's): a
+  dimension doubled or halved in 0% of conservative children (from 18%) and 11% of exploratory ones
+  (from 61%). The saltation children, the basin hops, still hop.
 
 ## M87 — Octopuses, webbed feet, bears · 2026-11-13
 

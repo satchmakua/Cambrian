@@ -781,10 +781,17 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   **Tests:** `tests/engine/plans/cephalopod.test.ts`, `tests/viewer/feet.test.ts › webbed`,
   `tests/engine/plans/ursid.test.ts › hump`.
 
+- [x] **M88 — A fourth look, and breeding that stays coherent.** Natural eyes (browns first) and
+  natural markings on familiar animals, dragons with wings, a slug's small mouth; bred parts whose tips
+  fit their kind, head parts on the head, no mutation-born second faces, and proportions that step by a
+  share of themselves. **Tests:** `tests/viewer/iris.test.ts`, `tests/engine/random.test.ts › a
+  familiar frog`, `tests/engine/mutate.test.ts › bred offspring stay coherent`.
+
 ### Next up (unchecked — pick from here)
 
-- [ ] **A fourth look by eye.** Render all 31 plans again and find what stands out now; what is known:
-  a mouth line on a closed muzzle.
+- [ ] **Saltation that lands.** A basin hop (a litter's saltation children) still often lands between
+  plans: a bird swollen to a sausage, a cat on a crab's legs. Hop toward the nearest attractor's
+  proportions, not just its limb count.
 
 - [ ] **Richer world.** Drought years, burrows and nests, a second lake.
 - [ ] **A lineage film.** A wild species' body changes over the generations, as a strip of portraits.
