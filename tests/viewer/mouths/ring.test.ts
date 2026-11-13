@@ -195,6 +195,31 @@ describe('ring mouth (sucker · lamprey)', () => {
     expect(b.funnel.getAttribute('position').count).toBe(81); // 4 rings × 20 + throat apex
   });
 
+  it("a sucker's throat is flesh darkening inward, and its rasp a ring of knobs — not a drain's black hole and iron rim", () => {
+    // (a near-black, glossy funnel caught the light in facets like cut glass, and a smooth pale hoop
+    // ringed it: on the horror's crown it read as a drain grate)
+    const p = grow(defaultGenome());
+    const b = buildRing(p, forceRing(p, SUCKER), [], false)!;
+    const col = b.funnel.getAttribute('color');
+    expect(col).toBeTruthy();
+    const lum = (i: number) => 0.3 * col.getX(i) + 0.59 * col.getY(i) + 0.11 * col.getZ(i);
+    const rim = lum(0);
+    const throat = lum(col.count - 1);
+    expect(rim).toBeGreaterThan(throat * 3);
+    expect(col.getX(0), 'the rim is red flesh').toBeGreaterThan(col.getY(0) * 1.6);
+    // the rasp's section swells and thins round the ring: knobs
+    const pos = b.rasp!.getAttribute('position');
+    const ring = b.levels[1];
+    let lo = Infinity, hi = 0;
+    for (let i = 0; i < pos.count - 2; i++) {
+      let near = Infinity;
+      for (const s of ring) near = Math.min(near, Math.hypot(pos.getX(i) - s.p[0], pos.getY(i) - s.p[1], pos.getZ(i) - s.p[2]));
+      lo = Math.min(lo, near);
+      hi = Math.max(hi, near);
+    }
+    expect(hi / Math.max(lo, 1e-6)).toBeGreaterThan(1.8);
+  });
+
   it('lamprey: 28 ragged teeth in three shrinking rings, and no sucker accents', () => {
     const p = grow(defaultGenome());
     const idx = forceRing(p, LAMPREY);

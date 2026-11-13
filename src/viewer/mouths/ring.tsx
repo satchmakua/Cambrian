@@ -26,7 +26,7 @@ import type { MeshFeature } from '../meshData';
 import { buildMouthRing, hash01, mouthSpec, type MouthSample, type SkinSurface } from '../mouthLine';
 import { sweepTube, type SweepPoint } from '../sweep';
 import { fangGeometry, setToothInstances, toothRing, type ToothXform } from '../teeth';
-import { INTERIOR, KERATIN } from './palette';
+import { GUM, INTERIOR, KERATIN, TONGUE } from './palette';
 import { relRow } from './shared';
 
 export type RingVariant = 'sucker' | 'lamprey';
@@ -46,6 +46,8 @@ const LAMPREY_RINGS = [
 // pucker ridge ring indices — chosen in mirror pairs under i ↦ (n/2 − i) mod n (0↔10, 3↔7,
 // 13↔17), so a midline sucker stays bilaterally exact (M18) while the spacing stays organic
 const PUCKERS = [0, 3, 7, 10, 13, 17] as const;
+/** a sucker's rasp: how many keratin knobs ring it (odd, so the ring never reads as a machined part) */
+const RASP_KNOBS = 15;
 
 export interface RingBuild {
   variant: RingVariant;
@@ -152,9 +154,12 @@ export function buildRing(
   const ridges: THREE.BufferGeometry[] = [];
   let disc: RingBuild['disc'] = null;
   if (variant === 'sucker') {
+    // the rasp is a ring of little keratin knobs, not a hoop: a smooth pale torus round a black hole
+    // read as the iron rim of a drain. (Beads by a smooth bump on the radius — RASP_KNOBS of them, an
+    // odd count so it never reads machined; the ring is resampled finer so each knob is round.)
     rasp = sweepTube(
-      shell[1].map((s): SweepPoint => ({ p: s.p, n: s.n })),
-      { radius: () => r * 0.038, flatten: 0.7, radialSegments: 8, closed: true },
+      resampleClosed(shell[1], RASP_KNOBS * 4).map((s): SweepPoint => ({ p: s.p, n: s.n })),
+      { radius: (u) => r * (0.022 + 0.034 * Math.pow(Math.max(0, Math.cos(u * Math.PI * 2 * RASP_KNOBS)), 2)), flatten: 0.8, radialSegments: 8, closed: true },
     );
     for (const j of PUCKERS) {
       const pts: SweepPoint[] = [];
@@ -196,9 +201,12 @@ export function RingMouth({
     const pucker = new THREE.Color(dark).lerp(new THREE.Color(0x4a2026), 0.55);
     return {
       lip: new THREE.MeshStandardMaterial({ color: lip, roughness: 0.5 }),
-      funnel: new THREE.MeshStandardMaterial({ color: INTERIOR, roughness: 0.3, side: THREE.DoubleSide }),
+      // (painted along it: lip-flesh at the rim darkening to the throat — see funnelShell. Near-black and
+      // glossy all over, its facets caught the light like cut glass: a drain grate, not a mouth)
+      funnel: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, side: THREE.DoubleSide }),
       teeth: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42 }),
-      rasp: new THREE.MeshStandardMaterial({ color: KERATIN, roughness: 0.55 }),
+      // (horn dulled toward the lip's flesh: bright, the ring was a brass rim in the dark)
+      rasp: new THREE.MeshStandardMaterial({ color: new THREE.Color(KERATIN).lerp(lip, 0.35), roughness: 0.6 }),
       pucker: new THREE.MeshStandardMaterial({ color: pucker, roughness: 0.45 }),
       disc: new THREE.MeshStandardMaterial({ color: 0x0b0203, roughness: 0.25 }),
     };
@@ -256,10 +264,22 @@ function funnelShell(shell: readonly MouthSample[][], apex: Vec3): THREE.BufferG
   const K = shell.length;
   const n = shell[0].length;
   const positions: number[] = [];
+  const colors: number[] = [];
   const indices: number[] = [];
-  for (const ring of shell) for (const s of ring) positions.push(s.p[0], s.p[1], s.p[2]);
+  // wet flesh at the rim, darkening ring by ring to the near-black of the throat
+  const c = new THREE.Color();
+  const tone = (t: number): THREE.Color => c.copy(FUNNEL_RIM).lerp(GUM_C, Math.min(1, t * 1.6)).lerp(INTERIOR_C, Math.max(0, t * 1.6 - 0.6));
+  shell.forEach((ring, k) => {
+    tone(k / K);
+    for (const s of ring) {
+      positions.push(s.p[0], s.p[1], s.p[2]);
+      colors.push(c.r, c.g, c.b);
+    }
+  });
   const apexIdx = K * n;
   positions.push(apex[0], apex[1], apex[2]);
+  tone(1);
+  colors.push(c.r, c.g, c.b);
   for (let k = 0; k < K - 1; k++) {
     for (let i = 0; i < n; i++) {
       const i2 = (i + 1) % n;
@@ -272,7 +292,36 @@ function funnelShell(shell: readonly MouthSample[][], apex: Vec3): THREE.BufferG
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geo.setIndex(indices);
   geo.computeVertexNormals();
   return geo;
+}
+
+const FUNNEL_RIM = new THREE.Color(TONGUE);
+const GUM_C = new THREE.Color(GUM);
+const INTERIOR_C = new THREE.Color(INTERIOR);
+
+/** a closed ring of samples, resampled to `m` evenly along its length (position and normal lerped) */
+function resampleClosed(ring: readonly MouthSample[], m: number): MouthSample[] {
+  const n = ring.length;
+  const cum = [0];
+  for (let i = 0; i < n; i++) {
+    const a = ring[i].p, b = ring[(i + 1) % n].p;
+    cum.push(cum[i] + Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]));
+  }
+  const L = cum[n];
+  const out: MouthSample[] = [];
+  let j = 0;
+  for (let k = 0; k < m; k++) {
+    const d = (k / m) * L;
+    while (j < n - 1 && cum[j + 1] < d) j++;
+    const t = (d - cum[j]) / Math.max(1e-9, cum[j + 1] - cum[j]);
+    const a = ring[j], b = ring[(j + 1) % n];
+    const lerp = (x: Vec3, y: Vec3): Vec3 => [x[0] + (y[0] - x[0]) * t, x[1] + (y[1] - x[1]) * t, x[2] + (y[2] - x[2]) * t];
+    const nn = lerp(a.n, b.n);
+    const l = Math.hypot(nn[0], nn[1], nn[2]) || 1;
+    out.push({ ...a, p: lerp(a.p, b.p), n: [nn[0] / l, nn[1] / l, nn[2] / l] });
+  }
+  return out;
 }
