@@ -265,6 +265,13 @@ export function makeCreatureMaterial(
           vec3 skin = mix(uMain, uBelly, 1.0 - smoothstep(0.1, 0.4, up));
           skin = mix(skin, uBack, smoothstep(0.64, 0.96, up));
           float pat = patternField(bp, uPType, uPScale);
+          // stripes and bands run down from the back, stripes thinning as they go, and give out under the
+          // belly — a tiger's, a lizard's crossbands, a fish's bars. (Wrapped right round the trunk at one
+          // width, they were hoops on a toy.) A band keeps half its tone on the belly.
+          if (uPType == 1 || uPType == 2) {
+            float dorsal = smoothstep(-0.6, 0.05, gNb.y);
+            pat = uPType == 1 ? pow(pat, mix(2.6, 1.0, dorsal)) * dorsal : pat * mix(0.5, 1.0, dorsal);
+          }
           // (spots fade out down the legs, as a fawn's dapples or a cheetah's do — the blotches laid on
           // a slim shin stretched into streaks)
           if (uPType == 3) pat *= 1.0 - 0.75 * vLeg;
@@ -571,10 +578,12 @@ float patternField(vec3 p0, int type, float scale) {
   if (type == 0) return 0.0;                                    // plain
   vec3 p = warp(p0, 0.5);                                       // a flowing coordinate
   if (type == 1) {                                              // stripes — wavy transverse (tiger/zebra)
+    // narrow dark stripes on the coat, the marking where the wave crosses zero. (The other way about —
+    // the marking everywhere but there — a tiger was a dark coat ringed with thin pale hoops.)
     float coord = (p.z * 1.5 + p.y * 0.45) * scale + 1.8 * fbm3(p0 * 0.85);
     float w = fwidth(coord);
-    float v = smoothstep(0.04 - w, 0.5 + w, abs(sin(coord)));
-    return mix(0.68, v, 1.0 - smoothstep(0.6, 1.6, w));
+    float v = 1.0 - smoothstep(0.12 - w, 0.42 + w, abs(sin(coord)));
+    return mix(0.2, v, 1.0 - smoothstep(0.6, 1.6, w));
   }
   if (type == 2) {                                              // bands — bold transverse
     float s = sin(p.z * scale * 0.8 + 0.6 * fbm3(p0));
