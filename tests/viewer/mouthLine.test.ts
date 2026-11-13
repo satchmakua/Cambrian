@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { grow, type Phenotype } from '../../src/engine/grow';
-import { genomeOfMorphotype, randomGenome } from '../../src/engine/random';
+import { genomeOfMorphotype, MORPHOTYPE_IDS, randomGenome } from '../../src/engine/random';
 import { defaultGenome } from '../../src/engine/genome';
-import { buildFieldPrims, fieldAt, fieldAtCarved } from '../../src/viewer/bodyField';
-import { buildMouthLine, mouthCarves, mouthSpecs, type MouthSpec } from '../../src/viewer/mouthLine';
+import { buildFieldPrims, fieldAt, fieldAtCarved, qRotateV } from '../../src/viewer/bodyField';
+import { buildMouthLine, mouthCarves, mouthSpec, mouthSpecs, type MouthSpec } from '../../src/viewer/mouthLine';
 
 // The invariant the whole mouth overhaul exists for: every lip sample must sit ON the true skin.
 // Ray-trace tolerance is 1e-4; the Newton fallback can be looser on soft-blended saddles.
@@ -114,6 +114,30 @@ describe('mouth line (mouth overhaul)', () => {
         for (const sm of line.lower) expect(dot(sm.n, down), `${kind} #${seed} under`).toBeLessThan(0.81);
       }
     }
+  });
+
+  it("a closed mouth doesn't grin: its corners stand no higher on the head than its middle, near enough", () => {
+    // (swept across the face about the mouth's own forward-leaning up, a lip line was a circle on a
+    // tilted plane: its corners rose above its middle by up to two-thirds of the mouth's size — a
+    // shark's, a theropod's, a deer's cartoon grin)
+    let seen = 0;
+    for (const id of MORPHOTYPE_IDS) {
+      for (let seed = 1; seed <= 4; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        if (p.genomeRef.symmetry === 'radial') continue;
+        const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
+        const spec = idx >= 0 ? mouthSpec(p, idx) : null;
+        if (!spec || !['fanged', 'maw', 'herbivore', 'underbite'].includes(spec.variant)) continue;
+        seen++;
+        const line = buildMouthLine(p, spec, [], 17, 'kit');
+        const up = qRotateV(spec.anchor.quat, [0, 1, 0]);
+        const h = (q: readonly number[]) => q[0] * up[0] + q[1] * up[1] + q[2] * up[2];
+        const u = line.upper;
+        const lift = Math.max(h(u[0].p), h(u[u.length - 1].p)) - h(u[u.length >> 1].p);
+        expect(lift / spec.r, `${id} #${seed}`).toBeLessThan(0.2);
+      }
+    }
+    expect(seen).toBeGreaterThan(50);
   });
 
   it('a mandibled mouth is a small one: no wider than its jaws can close across', () => {

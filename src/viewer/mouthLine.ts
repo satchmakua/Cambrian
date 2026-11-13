@@ -137,7 +137,11 @@ export function mouthSpec(p: Phenotype, mouthIdx: number): MouthSpec | null {
   // how far the slit wraps around the muzzle — a mammal's lip line ends under the eye, not back by
   // the ear (a long wrap read as a cartoon grin)
   const arc = (muzzled ? 0.62 : 0.85) + hash01(seed, mouthIdx + 23) * (muzzled ? 0.22 : 0.5);
-  const droop = 0.12 + hash01(seed, mouthIdx + 37) * 0.22;
+  // How far the corners fall below level. A seam (a reptile's, a fish's, a shark's) a little: no longer
+  // lifted by the sweep (see traceCurve), the old droop of a fifth of a radian and more turned it down
+  // into a frown. A muzzle's lip line falls back to its corners, as a dog's or an ape's does — and it
+  // wraps a round muzzle, which seen from above and in front bends a level line up into a grin.
+  const droop = muzzled ? 0.34 + hash01(seed, mouthIdx + 37) * 0.22 : 0.03 + hash01(seed, mouthIdx + 37) * 0.08;
   return {
     idx: mouthIdx,
     variant,
@@ -244,6 +248,17 @@ function spareTheEyes(p: Phenotype, c: Carve): Carve {
  * (radians below the aim; positive = downward), each traced to the skin. `carves` lets the lower
  * lip land on the carved cavity rim instead of the pristine skin.
  */
+/** a mouth aimed closer than this (cosine) to the head's vertical sweeps about its own up instead */
+const SWEEP_ALONG = 0.9;
+
+/** `v` turned by `a` about the unit axis `k` (Rodrigues) */
+function rotateAbout(v: Vec3, k: Vec3, a: number): Vec3 {
+  const c = Math.cos(a), sn = Math.sin(a);
+  const kv = cross3(k, v);
+  const d = dot3(k, v) * (1 - c);
+  return [v[0] * c + kv[0] * sn + k[0] * d, v[1] * c + kv[1] * sn + k[1] * d, v[2] * c + kv[2] * sn + k[2] * d];
+}
+
 function traceCurve(
   f: FieldPrims,
   carves: readonly Carve[],
@@ -253,22 +268,27 @@ function traceCurve(
   pitch: (t: number) => number,
 ): MouthSample[] {
   const out: MouthSample[] = [];
+  // The line sweeps across the face about the HEAD's vertical, not about the mouth's own up. A mouth
+  // aims down onto the front of the face, so its up leans forward; swept about that, the lip line was
+  // a circle on a tilted plane, and from in front its corners rose above its middle — a cartoon grin
+  // on every face. About the head's vertical the corners keep the middle's height, and the droop alone
+  // bends them. (A mouth aimed along the head's vertical — under a sea star — sweeps about its own up.)
+  const headUp = norm3(qRotateV(s.anchor.quat, [0, 1, 0]));
+  const axis = Math.abs(dot3(headUp, s.aim)) < SWEEP_ALONG ? headUp : s.up;
+  // (turned the way the mouth's own frame turns: +t toward its right)
+  const turn = dot3(cross3(axis, s.aim), s.right) < 0 ? -1 : 1;
   for (let i = 0; i < samples; i++) {
     const t = -1 + (2 * i) / (samples - 1);
-    const yawA = t * s.arc;
+    const yawA = t * s.arc * turn;
     const pitchA = pitch(t);
-    // direction = aim yawed about `up` by t·arc, then pitched down about the yawed `right`
-    const cy = Math.cos(yawA), sy = Math.sin(yawA);
-    const dirYaw: Vec3 = [
-      s.aim[0] * cy + s.right[0] * sy,
-      s.aim[1] * cy + s.right[1] * sy,
-      s.aim[2] * cy + s.right[2] * sy,
-    ];
+    // direction = aim yawed about the sweep axis by t·arc, then pitched down about the yawed `right`
+    const dirYaw = rotateAbout(s.aim, axis, yawA);
+    const upYaw = rotateAbout(s.up, axis, yawA);
     const cp = Math.cos(pitchA), sp = Math.sin(pitchA);
     const dir = norm3([
-      dirYaw[0] * cp - s.up[0] * sp,
-      dirYaw[1] * cp - s.up[1] * sp,
-      dirYaw[2] * cp - s.up[2] * sp,
+      dirYaw[0] * cp - upYaw[0] * sp,
+      dirYaw[1] * cp - upYaw[1] * sp,
+      dirYaw[2] * cp - upYaw[2] * sp,
     ]);
     const hit =
       rayToSurface(f, carves, origin, dir) ??
