@@ -159,10 +159,37 @@ export function mouthSpec(p: Phenotype, mouthIdx: number): MouthSpec | null {
 }
 
 /** All of a phenotype's mouth specs (usually one — the guaranteed face). */
+/**
+ * The mouths a body is drawn with. A radial body grows its central maw once per arm, the copies all
+ * round the axis within a mouth's width or so of each other: an urchin's eight, aimed not quite
+ * straight down, traced eight seams round its underside (a ball in a net bag), a sea star's five a
+ * swirl of dark arcs, a horror's crown a ring of overlapping funnels. A radial body draws the first
+ * of each gene's copies (one per style), and only that one carves its cavity; any other body draws
+ * every mouth it has. (Cached per phenotype.)
+ */
+const DRAWN_MOUTHS = new WeakMap<Phenotype, Set<number>>();
+export function drawnMouths(p: Phenotype): Set<number> {
+  let s = DRAWN_MOUTHS.get(p);
+  if (s) return s;
+  const kept = new Set<number>();
+  const styles = new Set<number>();
+  const radial = p.genomeRef.symmetry === 'radial';
+  p.nodes.forEach((n, i) => {
+    if (n.terminal !== 'mouth') return;
+    const style = n.part?.style ?? -1;
+    if (radial && styles.has(style)) return;
+    styles.add(style);
+    kept.add(i);
+  });
+  DRAWN_MOUTHS.set(p, (s = kept));
+  return s;
+}
+
 export function mouthSpecs(p: Phenotype): MouthSpec[] {
   const out: MouthSpec[] = [];
+  const drawn = drawnMouths(p);
   for (let i = 0; i < p.nodes.length; i++) {
-    if (p.nodes[i].terminal === 'mouth') {
+    if (p.nodes[i].terminal === 'mouth' && drawn.has(i)) {
       const s = mouthSpec(p, i);
       if (s) out.push(s);
     }

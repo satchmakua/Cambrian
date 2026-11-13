@@ -296,7 +296,7 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'cephalopod', cluster: 'uncanny', weight: 1.2, symmetry: 'radial', radialCount: [8, 8], girth: [0.5, 0.78], height: [1.3, 1.65], repeat: [1, 1], eyeEl: [-0.22, -0.1], eyeSize: 2.6, eyeStyle: [0.42, 0.58], mouthStyle: [0.26, 0.37], covering: ['slime'], pattern: ['spots', 'ocelli', 'gradient'], sheen: [0.7, 1.0], hue: [0.6, 0.95], sat: [0.4, 0.85] },
   { id: 'horror', cluster: 'uncanny', weight: 1.0, symmetry: 'radial', radialCount: [5, 8], girth: [0.45, 0.75], repeat: [1, 1], height: [1.25, 1.6], eyeEl: [0.3, 0.55], eyeSize: 0.8, mouthSize: [1.3, 1.6], eyeStyle: [0.7, 1], mouthStyle: [0.5, 0.74], covering: ['skin', 'slime'], pattern: ['ocelli', 'mottle'], sheen: [0.4, 0.8], hue: [0.7, 1.0], sat: [0.3, 0.7] },
   { id: 'slime', cluster: 'uncanny', weight: 0.7, girth: [0.42, 0.6], repeat: [4, 5], height: [0.5, 0.62], elong: [0.95, 1.1], rear: [-0.012, 0.004], taper: [1.1, 1.14], legPairs: [0], stalkEyes: 1, stalkLen: [0.4, 0.5], eyeEl: [0.6, 0.75], eyeAz: [1.22, 1.38], mouthStyle: [0.01, 0.05], mouthSize: [0.45, 0.55], tail: 0.0, head: 0.0, eyeStyle: [0.05, 0.25], covering: ['slime'], pattern: ['gradient', 'mottle'], sheen: [0.8, 1.0], hue: [0.25, 0.7], sat: [0.5, 0.9], light: [0.45, 0.7] },
-  { id: 'urchin', cluster: 'uncanny', weight: 0.6, symmetry: 'radial', radialCount: [8, 12], girth: [0.45, 0.7], repeat: [1, 1], height: [0.9, 1.1], eyeSize: 0.45, eyeEl: [-1.3, -1.15], eyeStyle: [0.22, 0.36], mouthStyle: [0.07, 0.12], covering: ['chitin'], pattern: ['mottle', 'bands'], hue: [0.6, 0.95], sat: [0.4, 0.8] },
+  { id: 'urchin', cluster: 'uncanny', weight: 0.6, symmetry: 'radial', radialCount: [8, 12], girth: [0.45, 0.7], repeat: [1, 1], height: [0.9, 1.1], eyeSize: 0.45, eyeEl: [-1.3, -1.15], eyeStyle: [0.22, 0.36], mouthStyle: [0.52, 0.6], covering: ['chitin'], pattern: ['mottle', 'bands'], hue: [0.6, 0.95], sat: [0.4, 0.8] },
   // a sea star: a flat disc and five plump arms tapering to round tips; no face on top — its small
   // eyes look down from the rim of the disc and its mouth is underneath (on four arms it was a throwing
   // star; a crown of eyes on the disc, with a maw and a feeding tube among them, a face pasted on it)
@@ -570,7 +570,9 @@ function compileRadial(rng: Rng, seed: number, m: Morpho, girth: number): Genome
   // a central maw: elevation ≈ ±90° so grow's radial array collapses it onto the axis — on the crown,
   // or (an octopus's beak, a sea star's mouth) underneath, in the middle of its arms
   const mo = mouth(rng, girth, m.mouthStyle);
-  mo.attachElevation = m.id === 'cephalopod' || m.id === 'starfish' || m.id === 'urchin' ? -1.35 : 1.35;
+  // (an urchin's and a sea star's straight down, in the middle of the underside: tilted off it like the
+  // octopus's beak, the urchin's round mouth showed from the side as a red band round its base)
+  mo.attachElevation = m.id === 'starfish' || m.id === 'urchin' ? -1.52 : m.id === 'cephalopod' ? -1.35 : 1.35;
   if (m.mouthSize) mo.thickness = clamp(mo.thickness * rg(rng, m.mouthSize), A.thickness); // (no draw unless set)
   apps.push(mo);
 
@@ -1238,20 +1240,14 @@ function urchinCoat(rng: Rng, girth: number, n: number): AppendageGene[] {
       }),
     );
   });
-  // tube feet: short, soft, out of sight under the spines
-  apps.push(
-    part('tentacle', 'none', false, range(rng, 0, 1), {
-      attachT: 0.5,
-      attachAzimuth: range(rng, 0, 0.3),
-      attachElevation: range(rng, -1.25, -1.1),
-      segments: 2,
-      // (a little shorter than they were: they showed under the ball as a fringe of pink stubs)
-      length: clamp(girth * range(rng, 0.14, 0.2), A.length),
-      thickness: clamp(girth * range(rng, 0.06, 0.08), A.thickness),
-      taper: range(rng, 0.7, 0.8),
-      curl: [0, 0],
-    }),
-  );
+  // (no tube feet: two links of the shortest limb a gene can grow, under the ball, they stood it on
+  // stilts. Their draws are still made, so nothing after them moves.)
+  range(rng, 0, 1);
+  range(rng, 0, 0.3);
+  range(rng, -1.25, -1.1);
+  range(rng, 0.14, 0.2);
+  range(rng, 0.06, 0.08);
+  range(rng, 0.7, 0.8);
   [-0.42, 0, 0.41, 0.82].forEach((el, i) => {
     apps.push(
       part('spine', 'claw', false, range(rng, QUILL_STYLE, 1), {

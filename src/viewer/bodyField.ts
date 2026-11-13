@@ -125,7 +125,9 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   // at the eye, or the eye hangs in the air above a stump
   const stalkTip = (a: BodyNode, b: BodyNode) => mode === 'hybrid' && b.terminal === 'eye' && a.kind === 'limb' && a.part?.kind === 'eyestalk';
   let bodyEdges = p.edges.filter(([a, b]) => include(p.nodes[a]) && (include(p.nodes[b]) || stalkTip(p.nodes[a], p.nodes[b])));
-  if (bodyEdges.length === 0) bodyEdges = p.edges;
+  // (a body with no limb of its own but its quills — an urchin without tube feet — falls back on every
+  // link but those: on every link, its quills were skinned as beaded rods)
+  if (bodyEdges.length === 0) bodyEdges = p.edges.filter(([a, b]) => !quills.has(p.nodes[a]) && !quills.has(p.nodes[b]));
   const edges = bodyEdges.length > 0 ? bodyEdges : null;
 
   // A CHAIN IS A CURVE. A trunk, a neck, a tail is a row of nodes, and a straight cone from each to

@@ -62,6 +62,14 @@ describe('urchin', () => {
     }
   });
 
+  it('rests on its spines, not on a fringe of tube feet', () => {
+    // (two links of the shortest limb a gene can grow, under the ball, they stood it on dark stilts)
+    for (const seed of SEEDS) {
+      const g = genomeOfMorphotype(seed, 'urchin');
+      expect(g.body.appendages.some((a) => a.kind === 'tentacle'), `#${seed}`).toBe(false);
+    }
+  });
+
   it('has no face on top: small eyes and a mouth underneath', () => {
     // (a fleshy ring of a mouth on top, with teeth standing out of it, made the urchin an open bowl)
     for (const seed of SEEDS) {

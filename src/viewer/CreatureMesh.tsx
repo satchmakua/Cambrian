@@ -41,7 +41,7 @@ import { facetKeep, facetSizeOf, facetSkin } from './facets';
 import { quillGeometry } from './quills';
 import { frillGeometry, frillPlan } from './frill';
 import { getGeometry, retainGeometry, releaseGeometry, hasGeometry } from './geometryCache';
-import { mouthCarves, surfacePrims } from './mouthLine';
+import { drawnMouths, mouthCarves, surfacePrims } from './mouthLine';
 import { gillCutOf, gillGeometry, gillMarks, gillRadiusOf } from './gills';
 import { sampleTrajectory, type Trajectory } from '../physics/fitness';
 import type { SkinMode } from '../ui/store';
@@ -713,6 +713,8 @@ function Feature({
     case 'eye':
       return <Eye f={f} socket={footColor} iris={irisColor} lid={finColor} seed={phenotype.genomeRef.seed} skin={skin} phenotype={phenotype} />;
     case 'mouth':
+      // (one of a radial body's copies of its central maw: see drawnMouths)
+      if (!drawnMouths(phenotype).has(f.idx)) return null;
       return (
         <Mouth f={f} dark={footColor} skin={skin} phenotype={phenotype} carves={carves} recessed={recessed} surface={surface} />
       );

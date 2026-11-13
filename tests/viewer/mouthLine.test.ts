@@ -3,7 +3,7 @@ import { grow, type Phenotype } from '../../src/engine/grow';
 import { genomeOfMorphotype, MORPHOTYPE_IDS, randomGenome } from '../../src/engine/random';
 import { defaultGenome } from '../../src/engine/genome';
 import { buildFieldPrims, fieldAt, fieldAtCarved, qRotateV } from '../../src/viewer/bodyField';
-import { buildMouthLine, mouthCarves, mouthSpec, mouthSpecs, type MouthSpec } from '../../src/viewer/mouthLine';
+import { buildMouthLine, mouthCarves, mouthSpec, mouthSpecs, type MouthSpec, drawnMouths } from '../../src/viewer/mouthLine';
 
 // The invariant the whole mouth overhaul exists for: every lip sample must sit ON the true skin.
 // Ray-trace tolerance is 1e-4; the Newton fallback can be looser on soft-blended saddles.
@@ -283,6 +283,24 @@ describe('mouth line (mouth overhaul)', () => {
       for (const c of carves) {
         expect(c.pos.every(Number.isFinite)).toBe(true);
         expect(c.radii.every((r) => Number.isFinite(r) && r > 0)).toBe(true);
+      }
+    }
+  });
+
+  it("a radial body's central maw is drawn once, not once per arm", () => {
+    // (an urchin's eight copies, aimed not quite straight down, traced eight seams round its underside —
+    // a ball in a net bag — and a sea star's five a swirl of dark arcs under its disc)
+    for (let seed = 1; seed <= 6; seed++) {
+      for (const id of ['urchin', 'starfish', 'cephalopod', 'horror']) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        expect(p.nodes.filter((n) => n.terminal === 'mouth').length, `${id} #${seed}`).toBeGreaterThan(1);
+        expect(drawnMouths(p).size, `${id} #${seed}`).toBe(1);
+        expect(mouthSpecs(p).length, `${id} #${seed}`).toBe(1);
+      }
+      // a bilateral body draws every mouth it has
+      for (const id of ['felid', 'bird', 'fish']) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        expect(drawnMouths(p).size, `${id} #${seed}`).toBe(p.nodes.filter((n) => n.terminal === 'mouth').length);
       }
     }
   });
