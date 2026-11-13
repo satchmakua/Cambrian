@@ -843,9 +843,9 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
 ### Next up (unchecked — pick from here)
 
 - [ ] **What the ninth look left.** Ears that are spikes edge-on (the far ear's angle); the weasel end
-  on (its shoulder joints stand out past its flanks); a dog's muzzle creased at the skull; the frog a
-  bun resting on its chin; a deer's horns rising out of its ears; FACE plates that frame nothing (the
-  urchin's, the sea star's) or cut the head off (the lizard's).
+  on (its shoulder joints stand out past its flanks); the frog a bun resting on its chin (forelegs
+  under its middle); FACE plates that frame nothing (the urchin's, the sea star's) or cut the head off
+  (the lizard's).
 
 - [ ] **What the sixth look left.** The crab's walking legs still arch high like a spider's; the bear's
   muzzle a hippo's (a tube ending in a bulb, a small nose on it); the ape's coat reads as bare rubber;

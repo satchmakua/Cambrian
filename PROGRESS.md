@@ -135,10 +135,17 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   - *Stockings, still*: bare shanks take four tenths of the coat's own colour, darkened.
   - *The far eye out of the outline, marble eyes*: a face's eyes sit a little deeper (0.52 of their
     radius under the skin, was 0.42).
+  - *A deer's horns growing out of its ears*: both attached at the back of the skull, the horns'
+    sideways angle overlapping the ears'. The horns rise from near the top of the crown, a little
+    forward on the brow, and the ears stand out to the sides.
+  - *A dog's muzzle a bulb creased onto the skull*: as well as its jaw, a stopped skull has a bridge in
+    its skin, from the brow down onto the muzzle's first link: the top line slopes onto the nose.
+  - *Glossy vinyl arthropods*: chitin wore a near-mirror coat with an oil-slick shimmer; it is a satin
+    lacquer now (a 0.45 coat at 0.24 roughness, half the shimmer).
 - **Still to do from it:** the weasel end on (its shoulder joints stand out past its flanks); ears
   that are spikes edge-on (the far ear, facing forward-out, from a three-quarter view: thicker ears
-  didn't help — it is the angle); a dog's muzzle still creased where it meets the skull; the frog a
-  bun on its chin; the deer's horns rising out of its ears.
+  didn't help — it is the angle); the frog a bun on its chin (its forelegs attach under the middle of
+  its body, behind its broad head); FACE plates that frame nothing or cut the head off.
 
 ## M93 — What the seventh look left: tails, claws, paws and eyes · 2026-11-13
 
