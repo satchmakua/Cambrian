@@ -27,7 +27,7 @@ import { buildMouthRing, hash01, mouthSpec, type MouthSample, type SkinSurface }
 import { sweepTube, type SweepPoint } from '../sweep';
 import { fangGeometry, setToothInstances, toothRing, type ToothXform } from '../teeth';
 import { GUM, INTERIOR, KERATIN, TONGUE } from './palette';
-import { relRow } from './shared';
+import { bakeBodySpace, relRow } from './shared';
 
 export type RingVariant = 'sucker' | 'lamprey';
 
@@ -46,6 +46,12 @@ const LAMPREY_RINGS = [
 // pucker ridge ring indices — chosen in mirror pairs under i ↦ (n/2 − i) mod n (0↔10, 3↔7,
 // 13↔17), so a midline sucker stays bilaterally exact (M18) while the spacing stays organic
 const PUCKERS = [0, 3, 7, 10, 13, 17] as const;
+/** the lip's girth (× the mouth's radius): a full fleshy roll over the rim of the cavity. (At 0.14 the lip
+ *  was a thin cord laid along the cut the cavity makes in the skin, and the cut showed past it: on a
+ *  horror's crown, seen from the side, a ragged rim round a red hole — a broken eggshell.) */
+export const RING_LIP = 0.17;
+/** how far past a carved cavity's wall the lip's line runs (× the mouth's radius): just over the cut */
+const LIP_PAST_RIM = 0.06;
 /** a sucker's rasp: how many keratin knobs ring it (odd, so the ring never reads as a machined part) */
 const RASP_KNOBS = 15;
 
@@ -81,19 +87,25 @@ export function buildRing(
   const o = spec.node.pos; // node-relative frame origin
 
 
-  // outer lip — traced on the real (possibly carved) surface so it hugs whatever rim exists
-  const lipSamples = relRow(buildMouthRing(phenotype, spec, SPREAD, carves, SAMPLES, surface), o);
+  // outer lip — traced on the PRISTINE skin, so it rolls over the rim of the cavity. (Traced on the
+  // carved skin, its rays fell into the hole: on a horror's crown the lip lay at the bottom of the
+  // funnel, and the cavity's bare cut edge was the mouth's rim — a broken eggshell from the side.)
+  // (round a carved cavity, each sample is found on its RIM: a little past the cut, under the lip's roll)
+  const rim = recessed && carves.length ? { carves, outside: r * LIP_PAST_RIM } : undefined;
+  const lipSamples = relRow(buildMouthRing(phenotype, spec, SPREAD, [], SAMPLES, surface, rim), o);
 
   // seeded lip girth wobble keyed on sin(angle): invariant under the ring's X-mirror (a → π−a),
   // so twin samples draw identical girth (M18) while the ring still swells and thins organically
   const lipR = (u: number): number => {
     const key = Math.round((Math.sin((2 * u - 1) * Math.PI) + 1) * 512);
-    return r * 0.14 * (1 + (hash01(seed, idx * 131 + key) * 2 - 1) * 0.18);
+    return r * RING_LIP * (1 + (hash01(seed, idx * 131 + key) * 2 - 1) * 0.18);
   };
   const lip = sweepTube(
     lipSamples.map((s): SweepPoint => ({ p: s.p, n: s.n })),
     { radius: lipR, flatten: 0.6, radialSegments: 10, closed: true },
   );
+  // (the lip is the body's own skin rolled over the rim: it wears the covering, so it needs body space)
+  bakeBodySpace(lip, o);
 
   // funnel levels — concentric rings of the SAME fan, traced on the pristine skin (the recess is
   // applied below by depth, so tracing inside the cavity would double-count it)
@@ -183,6 +195,7 @@ export function RingMouth({
   recessed,
   dark,
   surface = 'kit',
+  skin,
 }: {
   f: MeshFeature;
   phenotype: Phenotype;
@@ -190,6 +203,7 @@ export function RingMouth({
   recessed: boolean; // true when the smooth skin actually carved the funnel behind this mouth
   dark: number;
   surface?: SkinSurface; // which rendered skin to trace the ring onto (kit vs blended smooth/hybrid)
+  skin?: THREE.Material; // the body's covering: the lip is its own skin rolled over the rim
 }) {
   const built = useMemo(
     () => buildRing(phenotype, f.idx, carves, recessed, surface),
@@ -232,7 +246,9 @@ export function RingMouth({
   return (
     <group>
       <mesh geometry={built.funnel} material={mats.funnel} />
-      <mesh geometry={built.lip} material={mats.lip} castShadow />
+      {/* (in a flesh tone of its own, a deep maroon roll on a pink body, the lip sat on the crown like a
+          beret: the body's own skin, rolled over into the hole, is a mouth) */}
+      <mesh geometry={built.lip} material={skin ?? mats.lip} castShadow />
       {built.rasp && <mesh geometry={built.rasp} material={mats.rasp} />}
       {built.ridges.map((g, i) => (
         <mesh key={i} geometry={g} material={mats.pucker} />

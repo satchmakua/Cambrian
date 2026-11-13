@@ -237,7 +237,10 @@ export function mouthCarves(p: Phenotype): Carve[] {
         // (a soft rim, the skin rounding over into the hole: cut at a fifth of the mouth's size, the
         // hole's edge stair-stepped in the mesh and caught the light — a torn white rim)
         blend: s.r * 0.36,
-        band: s.r * 0.55,
+        // (the wet flesh stays in the hole: shaded out to half the mouth's size past the cavity's wall,
+        // it ran over the rim onto the skin in a ragged dark-red band — on a horror's crown, from the
+        // side, a broken eggshell with its red inside showing)
+        band: s.r * FUNNEL_BAND,
       };
     }
     if (carve) out.push(spareTheEyes(p, carve));
@@ -401,6 +404,11 @@ const MANDIBLE_SPAN = 2.0;
 /** …and so is a mouth set on a headless body's trunk (a slug's): its line's span is an angle about the
  *  whole body there, and it ran from flank to flank — a grin across the front of the animal. (At 2.4 of
  *  its radii it was still half the body's breadth: a long double slot, a mail slot.) */
+/** how far past a funnel mouth's cavity wall its wet flesh shading reaches (× the mouth's size) */
+export const FUNNEL_BAND = 0.2;
+/** the cone angles (rad, off the mouth's aim) a rim-searched mouth ring may take */
+const RIM_MIN_SPREAD = 0.08;
+const RIM_MAX_SPREAD = 1.25;
 export const TRUNK_MOUTH_SPAN = 1.5;
 
 export function buildMouthLine(
@@ -546,6 +554,7 @@ export function buildMouthRing(
   carves: readonly Carve[] = [],
   samples = 20,
   surface: SkinSurface = 'kit',
+  rim?: { carves: readonly Carve[]; outside: number },
 ): MouthSample[] {
   const f = surfacePrims(p, surface);
   const origin: Vec3 = [
@@ -554,20 +563,49 @@ export function buildMouthRing(
     s.anchor.pos[2] - s.aim[2] * s.anchor.radius * 0.2,
   ];
   const out: MouthSample[] = [];
-  const cs = Math.cos(spread);
-  const ss = Math.sin(spread);
   for (let i = 0; i < samples; i++) {
     const t = -1 + (2 * i) / samples;
     const a = t * Math.PI;
     const ca = Math.cos(a), sa = Math.sin(a);
-    const dir = norm3([
-      s.aim[0] * cs + (s.right[0] * ca + s.up[0] * sa) * ss,
-      s.aim[1] * cs + (s.right[1] * ca + s.up[1] * sa) * ss,
-      s.aim[2] * cs + (s.right[2] * ca + s.up[2] * sa) * ss,
-    ]);
-    const hit =
-      rayToSurface(f, carves, origin, dir) ??
-      projectToSurface(f, carves, [origin[0] + dir[0] * s.r, origin[1] + dir[1] * s.r, origin[2] + dir[2] * s.r]);
+    const dirAt = (th: number): Vec3 => {
+      const cs = Math.cos(th), ss = Math.sin(th);
+      return norm3([
+        s.aim[0] * cs + (s.right[0] * ca + s.up[0] * sa) * ss,
+        s.aim[1] * cs + (s.right[1] * ca + s.up[1] * sa) * ss,
+        s.aim[2] * cs + (s.right[2] * ca + s.up[2] * sa) * ss,
+      ]);
+    };
+    const hitAt = (th: number) => {
+      const dir = dirAt(th);
+      return (
+        rayToSurface(f, carves, origin, dir) ??
+        projectToSurface(f, carves, [origin[0] + dir[0] * s.r, origin[1] + dir[1] * s.r, origin[2] + dir[2] * s.r])
+      );
+    };
+    // a ring round a cut cavity: each sample's cone angle searched to the cavity's RIM, `outside` past
+    // its wall (on the uncut skin), so a lip traced on it rolls over the cut edge — at one cone angle for
+    // every mouth, the lip lay out on the skin with bare cut rim between, or down in the hole
+    let th = spread;
+    if (rim && rim.carves.length) {
+      const past = (x: number): number => {
+        const q = hitAt(x).p;
+        let d = Infinity;
+        for (const c of rim.carves) d = Math.min(d, carveDist(c, q[0], q[1], q[2]));
+        return d - rim.outside;
+      };
+      let lo = RIM_MIN_SPREAD, hi = RIM_MAX_SPREAD;
+      if (past(lo) >= 0) th = lo;
+      else if (past(hi) < 0) th = hi;
+      else {
+        for (let k = 0; k < 14; k++) {
+          const mid = (lo + hi) / 2;
+          if (past(mid) < 0) lo = mid;
+          else hi = mid;
+        }
+        th = hi;
+      }
+    }
+    const hit = hitAt(th);
     out.push({ t, p: hit.p, n: hit.n, tan: [1, 0, 0], away: [0, 1, 0] });
   }
   // tangents wrap around the ring; `away` = in-surface, radially outward

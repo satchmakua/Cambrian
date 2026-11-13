@@ -7,6 +7,21 @@ import * as THREE from 'three';
 import type { Vec3 } from '../../engine/genome';
 import type { MouthSample } from '../mouthLine';
 
+/** The covering shader's per-vertex inputs for a node-relative feature mesh (rest body space = local + o):
+ *  a mouth part that wears the body's own skin (a mammal's jaw, a sucker's lip) needs them. */
+export function bakeBodySpace(g: THREE.BufferGeometry, o: Vec3): void {
+  const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  const arr = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    arr[i * 3] = pos.getX(i) + o[0];
+    arr[i * 3 + 1] = pos.getY(i) + o[1];
+    arr[i * 3 + 2] = pos.getZ(i) + o[2];
+  }
+  g.setAttribute('aBodyPos', new THREE.BufferAttribute(arr, 3));
+  g.setAttribute('aFlesh', new THREE.BufferAttribute(new Float32Array(pos.count), 1));
+  g.setAttribute('aAO', new THREE.BufferAttribute(new Float32Array(pos.count).fill(1), 1));
+}
+
 /** Map a mouth-line row into the node-relative authoring frame (subtract the mouth node origin). */
 export function relRow(row: readonly MouthSample[], o: Vec3): MouthSample[] {
   return row.map((s) => ({ ...s, p: [s.p[0] - o[0], s.p[1] - o[1], s.p[2] - o[2]] as Vec3 }));

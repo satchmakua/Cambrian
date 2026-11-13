@@ -31,7 +31,7 @@ import { buildMouthLine, hash01, mouthSpec, type MouthSample, type SkinSurface }
 import { sweepTube, type SweepPoint } from '../sweep';
 import { bluntGeometry, fangGeometry, setToothInstances, toothRow, type ToothProfile, type ToothXform } from '../teeth';
 import { INTERIOR, LIP } from './palette';
-import { interiorBowl, muzzleSkirt, relRow } from './shared';
+import { interiorBowl, muzzleSkirt, relRow, bakeBodySpace } from './shared';
 import { JawContext, hingeOf, poseJaw } from './jaw';
 
 export type JawedVariant = 'herbivore' | 'maw' | 'fanged' | 'underbite';
@@ -384,20 +384,6 @@ export function buildJawed(
   }
 
   return { r, aim: spec.aim, upper, lower, muzzle, upperFold, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior, nose, nostrils, pads, muzzled, sealed };
-}
-
-/** The covering shader's per-vertex inputs for a node-relative feature mesh (rest body space = local + o). */
-function bakeBodySpace(g: THREE.BufferGeometry, o: Vec3): void {
-  const pos = g.getAttribute('position') as THREE.BufferAttribute;
-  const arr = new Float32Array(pos.count * 3);
-  for (let i = 0; i < pos.count; i++) {
-    arr[i * 3] = pos.getX(i) + o[0];
-    arr[i * 3 + 1] = pos.getY(i) + o[1];
-    arr[i * 3 + 2] = pos.getZ(i) + o[2];
-  }
-  g.setAttribute('aBodyPos', new THREE.BufferAttribute(arr, 3));
-  g.setAttribute('aFlesh', new THREE.BufferAttribute(new Float32Array(pos.count), 1));
-  g.setAttribute('aAO', new THREE.BufferAttribute(new Float32Array(pos.count).fill(1), 1));
 }
 
 function dot(a: Vec3, b: Vec3): number {

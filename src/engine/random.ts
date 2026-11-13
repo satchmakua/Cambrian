@@ -1202,10 +1202,12 @@ function horrorArms(rng: Rng, girth: number, n: number): AppendageGene[] {
       taper: range(rng, 0.74, 0.8),
       curl: [range(rng, -0.34, -0.24), side * range(rng, 0.14, 0.26)],
     }),
+    // the upper ring: thin feelers round the crown, about the mouth (rooted halfway up the body, the
+    // front one hung down across the face between the eyes, a pencil stuck in an egg)
     part('tentacle', 'none', false, range(rng, 0, 1), {
       attachT: 0.7,
       attachAzimuth: Math.PI / n + range(rng, 0, 0.1),
-      attachElevation: range(rng, 0.62, 0.86),
+      attachElevation: range(rng, 1.02, 1.18),
       segments: randint(rng, 4, 5),
       length: clamp(girth * range(rng, 0.36, 0.5), A.length),
       thickness: clamp(girth * range(rng, 0.11, 0.15), A.thickness),

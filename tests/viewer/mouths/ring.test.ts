@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import type { BufferGeometry } from 'three';
 import { grow, type Phenotype } from '../../../src/engine/grow';
 import { defaultGenome } from '../../../src/engine/genome';
-import { randomGenome } from '../../../src/engine/random';
-import { buildFieldPrims, fieldAt, fieldAtCarved } from '../../../src/viewer/bodyField';
+import { genomeOfMorphotype, randomGenome } from '../../../src/engine/random';
+import { buildFieldPrims, carveDist, fieldAt, fieldAtCarved } from '../../../src/viewer/bodyField';
 import { mouthCarves, mouthSpec } from '../../../src/viewer/mouthLine';
 import { buildRing, type RingBuild } from '../../../src/viewer/mouths/ring';
 
@@ -132,6 +132,32 @@ describe('ring mouth (sucker · lamprey)', () => {
         expect(d).toBeLessThan(0.06 * spec.r + ON_SURFACE); // the suction disc rides the apex
       }
     }
+  });
+
+  it("a recessed ring mouth's lip rolls over the cavity's rim — it does not lie at the bottom of the hole", () => {
+    // (traced on the carved skin, the lip's rays fell into the cavity: on a horror's crown it lay at the
+    // bottom of the funnel, and the hole's bare cut edge was the mouth's rim — a broken eggshell)
+    let checked = 0;
+    for (let seed = 1; seed <= 6; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'horror'));
+      const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const spec = mouthSpec(p, idx);
+      if (!spec || (spec.variant !== 'sucker' && spec.variant !== 'lamprey')) continue;
+      const carves = mouthCarves(p);
+      const own = carves.filter((c) => Math.hypot(c.pos[0] - spec.node.pos[0], c.pos[1] - spec.node.pos[1], c.pos[2] - spec.node.pos[2]) < 2 * spec.r);
+      expect(own.length, `#${seed}`).toBeGreaterThan(0);
+      const b = buildRing(p, idx, carves, true, 'hybrid')!;
+      const o = spec.node.pos;
+      for (const sm of b.lipSamples) {
+        const q = [sm.p[0] + o[0], sm.p[1] + o[1], sm.p[2] + o[2]];
+        // on the cavity's wall or out past it, within the lip's own girth of the rim
+        const d = Math.min(...own.map((c) => carveDist(c, q[0], q[1], q[2])));
+        expect(d, `#${seed}`).toBeGreaterThan(-0.1 * spec.r);
+        expect(d, `#${seed}`).toBeLessThan(0.6 * spec.r);
+      }
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(2);
   });
 
   it('recessed=true sinks the funnel into the carved cavity', () => {
