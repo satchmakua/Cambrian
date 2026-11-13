@@ -33,7 +33,7 @@ import { mouthVariant, eyeVariant } from './partStyles';
 import type { SkinQuality } from './smoothSkin';
 import { createRig, poseDead, poseRig, restPosed, SLEEP_DROP, type RigInstance } from './rig';
 import { dprOf, useQuality } from '../ui/settings';
-import { framingOf, reachOf, type Framing } from './framing';
+import { faceCamera, framingOf, reachOf, type Framing } from './framing';
 import { juvenileGenome } from '../engine/juvenile';
 import { JawContext, type JawControl } from './mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from './flight';
@@ -245,11 +245,11 @@ function PlateCamera({ kind, framing, px }: { kind: PlateKind; framing: Framing;
       if (!cam) return;
       const f = framing.face ?? { pt: [0, 0, framing.ext[2] / 2] as [number, number, number], r: framing.size * 0.25 };
       // look at the face from front, a touch high and to the side (a three-quarter portrait)
-      const d = Math.max(f.r * 3.6, framing.size * 0.55);
-      cam.position.set(f.pt[0] + d * 0.42, f.pt[1] + d * 0.22, f.pt[2] + d * 0.88);
+      const view = faceCamera(framing, Math.max(f.r * 3.6, framing.size * 0.55));
+      cam.position.set(...view.from);
       cam.near = Math.max(0.01, framing.size * 0.005);
       cam.far = framing.size * 40;
-      cam.lookAt(f.pt[0], f.pt[1], f.pt[2]);
+      cam.lookAt(...view.at);
       cam.updateProjectionMatrix();
     } else {
       const cam = ref.current;
@@ -385,7 +385,7 @@ function MainView({
   const camPos: [number, number, number] =
     cam === 'side' ? [d * 0.95, d * 0.12, 0.01] : cam === 'front' ? [0.01, d * 0.15, d * 0.95] : cam === 'top' ? [0.01, d, 0.02]
       : cam === 'feet' ? [fp[0] + footD * 0.75 * Math.sign(fp[0] || 1), fp[1] + footD * 0.35, fp[2] + footD * 0.65]
-      : cam === 'face' ? [f.pt[0] + fd * 0.42, f.pt[1] + fd * 0.22, f.pt[2] + fd * 0.88]
+      : cam === 'face' ? faceCamera(framing, fd).from
       : cam === 'headside' ? [f.pt[0] + fd, f.pt[1] + fd * 0.05, f.pt[2]]
       : cam === 'eye' ? eyeCam
       : [d * 0.62, d * 0.38, d * 0.7];

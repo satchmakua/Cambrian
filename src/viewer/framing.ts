@@ -12,6 +12,7 @@ export interface Framing {
   size: number; // longest extent
   groundY: number; // ground plane in centred space
   face: { pt: [number, number, number]; r: number } | null; // face focus in centred space
+  radial: boolean; // arrayed about the vertical (a sea star, an urchin, an octopus): its face is its crown
 }
 
 export function framingOf(p: Phenotype): Framing {
@@ -46,7 +47,44 @@ export function framingOf(p: Phenotype): Framing {
     }
     face = { pt, r };
   }
-  return { center, ext, size, groundY: -ext[1] / 2, face };
+  return { center, ext, size, groundY: -ext[1] / 2, face, radial: p.genomeRef.symmetry === 'radial' };
+}
+
+/** The three-quarter portrait's line of sight onto a face: from in front, a touch high and to one side. */
+export const FACE_VIEW: readonly [number, number, number] = (() => {
+  const v = [0.42, 0.22, 0.88];
+  const l = Math.hypot(v[0], v[1], v[2]);
+  return [v[0] / l, v[1] / l, v[2] / l] as const;
+})();
+
+/** …and onto a radial body's crown: from well above, over the arms (see faceCamera). */
+export const CROWN_VIEW: readonly [number, number, number] = (() => {
+  const v = [0.36, 0.8, 0.48];
+  const l = Math.hypot(v[0], v[1], v[2]);
+  return [v[0] / l, v[1] / l, v[2] / l] as const;
+})();
+/** how far back a crown's portrait stands, × the body's size: the whole of it in frame */
+const CROWN_REACH = 1.15;
+
+/**
+ * Where a camera stands to look at a creature's face from `want` away along FACE_VIEW — or further
+ * back, until it is out of the creature's bounds. A radial body's face is its middle — a sea star's
+ * mouth under its disc, an urchin's under its spines — so it is looked down on along CROWN_VIEW, from
+ * far enough back to take in the whole of it. (From in front at a head's distance the camera stood
+ * inside an arm, or among the spines.)
+ */
+export function faceCamera(framing: Framing, want: number): { at: [number, number, number]; from: [number, number, number] } {
+  const f = framing.face ?? { pt: [0, 0, framing.ext[2] / 2] as [number, number, number], r: framing.size * 0.25 };
+  const view = framing.radial ? CROWN_VIEW : FACE_VIEW;
+  const margin = framing.size * 0.08;
+  // the least distance along the view at which it leaves the box (it may leave through any face)
+  let out = Infinity;
+  for (let a = 0; a < 3; a++) {
+    if (view[a] <= 1e-6) continue;
+    out = Math.min(out, (framing.ext[a] / 2 - f.pt[a] + margin) / view[a]);
+  }
+  const d = Math.max(want, out, framing.radial ? framing.size * CROWN_REACH : 0);
+  return { at: f.pt, from: [f.pt[0] + view[0] * d, f.pt[1] + view[1] * d, f.pt[2] + view[2] * d] };
 }
 
 /**

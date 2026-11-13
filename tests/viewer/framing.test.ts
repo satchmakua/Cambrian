@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { framingOf, reachOf } from '../../src/viewer/framing';
+import { CROWN_VIEW, faceCamera, FACE_VIEW, framingOf, reachOf } from '../../src/viewer/framing';
+import { MORPHOTYPE_IDS } from '../../src/engine/random';
 import { restPosed } from '../../src/viewer/rig';
 import { buildMeshData } from '../../src/viewer/meshData';
 import { finOf } from '../../src/viewer/CreatureMesh';
@@ -75,5 +76,31 @@ describe('framing a creature', () => {
     // a body without fins is framed on its bounds, as ever
     const cat = grow(genomeOfMorphotype(3, 'felid'));
     expect(framingOf(cat).ext[2]).toBeCloseTo(cat.bounds.max[2] - cat.bounds.min[2], 12);
+  });
+
+  it("a face's portrait is taken from outside the body — and from a head's own distance where that is outside", () => {
+    // (a sea star's or an urchin's face is its middle: at a head's distance the camera stood inside an
+    // arm or among the spines, and a crab's among its claws)
+    for (const id of MORPHOTYPE_IDS) {
+      for (let seed = 1; seed <= 4; seed++) {
+        const f = framingOf(grow(genomeOfMorphotype(seed, id)));
+        const want = Math.max((f.face?.r ?? 0) * 3.6, f.size * 0.55);
+        const { at, from } = faceCamera(f, want);
+        const outside = [0, 1, 2].some((a) => Math.abs(from[a]) > f.ext[a] / 2);
+        expect(outside, `${id} #${seed}`).toBe(true);
+        // looking along the portrait's line, no nearer than asked
+        const d = Math.hypot(from[0] - at[0], from[1] - at[1], from[2] - at[2]);
+        expect(d, `${id} #${seed}`).toBeGreaterThanOrEqual(want - 1e-9);
+        const view = f.radial ? CROWN_VIEW : FACE_VIEW;
+        for (let a = 0; a < 3; a++) expect((from[a] - at[a]) / d, `${id} #${seed}`).toBeCloseTo(view[a], 9);
+        // a radial body's crown is looked down on from far enough back to take in the whole of it
+        if (f.radial) expect(d, `${id} #${seed}`).toBeGreaterThanOrEqual(f.size * 1.15 - 1e-9);
+      }
+    }
+    // a cat's face is out in front: its portrait is taken from the distance asked
+    const cat = framingOf(grow(genomeOfMorphotype(3, 'felid')));
+    const want = Math.max(cat.face!.r * 3.6, cat.size * 0.55);
+    const v = faceCamera(cat, want);
+    expect(Math.hypot(v.from[0] - v.at[0], v.from[1] - v.at[1], v.from[2] - v.at[2])).toBeCloseTo(want, 9);
   });
 });
