@@ -56,10 +56,10 @@ export function faceMaskOf(p: Phenotype): FaceMask | null {
 
 /**
  * The HEAD as a body-space capsule, from its braincase to the tip of its snout (the chain's head
- * section, the one that holds the mouth). A transverse marking — a band, a stripe — stops at it and
- * the head takes the coat's one tone. (Where a band's edge fell across a face it drew a bill on it:
+ * section, the one that holds the mouth). A bold transverse band stops at it and the head takes the
+ * coat's one tone. (Where a band's edge fell across a face it drew a bill on it:
  * a dragon with a tan snout on a brown head was a duck's; a lizard wore a mask.) Null when there is
- * no such marking, or no head apart from the trunk.
+ * no band, or no head apart from the trunk.
  */
 export interface HeadMask {
   a: [number, number, number]; // the braincase
@@ -68,8 +68,9 @@ export interface HeadMask {
 }
 
 export function headMaskOf(p: Phenotype): HeadMask | null {
-  const pattern = p.genomeRef.covering.pattern;
-  if (pattern !== 'bands' && pattern !== 'stripes') return null;
+  // (bands only: a tiger's or a tabby's stripes run on over its face, and kept off it the cat wore a
+  // plain pale hood that stopped dead at the neck)
+  if (p.genomeRef.covering.pattern !== 'bands') return null;
   const mouth = p.nodes.findIndex((n) => n.terminal === 'mouth');
   const holder = mouth < 0 ? undefined : p.edges.find(([, b]) => b === mouth);
   const seg = holder ? p.nodes[holder[0]] : undefined;

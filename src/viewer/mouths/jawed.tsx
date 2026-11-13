@@ -324,15 +324,20 @@ export function buildJawed(
     const Y = new THREE.Vector3(...n).cross(X).normalize();
     const Z = new THREE.Vector3(...n);
     const g = new THREE.SphereGeometry(1, 18, 12);
-    // wider across the top than at the bottom: a rounded triangle, the classic mammal rhinarium
+    // a short muzzle wears a small nose: a cat's is a little triangle, a dog's a broad pad (the same
+    // pad on every muzzle gave a cat a dog's big black nose)
+    const ns = noseScaleOf(snoutReach(phenotype, idx));
+    // wider across the top than at the bottom: a rounded triangle, the classic mammal rhinarium (the
+    // smaller, the more a triangle)
+    const flare = 0.32 + 1.0 * (1 - ns);
     const pos = g.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) {
       const y = pos.getY(i);
-      pos.setX(i, pos.getX(i) * (1 + 0.32 * y));
+      pos.setX(i, pos.getX(i) * (1 + flare * y));
     }
     const frame = new THREE.Matrix4().makeBasis(X, Y, Z);
     const at = new THREE.Vector3(line.nose.p[0] - o[0], line.nose.p[1] - o[1], line.nose.p[2] - o[2]).addScaledVector(Z, -r * 0.02);
-    const m = frame.clone().scale(new THREE.Vector3(r * 0.36, r * 0.22, r * 0.11));
+    const m = frame.clone().scale(new THREE.Vector3(r * 0.36 * ns, r * 0.22 * ns, r * 0.11 * ns));
     m.setPosition(at);
     g.applyMatrix4(m);
     g.computeVertexNormals();
@@ -342,9 +347,9 @@ export function buildJawed(
     for (const side of [-1, 1]) {
       const h = new THREE.SphereGeometry(1, 10, 6);
       const local = new THREE.Matrix4()
-        .makeTranslation(side * r * 0.13, -r * 0.035, r * 0.085)
+        .makeTranslation(side * r * 0.13 * ns, -r * 0.035 * ns, r * 0.085 * ns)
         .multiply(new THREE.Matrix4().makeRotationZ(side * 0.45))
-        .multiply(new THREE.Matrix4().makeScale(r * 0.07, r * 0.036, r * 0.03));
+        .multiply(new THREE.Matrix4().makeScale(r * 0.07 * ns, r * 0.036 * ns, r * 0.03 * ns));
       h.applyMatrix4(frame.clone().setPosition(at).multiply(local));
       holes.push(h);
     }
@@ -374,10 +379,36 @@ function dot(a: Vec3, b: Vec3): number {
 }
 
 /**
+ * How far a muzzle runs out ahead of its braincase: the mouth's distance from its head section's first
+ * node, in that node's radii — about 1.6 on a cat, 2 on a mouse or a weasel, 2.4 on a dog or a bear, 3
+ * on a deer.
+ */
+export function snoutReach(p: Phenotype, mouthIdx: number): number {
+  const parent = p.edges.find(([, b]) => b === mouthIdx)?.[0];
+  if (parent === undefined) return SNOUT_LONG;
+  const seg = p.nodes[parent].segment;
+  const head = p.nodes.find((n) => n.kind === 'spine' && n.segment === seg);
+  if (!head) return SNOUT_LONG;
+  const m = p.nodes[mouthIdx].pos;
+  return Math.hypot(m[0] - head.pos[0], m[1] - head.pos[1], m[2] - head.pos[2]) / Math.max(head.radius, 1e-6);
+}
+/** a muzzle reaching no further than this ahead of its braincase is a short one: a cat's */
+export const SNOUT_SHORT = 1.85;
+const SNOUT_LONG = 2.4;
+/** the nose pad's size against a full one, by the muzzle's reach: 0.75 on a cat's, whole on a dog's
+ *  (at 0.6 a cat's was a pink speck, gone at any distance) */
+export function noseScaleOf(reach: number): number {
+  return Math.min(1, Math.max(0.75, 0.75 + (0.25 * (reach - 1.6)) / (SNOUT_LONG - 1.6)));
+}
+
+/**
  * How likely a nose is to be pink rather than near-black: the smaller the animal, the likelier —
  * better than even on a mouse, nothing on anything that stands as tall as a cat, a dog or a bear.
  * Judged from the body itself: how high its back stands above the lowest thing it has.
  */
+/** …and a short muzzle's (a cat's) rose more often than not, whatever its size */
+const SHORT_PINK = 0.65;
+
 export function pinkNoseChance(p: Phenotype): number {
   let top = -Infinity;
   let floor = Infinity;
@@ -422,7 +453,7 @@ export function JawedMouth({
     () =>
       ape
         ? new THREE.Color(ape.color).multiplyScalar(0.7).getHex()
-        : hash01(phenotype.genomeRef.seed, 0x4e05) < pinkNoseChance(phenotype)
+        : hash01(phenotype.genomeRef.seed, 0x4e05) < Math.max(pinkNoseChance(phenotype), snoutReach(phenotype, f.idx) < SNOUT_SHORT ? SHORT_PINK : 0)
           ? new THREE.Color().setHSL(0.98, 0.32, 0.42).getHex()
           : 0x1c1416,
     [phenotype, ape],

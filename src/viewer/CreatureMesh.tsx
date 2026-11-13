@@ -812,6 +812,9 @@ function capGeometry(theta: number, limbal: boolean, squeezeX = 1): THREE.Sphere
   return g;
 }
 const REPTILE_IRIS = [0xb08a2e, 0xa8661f, 0x7d8a33, 0x9a4f24, 0x8f8a6e, 0xc2a046];
+/** a cat's iris round its slit (a slit eye in a coat of fur): gold, amber, green, a pale copper, rarely a
+ *  pale blue. (A reptile's russet on a cat glared like a demon's.) */
+const CAT_IRIS = [0xd2a72c, 0xc8901f, 0x9aae3c, 0x7f9c3a, 0xc07b2c, 0xd2a72c, 0x9fbcc8];
 const FISH_IRIS = [0xc9cdd2, 0xb9bfc4, 0xd2b062, 0xbf9a4a, 0xa9b49c];
 /** a shark's iris (a swimmer in bare skin): dark all through, a slate or bottle-green glint at most.
  *  (A bony fish's silver or brass ring round a big pupil, on a grey shark, was a toy's googly eye.) */
@@ -891,7 +894,11 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   // (lidded and staring forward over a grin, every fish read as a Muppet)
   const fishEye = useMemo(() => vertebrate && onFace && !!phenotype && isSwimmer(phenotype), [vertebrate, onFace, phenotype]);
   const lidded = vertebrate && !fishEye;
-  const slitIris = useMemo(() => REPTILE_IRIS[Math.floor(unitHash(seed, 0x511) * REPTILE_IRIS.length)], [seed]);
+  const furred = phenotype?.genomeRef.covering.type === 'fur';
+  const slitIris = useMemo(() => {
+    const pal = furred ? CAT_IRIS : REPTILE_IRIS;
+    return pal[Math.floor(unitHash(seed, 0x511) * pal.length)];
+  }, [seed, furred]);
   const sharkEye = fishEye && phenotype?.genomeRef.covering.type === 'skin';
   const fishIris = useMemo(() => (sharkEye ? SHARK_IRIS : FISH_IRIS)[Math.floor(unitHash(seed, 0xf15) * (sharkEye ? SHARK_IRIS : FISH_IRIS).length)], [seed, sharkEye]);
   const seat = useMemo(() => (vertebrate && onFace && phenotype ? eyeSeat(phenotype, f.idx, f.quat, r) : { quat: f.quat, sink: 0, centre: null }), [vertebrate, onFace, phenotype, f.idx, f.quat, r]);

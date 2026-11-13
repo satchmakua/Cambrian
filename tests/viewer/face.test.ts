@@ -27,15 +27,16 @@ describe('bare faces', () => {
 });
 
 describe('a plain head under bands and stripes', () => {
-  it('a banded or striped coat keeps the head one tone: a capsule from the braincase to the snout', () => {
-    // (where a band's edge fell across a face it drew a bill on it — a duck's on a dragon)
+  it('a banded coat keeps the head one tone: a capsule from the braincase to the snout — a striped one runs on over it', () => {
+    // (where a band's edge fell across a face it drew a bill on it — a duck's on a dragon; but a tiger's
+    // or a tabby's stripes run on over its face, and kept off it the cat wore a pale hood)
     let banded = 0;
     for (const id of ['dragon', 'wyvern', 'lizard', 'serpent', 'raptor']) {
       for (let seed = 1; seed <= 12; seed++) {
         const p = grow(genomeOfMorphotype(seed, id));
         const m = headMaskOf(p);
         const pattern = p.genomeRef.covering.pattern;
-        if (pattern !== 'bands' && pattern !== 'stripes') {
+        if (pattern !== 'bands') {
           expect(m, `${id} #${seed} (${pattern})`).toBeNull();
           continue;
         }
@@ -56,7 +57,7 @@ describe('a plain head under bands and stripes', () => {
         expect(reach(trunk[Math.floor(trunk.length / 2)].pos), `${id} #${seed} trunk`).toBeGreaterThan(1.5 * m!.r);
       }
     }
-    expect(banded).toBeGreaterThan(10);
+    expect(banded).toBeGreaterThan(8);
   });
 
   it('a face on the trunk itself (an urchin’s, a slug’s) has no head to keep plain', () => {

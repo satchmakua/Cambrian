@@ -268,8 +268,8 @@ export function makeCreatureMaterial(
           // (spots fade out down the legs, as a fawn's dapples or a cheetah's do — the blotches laid on
           // a slim shin stretched into streaks)
           if (uPType == 3) pat *= 1.0 - 0.75 * vLeg;
-          // (a band's or a stripe's edge across a face drew a bill or a mask on it: the head is one tone)
-          if ((uPType == 1 || uPType == 2) && uHeadA.w > 0.0) {
+          // (a band's edge across a face drew a bill or a mask on it: the head is one tone)
+          if (uPType == 2 && uHeadA.w > 0.0) {
             vec3 hab = uHeadB - uHeadA.xyz;
             float ht = clamp(dot(vBodyPos - uHeadA.xyz, hab) / max(dot(hab, hab), 1e-6), 0.0, 1.0);
             pat *= smoothstep(uHeadA.w * 1.1, uHeadA.w * 1.5, length(vBodyPos - uHeadA.xyz - hab * ht));

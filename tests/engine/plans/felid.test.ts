@@ -1,0 +1,42 @@
+import { describe, it, expect } from 'vitest';
+import * as THREE from 'three';
+import { grow } from '../../../src/engine/grow';
+import { genomeOfMorphotype } from '../../../src/engine/random';
+import { eyeVariant } from '../../../src/viewer/partStyles';
+import { buildJawed, noseScaleOf, snoutReach, SNOUT_SHORT } from '../../../src/viewer/mouths/jawed';
+import { mouthSpec } from '../../../src/viewer/mouthLine';
+
+describe('felid', () => {
+  it("looks out of a cat's slit eyes", () => {
+    // (round eyes with a brown iris — the commonest mammal eye — gave the cat a dog's face)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'felid'));
+      const eyes = p.nodes.filter((n) => n.terminal === 'eye');
+      expect(eyes.length, `#${seed}`).toBe(2);
+      for (const e of eyes) expect(eyeVariant(e.part!.style), `#${seed}`).toBe('slit');
+    }
+  });
+
+  it("wears a small nose on its short muzzle, where a dog wears a broad pad", () => {
+    // (the same pad on every muzzle: a cat with a dog's big black nose)
+    const noseWidth = (id: string, seed: number) => {
+      const p = grow(genomeOfMorphotype(seed, id));
+      const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const spec = mouthSpec(p, idx)!;
+      const b = buildJawed(p, idx, [], false, spec.variant as 'fanged' | 'maw' | 'herbivore' | 'underbite')!;
+      expect(b.nose, `${id} #${seed}`).not.toBeNull();
+      b.nose!.computeBoundingBox();
+      const s = b.nose!.boundingBox!.getSize(new THREE.Vector3());
+      return { w: Math.max(s.x, s.y, s.z) / b.r, reach: snoutReach(p, idx) };
+    };
+    for (let seed = 1; seed <= 6; seed++) {
+      const cat = noseWidth('felid', seed);
+      const dog = noseWidth('canid', seed);
+      expect(cat.reach, `cat #${seed}`).toBeLessThan(SNOUT_SHORT);
+      expect(dog.reach, `dog #${seed}`).toBeGreaterThan(SNOUT_SHORT);
+      expect(cat.w, `#${seed}`).toBeLessThan(dog.w * 0.85);
+    }
+    expect(noseScaleOf(1.6)).toBeCloseTo(0.75, 9);
+    expect(noseScaleOf(2.4)).toBe(1);
+  });
+});
