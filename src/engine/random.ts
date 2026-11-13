@@ -841,11 +841,13 @@ function cheliped(rng: Rng, girth: number): AppendageGene {
     attachT: range(rng, 0.9, 0.98),
     attachAzimuth: range(rng, 3.0, 3.15), // out to the side, held up a touch
     attachElevation: range(rng, 0.5, 0.7), // and forward
-    segments: 3,
-    length: clamp(girth * range(rng, 0.4, 0.5), A.length),
+    segments: 4, // (a joint more to fold at: at the curl gene's bound, three left the claws splayed ahead)
+    length: clamp(girth * range(rng, 0.26, 0.31), A.length),
     thickness: clamp(girth * range(rng, 0.44, 0.5), A.thickness),
     taper: range(rng, 0.95, 1.0),
-    curl: [range(rng, -0.08, 0.02), range(rng, 0.48, 0.6)], // carried level; each joint folds it inward
+    // carried level; each joint folds it inward, so the two claws all but meet in front of the face
+    // (folded less and longer, they ran straight out ahead side by side: a lobster's, a scorpion's)
+    curl: [range(rng, -0.08, 0.02), range(rng, 0.55, 0.6)], // (0.6: a curl gene's bound)
   });
 }
 

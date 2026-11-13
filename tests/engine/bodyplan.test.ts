@@ -1050,6 +1050,21 @@ describe('body plans', () => {
     }
   });
 
+  it("a crab holds its claws folded in before its face, not run out ahead side by side", () => {
+    // (long and folded little, the claws ran straight out ahead, splaying: a lobster's, a scorpion's)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'crab'));
+      const parent = new Int32Array(p.nodes.length).fill(-1);
+      for (const [a, b] of p.edges) parent[b] = a;
+      p.nodes.forEach((n, i) => {
+        if (n.terminal !== 'pincer') return;
+        let j = i;
+        while (parent[j] >= 0 && p.nodes[parent[j]].part?.kind === 'arm') j = parent[j];
+        expect(Math.abs(n.pos[0]) / Math.abs(p.nodes[j].pos[0]), `#${seed}`).toBeLessThan(1.03);
+      });
+    }
+  });
+
   it("a crab's eyes stand on slender stalks at the front rim of its shell — every crab's", () => {
     // (one crab in twenty had no stalks and its eyes were buried under the shell: no face at all;
     // the rest wore thick chimneys rising from the middle of the dome, splayed like horns)
