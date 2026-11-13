@@ -599,9 +599,12 @@ float patternField(vec3 p0, int type, float scale) {
     return mix(0.2, v, 1.0 - smoothstep(0.6, 1.6, w));
   }
   if (type == 2) {                                              // bands — bold transverse
+    // (each band's edge a short blend, as a crossband's is, and the bands a little narrower than the
+    // ground between them: edged dead sharp, half the body in each, they were painted on — bandages
+    // round a dragon's limbs, an arachnid's abdomen dipped in ink)
     float s = sin(p.z * scale * 0.8 + 0.6 * fbm3(p0));
-    float w = fwidth(s) + 0.02;
-    return smoothstep(-w, w, s);
+    float w = fwidth(s) + 0.2;
+    return smoothstep(0.12 - w, 0.12 + w, s);
   }
   float c = gFw * scale * 0.55;                                 // voronoi cells per pixel
   if (type == 3) {                                              // spots — solid, soft-edged blotches
