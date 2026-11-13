@@ -129,6 +129,78 @@ export function buildMembraneWing(side: number, S: number, raise = 0.6): WingBui
   return { surface, bones, wrist: W };
 }
 
+/**
+ * A FOLDED membrane wing on side `side` (±1), from a wing of span `S`, relative to the shoulder at the
+ * origin: how a bat or a dragon holds its wings on the ground. The humerus runs back along the upper
+ * flank to the elbow; the forearm comes forward and up again, so the wrist — and its thumb claw — stands
+ * above the shoulder; the fingers run back and down the flank in a tight fan, the skin between them
+ * pleated. (Held spread and raised all the time, a dragon walking the valley carried two poles on its
+ * back, each a narrow strip of skin seen edge on.)
+ */
+export function buildFoldedMembraneWing(side: number, S: number): WingBuild {
+  const s = side >= 0 ? 1 : -1;
+  const out = v3(s, 0, 0); // the side: the folded wing's skin faces out from the flank
+  const P0 = v3(0, 0, 0);
+  const E = v3(0.05 * s * S, -0.03 * S, -0.26 * S); // the elbow, back along the flank
+  const W = v3(0.07 * s * S, 0.17 * S, -0.02 * S); // the wrist, forward and up again, over the shoulder
+  // the fingers: from the hand, back and down in a tight fan (angle below the line back, length)
+  const fingers: [number, number][] = [
+    [0.08, 0.6],
+    [0.24, 0.57],
+    [0.42, 0.52],
+    [0.62, 0.44],
+  ];
+  const back = v3(0, 0, -1), down = v3(0, -1, 0);
+  const roots = fingers.map((_, i) => W.clone().add(v3(0, -0.012 * i * S, -0.018 * i * S)));
+  // (the skin between them folds in pleats: each tip a little further out or in than the last)
+  const tips = fingers.map(([th, L], i) =>
+    roots[i].clone().add(back.clone().multiplyScalar(Math.cos(th) * L * S)).add(down.clone().multiplyScalar(Math.sin(th) * L * S)).add(out.clone().multiplyScalar((i % 2 ? -0.012 : 0.022) * S)),
+  );
+  // the hind panel meets the flank behind the elbow
+  const B = v3(0.03 * s * S, -0.1 * S, -0.5 * S);
+
+  const pos: number[] = [];
+  const idx: number[] = [];
+  const ROWS = 5;
+  const COLS = 8;
+  const panel = (H: THREE.Vector3, e0: THREE.Vector3, e1: THREE.Vector3, sag: number) => {
+    const base = pos.length / 3;
+    for (let i = 0; i <= COLS; i++) {
+      const t = i / COLS;
+      const edge = e0.clone().lerp(e1, t);
+      edge.lerp(H, sag * Math.sin(Math.PI * t));
+      for (let j = 0; j <= ROWS; j++) {
+        const p = H.clone().lerp(edge, j / ROWS);
+        pos.push(p.x, p.y, p.z);
+      }
+    }
+    for (let i = 0; i < COLS; i++) {
+      for (let j = 0; j < ROWS; j++) {
+        const a = base + i * (ROWS + 1) + j;
+        const b = a + ROWS + 1;
+        idx.push(a, b, a + 1, b, b + 1, a + 1);
+      }
+    }
+  };
+  panel(P0, E, W, 0.0); // between the upper arm and the forearm (the folded leading edge)
+  panel(roots[0], tips[0], tips[1], 0.08);
+  panel(roots[1], tips[1], tips[2], 0.1);
+  panel(roots[2], tips[2], tips[3], 0.1);
+  panel(roots[3], tips[3], B, 0.14);
+  panel(E, roots[3], B, 0.0); // from the forearm back to the flank
+
+  const surface = new THREE.BufferGeometry();
+  surface.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  surface.setIndex(idx);
+  surface.computeVertexNormals();
+  const bones: WingBone[] = [
+    { a: P0, b: E, r0: 0.03 * S, r1: 0.024 * S }, // humerus
+    { a: E, b: W, r0: 0.022 * S, r1: 0.017 * S }, // forearm
+    ...tips.map((t, i) => ({ a: roots[i], b: t, r0: 0.014 * S * (1 - i * 0.12), r1: 0.004 * S })),
+  ];
+  return { surface, bones, wrist: W };
+}
+
 // --- feathers ------------------------------------------------------------------------------------
 
 /** One feather: a slightly cupped lens in its own frame (+X along the shaft, +Y across the vane). */

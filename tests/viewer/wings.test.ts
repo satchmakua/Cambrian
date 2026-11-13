@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { buildMembraneWing, buildFeatheredWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface } from '../../src/viewer/wings';
+import { buildMembraneWing, buildFoldedMembraneWing, buildFeatheredWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface } from '../../src/viewer/wings';
 
 function finite(g: THREE.BufferGeometry): boolean {
   const a = g.getAttribute('position').array as ArrayLike<number>;
@@ -32,6 +32,37 @@ describe('wings (shoulder-built, body frame)', () => {
       expect(hum.b.z).toBeLessThan(fore.b.z * (hum.b.x / fore.b.x));
       const roots = new Set(w.bones.slice(2).map((b) => b.a.toArray().map((v) => v.toFixed(4)).join(',')));
       expect(roots.size).toBe(4);
+    }
+  });
+
+  it('a membrane wing at rest is folded along its own flank: the wrist up over the shoulder, the fingers back and down', () => {
+    // (held spread and raised at all times, a dragon walking the valley carried two poles on its back,
+    // each a narrow strip of skin seen edge on)
+    for (const side of [1, -1]) {
+      const S = 2;
+      const w = buildFoldedMembraneWing(side, S);
+      expect(finite(w.surface)).toBe(true);
+      const b = bbox(w.surface);
+      // close against its own side: never across the midline, never spread out from the body
+      if (side > 0) expect(b.min.x).toBeGreaterThan(-0.05);
+      else expect(b.max.x).toBeLessThan(0.05);
+      expect(Math.max(Math.abs(b.min.x), Math.abs(b.max.x))).toBeLessThan(0.15 * S);
+      // long back along the body, the wrist standing over the shoulder
+      expect(b.min.z).toBeLessThan(-0.45 * S);
+      expect(w.wrist!.y).toBeGreaterThan(0.1 * S);
+      expect(Math.abs(w.wrist!.z)).toBeLessThan(0.1 * S);
+      // the elbow behind the shoulder, the fingers running back and down from the wrist
+      const [hum, fore, ...fingers] = w.bones;
+      expect(hum.b.z).toBeLessThan(-0.15 * S);
+      expect(fore.b.y).toBeGreaterThan(hum.b.y);
+      for (const f of fingers) {
+        expect(f.b.z).toBeLessThan(f.a.z - 0.25 * S);
+        expect(f.b.y).toBeLessThanOrEqual(f.a.y + 1e-9);
+      }
+      // mirror-exact
+      const o = buildFoldedMembraneWing(-side, S).surface.getAttribute('position');
+      const a = w.surface.getAttribute('position');
+      for (let i = 0; i < a.count; i += 5) expect(a.getX(i)).toBeCloseTo(-o.getX(i), 6);
     }
   });
 

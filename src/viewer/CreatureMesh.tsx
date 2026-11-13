@@ -28,7 +28,7 @@ import { makeCreatureMaterial } from './creatureMaterial';
 import { bareLegsOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, legWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, longWingFold, trunkGirth, wingCarriage, LONG_WING, type FinBuild } from './wings';
+import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, longWingFold, trunkGirth, wingCarriage, LONG_WING, type FinBuild } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface } from './bodyField';
 import { BROW_TILT, eyeClearings, eyeSeat, eyeTilt, isSwimmer } from './eyeSeat';
@@ -1493,13 +1493,15 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
     const openS = Math.max(trunkLen * 1.15, girth * 3) * (0.55 + gene);
     // a feathered wing on a four-legged body is held up and half open, to the span a membrane wing
     // on the same body would have (wings.ts wingCarriage)
+    // (a membrane wing folds along the flank at rest, as a bat's or a dragon's does, and opens to fly)
     const w = raised
       ? buildSpreadFeatheredWing(side, openS, plumage, accent, 0.62 + 0.2 * (g.seed % 7) / 7)
       : feathered
         ? buildFeatheredWing(side, foldS, plumage, accent, long?.axis)
-        : buildMembraneWing(side, openS, 0.55 + 0.3 * (g.seed % 7) / 7);
+        : buildFoldedMembraneWing(side, openS);
     // the flight posture: the same plumage opened out — a wing reaches further spread than folded
     const spread = feathered ? buildSpreadFeatheredWing(side, raised ? openS * 1.1 : foldS * 1.35, plumage, accent).surface : null;
+    const open = feathered ? null : buildMembraneWing(side, openS, 0.55 + 0.3 * (g.seed % 7) / 7);
     // (an upright body pitches forward to fly: its spread wings are built tilted back by as much, so
     // they come out level — see flightLevel)
     const level = spread ? flightLevel(phenotype) : 0;
@@ -1520,37 +1522,57 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
     }
     if (long) anchor = long.anchor;
     const off: [number, number, number] = [anchor[0] - tip[0], anchor[1] - tip[1], anchor[2] - tip[2]];
-    if (feathered && !raised) {
-      // wrap the folded wing around the flank (the same field the hybrid skin is meshed from)
+    if (!raised) {
+      // wrap the folded wing around the flank (the same field the hybrid skin is meshed from) — and a
+      // folded membrane wing's bones with it, joint by joint, so the arm lies on the skin, not in it
       const prims = surfacePrims(phenotype, 'hybrid');
-      conformToSurface(w.surface, (x, y, z) => fieldAt(prims, x, y, z), anchor, girth * 0.04, w.lift);
+      const field = (x: number, y: number, z: number) => fieldAt(prims, x, y, z);
+      conformToSurface(w.surface, field, anchor, girth * 0.04, w.lift);
+      if (!feathered) {
+        const joints: THREE.Vector3[] = [];
+        for (const b of w.bones) joints.push(b.a, b.b);
+        if (w.wrist) joints.push(w.wrist);
+        const pts = new THREE.BufferGeometry().setFromPoints(joints);
+        conformToSurface(pts, field, anchor, girth * 0.08);
+        const at = pts.getAttribute('position');
+        joints.forEach((j, i) => j.set(at.getX(i), at.getY(i), at.getZ(i)));
+        pts.dispose();
+      }
     }
-    const bones = w.bones.map((b) => {
+    const boneOf = (b: { a: THREE.Vector3; b: THREE.Vector3; r0: number; r1: number }) => {
       const d = b.b.clone().sub(b.a);
       const len = Math.max(d.length(), 1e-4);
       const q = new THREE.Quaternion().setFromUnitVectors(UP, d.normalize());
       const mid = b.a.clone().add(b.b).multiplyScalar(0.5);
       return { pos: [mid.x, mid.y, mid.z] as [number, number, number], quat: [q.x, q.y, q.z, q.w] as [number, number, number, number], len, r0: b.r0, r1: b.r1 };
-    });
-    return { w, off, bones, side, spread };
+    };
+    const openBones = open ? open.bones.map(boneOf) : [];
+    const bones = w.bones.map(boneOf);
+    return { w, off, bones, side, spread, open, openBones };
   }, [phenotype, f.idx, f.radius, f.style, feathered, raised, g]);
   useEffect(() => () => {
     build.w.surface.dispose();
     build.spread?.dispose();
+    build.open?.surface.dispose();
   }, [build]);
   // flight: fold ↔ spread, and the wingbeat as a roll about the body axis at the shoulder
   const flight = useContext(FlightContext);
   const flapRef = useRef<THREE.Group>(null);
   const foldRef = useRef<THREE.Mesh>(null);
   const spreadRef = useRef<THREE.Mesh>(null);
+  const foldGroup = useRef<THREE.Group>(null);
+  const openGroup = useRef<THREE.Group>(null);
   useFrame(() => {
     const sp = flight ? flight.spread : 0;
     if (flapRef.current) flapRef.current.rotation.z = build.side * (flight ? flight.flap * sp : 0);
-    if (foldRef.current) foldRef.current.visible = !build.spread || sp < 0.35;
-    if (spreadRef.current) {
-      spreadRef.current.visible = sp >= 0.35;
-      // opening out: the spread wing grows from the folded length as it unfolds
-      spreadRef.current.scale.setScalar(0.55 + 0.45 * THREE.MathUtils.smoothstep(sp, 0.35, 1));
+    const folded = !(build.spread || build.open) || sp < 0.35;
+    // opening out: the spread wing grows from the folded length as it unfolds
+    const opening = 0.55 + 0.45 * THREE.MathUtils.smoothstep(sp, 0.35, 1);
+    for (const o of [foldRef.current, foldGroup.current]) if (o) o.visible = folded;
+    for (const o of [spreadRef.current, openGroup.current]) {
+      if (!o) continue;
+      o.visible = !folded;
+      o.scale.setScalar(opening);
     }
   });
   // the arm and finger bones wear the wing's own skin, a shade deeper (a flat dark cylinder read as a
@@ -1573,36 +1595,55 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
         </>
       ) : (
         <>
-          <mesh geometry={build.w.surface} castShadow>
-            <meshPhysicalMaterial color={skin} roughness={0.62} sheen={0.3} sheenRoughness={0.5} side={THREE.DoubleSide} transparent opacity={0.93} />
-          </mesh>
-          {!lite && build.bones.map((b, i) => (
-            <group key={i} position={b.pos} quaternion={b.quat}>
-              <mesh castShadow>
-                <cylinderGeometry args={[b.r1, b.r0, b.len, 10]} />
-                <meshStandardMaterial color={bone} roughness={0.55} />
-              </mesh>
-              {/* rounded joints: knuckles at both ends, not flat-cut tube ends */}
-              <mesh position={[0, -b.len / 2, 0]}>
-                <sphereGeometry args={[b.r0, 10, 8]} />
-                <meshStandardMaterial color={bone} roughness={0.55} />
-              </mesh>
-              <mesh position={[0, b.len / 2, 0]}>
-                <sphereGeometry args={[b.r1, 8, 6]} />
-                <meshStandardMaterial color={bone} roughness={0.55} />
-              </mesh>
+          {/* at rest folded along the flank; in flight opened out (see buildFoldedMembraneWing) */}
+          <group ref={foldGroup}>
+            <MembraneWing surface={build.w.surface} bones={build.bones} wrist={build.w.wrist} skin={skin} bone={bone} lite={lite} />
+          </group>
+          {build.open && (
+            <group ref={openGroup} visible={false}>
+              <MembraneWing surface={build.open.surface} bones={build.openBones} wrist={build.open.wrist} skin={skin} bone={bone} lite={lite} />
             </group>
-          ))}
-          {!lite && build.w.wrist && (
-            <mesh position={[build.w.wrist.x, build.w.wrist.y + build.bones[0].r1 * 0.6, build.w.wrist.z]} rotation={[-0.4, 0, 0]} castShadow>
-              <coneGeometry args={[build.bones[0].r1 * 0.7, build.bones[0].r1 * 3.2, 7]} />
-              <meshStandardMaterial color={0x2a2420} roughness={0.45} />
-            </mesh>
           )}
         </>
       )}
      </group>
     </group>
+  );
+}
+
+type WingBoneMesh = { pos: [number, number, number]; quat: [number, number, number, number]; len: number; r0: number; r1: number };
+// A membrane wing as drawn: its skin, the arm and finger bones in the wing's own skin a shade deeper,
+// and the thumb claw at the wrist.
+function MembraneWing({ surface, bones, wrist, skin, bone, lite }: { surface: THREE.BufferGeometry; bones: WingBoneMesh[]; wrist: THREE.Vector3 | null; skin: number; bone: number; lite: boolean }) {
+  return (
+    <>
+      <mesh geometry={surface} castShadow>
+        <meshPhysicalMaterial color={skin} roughness={0.62} sheen={0.3} sheenRoughness={0.5} side={THREE.DoubleSide} transparent opacity={0.93} />
+      </mesh>
+      {!lite && bones.map((b, i) => (
+        <group key={i} position={b.pos} quaternion={b.quat}>
+          <mesh castShadow>
+            <cylinderGeometry args={[b.r1, b.r0, b.len, 10]} />
+            <meshStandardMaterial color={bone} roughness={0.55} />
+          </mesh>
+          {/* rounded joints: knuckles at both ends, not flat-cut tube ends */}
+          <mesh position={[0, -b.len / 2, 0]}>
+            <sphereGeometry args={[b.r0, 10, 8]} />
+            <meshStandardMaterial color={bone} roughness={0.55} />
+          </mesh>
+          <mesh position={[0, b.len / 2, 0]}>
+            <sphereGeometry args={[b.r1, 8, 6]} />
+            <meshStandardMaterial color={bone} roughness={0.55} />
+          </mesh>
+        </group>
+      ))}
+      {!lite && wrist && bones.length > 0 && (
+        <mesh position={[wrist.x, wrist.y + bones[0].r1 * 0.6, wrist.z]} rotation={[-0.4, 0, 0]} castShadow>
+          <coneGeometry args={[bones[0].r1 * 0.7, bones[0].r1 * 3.2, 7]} />
+          <meshStandardMaterial color={0x2a2420} roughness={0.45} />
+        </mesh>
+      )}
+    </>
   );
 }
 
