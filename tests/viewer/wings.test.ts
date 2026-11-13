@@ -229,6 +229,19 @@ describe('wings (shoulder-built, body frame)', () => {
     // a fish's fork is even, top and bottom
     const fork = box('caudal', 'fish', back);
     expect(Math.abs(fork.max.y + fork.min.y)).toBeLessThan(0.08);
+    // …and a broad fan on the tail stock, notched shallow: it fills half its own box (with the tucked-in
+    // hub). A fan from one point notched a third of its length — two needles in a V — filled a fifth.
+    const tail = buildFin('caudal', back, g, 1, 'fish').membrane;
+    const tp = tail.getAttribute('position');
+    const ti = tail.getIndex()!;
+    let area = 0;
+    for (let t = 0; t < ti.count; t += 3) {
+      const [a, b, c] = [ti.getX(t), ti.getX(t + 1), ti.getX(t + 2)];
+      const uy = tp.getY(b) - tp.getY(a), uz = tp.getZ(b) - tp.getZ(a);
+      const wy = tp.getY(c) - tp.getY(a), wz = tp.getZ(c) - tp.getZ(a);
+      area += Math.abs(uy * wz - uz * wy) / 2;
+    }
+    expect(area / ((fork.max.y - fork.min.y) * (fork.max.z - fork.min.z))).toBeGreaterThan(0.45);
     // a shark's pectoral is a long plane, a fish's a short paddle
     const side = new THREE.Vector3(1, -0.2, 0).normalize();
     expect(box('pectoral', 'shark', side).max.x).toBeGreaterThan(1.5 * box('pectoral', 'fish', side).max.x);

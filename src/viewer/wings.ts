@@ -585,6 +585,9 @@ export function conformToSurface(
 // --- fins ---------------------------------------------------------------------------------------
 
 export type FinKind = 'dorsal' | 'pectoral' | 'pelvic' | 'anal' | 'caudal';
+/** a bony fish's tail: its base's half-depth (× the fin's depth) and how far back its fork's notch
+ *  reaches (× its length) */
+export const FISH_TAIL: readonly [number, number] = [0.16, 0.66];
 
 /**
  * The cut of a body's fins, from the fin part's style gene:
@@ -706,10 +709,29 @@ export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 
     edge(up[0], up[1], notch[0], notch[1], 6, 0, -0.14 * H); // the trailing edge, hollow
     edge(notch[0], notch[1], low[0], low[1], 4, 0, 0.04 * H); // the lower lobe's trailing edge
     edge(low[0], low[1], rootBot, 0, 4, -0.03 * C, 0); // …and its leading edge, back to the stock
+  } else if (kind === 'caudal' && cut === 'fish') {
+    // a bony fish's tail: a broad fan on a base as deep as the tail stock, its two lobes flaring from it
+    // to rounded tips, the trailing edge between them notched in a shallow fork. (A fan from one point at
+    // the stock, notched to a third of its length, was two needle spikes in a V: too spindly by far for
+    // a stout fish.)
+    const rootHalf = FISH_TAIL[0] * C;
+    const notch = FISH_TAIL[1] * H;
+    const edge = (a0: number, r0: number, a1: number, r1: number, n: number, bowA: number, bowR: number) => {
+      for (let i = 1; i <= n; i++) {
+        const t = i / n, b = Math.sin(Math.PI * t);
+        outline.push(P(a0 + (a1 - a0) * t + bowA * b, r0 + (r1 - r0) * t + bowR * b));
+      }
+    };
+    outline.push(P(rootHalf, 0));
+    edge(rootHalf, 0, 0.5 * C, H, 5, 0.06 * C, -0.04 * H); // the upper lobe's leading edge, flaring
+    edge(0.5 * C, H, 0.42 * C, 1.04 * H, 2, 0, 0.03 * H); // its rounded tip
+    edge(0.42 * C, 1.04 * H, 0, notch, 4, 0, -0.06 * H); // the trailing edge in to the notch
+    edge(0, notch, -0.42 * C, 1.04 * H, 4, 0, -0.06 * H); // …and out to the lower lobe
+    edge(-0.42 * C, 1.04 * H, -0.5 * C, H, 2, 0, 0.03 * H);
+    edge(-0.5 * C, H, -rootHalf, 0, 5, -0.06 * C, -0.04 * H); // the lower lobe's leading edge, back in
   } else if (kind === 'caudal') {
     // a forked tail: two lobes (up and down along the chord) reaching back along the aim
-    // (a bony fish's fork is cut deeper than the plain fan's)
-    const pit = cut === 'fish' ? 0.34 : 0.45;
+    const pit = 0.45;
     for (let i = 0; i <= N; i++) {
       const t = i / N; // −C/2 … +C/2 across the fork
       const across = (t - 0.5) * C;
