@@ -17,7 +17,7 @@
  */
 import * as THREE from 'three';
 import { coatAccent, coatBelly, coatMain, coatPattern } from './palette';
-import type { FaceMask } from './face';
+import type { FaceMask, HeadMask } from './face';
 import type { Palette, Covering, CoveringType, PatternType } from '../engine/genome';
 import { getQuality, useSettings } from '../ui/settings';
 
@@ -115,6 +115,7 @@ export function makeCreatureMaterial(
   shell: FurShell | null = null,
   face: FaceMask | null = null,
   seam = 0, // a beetle's wing-cases: the half-width of the dark suture down the back's midline (0 = none)
+  head: HeadMask | null = null, // where bands and stripes stop: the head takes one tone
 ): THREE.MeshPhysicalMaterial {
   // A moodier base than the raw palette: real integument is rarely a bright, saturated toy. We
   // desaturate and darken a touch so creatures read as living tissue, not painted plastic.
@@ -182,6 +183,9 @@ export function makeCreatureMaterial(
     // a bare face (an ape's) — w = 0 when there is none
     shader.uniforms.uFace = { value: face ? new THREE.Vector4(face.c[0], face.c[1], face.c[2], face.r) : new THREE.Vector4(0, 0, 0, 0) };
     shader.uniforms.uFaceCol = { value: new THREE.Color(face ? face.color : 0) };
+    // the head, plain under a transverse marking — w = 0 when it is not kept plain
+    shader.uniforms.uHeadA = { value: head ? new THREE.Vector4(head.a[0], head.a[1], head.a[2], head.r) : new THREE.Vector4(0, 0, 0, 0) };
+    shader.uniforms.uHeadB = { value: new THREE.Vector3(...(head ? head.b : [0, 0, 0])) };
     shader.uniforms.uSeam = { value: seam };
     shader.uniforms.uFine = FINE_RELIEF; // (one object, shared: the graphics option switches every coat at once)
     // (unused slots keep r = 0, which clears nothing)
@@ -264,6 +268,12 @@ export function makeCreatureMaterial(
           // (spots fade out down the legs, as a fawn's dapples or a cheetah's do — the blotches laid on
           // a slim shin stretched into streaks)
           if (uPType == 3) pat *= 1.0 - 0.75 * vLeg;
+          // (a band's or a stripe's edge across a face drew a bill or a mask on it: the head is one tone)
+          if ((uPType == 1 || uPType == 2) && uHeadA.w > 0.0) {
+            vec3 hab = uHeadB - uHeadA.xyz;
+            float ht = clamp(dot(vBodyPos - uHeadA.xyz, hab) / max(dot(hab, hab), 1e-6), 0.0, 1.0);
+            pat *= smoothstep(uHeadA.w * 1.1, uHeadA.w * 1.5, length(vBodyPos - uHeadA.xyz - hab * ht));
+          }
           skin = mix(skin, uPattern, clamp(pat * uContrast, 0.0, 1.0));
           // a deeper accent in the cores of strong markings (rosette rings, ocelli) → richness
           skin = mix(skin, uPattern2, smoothstep(0.55, 0.95, pat) * uContrast * 0.4);
@@ -437,7 +447,7 @@ uniform float uPScale; uniform float uContrast; uniform float uSheen; uniform fl
 uniform vec3 uOff;
 uniform int uDebug;
 uniform float uBareY; uniform float uBareBand; uniform vec3 uBareCol;
-uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6]; uniform vec4 uFace; uniform vec3 uFaceCol; uniform float uSeam;
+uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6]; uniform vec4 uFace; uniform vec3 uFaceCol; uniform vec4 uHeadA; uniform vec3 uHeadB; uniform float uSeam;
 uniform float uFine;
 
 // Per-fragment globals, primed at the top of the colour stage and reused by the roughness + normal

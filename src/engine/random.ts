@@ -148,6 +148,9 @@ interface Morpho {
    *  midline and past it: on a narrow skull the pair merged into one forked stub. Nearer 1.0 they stand
    *  apart on the upper corners of the head. */
   hornAz?: Rg;
+  /** the horns' tilt along the skull (+ forward, − back) — default [0.3, 0.7], forward: on a dragon they
+   *  stood up off the crown like a pair of ears. Swept back they run on from the skull's line. */
+  hornEl?: Rg;
   spines?: number;
   frill?: number;
   /** 'head': the frill fans out from the back of the SKULL (a frilled lizard's ruff, a lion's mane)
@@ -278,8 +281,8 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'ratite', cluster: 'familiar', weight: 1.2, legAz: [4.62, 4.71], legYaw: 0, girth: [0.34, 0.5], repeat: [2, 3], height: [0.92, 1.08], elong: [1.15, 1.35], neck: [0.3, 0.38], neckLinks: [7, 8], neckLift: [-0.24, -0.2], headSize: [0.42, 0.5], headShape: ['tapered', 'wedge', 'round'], headDome: [0.8, 0.95], legPairs: [1], posture: 'upright', legLen: [2.05, 2.4], legThick: [0.3, 0.4], legTerm: ['claw'], tail: 0.9, tailTerm: ['none'], tailSegs: [1, 2], tailLen: [0.3, 0.5], tailThick: [0.24, 0.34], tailDroop: [-1.55, -1.3], tailCurl: [-0.3, -0.15], head: 0.5, eyeStyle: [0, 0.2], mouthStyle: [0.3, 0.37], covering: ['feathers'], pattern: ['plain', 'mottle'], soberMarks: true, hue: [0.06, 0.12], sat: [0.3, 0.5] },
   // --- uncanny ---
   // a dragon: four legs and a pair of great wings (one in seven was wingless — a horned, banded horse)
-  { id: 'dragon', cluster: 'uncanny', weight: 0.9, eyeEl: [0.7, 0.85], muzzleDrop: [0.12, 0.24], snout: [0.5, 0.75], muzzle: [0.52, 0.62], tailTaper: [0.78, 0.84], tailCurl: [-0.1, -0.03], tailSegs: [5, 6], tailThick: [0.5, 0.62], tailDroop: [-1.5, -1.3], taper: [1.05, 1.1], girth: [0.5, 0.66], repeat: [3, 4], elong: [1.15, 1.35], neck: [0.46, 0.54], neckLinks: [3, 3], neckLift: [-0.42, -0.34], headSize: [0.6, 0.75], legPairs: [2], posture: 'digitigrade', legLen: [0.9, 1.15], legThick: [0.5, 0.62], legTerm: ['claw'], wings: 1, wingSize: [1.5, 1.8], tail: 0.95, tailTerm: ['none', 'barb', 'club'], headShape: ['flat', 'wedge'], horns: 0.9, spines: 0.8, crest: 0.3, eyeStyle: [0.4, 0.9], mouthStyle: [0.14, 0.24], covering: ['scales', 'plates'], pattern: ['reticulate', 'bands', 'mottle'], sheen: [0.35, 0.8], hue: [0.0, 0.95], sat: [0.5, 0.9] },
-  { id: 'wyvern', cluster: 'uncanny', weight: 0.85, headShape: ['flat', 'wedge'], headWide: [0.86, 1.0], headDome: [0.72, 0.84], eyeEl: [0.7, 0.85], muzzleDrop: [0.12, 0.24], snout: [0.5, 0.75], muzzle: [0.52, 0.62], tailTaper: [0.78, 0.84], tailSegs: [5, 6], tailThick: [0.5, 0.6], tailDroop: [-1.5, -1.3], rear: [-0.22, -0.15], girth: [0.42, 0.56], repeat: [3, 4], elong: [1.2, 1.5], neck: [0.44, 0.52], neckLinks: [3, 4], neckLift: [-0.3, -0.2], headSize: [0.62, 0.78], legPairs: [1], posture: 'digitigrade', legLen: [1.1, 1.4], legThick: [0.5, 0.64], legTerm: ['claw'], wings: 1, wingSize: [1.7, 2.0], tail: 0.95, tailTerm: ['barb'], horns: 0.8, spines: 0.6, eyeStyle: [0.4, 0.9], mouthStyle: [0.14, 0.24], covering: ['scales'], pattern: ['bands', 'reticulate'], sheen: [0.3, 0.7], hue: [0.0, 0.95], sat: [0.5, 0.9] },
+  { id: 'dragon', cluster: 'uncanny', weight: 0.9, eyeEl: [0.7, 0.85], muzzleDrop: [0.02, 0.1], snout: [0.5, 0.75], muzzle: [0.6, 0.68], headWide: [0.95, 1.1], headDome: [0.68, 0.8], hornAz: [1.0, 1.3], hornEl: [-1.05, -0.65], eyeTilt: 0.4, tailTaper: [0.78, 0.84], tailCurl: [-0.1, -0.03], tailSegs: [5, 6], tailThick: [0.5, 0.62], tailDroop: [-1.5, -1.3], taper: [1.05, 1.1], girth: [0.5, 0.66], repeat: [3, 4], elong: [1.15, 1.35], neck: [0.46, 0.54], neckLinks: [3, 3], neckLift: [-0.42, -0.34], headSize: [0.6, 0.75], legPairs: [2], posture: 'digitigrade', legLen: [0.9, 1.15], legThick: [0.5, 0.62], legTerm: ['claw'], wings: 1, wingSize: [1.5, 1.8], tail: 0.95, tailTerm: ['none', 'barb', 'club'], headShape: ['flat', 'wedge'], horns: 0.9, spines: 0.8, crest: 0.3, eyeStyle: [0.42, 0.58], mouthStyle: [0.14, 0.24], covering: ['scales', 'plates'], pattern: ['reticulate', 'bands', 'mottle'], sheen: [0.35, 0.8], hue: [0.0, 0.95], sat: [0.5, 0.9] },
+  { id: 'wyvern', cluster: 'uncanny', weight: 0.85, headShape: ['flat', 'wedge'], headWide: [0.86, 1.0], headDome: [0.72, 0.84], eyeEl: [0.7, 0.85], muzzleDrop: [0.02, 0.1], snout: [0.5, 0.75], muzzle: [0.6, 0.68], hornAz: [1.0, 1.3], hornEl: [-1.05, -0.65], eyeTilt: 0.4, tailTaper: [0.78, 0.84], tailSegs: [5, 6], tailThick: [0.5, 0.6], tailDroop: [-1.5, -1.3], rear: [-0.22, -0.15], girth: [0.42, 0.56], repeat: [3, 4], elong: [1.2, 1.5], neck: [0.44, 0.52], neckLinks: [3, 4], neckLift: [-0.3, -0.2], headSize: [0.62, 0.78], legPairs: [1], posture: 'digitigrade', legLen: [1.1, 1.4], legThick: [0.5, 0.64], legTerm: ['claw'], wings: 1, wingSize: [1.7, 2.0], tail: 0.95, tailTerm: ['barb'], horns: 0.8, spines: 0.6, eyeStyle: [0.42, 0.58], mouthStyle: [0.14, 0.24], covering: ['scales'], pattern: ['bands', 'reticulate'], sheen: [0.3, 0.7], hue: [0.0, 0.95], sat: [0.5, 0.9] },
   // an octopus: a tall mantle over a crown of arms, thick where they leave it and drawn out to fine
   // tips; TWO eyes, low on the head just above the arms, with a bar of a pupil (one eye per arm — a
   // ring of eight glowing discs round the mantle — read as a googly-eyed egg on a spider's legs)
@@ -669,6 +672,7 @@ function muzzleHead(rng: Rng, g: number, m: Morpho, eyeStyle: number): SegmentGe
     // (sized against more than the skull's girth: at true scale a mammal's eye, half sunk into the
     // skull, all but vanished — a lively face needs a readable eye)
     apps.push(eyes(rng, range(rng, 0.05, 0.22), false, g * 1.12, { style: [eyeStyle, eyeStyle], az: (m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.45, 0.7)) + p * 0.3, el: m.eyeEl, size: m.eyeSize }));
+    if (m.eyeTilt) apps[apps.length - 1].roll = m.eyeTilt; // (a constant: no draw)
   }
   const mouthGene = mouth(rng, mg * 1.05, m.mouthStyle);
   mouthGene.attachT = 1; // the muzzle carries the mouth
@@ -885,7 +889,7 @@ function tail(rng: Rng, girth: number, terminal: Terminal, m?: Morpho): Appendag
 function horns(rng: Rng, refGirth: number, m?: Morpho): AppendageGene {
   return part('horn', 'claw', true, range(rng, 0, 0.6), {
     attachAzimuth: rg(rng, m?.hornAz, [1.0, 1.7]),
-    attachElevation: range(rng, 0.3, 0.7),
+    attachElevation: rg(rng, m?.hornEl, [0.3, 0.7]),
     segments: randint(rng, 1, 2),
     length: clamp(refGirth * range(rng, 0.5, 1.0), A.length),
     thickness: clamp(refGirth * range(rng, 0.18, 0.32), A.thickness),

@@ -33,7 +33,7 @@ import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface } from './bodyField';
 import { BROW_TILT, eyeClearings, eyeSeat, eyeTilt, isSwimmer } from './eyeSeat';
 import { coatDark, coatFin, coatMain, coatPattern } from './palette';
-import { browRidgeGeometry, faceMaskOf, isApe } from './face';
+import { browRidgeGeometry, faceMaskOf, headMaskOf, isApe } from './face';
 import { apeFootGeometry, fistGeometry } from './apeLimbs';
 import { clawGeometry } from './claw';
 import { shardGeometry } from './shards';
@@ -218,7 +218,8 @@ export function CreatureMesh({
   const seed = phenotype.genomeRef.seed;
 
   const face = useMemo(() => faceMaskOf(phenotype), [phenotype]);
-  const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed, bareLegsOf(phenotype), null, face), [pal, cov, seed, phenotype, face]);
+  const headMask = useMemo(() => headMaskOf(phenotype), [phenotype]);
+  const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed, bareLegsOf(phenotype), null, face, 0, headMask), [pal, cov, seed, phenotype, face, headMask]);
   useEffect(() => () => bodyMat.dispose(), [bodyMat]);
   // shell fur: FUR_SHELLS layers of the body out to a pile scaled to the creature
   const furMats = useMemo(() => {
@@ -228,8 +229,8 @@ export function CreatureMesh({
     const len = Math.min(0.08, Math.max(0.022, size * 0.0095));
     const bare = bareLegsOf(phenotype);
     const eyes = eyeClearings(phenotype, data.features);
-    return Array.from({ length: FUR_SHELLS }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / FUR_SHELLS, len, density: 3.2 / len, eyes }, face));
-  }, [fur, cov, skinMode, phenotype, pal, seed, data, face]);
+    return Array.from({ length: FUR_SHELLS }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / FUR_SHELLS, len, density: 3.2 / len, eyes }, face, 0, headMask));
+  }, [fur, cov, skinMode, phenotype, pal, seed, data, face, headMask]);
   useEffect(() => () => furMats.forEach((m) => m.dispose()), [furMats]);
 
   // physics playback (post-roadmap): when a recorded gait is present, capsules re-pose from it

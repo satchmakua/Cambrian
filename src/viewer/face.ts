@@ -54,6 +54,33 @@ export function faceMaskOf(p: Phenotype): FaceMask | null {
   return { c, r: r / MASK_CORE, color: srgbHSL(h, s, l).getHex() };
 }
 
+/**
+ * The HEAD as a body-space capsule, from its braincase to the tip of its snout (the chain's head
+ * section, the one that holds the mouth). A transverse marking — a band, a stripe — stops at it and
+ * the head takes the coat's one tone. (Where a band's edge fell across a face it drew a bill on it:
+ * a dragon with a tan snout on a brown head was a duck's; a lizard wore a mask.) Null when there is
+ * no such marking, or no head apart from the trunk.
+ */
+export interface HeadMask {
+  a: [number, number, number]; // the braincase
+  b: [number, number, number]; // the snout's tip
+  r: number; // the head's girth: plain within 1.1r of the a–b line (the skull's skin and the eyes on it), the marking back by 1.5r
+}
+
+export function headMaskOf(p: Phenotype): HeadMask | null {
+  const pattern = p.genomeRef.covering.pattern;
+  if (pattern !== 'bands' && pattern !== 'stripes') return null;
+  const mouth = p.nodes.findIndex((n) => n.terminal === 'mouth');
+  const holder = mouth < 0 ? undefined : p.edges.find(([, b]) => b === mouth);
+  const seg = holder ? p.nodes[holder[0]] : undefined;
+  if (!seg || seg.kind !== 'spine' || !seg.segment) return null; // a face on the trunk itself
+  const head = p.nodes.filter((n) => n.kind === 'spine' && n.segment === seg.segment);
+  if (head.length === 0) return null;
+  let r = 0;
+  for (const n of head) r = Math.max(r, n.radius * Math.max(n.scale?.[0] ?? 1, n.scale?.[1] ?? 1));
+  return { a: [...head[0].pos] as [number, number, number], b: [...head[head.length - 1].pos] as [number, number, number], r };
+}
+
 /** how far in front of the face the mask's centre stands (×the mouth's radius); how much of each
  *  eye and the mouth its bare core takes in past their centres (×their radius); and the core's share
  *  of the mask's radius (the covering shader's: full skin inside it, fading to coat at the edge) */

@@ -51,9 +51,9 @@ describe('the raptor plan', () => {
     }
   });
 
-  it('is the only plan whose eyes are tilted: every other face keeps its level, browless eyes', () => {
+  it('only a hawk and the dragons scowl: every other face keeps its level, browless eyes', () => {
     for (const id of MORPHOTYPE_IDS) {
-      if (id === 'raptor') continue;
+      if (id === 'raptor' || id === 'dragon' || id === 'wyvern') continue;
       for (let seed = 1; seed <= 8; seed++) {
         const g = genomeOfMorphotype(seed, id);
         if (g.symmetry !== 'bilateral') continue; // (a brow is only ever drawn on a bilateral face…
