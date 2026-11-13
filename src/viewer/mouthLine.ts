@@ -207,7 +207,9 @@ export function mouthCarves(p: Phenotype): Carve[] {
         ],
         quat: [...s.node.quat] as [number, number, number, number],
         radii: [s.r * 0.78, s.r * 0.78, depth],
-        blend: s.r * 0.2,
+        // (a soft rim, the skin rounding over into the hole: cut at a fifth of the mouth's size, the
+        // hole's edge stair-stepped in the mesh and caught the light — a torn white rim)
+        blend: s.r * 0.36,
         band: s.r * 0.55,
       };
     }

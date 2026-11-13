@@ -159,7 +159,7 @@ export function buildRing(
     // odd count so it never reads machined; the ring is resampled finer so each knob is round.)
     rasp = sweepTube(
       resampleClosed(shell[1], RASP_KNOBS * 4).map((s): SweepPoint => ({ p: s.p, n: s.n })),
-      { radius: (u) => r * (0.022 + 0.034 * Math.pow(Math.max(0, Math.cos(u * Math.PI * 2 * RASP_KNOBS)), 2)), flatten: 0.8, radialSegments: 8, closed: true },
+      { radius: (u) => r * (0.03 + 0.05 * Math.pow(Math.max(0, Math.cos(u * Math.PI * 2 * RASP_KNOBS)), 2)), flatten: 0.8, radialSegments: 8, closed: true },
     );
     for (const j of PUCKERS) {
       const pts: SweepPoint[] = [];
