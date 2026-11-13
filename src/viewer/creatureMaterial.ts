@@ -357,6 +357,11 @@ export function makeCreatureMaterial(
             float u = uShellH / sLen;
             float dc = length(fract(q) - 0.5 - jit * 0.5);
             float far = smoothstep(0.28, 1.15, gFw * uShellDen);
+            // …except along the outline, where the strands are seen side-on and stand out against the
+            // ground as fuzz however far off the animal is (faded there too, a coat at a distance was a
+            // smooth hide with a hard edge: bare rubber)
+            float graze = 1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition)));
+            far *= 1.0 - 0.85 * smoothstep(0.6, 0.92, graze) * (1.0 - eyeClear);
             if (u > 1.0 || dc > 0.62 * (1.0 - u) || far > hash13(cell + 5.0) || vFlesh > 0.05 || bare > 0.3 || faceW > 0.3) discard;
             // depth in the pile: shadowed at the root, catching light at the tips; each lock its own shade
             // — but only while the pile is dense. Where strands are thinning out toward a pixel's size
