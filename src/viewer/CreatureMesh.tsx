@@ -811,6 +811,9 @@ function capGeometry(theta: number, limbal: boolean, squeezeX = 1): THREE.Sphere
   }
   return g;
 }
+/** a membrane wing folded at rest, against its open span: a dragon's folded wing is a great sail over
+ *  its back (at the open span's scale, folded, it was a fan the size of the head) */
+const MEMBRANE_FOLD = 1.35;
 const REPTILE_IRIS = [0xb08a2e, 0xa8661f, 0x7d8a33, 0x9a4f24, 0x8f8a6e, 0xc2a046];
 /** a cat's iris round its slit (a slit eye in a coat of fur): gold, amber, green, a pale copper, rarely a
  *  pale blue. (A reptile's russet on a cat glared like a demon's.) */
@@ -1513,7 +1516,7 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
       ? buildSpreadFeatheredWing(side, openS, plumage, accent, 0.62 + 0.2 * (g.seed % 7) / 7)
       : feathered
         ? buildFeatheredWing(side, foldS, plumage, accent, long?.axis)
-        : buildFoldedMembraneWing(side, openS);
+        : buildFoldedMembraneWing(side, openS * MEMBRANE_FOLD);
     // the flight posture: the same plumage opened out — a wing reaches further spread than folded
     const spread = feathered ? buildSpreadFeatheredWing(side, raised ? openS * 1.1 : foldS * 1.35, plumage, accent).surface : null;
     const open = feathered ? null : buildMembraneWing(side, openS, 0.55 + 0.3 * (g.seed % 7) / 7);

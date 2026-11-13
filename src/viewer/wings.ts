@@ -143,12 +143,14 @@ export function buildFoldedMembraneWing(side: number, S: number): WingBuild {
   const P0 = v3(0, 0, 0);
   const E = v3(0.05 * s * S, -0.03 * S, -0.26 * S); // the elbow, back along the flank
   const W = v3(0.07 * s * S, 0.17 * S, -0.02 * S); // the wrist, forward and up again, over the shoulder
-  // the fingers: from the hand, back and down in a tight fan (angle below the line back, length)
+  // the fingers: from the hand, back and down in a fan (angle below the line back, length) — raked
+  // down over the flank, so the folded skin hangs from the wrist like a cape. (Run back nearly level
+  // and short, the first at 0.08 rad, the fold stood on the back as a little fan, a dorsal sail.)
   const fingers: [number, number][] = [
-    [0.08, 0.6],
-    [0.24, 0.57],
-    [0.42, 0.52],
-    [0.62, 0.44],
+    [0.22, 0.7],
+    [0.4, 0.66],
+    [0.6, 0.6],
+    [0.82, 0.52],
   ];
   const back = v3(0, 0, -1), down = v3(0, -1, 0);
   const roots = fingers.map((_, i) => W.clone().add(v3(0, -0.012 * i * S, -0.018 * i * S)));
@@ -156,8 +158,8 @@ export function buildFoldedMembraneWing(side: number, S: number): WingBuild {
   const tips = fingers.map(([th, L], i) =>
     roots[i].clone().add(back.clone().multiplyScalar(Math.cos(th) * L * S)).add(down.clone().multiplyScalar(Math.sin(th) * L * S)).add(out.clone().multiplyScalar((i % 2 ? -0.012 : 0.022) * S)),
   );
-  // the hind panel meets the flank behind the elbow
-  const B = v3(0.03 * s * S, -0.1 * S, -0.5 * S);
+  // the hind panel meets the flank behind the elbow, low on it
+  const B = v3(0.03 * s * S, -0.22 * S, -0.52 * S);
 
   const pos: number[] = [];
   const idx: number[] = [];
@@ -193,10 +195,12 @@ export function buildFoldedMembraneWing(side: number, S: number): WingBuild {
   surface.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   surface.setIndex(idx);
   surface.computeVertexNormals();
+  // (slim: the leading edge of a folded wing, not a pole — at a thirtieth of the span the humerus stood
+  // out of the shoulder like a peg)
   const bones: WingBone[] = [
-    { a: P0, b: E, r0: 0.03 * S, r1: 0.024 * S }, // humerus
-    { a: E, b: W, r0: 0.022 * S, r1: 0.017 * S }, // forearm
-    ...tips.map((t, i) => ({ a: roots[i], b: t, r0: 0.014 * S * (1 - i * 0.12), r1: 0.004 * S })),
+    { a: P0, b: E, r0: 0.018 * S, r1: 0.015 * S }, // humerus
+    { a: E, b: W, r0: 0.014 * S, r1: 0.011 * S }, // forearm
+    ...tips.map((t, i) => ({ a: roots[i], b: t, r0: 0.01 * S * (1 - i * 0.12), r1: 0.003 * S })),
   ];
   return { surface, bones, wrist: W };
 }
