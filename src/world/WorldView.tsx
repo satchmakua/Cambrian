@@ -508,8 +508,9 @@ function Lineage({ genome, speciesId }: { genome: Genome; speciesId: number }) {
   const parent = sp && sp.parent !== null ? speciesById(w, sp.parent) : undefined;
   const founder = sp?.founder;
   const diffs = useMemo(() => (founder ? howItDiffers(founder, genome) : []), [founder, genome]);
-  const mine = usePortrait(genome);
-  const theirs = usePortrait(diffs.length > 0 ? founder : null);
+  // (the card being looked at: drawn ahead of any row of icons still waiting)
+  const mine = usePortrait(genome, true);
+  const theirs = usePortrait(diffs.length > 0 ? founder : null, true);
   if (!sp) return null;
   return (
     <div className="lineage">
