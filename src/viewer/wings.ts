@@ -195,11 +195,11 @@ export function buildFoldedMembraneWing(side: number, S: number): WingBuild {
   surface.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   surface.setIndex(idx);
   surface.computeVertexNormals();
-  // (slim: the leading edge of a folded wing, not a pole — at a thirtieth of the span the humerus stood
-  // out of the shoulder like a peg)
+  // (slim: the leading edge of a folded wing, not a pole — at a thirtieth of the span, and then at a
+  // fiftieth, the humerus of a big dragon's wing stood out of its shoulder as a round-ended peg)
   const bones: WingBone[] = [
-    { a: P0, b: E, r0: 0.018 * S, r1: 0.015 * S }, // humerus
-    { a: E, b: W, r0: 0.014 * S, r1: 0.011 * S }, // forearm
+    { a: P0, b: E, r0: 0.009 * S, r1: 0.008 * S }, // humerus
+    { a: E, b: W, r0: 0.008 * S, r1: 0.007 * S }, // forearm
     ...tips.map((t, i) => ({ a: roots[i], b: t, r0: 0.01 * S * (1 - i * 0.12), r1: 0.003 * S })),
   ];
   return { surface, bones, wrist: W };

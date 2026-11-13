@@ -85,7 +85,7 @@ describe('wings (shoulder-built, body frame)', () => {
     const [hum, fore, ...fingers] = w.bones;
     const lowest = Math.min(...fingers.map((f) => f.b.y));
     expect(w.wrist!.y - lowest).toBeGreaterThan(0.33 * S);
-    expect(hum.r0).toBeLessThan(0.02 * S);
+    expect(hum.r0).toBeLessThan(0.012 * S);
     expect(fore.r0).toBeLessThan(hum.r0);
   });
 
