@@ -1681,7 +1681,8 @@ function TailFan({ phenotype }: { phenotype: Phenotype }) {
     const pal = g.palette;
     const plumage = coatMain(pal);
     const accent = coatPattern(pal);
-    return buildTailFan(Math.max(len * 0.55, girth * 1.6), plumage, accent, 0.2 + (g.seed % 5) * 0.06);
+    // (a little longer than it was: at a little over half the trunk, behind a hawk's wing tips it was a stub)
+    return buildTailFan(Math.max(len * 0.68, girth * 1.8), plumage, accent, 0.2 + (g.seed % 5) * 0.06);
   }, [phenotype, g]);
   useEffect(() => () => geo.dispose(), [geo]);
   return (

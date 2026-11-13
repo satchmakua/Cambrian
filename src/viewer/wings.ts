@@ -487,6 +487,9 @@ export function wingCarriage(feathered: boolean, legPairs: number): WingCarriage
  * tail tip (in the body frame, origin at the tail node). Replaces the fish caudal fin a feathered
  * creature's tail used to end in.
  */
+/** how far a tail fan's outer feathers lift to either side (rad): a shallow trough */
+const TAIL_TROUGH = 0.45;
+
 export function buildTailFan(S: number, base: THREE.Color, accent: THREE.Color, droop = 0.25): THREE.BufferGeometry {
   const pos: number[] = [];
   const col: number[] = [];
@@ -496,14 +499,19 @@ export function buildTailFan(S: number, base: THREE.Color, accent: THREE.Color, 
   for (let i = 0; i < N; i++) {
     const t = i / (N - 1);
     const ang = (t - 0.5) * 1.1; // ±31° fan
-    const along = v3(Math.sin(ang), -droop, -Math.cos(ang)).normalize();
-    const across = new THREE.Vector3().crossVectors(normal, along).normalize();
+    // …in a shallow trough, the outer feathers lifted to either side as a resting tail's layers lie:
+    // laid flat, from the side or any low angle the tail was its own edge, a twig in the rump
+    const rise = TAIL_TROUGH * Math.abs(t - 0.5) * 2;
+    const along = v3(Math.sin(ang), -droop + rise * 0.35, -Math.cos(ang)).normalize();
+    const tilt = v3(-Math.sign(t - 0.5) * Math.sin(rise), Math.cos(rise), -droop).normalize();
+    const across = new THREE.Vector3().crossVectors(tilt, along).normalize();
+    const fnormal = new THREE.Vector3().crossVectors(along, across).normalize();
     // outer feathers shorter (a rounded fan), the central pair longest, banded tips
     const len = S * (0.75 + 0.25 * Math.cos((t - 0.5) * Math.PI));
     const c = (i % 2 === 0 ? base.clone().multiplyScalar(0.62) : base.clone().lerp(accent, 0.35).multiplyScalar(0.7));
     // stack from the outside in so the central feathers lie on top
     const lift = 0.006 * S * (N / 2 - Math.abs(i - (N - 1) / 2));
-    featherInto(pos, col, idx, v3(0, 0, 0), along, across, normal, len, S * 0.2, c, lift);
+    featherInto(pos, col, idx, v3(0, 0, 0), along, across, fnormal.dot(normal) < 0 ? fnormal.negate() : fnormal, len, S * 0.2, c, lift);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));

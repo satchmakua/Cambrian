@@ -106,6 +106,21 @@ describe('wings (shoulder-built, body frame)', () => {
     expect(b.max.z).toBeLessThan(0.1);
   });
 
+  it('a tail fan lies in a shallow trough, so from the side it is a tail and not its own edge', () => {
+    // (laid flat, from the side or any low angle a hawk's tail was a twig stuck in its rump)
+    const g = buildTailFan(1, new THREE.Color(0.5, 0.4, 0.3), new THREE.Color(0.2, 0.2, 0.6), 0);
+    const b = bbox(g);
+    expect(b.max.y - b.min.y).toBeGreaterThan(0.12);
+    // the outer feathers stand above the middle ones, and both sides alike
+    const pos = g.getAttribute('position');
+    let hiL = -Infinity, hiR = -Infinity;
+    for (let i = 0; i < pos.count; i++) {
+      if (pos.getX(i) < -0.15) hiL = Math.max(hiL, pos.getY(i));
+      if (pos.getX(i) > 0.15) hiR = Math.max(hiR, pos.getY(i));
+    }
+    expect(Math.abs(hiL - hiR)).toBeLessThan(0.02);
+  });
+
   it('conformToSurface lifts every vertex out of a body to ride the margin above it', () => {
     const w = buildFeatheredWing(1, 2, new THREE.Color(1, 1, 1), new THREE.Color(1, 1, 1));
     const sphere = (x: number, y: number, z: number) => Math.hypot(x, y, z + 0.8) - 0.7; // a body
