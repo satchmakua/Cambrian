@@ -801,7 +801,14 @@ export function grow(genome: Genome): Phenotype {
         // front pairs reach forward beside the head, the last sweep back behind the rump like a
         // centipede's trailing pair (fanned evenly, a row of ten was a comb)
         const u = app.attachT - 0.5;
-        const fan = ringedHere ? (u > 0 ? 0.5 * u + 2.4 * u * u * u : 0.9 * u + 4.4 * u * u * u) : (app.attachT - 0.5) * (spider ? 2.3 : decapod ? 1.3 : 1.9);
+        // (a crab's walking legs sweep BACK as a set — the first pair barely forward of square, the last
+        // well behind it: fanned evenly fore and aft about the middle, they radiated round the shell
+        // like a tick's)
+        const fan = ringedHere
+          ? (u > 0 ? 0.5 * u + 2.4 * u * u * u : 0.9 * u + 4.4 * u * u * u)
+          : decapod
+            ? u * DECAPOD_FAN[0] - DECAPOD_FAN[1]
+            : u * (spider ? 2.3 : 1.9);
         const hx = sideX * Math.cos(fan);
         const hz = Math.sin(fan);
         // a spider's knees peak high over its back and its long shins reach far out and down; a crab's
@@ -811,8 +818,11 @@ export function grow(genome: Genome): Phenotype {
         // hexapod's femur runs out nearer level, the tibia drops steeply and the tarsus angles out
         // along the ground (one profile for all read as a spider on stilts or an insect on its belly)
         const n = app.segments - 1; // segment advances (n nodes span n-1 lengths)
+        // (a spider's shin and foot reach OUT as they come down, the leg one arc from the knee to a foot
+        // planted far out: dropped near plumb from a high knee, seen down its own plane the near leg was
+        // one straight pole through the head)
         const [k0, mid, end]: Vec3[] = spider
-          ? [[hx, 0.85, hz], [hx * 0.6, -0.75, hz * 0.6], [hx * 0.3, -1, hz * 0.3]]
+          ? [[hx, 0.8, hz], [hx * 0.75, -0.7, hz * 0.75], [hx * 0.6, -1, hz * 0.6]]
           : decapod
             ? [[hx, 0.62, hz], [hx, -0.5, hz], [hx * 0.55, -1, hz * 0.55]]
             : [[hx, 0.4, hz], [hx * 0.45, -1, hz * 0.45], [hx * 0.6, -0.45, hz * 0.6]];
@@ -1125,6 +1135,10 @@ const PELVIS_SLOT = 0.06;
 export function bipedSlot(pitch: number): number {
   return lerp(legSlots(1)[0], PELVIS_SLOT, rearedness(pitch));
 }
+/** a crab's walking legs: how widely they fan fore and aft by their slot (rad per unit of attachT), and
+ *  how far back the whole set sweeps (rad) */
+export const DECAPOD_FAN: readonly [number, number] = [1.05, 0.2];
+
 /** how far under the body a radial creature's tentacles take root (the pull of their seat toward −Y) */
 const TENTACLE_ROOT = 1.2;
 /** each of a radial body's tentacles bends to one side by up to half this a link, and lifts its tip by
