@@ -107,10 +107,12 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   - *A songbird's wings as smooth clamshell slabs*: the folded wing's coverts were one flat pale field;
     two more shingled rows of lesser coverts lie above the first.
   - *A slug's mouth as a mail slot*: a mouth on a headless trunk is held to 1.5 of its radii (was 2.4,
-    half the body's breadth), and a slime body shows no teeth along its seam.
+    half the body's breadth), and a slime body shows no teeth along its seam. The dashed dark line along
+    every seam (a zipper) was not the lip but the seam's upper jaw mass, a sliver a twentieth of a radius
+    proud of the skin, in the hide's own material, fighting it for the same pixels; it is not drawn.
 - **Still to do from it:** the weasel end on (its shoulder joints stand out past its flanks); ears
   that are spikes edge-on (the far ear, facing forward-out, from a three-quarter view: thicker ears
-  didn't help — it is the angle); a seam's thin upper lip half-buried in the skin, in dashes.
+  didn't help — it is the angle).
 
 ## M93 — What the seventh look left: tails, claws, paws and eyes · 2026-11-13
 

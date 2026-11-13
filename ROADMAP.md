@@ -843,7 +843,7 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
 ### Next up (unchecked — pick from here)
 
 - [ ] **What the eighth look left.** Ears that are spikes edge-on (the far ear's angle); the weasel end
-  on (its shoulder joints stand out past its flanks); a seam's half-buried upper lip, in dashes.
+  on (its shoulder joints stand out past its flanks).
 
 - [ ] **What the sixth look left.** The crab's walking legs still arch high like a spider's; the bear's
   muzzle a hippo's (a tube ending in a bulb, a small nose on it); the ape's coat reads as bare rubber;
