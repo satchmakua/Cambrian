@@ -929,14 +929,44 @@ function immigrate(w: World): void {
 /** Below this mass, prey can hide from hunters in the bushes. */
 const COVER_MASS = 1.5;
 
+/** the plants by the square (they never move: a world's are placed once, and a load replaces the
+ *  whole list), so a search for cover looks at the few near it — not all 170 for every hunter's prey
+ *  and every fleeing animal, every step (a sixth of a year's fast-forward was that scan) */
+const PLANT_CELL = 8;
+const PLANT_GRIDS = new WeakMap<Plant[], Map<number, Plant[]>>();
+function plantGrid(plants: Plant[]): Map<number, Plant[]> {
+  let grid = PLANT_GRIDS.get(plants);
+  if (!grid) {
+    grid = new Map();
+    for (const p of plants) {
+      const k = (Math.floor(p.x / PLANT_CELL) + 1000) * 4096 + (Math.floor(p.z / PLANT_CELL) + 1000);
+      let cell = grid.get(k);
+      if (!cell) grid.set(k, (cell = []));
+      cell.push(p);
+    }
+    PLANT_GRIDS.set(plants, grid);
+  }
+  return grid;
+}
+
 function nearestBush(w: World, x: number, z: number, within: number): Plant | null {
+  const grid = plantGrid(w.plants);
   let best: Plant | null = null;
   let bd = within;
-  for (const p of w.plants) {
-    const d = Math.hypot(p.x - x, p.z - z);
-    if (d < bd) {
-      bd = d;
-      best = p;
+  const i0 = Math.floor((x - within) / PLANT_CELL), i1 = Math.floor((x + within) / PLANT_CELL);
+  const j0 = Math.floor((z - within) / PLANT_CELL), j1 = Math.floor((z + within) / PLANT_CELL);
+  for (let i = i0; i <= i1; i++) {
+    for (let j = j0; j <= j1; j++) {
+      const cell = grid.get((i + 1000) * 4096 + (j + 1000));
+      if (!cell) continue;
+      for (const p of cell) {
+        const d = Math.hypot(p.x - x, p.z - z);
+        // (a tie goes to the plant placed first, as a scan of the whole list in order gave it)
+        if (d < bd || (d === bd && best && p.id < best.id)) {
+          bd = d;
+          best = p;
+        }
+      }
     }
   }
   return best;
@@ -1614,9 +1644,10 @@ function steer(w: World, c: Creature, goal: { x: number; z: number } | null, pac
  *  inside 0.9 of the sum and a mating inside all of it, and the pair engaged in either is let be
  *  anyway (see `engaged`): a long hunter's footprint must never hold its jaws off its prey. */
 const ROOM = 0.8;
-/** The share of an overlap eased out each second: soft, so a herd settles shoulder to shoulder and
- *  is seen to shuffle aside rather than bounce. */
-const ROOM_RATE = 4;
+/** The share of an overlap eased out each second: over a pass (every other step) the whole of it, up
+ *  to ROOM_PUSH — the eye still sees a shuffle, as the actor eases toward where the sim puts it. (At
+ *  four a second, grazers drifting into one another as they fed outran it and stood inside each other.) */
+const ROOM_RATE = 10;
 /** A long body's footprint runs down its heading over this share of its length: its trunk, from the
  *  shoulders to the hips (a snout or a tail tip may still pass over a neighbour's). */
 const ROOM_SPAN = 0.7;
