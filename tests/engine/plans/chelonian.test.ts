@@ -97,4 +97,29 @@ describe('chelonian', () => {
     const crab = grow(genomeOfMorphotype(3, 'crab'));
     expect(footPlanOf(crab)).toBeNull();
   });
+
+  it("its shell swells out over each leg's root: the leg comes out from under it, not through its wall", () => {
+    // (legs leaving the flat body at its widest line, as thick as a quarter of the shell, stood their
+    // tops up above the shell's curve outside it: periscopes)
+    for (let seed = 1; seed <= 4; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'chelonian'));
+      const shell = buildShellGeometry(p, 'low')!;
+      const pos = shell.getAttribute('position');
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      const hips = p.nodes.filter((n, i) => n.part?.kind === 'leg' && p.nodes[parent.get(i)!].kind === 'spine');
+      expect(hips.length, `#${seed}`).toBe(4);
+      for (const h of hips) {
+        // the leg runs out level to a knee at the shell's edge: the shell reaches past the knee's outer
+        // side, level with it, front to back
+        const k = p.nodes[p.edges.find(([a, b]) => a === p.nodes.indexOf(h) && p.nodes[b].part?.kind === 'leg')![1]];
+        let reach = 0;
+        for (let v = 0; v < pos.count; v++) {
+          if (Math.abs(pos.getZ(v) - k.pos[2]) > 0.3 * k.radius || Math.abs(pos.getY(v) - k.pos[1]) > 0.3 * k.radius) continue;
+          if (Math.sign(pos.getX(v)) === Math.sign(k.pos[0])) reach = Math.max(reach, Math.abs(pos.getX(v)));
+        }
+        expect(reach, `#${seed} over the knee`).toBeGreaterThan(Math.abs(k.pos[0]) + k.radius);
+      }
+      shell.dispose();
+    }
+  });
 });

@@ -116,6 +116,10 @@ export function buildSmoothGeometry(
 // Carapace shell
 // =============================================================================
 
+/** how far a horn shell swells out over a leg's root (×the root's radius), and over how wide a patch */
+const HIP_COVER = 1.15;
+const HIP_COVER_REACH = 2.4;
+
 /**
  * A carapace that CONFORMS to the body: the trunk's own field inflated by a shell thickness (more on
  * top — a domed back) and cut off below the flank by a skirt plane that flares out at the rim. The
@@ -189,12 +193,30 @@ export function buildShellGeometry(p: Phenotype, quality: SkinQuality = 'high'):
   for (const n of trunk) depth = Math.max(depth, n.radius * (n.scale?.[1] ?? 1));
   const yCut = yMid - (thin ? rMax * 0.04 : Math.max(rMax * 0.28, depth * 0.7));
   const flare = rMax * (thin ? 0.025 : 0.18);
+  // …and a horn shell swells out over each leg's root and its first joint, so the leg comes out from
+  // under its edge. (A tortoise's legs run out level from its widest line to a knee at the shell's
+  // edge, then down: the knee, as thick as a quarter of the shell, stood outside its wall and the leg
+  // was a column up the side of the shell, a periscope.)
+  const parentOf = new Map(p.edges.map(([a, b]) => [b, a]));
+  const roots = new Set<number>();
+  if (!thin)
+    p.nodes.forEach((n, i) => {
+      if (n.part?.kind !== 'leg' || n.kind === 'spine' || p.nodes[parentOf.get(i) ?? -1]?.kind !== 'spine') return;
+      roots.add(i);
+      for (const [a, b] of p.edges) if (a === i && p.nodes[b].part?.kind === 'leg') roots.add(b);
+    });
+  const hips = [...roots].map((i) => p.nodes[i]);
 
   const field = (x: number, y: number, z: number): number => {
     const up = Math.min(1, Math.max(0, (y - yCut) / (rMax * 1.4)));
     // inflate: thicker toward the crown; flare at the rim (just above the cut)
     const rim = Math.max(0, 1 - (y - yCut) / (rMax * 0.35));
-    const t = t0 + dome * up * up + flare * rim;
+    let over = 0;
+    for (const h of hips) {
+      const d = Math.hypot(x - h.pos[0], y - h.pos[1], z - h.pos[2]) / (HIP_COVER_REACH * h.radius);
+      if (d < 1) over = Math.max(over, h.radius * HIP_COVER * (1 - d) * (1 - d));
+    }
+    const t = t0 + dome * up * up + flare * rim + over;
     const body = fieldAt(prims, x, y, z) - t;
     const cut = yCut - y; // > 0 below the skirt → outside
     return body > cut ? body : cut;
