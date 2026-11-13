@@ -235,6 +235,12 @@ export function grow(genome: Genome): Phenotype {
 
   const groundY = levelFeet(); // drop every foot to a common ground level (the creature stands)
   if (groundY !== null) groundTails(groundY); // …and no tail reaches below it
+  else if (lyingDown()) {
+    // (a legless body — a snake — lies on its belly, and its tail on the same ground: see groundTails)
+    let belly = Infinity;
+    for (const n of nodes) if (n.kind === 'spine') belly = Math.min(belly, n.pos[1] - nodeReach(n)[1]);
+    if (Number.isFinite(belly)) groundTails(belly);
+  }
   recomputeBounds();
   if (ringPoint > 0 && groundY !== null) min[1] = Math.min(min[1], groundY - ringPoint); // the ground is under the legs' points
 
@@ -645,7 +651,16 @@ export function grow(genome: Genome): Phenotype {
    * tail drags on the floor and a light one trails level. An ARM likewise: an ape's long arms
    * reach down to rest their knuckles on the ground, never through it.
    */
+  /** A body that lies on its belly: bilateral, with no legs, fins or wings (a snake; a fish swims). */
+  function lyingDown(): boolean {
+    if (dev.symmetry !== 'bilateral') return false;
+    for (const n of nodes) if (n.part?.kind === 'leg' || n.part?.kind === 'fin' || n.part?.kind === 'wing') return false;
+    return true;
+  }
+
   function groundTails(groundY: number): void {
+    // (see the snake's tail, below)
+    const grounded = lyingDown();
     const parentOf = new Int32Array(nodes.length).fill(-1);
     for (const [a, b] of edges) parentOf[b] = a;
     const kids: number[][] = nodes.map(() => []);
@@ -672,6 +687,11 @@ export function grow(genome: Genome): Phenotype {
           for (const c of chain) nodes[c].pos[1] = n.pos[1] + (nodes[c].pos[1] - n.pos[1]) * s;
         }
       }
+      // A SNAKE's tail (a body with no legs and no fins: it lies on the ground, it doesn't swim) rests
+      // on the ground along its length: each link settles onto the floor as it thins. (Run straight
+      // back from the rump at the rump's own height, the thinning tail's tip stood a quarter of a unit
+      // in the air — a hook, a little spike held up behind it.)
+      const resting = kind === 'tail' && grounded;
       let lift = 0;
       let cur = i;
       while (true) {
@@ -681,6 +701,9 @@ export function grow(genome: Genome): Phenotype {
         const floor = groundY + c.radius * (c.scale?.[1] ?? 1) * 0.85;
         if (c.pos[1] < floor) {
           lift += floor - c.pos[1];
+          c.pos[1] = floor;
+        } else if (resting) {
+          lift -= c.pos[1] - floor;
           c.pos[1] = floor;
         }
         const next = kids[cur].find((k) => nodes[k].part?.kind === kind);
