@@ -746,7 +746,7 @@ function Feature({
     case 'gill':
       return <Gill f={f} color={footColor} phenotype={phenotype} surface={surface} />;
     case 'crest':
-      return <Crest f={f} color={finColor} />;
+      return <Crest f={f} color={finColor} feathered={phenotype.genomeRef.covering.type === 'feathers'} />;
     case 'carapace':
       return null; // the conforming shell is drawn by CreatureMesh from the trunk field
     case 'whisker':
@@ -1813,21 +1813,62 @@ function Gill({ f, color, phenotype, surface }: { f: MeshFeature; color: number;
 }
 
 // A crest: a fan of thin feathered/membranous blades (songbird / basilisk).
-function Crest({ f, color }: { f: MeshFeature; color: number }) {
+/**
+ * A crest: a tuft standing on the crown, in the upright plane through the head's length, sweeping
+ * back — the front ones near upright, the rear ones lying back, the middle ones longest; on a bird
+ * feathers, on anything else pointed blades. Each is thin across the head, so it stands and is seen
+ * side-on. (Its blades were flat across its own aim, which points up: they lay on the crown as a
+ * paper hat.)
+ */
+function Crest({ f, color, feathered }: { f: MeshFeature; color: number; feathered: boolean }) {
   const r = Math.max(f.radius, 0.06);
+  const blades = useMemo(() => {
+    const inv = new THREE.Quaternion(f.quat[0], f.quat[1], f.quat[2], f.quat[3]).invert();
+    const up = new THREE.Vector3(0, 0, 1); // the crest's aim, off the crown
+    // the body's back (−Z), in the crest's own frame, flattened onto the crown
+    const back = new THREE.Vector3(0, 0, -1).applyQuaternion(inv);
+    back.addScaledVector(up, -back.dot(up));
+    if (back.lengthSq() < 1e-6) back.set(0, -1, 0);
+    else back.normalize();
+    const side = new THREE.Vector3().crossVectors(up, back).normalize();
+    const N = CREST_BLADES;
+    return Array.from({ length: N }, (_, i) => {
+      const u = i / (N - 1);
+      const sweep = 0.2 + 0.85 * u;
+      const lat = (i % 2 ? 1 : -1) * 0.1 * (1 - u);
+      const dir = up.clone().multiplyScalar(Math.cos(sweep)).addScaledVector(back, Math.sin(sweep)).addScaledVector(side, lat).normalize();
+      const len = r * (1.5 + 1.0 * Math.sin(Math.PI * (0.25 + 0.6 * u)));
+      // the blade's thin axis across the head, its broad face in the plane of up and back
+      const thin = side.clone().addScaledVector(dir, -side.dot(dir)).normalize();
+      const broad = new THREE.Vector3().crossVectors(dir, thin);
+      const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(thin, broad, dir));
+      const root = back.clone().multiplyScalar(r * 0.7 * (u - 0.35));
+      return { root, q, len };
+    });
+  }, [f.quat, r]);
   return (
     <group quaternion={f.quat}>
-      {[-0.6, -0.2, 0.2, 0.6].map((ang, i) => (
-        <group key={i} rotation={[0, 0, ang]}>
-          <mesh position={[0, r * 0.9, 0]} scale={[r * 0.7, r * 1.8, r * 0.07]} castShadow>
-            <sphereGeometry args={[1, 8, 8]} />
-            <meshStandardMaterial color={color} roughness={0.6} side={THREE.DoubleSide} />
-          </mesh>
+      {blades.map((b, i) => (
+        <group key={i} position={b.root} quaternion={b.q}>
+          {feathered ? (
+            // a feather: a lens from the root out along the blade
+            <mesh position={[0, 0, b.len * 0.5]} scale={[r * 0.06, r * 0.3, b.len * 0.5]} castShadow>
+              <sphereGeometry args={[1, 8, 8]} />
+              <meshStandardMaterial color={color} roughness={0.6} side={THREE.DoubleSide} />
+            </mesh>
+          ) : (
+            // a pointed blade (a cone along its length, flattened across the head)
+            <mesh position={[0, 0, b.len * 0.5]} rotation={[Math.PI / 2, 0, 0]} scale={[0.25, 1, 1]} castShadow>
+              <coneGeometry args={[r * 0.3, b.len, 6]} />
+              <meshStandardMaterial color={color} roughness={0.55} />
+            </mesh>
+          )}
         </group>
       ))}
     </group>
   );
 }
+const CREST_BLADES = 5;
 
 // Whiskers: a small fan of fine pale filaments off the snout.
 function Whisker({ f, color }: { f: MeshFeature; color: number }) {
