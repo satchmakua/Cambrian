@@ -157,10 +157,15 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
     it the belly's tone; a leg and its paw wear the flank's now.
   - *A cat's head a plush ball with no muzzle*: a short muzzle now wears two soft whisker pads either
     side of the mouth, under the nose, in the coat's own material.
+  - *FACE plates that framed nothing or cut the head off*: a radial body's portrait looked almost
+    straight down onto its mouth under the disc (a hole among spines); it now frames the whole animal
+    from above and to the side. A long low body's (a lizard's, a crocodile's, a snake's) stood off half
+    the body's length, mostly ground; it stands off by the head's size, at most 1.4 of the body's
+    width or height.
 - **Still to do from it:** the weasel end on (its shoulder joints stand out past its flanks); ears
   that are spikes edge-on (the far ear, facing forward-out, from a three-quarter view: thicker ears
   didn't help — it is the angle); the frog a bun on its chin (its forelegs attach under the middle of
-  its body, behind its broad head); FACE plates that frame nothing or cut the head off.
+  its body, behind its broad head).
 
 ## M93 — What the seventh look left: tails, claws, paws and eyes · 2026-11-13
 
