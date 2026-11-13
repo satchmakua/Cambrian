@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { bareLegsOf, footPlanOf, isHindFoot, legWeights, ratLike, toedFootGeometry } from '../../src/viewer/feet';
+import { bareLegsOf, bareOf, footPlanOf, isHindFoot, legWeights, partWeights, ratLike, toedFootGeometry } from '../../src/viewer/feet';
 import { buildSmoothGeometry } from '../../src/viewer/smoothSkin';
 import { randomGenome } from '../../src/engine/random';
 
@@ -28,6 +28,26 @@ describe('feet', () => {
       expect(p.nodes.some((n) => n.part?.kind === 'leg' && n.terminal === 'paw'), `rodent #${seed}`).toBe(true);
       expect(ratLike(p), `rodent #${seed}`).toBe(true);
       for (const id of ['felid', 'canid', 'ursid', 'mustelid']) expect(ratLike(grow(genomeOfMorphotype(seed, id))), `${id} #${seed}`).toBe(false);
+    }
+  });
+
+  it("a rat's tail is naked from root to tip; its body and a weasel's brush keep their coat", () => {
+    // (in the coat, a mouse trailed a furred rope)
+    for (let seed = 1; seed <= 8; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'rodent'));
+      const b = bareOf(p);
+      expect(b?.kind, `rodent #${seed}`).toBe('tail');
+      // every node's own centre: the tail's bare, the trunk's and the legs' not
+      const pos = p.nodes.flatMap((n) => [...n.pos]);
+      const w = partWeights(p, pos, p.nodes.length, 'tail');
+      p.nodes.forEach((n, i) => {
+        if (n.part?.kind === 'tail' && i !== p.nodes.findIndex((m) => m.part?.kind === 'tail')) expect(w[i], `rodent #${seed} tail`).toBeGreaterThan(0.9);
+        if (n.kind === 'spine' || n.part?.kind === 'leg') expect(w[i], `rodent #${seed} ${n.kind}`).toBeLessThan(0.1);
+      });
+      // nothing above the gate: the whole tail, wherever it lies
+      expect(b!.bare.y).toBeGreaterThan(p.bounds.max[1]);
+      for (const id of ['mustelid', 'felid', 'canid']) expect(bareOf(grow(genomeOfMorphotype(seed, id))), `${id} #${seed}`).toBeNull();
+      expect(bareOf(grow(genomeOfMorphotype(seed, 'bird')))?.kind, `bird #${seed}`).toBe('leg');
     }
   });
 

@@ -25,7 +25,7 @@ import { Mouth } from './mouths';
 import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
-import { bareLegsOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, legWeights, ratLike, toedFootGeometry, TALONED, type FootPlan } from './feet';
+import { bareOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, partWeights, ratLike, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
 import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, longWingFold, trunkGirth, wingCarriage, LONG_WING, type FinBuild } from './wings';
@@ -135,13 +135,14 @@ function buildSkin(phenotype: Phenotype, full: boolean, carves: readonly Carve[]
   return g;
 }
 
-/** The bare-shank gate (aLeg) for a body geometry with baked aBodyPos — only for a creature with bare
- *  shanks; a geometry without it reads 0 (not leg) in the shader. */
+/** The bare-part gate (aLeg) for a body geometry with baked aBodyPos — only for a creature with bare
+ *  shanks or a naked tail (bareOf); a geometry without it reads 0 (not bare) in the shader. */
 function bakeLegs(g: THREE.BufferGeometry, phenotype: Phenotype): void {
-  if (!bareLegsOf(phenotype)) return;
+  const b = bareOf(phenotype);
+  if (!b) return;
   const bp = g.getAttribute('aBodyPos') as THREE.BufferAttribute | undefined;
   if (!bp) return;
-  g.setAttribute('aLeg', new THREE.BufferAttribute(legWeights(phenotype, bp.array, bp.count), 1));
+  g.setAttribute('aLeg', new THREE.BufferAttribute(partWeights(phenotype, bp.array, bp.count, b.kind), 1));
 }
 
 /** The geometry cache's key for a carapace shell (turtle, crab, beetle) at a fineness. */
@@ -222,10 +223,10 @@ export function CreatureMesh({
 
   const face = useMemo(() => faceMaskOf(phenotype), [phenotype]);
   const headMask = useMemo(() => headMaskOf(phenotype), [phenotype]);
-  const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed, bareLegsOf(phenotype), null, face, 0, headMask), [pal, cov, seed, phenotype, face, headMask]);
+  const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed, bareOf(phenotype)?.bare ?? null, null, face, 0, headMask), [pal, cov, seed, phenotype, face, headMask]);
   useEffect(() => () => bodyMat.dispose(), [bodyMat]);
   // a crystal's smooth skin is cut into faces (buildSkin), and its material cuts none of its own
-  const cutMat = useMemo(() => (cov.type === 'crystal' ? makeCreatureMaterial(pal, cov, seed, bareLegsOf(phenotype), null, face, 0, headMask, true) : null), [pal, cov, seed, phenotype, face, headMask]);
+  const cutMat = useMemo(() => (cov.type === 'crystal' ? makeCreatureMaterial(pal, cov, seed, bareOf(phenotype)?.bare ?? null, null, face, 0, headMask, true) : null), [pal, cov, seed, phenotype, face, headMask]);
   useEffect(() => () => cutMat?.dispose(), [cutMat]);
   const skinMat = cutMat ?? bodyMat;
   // shell fur: FUR_SHELLS layers of the body out to a pile scaled to the creature
@@ -234,7 +235,7 @@ export function CreatureMesh({
     const { min, max } = phenotype.bounds;
     const size = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
     const len = Math.min(0.08, Math.max(0.022, size * 0.0095));
-    const bare = bareLegsOf(phenotype);
+    const bare = bareOf(phenotype)?.bare ?? null;
     const eyes = eyeClearings(phenotype, data.features);
     return Array.from({ length: FUR_SHELLS }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / FUR_SHELLS, len, density: 3.2 / len, eyes }, face, 0, headMask));
   }, [fur, cov, skinMode, phenotype, pal, seed, data, face, headMask]);

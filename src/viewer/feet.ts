@@ -79,6 +79,19 @@ export function ratLike(p: Phenotype): boolean {
   return paws && top - floor < RAT_HEIGHT && tailRootRatio(p) < RAT_TAIL;
 }
 
+/** a rat's naked tail: a pinkish grey skin of fine rings (in the coat, a mouse trailed a furred rope) */
+export const TAIL_SKIN = new THREE.Color().setHSL(0.01, 0.22, 0.52).getHex();
+
+/** What of a body goes bare — the shader's bare zone, where the coat's relief gives way to fine scutes
+ *  and the fur shells stop: a feathered body's shanks below its bare line, a rat-like body's whole tail
+ *  (its height gate set over all of it). Null for the rest. */
+export function bareOf(p: Phenotype): { bare: BareLegs; kind: 'leg' | 'tail' } | null {
+  const legs = bareLegsOf(p);
+  if (legs) return { bare: legs, kind: 'leg' };
+  if (ratLike(p) && p.nodes.some((n) => n.part?.kind === 'tail')) return { bare: { y: 1e6, band: 1, color: TAIL_SKIN }, kind: 'tail' };
+  return null;
+}
+
 /** The leg chains: [hip node, …, foot node] for every leg that reaches a terminal. */
 function legChains(p: Phenotype): number[][] {
   const parent = new Int32Array(p.nodes.length).fill(-1);
@@ -123,7 +136,12 @@ export function bareLegsOf(p: Phenotype): BareLegs | null {
  * by height alone, a low-slung bird's belly and tail were painted as scaly leg.
  */
 export function legWeights(p: Phenotype, bodyPos: ArrayLike<number>, count: number): Float32Array {
-  const isLeg = (i: number) => p.nodes[i].part?.kind === 'leg' && p.nodes[i].kind !== 'spine';
+  return partWeights(p, bodyPos, count, 'leg');
+}
+
+/** …and the same for any one kind of part (a rat's naked TAIL: see bareOf). */
+export function partWeights(p: Phenotype, bodyPos: ArrayLike<number>, count: number, kind: 'leg' | 'tail'): Float32Array {
+  const isLeg = (i: number) => p.nodes[i].part?.kind === kind && p.nodes[i].kind !== 'spine';
   type Seg = { a: readonly number[]; b: readonly number[]; ra: number; rb: number };
   const legs: Seg[] = [];
   const other: Seg[] = [];
