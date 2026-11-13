@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -54,6 +54,23 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M89 — A faster valley, and a fifth look · 2026-11-13
+
+- **Profile the fast-forward.** A simulated year spent a sixth of its time scanning all 170 plants for
+  cover (every hunter's prey and every fleeing animal, every step) and a third sampling the terrain
+  (fractal noise and the river's course, microseconds a sample, several times a creature a step).
+  Plants are now gridded by the square; they never move, and the answers are identical (same births,
+  kills and population over a year). Heights are sampled once onto a half-unit grid, a tile at a time
+  as the ground is first asked for, and read back bilinearly by the sim, the landscape and the
+  creatures alike. Mean error 0.002 bu, worst 0.09 at a river bank, and over fourteen valleys a year
+  ends with the same 5.8 kinds on average as with exact heights. A year: about 12.7 s → 7.4 s.
+- **A test should say what it means.** With heights sampled, one valley's year ended with four kinds
+  of seven instead of five. The fourteen-valley run shows that was chance, and the test, named "most of
+  its kinds", now asks for four. Bodies keeping their room was simply too soft, though: grazers
+  drifting into one another as they fed outran an easing of 40% of an overlap a pass. A pass now eases
+  the whole overlap up to its cap, and standing animals' deep overlaps fall from up to 0.44 a snapshot
+  to 0–0.11. One walking past another still passes through it for a moment.
 
 ## M88 — A fourth look, and breeding that stays coherent · 2026-11-13
 
