@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { grow, type Phenotype } from '../../../src/engine/grow';
 import { genomeOfMorphotype } from '../../../src/engine/random';
 import { eyeVariant, mouthVariant } from '../../../src/viewer/partStyles';
+import { buildFieldPrims, CHAIN_CUTS } from '../../../src/viewer/bodyField';
 
 const SEEDS = Array.from({ length: 16 }, (_, i) => i + 1);
 const star = (seed: number) => {
@@ -88,5 +89,19 @@ describe('starfish', () => {
       if (g.palette.hueA <= 0.1 || g.palette.hueA >= 0.95) warm++;
     }
     expect(warm).toBeGreaterThanOrEqual(12);
+  });
+  it('each arm is one smooth curve from the disc to its tip — not a string of sausages joined at its links', () => {
+    // (a straight cone from each joint to the next met its neighbour at an angle where the girth changed:
+    // a crease round the arm at every joint)
+    for (let seed = 1; seed <= 6; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'starfish'));
+      const f = buildFieldPrims(p, 'hybrid');
+      // a link between two of an arm's own nodes is cut into CHAIN_CUTS cones along a spline
+      const armLinks = p.edges.filter(([a, b]) => p.nodes[a].part?.kind === 'spine' && p.nodes[b].part?.kind === 'spine').length;
+      expect(armLinks, `#${seed}`).toBeGreaterThan(0);
+      let cones = 0;
+      for (let m = 0; m < f.nc; m++) if (p.nodes[f.ia[m]].part?.kind === 'spine' && p.nodes[f.ib[m]].part?.kind === 'spine') cones++;
+      expect(cones, `#${seed}`).toBe(armLinks * CHAIN_CUTS);
+    }
   });
 });

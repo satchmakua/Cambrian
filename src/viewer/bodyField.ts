@@ -196,10 +196,12 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   // front, was a stack of bands like a grub's; a shark's belly was terraced. So each link of such a
   // chain is cut into CHAIN_CUTS cones along a spline through its nodes (their places and their
   // radii): the same body, without the corners. (A leg's links stay straight: those are joints.)
+  // (…and a radial body's arms: a sea star's, cut at its joints, were strings of sausages, banded across)
+  const radial = p.genomeRef.symmetry === 'radial';
   const sameChain = (a: BodyNode, b: BodyNode): boolean =>
     a.kind === 'spine' && b.kind === 'spine'
       ? (a.segment ?? 0) === (b.segment ?? 0)
-      : a.kind !== 'spine' && b.kind !== 'spine' && a.part != null && a.part.kind === b.part?.kind && SMOOTH_LIMBS.has(a.part.kind);
+      : a.kind !== 'spine' && b.kind !== 'spine' && a.part != null && a.part.kind === b.part?.kind && (SMOOTH_LIMBS.has(a.part.kind) || (radial && a.part.kind === 'spine'));
   const up = new Int32Array(p.nodes.length).fill(-1); // a node's neighbour up its chain, among the meshed edges
   const down = new Int32Array(p.nodes.length).fill(-1); // …and down it (−2: it forks)
   if (edges) {
