@@ -245,7 +245,10 @@ function PlateCamera({ kind, framing, px }: { kind: PlateKind; framing: Framing;
       if (!cam) return;
       const f = framing.face ?? { pt: [0, 0, framing.ext[2] / 2] as [number, number, number], r: framing.size * 0.25 };
       // look at the face from front, a touch high and to the side (a three-quarter portrait)
-      const view = faceCamera(framing, Math.max(f.r * 3.6, framing.size * 0.55));
+      // (a long low body — a lizard, a crocodile, a snake — is far longer than its head is big: at half
+      // its length the portrait was mostly ground, the head a sliver at its edge. The head's own size,
+      // and the body's height, set it.)
+      const view = faceCamera(framing, Math.max(f.r * 3.6, Math.min(framing.size * 0.55, Math.max(framing.ext[0], framing.ext[1]) * 1.4)));
       cam.position.set(...view.from);
       cam.near = Math.max(0.01, framing.size * 0.005);
       cam.far = framing.size * 40;
