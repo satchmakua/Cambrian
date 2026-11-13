@@ -91,10 +91,19 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   bare-shank gate generalised to any part), its ears pink inside, and a tailless rodent bare-pawed too;
   a coat keeps a fringe of fur along its outline however far off (the shells fade elsewhere); mood
   bubbles stay small when the camera comes close (a world-sized tag hid a mouse).
-- **Still to do from it:** the dog's and the bear's ball of a skull with a tube of a muzzle; the
-  ape's pads with no hands; the weasel end on; stiff fan wings (dragon, wyvern, songbird); black
-  "stockings" on bare shanks; hard-edged bands on dragons; an arachnid's dipped abdomen; ears that are
-  spikes edge-on; one cone for every horn.
+- **Then the rest of its recurring list:**
+  - *A ball of a skull with a tube of a muzzle* (dog, bear). A skull with a stop is a braincase with a
+    muzzle half its girth hung on its front, and its skin was just that: its lower outline stepped up
+    where the muzzle began. A furred skull with a stop now has a jaw in its skin, a tapered cone from
+    under the braincase to the chin: the jaw line runs on from the throat to the chin.
+  - *Black stockings on bare shanks* (theropod, chimera, ostrich): a slate bill's legs were as dark as
+    the bill. They are a mid grey now, under a softer plumage line.
+  - *Hard-edged bands, painted on* (dragon, arachnid): a band's edge is a short blend now, the bands a
+    little narrower than the ground between them.
+  - *One cone for every horn*: a horn is a keratin sheath swept back along a curve from its root, ridged
+    toward its base, dark at the root and pale at the point.
+- **Still to do from it:** the ape's pads with no hands; the weasel end on; stiff fan wings (dragon,
+  wyvern, songbird); ears that are spikes edge-on.
 
 ## M93 — What the seventh look left: tails, claws, paws and eyes · 2026-11-13
 

@@ -832,18 +832,18 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
 - [x] **M94 — An eighth look, harder.** A cut stone without camouflage; dragons and rats always
   tailed; a hawk's hooked bill; an urchin on its spines, one maw per radial body; an octopus's eye; a
   tortoise's shell over its legs; flat crab claws; smooth plumage on head and breast; mouths as creases
-  in the hide; a rat's naked tail and pink ears; fur fuzz on the outline; small mood bubbles near.
+  in the hide; a rat's naked tail and pink ears; fur fuzz on the outline; small mood bubbles near; a
+  jaw under a dog's and a bear's muzzle; grey shanks; banded edges blended; swept, ringed horns.
   **Tests:** `tests/viewer/creatureMaterial.test.ts › crystal`, `tests/engine/bodyplan.test.ts › always
   have a tail`, `tests/viewer/mouths/beak.test.ts › hawk's bill`, `tests/viewer/mouthLine.test.ts ›
   drawn once`, `tests/engine/plans/urchin.test.ts › tube feet`, `tests/engine/plans/chelonian.test.ts ›
-  over each leg's root`, `tests/viewer/feet.test.ts › naked`, `tests/viewer/face.test.ts`.
+  over each leg's root`, `tests/viewer/feet.test.ts › naked`, `tests/viewer/face.test.ts`,
+  `tests/viewer/bodyField.test.ts › has a jaw`, `tests/viewer/horn.test.ts`.
 
 ### Next up (unchecked — pick from here)
 
-- [ ] **What the eighth look left.** The dog's and the bear's ball of a skull with a tube of a muzzle;
-  the ape's pads with no hands; stiff fan wings (dragon, wyvern, songbird); black stockings on bare
-  shanks; hard-edged bands on dragons; an arachnid's dipped abdomen; ears that are spikes edge-on; one
-  cone for every horn.
+- [ ] **What the eighth look left.** The ape's pads with no hands; stiff fan wings (dragon, wyvern,
+  songbird); ears that are spikes edge-on; the weasel end on.
 
 - [ ] **What the sixth look left.** The crab's walking legs still arch high like a spider's; the bear's
   muzzle a hippo's (a tube ending in a bulb, a small nose on it); the ape's coat reads as bare rubber;
