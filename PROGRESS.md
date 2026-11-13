@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -54,6 +54,41 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M90 — Cut stone, a mouth of flesh, and hops that land · 2026-11-13
+
+- **What the fifth look left, part one.** The horror's crown mouth read as a drain: a near-black,
+  glossy funnel whose facets caught the light like cut glass, ringed by a smooth pale hoop. The funnel
+  is now painted along its depth, wet flesh at the rim through gum to the near-black of the throat,
+  and less glossy; the rasp is a ring of fifteen keratin knobs, dulled toward the lip's flesh. A
+  lamprey's rows of teeth now stand in flesh too.
+- **A crystal hide is cut, outline and all.** The crystalline beast was faceted only in its shading:
+  its outline was every other creature's soft round body, a pig in a glass texture. Its skin is now
+  laid onto flat faces after it is polygonized: the vertices are split into Voronoi cells over body
+  space (a face about 0.62 of the trunk's girth, the cells hashed from the seed) and each cell's
+  vertices are projected onto its own plane, taking its normal; the triangles spanning two cells
+  become the bevels between faces. Nothing is split, so the mesh, its index and its skin weights stay
+  as they were. Laid flat across the crease of a leg into the body the skin folded over itself, a black
+  tear, so a vertex turned well away from its face's plane, or far off it, stays put, and a triangle the
+  cut turned over is put back. About 5,000 vertices come out on some 600 faces, at about 5 ms a skin.
+- **Two things the look left stay left.** A dog's and a bear's muzzle is a tube ending in a round bulb,
+  a sausage on the face, but the dog's own test holds the muzzle's girth to the nose on purpose (a
+  tapering cone read as a bull terrier) and a re-taper would undo that; it needs a better shape, not a
+  tweak. A weasel seen end on is a ball behind a small head: its shoulder joints set the width, slimmer
+  legs fail its "stout" test before the joints thin, and a wider skull barely shows.
+- **Saltation that lands.** A litter's two saltation children are bursts of structural change, and
+  about one in five came down near no plan at all: a bird swollen to a sausage, a deer ballooned round
+  on its legs, a dog with a chest like a barrel. Such a child now keeps its structure (which parts, and
+  where) and has its proportions drawn 70% of the way back toward a founder of its lineage's plan:
+  each body section's size, link count, taper and bend, and each part's toward the founder's part of
+  the same kind. Of 99 such children of ten founders, 35 had a body section more than 1.8 times its
+  parent's (or under 1/1.8 of it); landed, 14.
+- **Aim at the right attractor.** The roadmap said to hop toward the *nearest* plan. Drawn toward the
+  plan the child itself was nearest, the ballooned deer, nearest a shark by the coarse measure, lay
+  out long and low as a shark does. The measure is ruled by structure (counts of legs, wings, tails and
+  eyes; radial or not), so it can't say what proportions a body should have; the lineage's own plan
+  can. The same reason is why the measure barely moves (21% → 20% in a valley): landing keeps the
+  structure. What it doesn't mend is a hop to radial, a cat flipped into a sprawl, which it leaves.
 
 ## M89 — A faster valley, and a fifth look · 2026-11-13
 

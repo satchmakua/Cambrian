@@ -798,15 +798,22 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   `tests/engine/plans/fish.test.ts › a shark's snout`, `tests/engine/bodyplan.test.ts › a crab's legs`,
   `tests/viewer/framing.test.ts › a face's portrait`.
 
+- [x] **M90 — Cut stone, a mouth of flesh, and hops that land.** The crystalline beast's hide cut into
+  flat faces, outline and all; the horror's crown mouth a funnel of flesh with a knobbed rasp; a
+  saltation child that comes down near no plan takes back its lineage's proportions (structure kept).
+  **Tests:** `tests/viewer/facets.test.ts`, `tests/viewer/mouths/ring.test.ts › a sucker's throat`,
+  `tests/engine/landing.test.ts`.
+
 ### Next up (unchecked — pick from here)
 
-- [ ] **Saltation that lands.** A basin hop (a litter's saltation children) still often lands between
-  plans: a bird swollen to a sausage, a cat on a crab's legs. Hop toward the nearest attractor's
-  proportions, not just its limb count.
+- [ ] **Hops to radial that land.** A bilateral lineage's child flipped radial is a sprawl (a cat's
+  legs round a disc). Land it in the radial basin it is nearest: that plan's body in the lineage's
+  coat, rather than leaving it.
 
 - [ ] **Richer world.** Burrows and nests, a second lake.
-- [ ] **What the fifth look left.** A weasel end on is a ball behind a small head; mammal muzzles much
-  alike; the crystalline beast smooth where it should be cut; the horror's crown mouth a drain grate.
+- [ ] **What the fifth look left.** A weasel end on is a ball behind a small head (its shoulder joints
+  set the width); a dog's and a bear's muzzle is a tube ending in a bulb (the dog's test holds its
+  girth to the nose on purpose: it needs a better shape, not a re-taper).
 - [ ] **A lineage film.** A wild species' body changes over the generations, as a strip of portraits.
 - [ ] **More headroom.** Skin builds off the main thread (a worker for the marching tetrahedra); the
   flowers as cells like the grass; level-of-detail crowns for far trees.
