@@ -62,13 +62,15 @@ export function apeFootGeometry(r: number, side: number): ApeLimbGeometry {
   const fur = merged([blob(0, floor + 0.52 * r, 0.62 * r, 0.98 * r, 0.52 * r, 1.75 * r, 0, 18)]);
   const bare: THREE.BufferGeometry[] = [];
   const toes: readonly [number, number][] = [
-    [-0.34, 2.22],
-    [0.08, 2.32],
-    [0.46, 2.2],
-    [0.8, 1.98],
+    [-0.34, 2.4],
+    [0.08, 2.52],
+    [0.46, 2.4],
+    [0.8, 2.16],
   ];
-  // (the outer toes sit back a little, as on a hand)
-  for (const [x, z] of toes) bare.push(blob(side * x * r, floor + 0.27 * r, z * r, 0.21 * r, 0.27 * r, 0.5 * r));
-  bare.push(blob(-side * 1.02 * r, floor + 0.28 * r, 1.25 * r, 0.25 * r, 0.28 * r, 0.62 * r, -side * 0.6));
+  // (the outer toes sit back a little, as on a hand; long, like fingers — as stubs half the sole's
+  // width they were a row of beads on a pad, a bear's paw)
+  for (const [x, z] of toes) bare.push(blob(side * x * r, floor + 0.25 * r, z * r, 0.2 * r, 0.25 * r, 0.72 * r));
+  // the big toe stands well off the inside edge, angled out like a thumb
+  bare.push(blob(-side * 1.12 * r, floor + 0.27 * r, 1.3 * r, 0.25 * r, 0.27 * r, 0.75 * r, -side * 0.75));
   return { fur, bare: merged(bare) };
 }

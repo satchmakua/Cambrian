@@ -1326,7 +1326,8 @@ function ApeLimb({ f, skin, phenotype, fist = false }: { f: MeshFeature; skin: T
     geo.fur.dispose();
     geo.bare.dispose();
   }, [geo]);
-  const bare = useMemo(() => new THREE.Color(faceMaskOf(phenotype)?.color ?? 0x3a2a22).multiplyScalar(0.5).getHex(), [phenotype]);
+  // (the face's own bare skin, a shade darker: at half its tone the fingers were black beads)
+  const bare = useMemo(() => new THREE.Color(faceMaskOf(phenotype)?.color ?? 0x3a2a22).multiplyScalar(0.72).getHex(), [phenotype]);
   return (
     <group>
       <mesh geometry={geo.fur} material={skin} castShadow />
