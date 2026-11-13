@@ -122,25 +122,65 @@ export function facetSkin(geo: THREE.BufferGeometry, size: number, seed: number,
   }
   const arr = pos.array as Float32Array;
   const nar = nrm.array as Float32Array;
+  // each vertex's neighbourhood (two rings round it): the cells whose planes it may come to lie on
+  const index0 = geo.getIndex();
+  const near: Set<number>[] = Array.from({ length: n }, () => new Set<number>());
+  const ring1: Set<number>[] = Array.from({ length: n }, () => new Set<number>());
+  if (index0) {
+    const ix = index0.array;
+    for (let t = 0; t < ix.length; t += 3) {
+      const a = ix[t], b = ix[t + 1], c = ix[t + 2];
+      ring1[a].add(b).add(c);
+      ring1[b].add(a).add(c);
+      ring1[c].add(a).add(b);
+    }
+    for (let v = 0; v < n; v++) {
+      for (const w of ring1[v]) {
+        near[v].add(cellOf[w]);
+        for (const u of ring1[w]) near[v].add(cellOf[u]);
+      }
+    }
+  }
   // the mouth's carved cavity, and its rim, stay as they were: laid onto the face's planes, the wet
   // flesh inside came up through the hide in orange flecks, and the dark of the cavity in black ones
   const flesh = geo.getAttribute('aFlesh') as THREE.BufferAttribute | undefined;
+  // which vertices the cut laid onto a face (the shader lights those triangles by their own plane)
+  const cut = new Float32Array(n);
   for (let v = 0; v < n; v++) {
-    const cell = cells.get(cellOf[v])!;
-    if (cell.k === 0) continue;
+    const own = cells.get(cellOf[v])!;
+    if (own.k === 0) continue;
     if ((flesh && flesh.getX(v) > 0) || keep?.[v]) continue;
-    const [nx, ny, nz] = cell.m;
-    // a vertex turned well away from its cell's plane, or far off it, stays as it was: where a cell
-    // spans a crease (a leg into the body) laying it flat folded the skin over itself, a black tear
-    if (n0[v * 3] * nx + n0[v * 3 + 1] * ny + n0[v * 3 + 2] * nz < FACET_AGREE) continue;
-    const d = (p0[v * 3] - cell.c[0]) * nx + (p0[v * 3 + 1] - cell.c[1]) * ny + (p0[v * 3 + 2] - cell.c[2]) * nz;
-    if (Math.abs(d) > FACET_REACH * size) continue;
-    arr[v * 3] = p0[v * 3] - nx * d;
-    arr[v * 3 + 1] = p0[v * 3 + 1] - ny * d;
-    arr[v * 3 + 2] = p0[v * 3 + 2] - nz * d;
-    nar[v * 3] = nx;
-    nar[v * 3 + 1] = ny;
-    nar[v * 3 + 2] = nz;
+    const vx = n0[v * 3], vy = n0[v * 3 + 1], vz = n0[v * 3 + 2];
+    // A CUT STONE IS THE MEET OF ITS FACES' PLANES: along its normal, a vertex lies on the first of the
+    // nearby faces' planes it meets (the nearest inward), so two faces meet in a straight crease where
+    // their planes cross. (Laid each onto its own cell's plane, the planes did not meet at the cells'
+    // border: every border was a ragged step between two faces — torn paper, frost, not cut stone.)
+    let best = Infinity;
+    let bm: [number, number, number] | null = null;
+    const cands = near[v].size ? near[v] : new Set([cellOf[v]]);
+    for (const id of cands) {
+      const cell = cells.get(id);
+      if (!cell || cell.k === 0) continue;
+      const [nx, ny, nz] = cell.m;
+      // (a plane turned well away from the vertex's own normal, or far off it, isn't its: where a cell
+      // spans a crease — a leg into the body — laying it flat folded the skin over itself, a black tear)
+      const along = vx * nx + vy * ny + vz * nz;
+      if (along < FACET_AGREE) continue;
+      const t = ((cell.c[0] - p0[v * 3]) * nx + (cell.c[1] - p0[v * 3 + 1]) * ny + (cell.c[2] - p0[v * 3 + 2]) * nz) / along;
+      if (Math.abs(t) > FACET_REACH * size) continue;
+      if (t < best) {
+        best = t;
+        bm = cell.m;
+      }
+    }
+    if (!bm) continue;
+    arr[v * 3] = p0[v * 3] + vx * best;
+    arr[v * 3 + 1] = p0[v * 3 + 1] + vy * best;
+    arr[v * 3 + 2] = p0[v * 3 + 2] + vz * best;
+    nar[v * 3] = bm[0];
+    nar[v * 3 + 1] = bm[1];
+    nar[v * 3 + 2] = bm[2];
+    cut[v] = 1;
   }
   // …and a triangle the cut turned over — its face swung more than FACET_TURN from where it faced
   // before — is put back as it was, until none is. (Tested only against its corners' new normals, a
@@ -175,12 +215,14 @@ export function facetSkin(geo: THREE.BufferGeometry, size: number, seed: number,
             arr[o + q] = p0[o + q];
             nar[o + q] = n0[o + q];
           }
+          cut[o / 3] = 0;
         }
         undone++;
       }
       if (undone === 0) break;
     }
   }
+  geo.setAttribute('aCut', new THREE.BufferAttribute(cut, 1));
   pos.needsUpdate = true;
   nrm.needsUpdate = true;
   geo.computeBoundingSphere();

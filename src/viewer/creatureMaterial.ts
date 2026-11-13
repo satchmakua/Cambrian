@@ -223,9 +223,9 @@ export function makeCreatureMaterial(
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
-        '#include <common>\nattribute vec3 aBodyPos;\nattribute float aFlesh;\nattribute float aAO;\nattribute float aLeg;\nvarying vec3 vBodyPos;\nvarying vec3 vWNrm;\nvarying vec3 vBNrm;\nvarying float vFlesh;\nvarying float vAO;\nvarying float vLeg;',
+        '#include <common>\nattribute vec3 aBodyPos;\nattribute float aFlesh;\nattribute float aAO;\nattribute float aLeg;\nattribute float aCut;\nvarying vec3 vBodyPos;\nvarying vec3 vWNrm;\nvarying vec3 vBNrm;\nvarying float vFlesh;\nvarying float vAO;\nvarying float vLeg;\nvarying float vCut;',
       )
-      .replace('#include <project_vertex>', '  vBodyPos = aBodyPos;\n  vFlesh = aFlesh;\n  vAO = aAO;\n  vLeg = aLeg;\n#include <project_vertex>')
+      .replace('#include <project_vertex>', '  vBodyPos = aBodyPos;\n  vFlesh = aFlesh;\n  vAO = aAO;\n  vLeg = aLeg;\n  vCut = aCut;\n#include <project_vertex>')
       // a fur shell rides out along the (skinned) normal
       // …and the outer shells lean back along the body and down, so the slices stack into combed
       // hairs rather than standing straight up like the pile of a towel
@@ -427,6 +427,15 @@ export function makeCreatureMaterial(
       .replace(
         '#include <normal_fragment_begin>',
         `#include <normal_fragment_begin>
+        // a skin cut into faces is lit face by face: each triangle by its own plane, so a face is one shade
+        // to its edges (by the vertex normals, blended across each triangle, the border between two faces
+        // ran where the vertices' faces changed — a zigzag along the mesh, torn paper)
+        // (…where the cut laid the skin onto its faces — vCut: the uncut legs and face keep their smooth
+        // normals, or each of their mesh's triangles caught the light as a chip of its own)
+        if (uCut > 0.5 && vCut > 0.99) {
+          vec3 fv = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+          normal = dot(fv, normal) < 0.0 ? -fv : fv;
+        }
         {
           // (the musculature is broad and smooth: its derivative is as good taken per block)
           float hm = gM * 0.02 * uBump;
@@ -491,6 +500,7 @@ varying vec3 vBNrm;
 varying float vFlesh;
 varying float vAO;
 varying float vLeg;
+varying float vCut;
 uniform vec3 uMain; uniform vec3 uBack; uniform vec3 uBelly; uniform vec3 uPattern; uniform vec3 uPattern2; uniform vec3 uRim;
 uniform vec3 uBlood;
 uniform int uPType; uniform int uCover;
@@ -822,7 +832,10 @@ float surfaceHeight(vec3 p, int cover) {
     // The narrow bevels between faces, where the normal swings from one face's to the next within a
     // pixel or two, are the cut's EDGES: they catch the light as bright lines. (A curved, uncut skin
     // turns its normal far more slowly than that.)
-    vec3 fn = normalize(vBNrm);
+    // (the face's own normal — the triangle's, from the body-space position's slopes — one value across
+    // the face, and turned to the outside)
+    vec3 fn = normalize(cross(dFdx(vBodyPos), dFdy(vBodyPos)));
+    if (dot(fn, vBNrm) < 0.0) fn = -fn;
     float bend = length(fwidth(fn));
     float planar = 1.0 - smoothstep(0.0, 0.03, bend);
     gFacet = mix(0.5, hash13(floor(fn * 5.0 + 0.5) + 3.0), planar);

@@ -106,3 +106,36 @@ describe('a crystal hide cut into faces', () => {
     expect(Array.from(a.getAttribute('normal').array)).toEqual(Array.from(b.getAttribute('normal').array));
   });
 });
+
+describe('cut stone: faces that meet', () => {
+  it("lays each vertex on the first nearby face's plane along its normal, so faces meet instead of stepping", () => {
+    // (laid each onto its own cell's plane, two faces' planes did not meet at their border: every border
+    // a ragged step, the edges across it stretched — torn paper, not cut stone)
+    for (const seed of [23, 1, 2, 3]) {
+      const p = grow(genomeOfMorphotype(seed, 'crystalline'));
+      const g = buildSmoothGeometry(p, true, [], 'high');
+      const before = Float32Array.from(g.getAttribute('position').array as Float32Array);
+      const size = facetSizeOf(p);
+      facetSkin(g, size, p.genomeRef.seed, facetKeep(p, g));
+      const after = g.getAttribute('position').array as Float32Array;
+      const ix = g.getIndex()!.array;
+      const d: number[] = [];
+      for (let t = 0; t < ix.length; t += 3) {
+        for (const [a, b] of [[ix[t], ix[t + 1]], [ix[t + 1], ix[t + 2]], [ix[t + 2], ix[t]]]) {
+          const l0 = Math.hypot(before[a * 3] - before[b * 3], before[a * 3 + 1] - before[b * 3 + 1], before[a * 3 + 2] - before[b * 3 + 2]);
+          const l1 = Math.hypot(after[a * 3] - after[b * 3], after[a * 3 + 1] - after[b * 3 + 1], after[a * 3 + 2] - after[b * 3 + 2]);
+          d.push(Math.abs(l1 - l0) / size);
+        }
+      }
+      d.sort((x, y) => x - y);
+      // (stepped, the 99th percentile edge stretched by 0.075–0.09 of a face)
+      expect(d[Math.floor(d.length * 0.99)], `#${seed}`).toBeLessThan(0.065);
+      // the faces it cut are marked for the shader to light by their own plane; the legs it left are not
+      const cut = g.getAttribute('aCut');
+      let on = 0;
+      for (let v = 0; v < cut.count; v++) on += cut.getX(v);
+      expect(on / cut.count, `#${seed}`).toBeGreaterThan(0.3);
+      expect(on / cut.count, `#${seed}`).toBeLessThan(0.98);
+    }
+  });
+});
