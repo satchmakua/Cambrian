@@ -69,8 +69,9 @@ export interface HeadMask {
 
 export function headMaskOf(p: Phenotype): HeadMask | null {
   // (bands only: a tiger's or a tabby's stripes run on over its face, and kept off it the cat wore a
-  // plain pale hood that stopped dead at the neck)
-  if (p.genomeRef.covering.pattern !== 'bands') return null;
+  // plain pale hood that stopped dead at the neck. And plumage: a bird's head is smooth-feathered,
+  // its feathers' edges kept to its back and wings — see the covering shader)
+  if (p.genomeRef.covering.pattern !== 'bands' && p.genomeRef.covering.type !== 'feathers') return null;
   const mouth = p.nodes.findIndex((n) => n.terminal === 'mouth');
   const holder = mouth < 0 ? undefined : p.edges.find(([, b]) => b === mouth);
   const seg = holder ? p.nodes[holder[0]] : undefined;

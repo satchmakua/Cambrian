@@ -743,11 +743,20 @@ float surfaceHeight(vec3 p, int cover) {
     float barbs = fbmA(vec3(p.x * 40.0, p.y * 40.0, p.z * 9.0), 40.0);
     float shaft;
     float lay = mix(0.66, scallops(p * 13.0, gLay, gNb, gFw * 13.0, shaft), aaW(13.0));
-    shaft *= aaW(50.0);
+    // A bird's head and its underside are smooth plumage; the feathers' edges show on its back and
+    // its wings. (Scalloped evenly all over, each feather's edge in shadow, it wore fish scales.)
+    float plain = smoothstep(0.1, -0.6, gNb.y) * 0.7;
+    if (uHeadA.w > 0.0) {
+      vec3 hab = uHeadB - uHeadA.xyz;
+      float ht = clamp(dot(vBodyPos - uHeadA.xyz, hab) / max(dot(hab, hab), 1e-6), 0.0, 1.0);
+      plain = max(plain, 1.0 - smoothstep(uHeadA.w * 1.0, uHeadA.w * 1.6, length(vBodyPos - uHeadA.xyz - hab * ht)));
+    }
+    lay = mix(lay, 0.66, plain * 0.85);
+    shaft *= aaW(50.0) * (1.0 - plain);
     gHb = lay * 0.0075 + (barbs - 0.5) * 0.001 + shaft * 0.0012;
     // (gH reads as a RECESS for the grime and roughness: where a feather comes out from under the
-    // one in front is where the shadow sits; its tip is clean)
-    return clamp(0.82 - lay * 0.6 + (barbs - 0.5) * 0.05 - shaft * 0.18, 0.0, 1.0);
+    // one in front is where the shadow sits; its tip is clean — a soft shadow, not an outline)
+    return clamp(0.82 - lay * 0.42 + (barbs - 0.5) * 0.05 - shaft * 0.18, 0.0, 1.0);
   }
   if (cover == 4) {                                             // chitin — a smooth lacquered cuticle
     // Hard and glossy: a faint undulation and fine punctures, no seam network. (Voronoi grooves drew a

@@ -36,7 +36,9 @@ describe('a plain head under bands and stripes', () => {
         const p = grow(genomeOfMorphotype(seed, id));
         const m = headMaskOf(p);
         const pattern = p.genomeRef.covering.pattern;
-        if (pattern !== 'bands') {
+        // (plumage wears the mask too, whatever its marking: a bird's head is smooth-feathered — see
+        // the covering shader)
+        if (pattern !== 'bands' && p.genomeRef.covering.type !== 'feathers') {
           expect(m, `${id} #${seed} (${pattern})`).toBeNull();
           continue;
         }
