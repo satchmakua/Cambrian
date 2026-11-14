@@ -214,6 +214,8 @@ export function isBrushTail(part: { kind: string; style: number } | undefined, t
 }
 /** How far toward the top of the croup a brush is set (added to the upward part of its aim). */
 const BRUSH_SEAT = 1.1;
+/** how far back (the aim's −z) a horn's root is seated, however far back the horn is swept */
+export const HORN_SEAT_BACK = 0.4;
 
 /**
  * A brush's girth along its length (0 the root … 1 the tip), × the tail's own tapering radius: slim
@@ -973,6 +975,10 @@ export function grow(genome: Genome): Phenotype {
       // carried. (Seated where it aims, like any other part, a tail that hangs came out from under
       // the rump, between the thighs, with the buttocks standing out above it.)
       if (brush) root = norm([dir[0], dir[1] + BRUSH_SEAT, dir[2]]);
+      // A HORN roots on the skull at its azimuth however far back it is swept: on the skull's upper rear
+      // corner. (Seated where it aimed, a pair aimed well back both rooted on the back of the skull, near the
+      // midline, their sheaths merged — from above, a fork laid on the neck: a wyvern's, a dragon's.)
+      if (app.kind === 'horn' && dev.symmetry === 'bilateral' && dir[2] < -HORN_SEAT_BACK) root = norm([dir[0], dir[1], -HORN_SEAT_BACK]);
       // measured against the node's TRUE surface (see surfaceExtent), so a long snout or a domed skull
       // still wears its face proud rather than swallowing it.
       const out = surfaceExtent(base, root) + seat * app.thickness;

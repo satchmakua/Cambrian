@@ -253,15 +253,16 @@ describe('chimera', () => {
     expect(restingFold(wy, foldedSpan(wy, wt.radius), wingShoulder(wy, 1)!)).toBe(foldedSpan(wy, wt.radius));
   });
 
-  it("a dragon's back spines stand on three links of its back, its horns root apart, its feet keep their girth", () => {
+  it("a dragon's (a wyvern's, a chimera's) back spines stand on three links of its back, its horns root apart, its feet keep their girth", () => {
     // (at 0.2/0.45/0.7 two spines always fell on one link of a 3-4 link trunk: two dots; aimed nearly straight
     // back, both horns rooted on the midline, their sheaths merged: a fork; its shanks thinned to tiny claws)
+    for (const id of ['dragon', 'wyvern', 'chimera'])
     for (let seed = 1; seed <= 40; seed++) {
-      const p = grow(genomeOfMorphotype(seed, 'dragon'));
+      const p = grow(genomeOfMorphotype(seed, id));
       const trunk = trunkOf(p);
       const len = Math.max(...trunk.map((n) => n.pos[2])) - Math.min(...trunk.map((n) => n.pos[2]));
       const spines = p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'spine').map((n) => n.pos[2]).sort((a, b) => a - b);
-      for (let i = 1; i < spines.length; i++) expect(spines[i] - spines[i - 1], `#${seed} spines apart`).toBeGreaterThanOrEqual(0.25 * len);
+      for (let i = 1; i < spines.length; i++) expect(spines[i] - spines[i - 1], `${id} #${seed} spines apart`).toBeGreaterThanOrEqual(0.25 * len);
       const parent = parentsOf(p);
       p.nodes.forEach((n, i) => {
         if (n.kind !== 'terminal' || n.part?.kind !== 'horn' || n.pos[0] < 0) return;
@@ -269,8 +270,9 @@ describe('chimera', () => {
         while (parent.has(root) && p.nodes[parent.get(root)!].part?.kind === 'horn') root = parent.get(root)!;
         const R = p.nodes[root];
         const r = Math.max(R.radius, n.radius, 0.06);
-        expect(2 * R.pos[0] - 2 * HORN_ROOT * r, `#${seed} horn roots apart`).toBeGreaterThan(0);
+        expect(2 * R.pos[0] - 2 * HORN_ROOT * r, `${id} #${seed} horn roots apart`).toBeGreaterThan(0);
       });
+      if (id !== 'dragon') continue;
       const feet = p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg');
       const chest = Math.max(...trunk.map((n) => n.radius));
       expect(Math.min(...feet.map((n) => n.radius)) / chest, `#${seed} feet`).toBeGreaterThanOrEqual(0.17);
