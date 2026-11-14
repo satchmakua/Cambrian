@@ -6,6 +6,7 @@
  * CreatureMesh renders this and animates the node positions each frame (M5 motion).
  */
 import type { Phenotype } from '../engine/grow';
+import { quillNodes } from './quills';
 import type { Terminal, PartKind } from '../engine/genome';
 
 // Face organs that seat directly on a body surface: the capsule that would connect the body to one of
@@ -45,7 +46,11 @@ export interface MeshData {
 }
 
 export function buildMeshData(p: Phenotype): MeshData {
-  const nodes: MeshNode[] = p.nodes.map((n) => ({ pos: n.pos, radius: n.radius, scale: n.scale, quat: n.scale ? n.quat : undefined }));
+  // (a shaped LIMB link — the blade of a sculling tail — is the smooth skin's to draw: in the kit, round
+  // capsules between flattened links strung the tail into beads, so there it stays the round taper)
+  const shaped = (n: Phenotype['nodes'][number]) => (n.kind === 'spine' ? n.scale : undefined);
+  const nodes: MeshNode[] = p.nodes.map((n) => ({ pos: n.pos, radius: n.radius, scale: shaped(n), quat: shaped(n) ? n.quat : undefined }));
+  const quills = quillNodes(p);
   const edges: MeshEdge[] = [];
   for (const [a, b] of p.edges) {
     // never draw the connecting capsule into a seated face organ (see SURFACE_ORGANS) — that tube is
@@ -53,12 +58,15 @@ export function buildMeshData(p: Phenotype): MeshData {
     const tb = p.nodes[b].terminal;
     if (tb && SURFACE_ORGANS.has(tb)) continue;
     if (p.nodes[b].part?.kind === 'wing') continue; // wings render whole from the shoulder (wings.ts)
+    if (quills.has(b)) continue; // an urchin's quills, root to point (quills.ts)
     edges.push({ a, b, radius: ((p.nodes[a].radius + p.nodes[b].radius) / 2) * 0.9 });
   }
 
   const bodySpheres: number[] = [];
   const features: MeshFeature[] = [];
   p.nodes.forEach((n, i) => {
+    // (a quill is drawn whole, root to point — see quills.ts: none of its nodes is a sphere or a feature)
+    if (quills.has(i)) return;
     if (n.terminal && n.terminal !== 'none') {
       features.push({ type: n.terminal, idx: i, radius: n.radius, quat: n.quat, kind: n.part?.kind, style: n.part?.style ?? 0.5 });
     } else if (n.part?.kind !== 'wing') {

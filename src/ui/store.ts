@@ -101,6 +101,15 @@ interface AppState extends Session {
   newGame: (founder: Genome, mode: SymmetryMode, game: GameInfo) => void;
   /** Swap in a saved game's lineage. */
   restore: (save: BreederSave, game: GameInfo) => void;
+  /**
+   * The same in two steps, for a load that must be all-or-nothing: everything that can fail (the
+   * creature being bred is grown, its litter bred) happens here and changes nothing; calling what
+   * comes back puts the lineage in place, and cannot fail.
+   */
+  readyRestore: (save: BreederSave) => (game: GameInfo) => void;
+  /** the browser could not keep the game at its last attempt (its store is full or blocked): until a
+   *  write succeeds, only a save to a slot — or a file — holds what has been bred since */
+  unkept: boolean;
   /** The lineage as a save holds it. */
   snapshot: () => BreederSave;
   /** Note the slot/name the game was just saved under. */
@@ -174,9 +183,14 @@ function rootedAt(genome: Genome, mode: SymmetryMode, menagerie: Menagerie): Ses
 // (the game's name, slot and set-up ride along with the session: module state, written with it)
 let GAME: GameInfo = NEW_GAME;
 
-function persist(s: Session): void {
+/** Write the session to the browser. `replacing`: the game was just swapped for another (a new game,
+ *  a load) — the last game's copy goes first, so that if this one cannot be written (the store is
+ *  full) Continue never finds the old game's lineage under the new game's name, and so the old copy's
+ *  bulk is not what leaves no room for the new. Returns whether the browser now holds the session. */
+function persist(s: Session, replacing = false): boolean {
   try {
-    if (typeof localStorage === 'undefined') return;
+    if (typeof localStorage === 'undefined') return true; // (nowhere to keep it: nothing has failed)
+    if (replacing) localStorage.removeItem(STORAGE_KEY);
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -188,8 +202,9 @@ function persist(s: Session): void {
         game: GAME,
       }),
     );
+    return true;
   } catch {
-    /* ignore quota / unavailable */
+    return false; // quota / unavailable
   }
 }
 
@@ -230,10 +245,15 @@ function loadInitial(): Session & { game: GameInfo; hasGame: boolean } {
 // ~16 ms to stringify), so each commit only marks the session dirty and the write happens when the
 // browser is idle — the latest state wins, and leaving the page flushes it.
 let unsaved: Session | null = null;
+let replacing = false; // the session waiting to be written is a different game from the one stored
 function flushSave(): void {
   const s = unsaved;
   unsaved = null;
-  if (s) persist(s);
+  if (!s) return;
+  const kept = persist(s, replacing);
+  replacing = false;
+  // (the store only hears about a change: a write that works, as nearly all do, touches nothing)
+  if (useStore.getState().unkept === kept) useStore.setState({ unkept: !kept });
 }
 function persistSoon(s: Session): void {
   const scheduled = unsaved !== null;
@@ -276,17 +296,25 @@ export const useStore = create<AppState>((set, get) => {
       }
       set({ view });
     },
+    unkept: false,
     newGame: (founder, mode, game) => {
+      const next = rootedAt(structuredClone(founder), mode, {}); // (first: a founder that will not grow changes nothing)
       GAME = game;
-      commit(rootedAt(structuredClone(founder), mode, {}));
+      commit(next);
       set({ game, hasGame: true, pressure: ZERO_PRESSURE, physicsDistance: null });
+      replacing = true;
       flushSave();
     },
-    restore: (save, game) => {
-      GAME = game;
-      commit(batch(save.nodes, save.currentId, save.counter, save.symmetryMode, save.menagerie));
-      set({ game, hasGame: true, pressure: ZERO_PRESSURE, physicsDistance: null });
-      flushSave();
+    restore: (save, game) => get().readyRestore(save)(game),
+    readyRestore: (save) => {
+      const next = batch(save.nodes, save.currentId, save.counter, save.symmetryMode, save.menagerie);
+      return (game) => {
+        GAME = game;
+        commit(next);
+        set({ game, hasGame: true, pressure: ZERO_PRESSURE, physicsDistance: null });
+        replacing = true;
+        flushSave();
+      };
     },
     snapshot: () => {
       const { nodes, currentId, counter, symmetryMode, menagerie } = get();

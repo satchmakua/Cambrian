@@ -14,14 +14,30 @@ import { MORPHOTYPE_IDS } from '../engine/random';
 // The valley and the Studio are loaded when they are first opened: neither is needed to draw the menu
 // or the breeder. (A modest saving — about 7% of the code fetched before the menu shows; the rest is
 // the 3D library and the creature renderer, which the menu's own stage needs.)
-const WorldView = lazy(() => import('../world/WorldView').then((m) => ({ default: m.WorldView })));
-const Studio = lazy(() => import('../viewer/Studio').then((m) => ({ default: m.Studio })));
+// (a fetch that fails is tried once more; one that keeps failing is shown by the screen boundary)
+const WorldView = lazy(fetching(() => import('../world/WorldView').then((m) => ({ default: m.WorldView }))));
+const Studio = lazy(fetching(() => import('../viewer/Studio').then((m) => ({ default: m.Studio }))));
 import { useStore } from './store';
 import { useWorldUi } from '../world/worldStore';
 import { MainMenu } from './menu/MainMenu';
+import { fetching } from './ScreenBoundary';
+import { typingIn } from './keys';
 import { PauseMenu } from './menu/PauseMenu';
 
+// Dev/headless: ?bare=1 renders just the creature full-bleed (no UI chrome) for clean face shots.
+const BARE = import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('bare') === '1';
+
+/** The app: the main menu, or — once a game is being played — its screens. */
 export function App() {
+  const view = useStore((s) => s.view);
+  // The menu stands on its own. It is where a player lands when a screen has failed, and the failure
+  // may be the creature being bred — one that cannot be grown, or drawn — so the way to the menu must
+  // not pass through anything that needs it (the game's screens grow it before they draw anything).
+  if (view === 'menu' && !BARE) return <MainMenu />;
+  return <Game />;
+}
+
+function Game() {
   const nodes = useStore((s) => s.nodes);
   const currentId = useStore((s) => s.currentId);
   const offspring = useStore((s) => s.offspring);
@@ -66,33 +82,31 @@ export function App() {
   const [paused, setPaused] = useState(() => import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('pause') === '1');
   const openMenu = useCallback(() => setPaused(true), []);
   const closeMenu = useCallback(() => setPaused(false), []);
-  // (the screens read this to stop drawing while the menu is over them)
+  // (the screens read this to stop drawing while the menu is over them — and it is taken down with
+  // the game's screens when the player leaves for the main menu, whose own stage reads it too)
   const setMenuOpen = useStore((s) => s.setMenuOpen);
-  useEffect(() => setMenuOpen(paused && view !== 'menu'), [paused, view, setMenuOpen]);
   useEffect(() => {
-    if (view === 'menu') {
-      setPaused(false);
-      return;
-    }
+    setMenuOpen(paused);
+    return () => setMenuOpen(false);
+  }, [paused, setMenuOpen]);
+  useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      // (the open menu handles its own Esc; a text field keeps its keys)
-      if (e.key === 'Escape' && !paused && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) setPaused(true);
+      // (the open menu handles its own Esc; a key held down opens it once, not on every repeat)
+      if (e.key !== 'Escape' || e.repeat || paused || typingIn(e.target)) return;
+      setPaused(true);
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
-  }, [view, paused]);
-  const pause = paused && view !== 'menu' ? <PauseMenu onClose={closeMenu} /> : null;
+  }, [paused]);
+  const pause = paused ? <PauseMenu onClose={closeMenu} /> : null;
 
-  // Dev/headless: ?bare=1 renders just the creature full-bleed (no UI chrome) for clean face shots.
-  const bare = import.meta.env.DEV && new URLSearchParams(location.search).get('bare') === '1';
-  if (bare) {
+  if (BARE) {
     return (
       <div style={{ position: 'fixed', inset: 0, background: '#0f1116' }}>
         <CreatureViewer phenotype={phenotype} skinMode={skinMode} />
       </div>
     );
   }
-  if (view === 'menu') return <MainMenu />;
   if (view === 'world') {
     return (
       <Suspense fallback={<ScreenLoading />}>

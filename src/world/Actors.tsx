@@ -16,8 +16,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
-import { CreatureMesh, prebuildSkin, skinKey, type Detail } from '../viewer/CreatureMesh';
-import { hasGeometry } from '../viewer/geometryCache';
+import { CreatureMesh, shellKey, type Detail } from '../viewer/CreatureMesh';
+import { hasGeometry, releaseGeometry, retainGeometry } from '../viewer/geometryCache';
+import { bestBuilt, buildSkins, plainSkin, requestSkin, SKIN_KEY as KEY, skinOrder, type Skin, type SkinOrder } from './skinQueue';
 import { createRig, LOOK_MAX, poseDead, poseRig, SLEEP_DROP } from '../viewer/rig';
 import { getQuality } from '../ui/settings';
 import { juvenileGenome, JUVENILE_UNTIL } from '../engine/juvenile';
@@ -29,6 +30,7 @@ import { heightAt, WATER_LEVEL } from '../sim/terrain';
 import { emoteFor, emoteMaterial, type Emote } from './emotes';
 import { SOUND, voiceOf, type Call } from './audio';
 import { useWorldUi } from './worldStore';
+import { lodAt, type Lod } from './lod';
 
 // --- skins: three finenesses, built in the background ------------------------------------------------
 //
@@ -39,75 +41,74 @@ import { useWorldUi } from './worldStore';
 //
 // No skin is ever built inside a render: an actor asks for the one it wants and goes on wearing what
 // it has (the nearest fineness already built, or the capsule kit) until the scheduler, which builds
-// within a small time budget each frame, says it is ready. Same-genome creatures share each surface
+// within a small time budget each frame, says it is ready — the surface, the weights that bind it to
+// the skeleton, and its carapace shell where it has one. Same-genome creatures share each surface
 // through the geometry cache.
+//
+// And no skin is built twice: a body keeps what it has worn. The distant and the plain skin stay for
+// as long as the creature is in the valley — it crosses the band between them every time the camera
+// moves, and each crossing used to throw one away and, a moment later, build it again. The fine skin
+// is several megabytes, so it is only kept a while after the camera moves off (long enough that
+// circling an animal, or coming back to it, costs nothing).
 
-type Skin = 'far' | 'low' | 'high';
-const KEY: Record<Skin, string> = { far: skinKey(true, 'far', false), low: skinKey(true, 'low', false), high: skinKey(true, 'high', false) };
-const QUEUES: Record<Skin, Phenotype[]> = { far: [], low: [], high: [] };
-const WAITING: Record<Skin, Map<Phenotype, Set<() => void>>> = { far: new Map(), low: new Map(), high: new Map() };
+/** how long a fine skin outlives the camera's interest in it */
+const FINE_KEEP_MS = 20_000;
 
-function requestSkin(p: Phenotype, q: Skin, onReady: () => void): () => void {
-  if (hasGeometry(p, KEY[q])) {
-    onReady();
-    return () => {};
-  }
-  let set = WAITING[q].get(p);
-  if (!set) {
-    WAITING[q].set(p, (set = new Set()));
-    QUEUES[q].push(p);
-  }
-  set.add(onReady);
-  return () => set!.delete(onReady);
-}
-
-/** Build the next queued skin of a fineness, if anyone still wants it. Returns whether one was built. */
-function buildNext(q: Skin): boolean {
-  while (QUEUES[q].length) {
-    const p = QUEUES[q].shift()!;
-    const ls = WAITING[q].get(p);
-    WAITING[q].delete(p);
-    if (!ls || ls.size === 0) continue; // nobody waiting any more
-    prebuildSkin(p, 'hybrid', q, false);
-    for (const f of ls) f();
-    return true;
-  }
-  return false;
-}
-
-/** Build queued surfaces each frame (call from a useFrame). */
+/** Build queued surfaces each frame (call from a useFrame): see skinQueue's `buildSkins`. */
 export function useSkinScheduler(): void {
-  useFrame(() => {
-    // a time budget per frame (always at least one build), so a burst of new genomes drains quickly
-    // on a fast machine without ever stalling a frame for long on a slow one. The distant skin goes
-    // first: it is the cheapest, and it gets a newcomer out of its capsule kit.
-    const t0 = performance.now();
-    let built = false;
-    for (const q of ['far', 'low'] as const) {
-      while (performance.now() - t0 < 6 && buildNext(q)) built = true;
-    }
-    // then, on a frame with nothing else to build, at most one fine skin (3–4x a plain one's cost)
-    if (!built) buildNext('high');
-  });
+  useFrame(() => buildSkins());
 }
 
-/** The fineness nearest the wanted one that is already built (null: none — the capsule kit). */
-function bestBuilt(p: Phenotype, want: Skin): Skin | null {
-  if (hasGeometry(p, KEY[want])) return want;
-  const others = want === 'far' ? (['low', 'high'] as const) : want === 'low' ? (['far', 'high'] as const) : (['low', 'far'] as const);
-  return others.find((q) => hasGeometry(p, KEY[q])) ?? null;
+/** Count this body as a user of a skin it has built (and of that skin's shell, if it has one), so
+ *  neither is swept while the body may wear it again. Returns the cache keys actually retained. */
+/** a mood bubble's largest size against the camera's distance from it (≈ a 14th of the view's height) */
+const BUBBLE_NEAR = 0.06;
+const BUBBLE_AT = new THREE.Vector3();
+
+function hold(p: Phenotype, q: Skin): string[] {
+  return [KEY[q], shellKey(q)].filter((k) => retainGeometry(p, k));
 }
 
 /** The skin to wear now, while the wanted one is built in the background (null: the capsule kit). */
 function useSkin(p: Phenotype, want: Skin): Skin | null {
-  const [have, setHave] = useState<Skin | null>(() => bestBuilt(p, want));
+  const [state, setState] = useState<{ p: Phenotype; have: Skin | null }>(() => ({ p, have: bestBuilt(p, want) }));
+  let have = state.have;
+  if (state.p !== p) {
+    // a different body (a youngster grown into its adult shape): what was being worn was the other
+    // body's — start from what this one has built, never by building in this render
+    have = bestBuilt(p, want);
+    setState({ p, have });
+  }
   useEffect(() => {
     const now = bestBuilt(p, want);
     // (keep what is worn while it is still there; else the nearest built)
-    setHave((h) => (now === want ? want : h && hasGeometry(p, KEY[h]) ? h : now));
+    setState((s) => {
+      const worn = s.p === p ? s.have : null;
+      const next = now === want ? want : worn && hasGeometry(p, KEY[worn]) ? worn : now;
+      return s.p === p && s.have === next ? s : { p, have: next };
+    });
     if (now === want) return;
-    return requestSkin(p, want, () => setHave(want));
+    return requestSkin(p, want, () => setState({ p, have: want }));
   }, [p, want]);
+
+  // what this body has worn, it keeps (see "skins" above)
+  const held = useRef(new Map<Skin, string[]>());
+  useEffect(() => {
+    const h = held.current;
+    if (have && !h.has(have)) h.set(have, hold(p, have));
+    const fine = h.get('high');
+    if (fine && want !== 'high' && have !== 'high') {
+      for (const k of fine) releaseGeometry(p, k, FINE_KEEP_MS);
+      h.delete('high');
+    }
+  }, [p, have, want]);
+  useEffect(
+    () => () => {
+      for (const keys of held.current.values()) for (const k of keys) releaseGeometry(p, k);
+      held.current.clear();
+    },
+    [p],
+  );
   return have;
 }
 
@@ -118,6 +119,7 @@ function useNear(get: () => THREE.Vector3 | null, radius: number): boolean {
   const camera = useThree((s) => s.camera);
   const [near, setNear] = useState(false);
   const cur = useRef(false);
+  const dwell = useRef(0);
   const timer = useRef(Math.random() * 0.3);
   useFrame((_, dt) => {
     timer.current -= dt;
@@ -127,7 +129,11 @@ function useNear(get: () => THREE.Vector3 | null, radius: number): boolean {
     if (!p) return;
     const d = camera.position.distanceTo(p);
     // (fine skins are a graphics option: off, nothing is ever near enough)
-    const next = getQuality().fineSkins && (cur.current ? d < radius * 1.25 : d < radius);
+    const inside = getQuality().fineSkins && (cur.current ? d < radius * 1.25 : d < radius);
+    // near means staying near: a camera sweeping past an animal is gone before its fine skin — the
+    // dearest thing the valley builds — could be seen, so it is asked for on the second look
+    dwell.current = inside ? dwell.current + 1 : 0;
+    const next = inside && (cur.current || dwell.current >= 2);
     if (next !== cur.current) {
       cur.current = next;
       setNear(next);
@@ -172,15 +178,20 @@ function angleLerp(a: number, b: number, t: number): number {
 
 // --- level of detail -------------------------------------------------------------------------------
 
-const LOD_FULL = 24; // bu from the camera: full detail inside this
-const LOD_LITE = 62; // simplified features inside this; silhouette only beyond
+const START = new THREE.Vector3();
+const HERE = new THREE.Vector3();
 
-/** Pick a detail level from the camera distance, with hysteresis so actors don't flicker at a band
- *  edge. Re-renders only when the level actually changes. */
-function useDetail(get: () => THREE.Vector3 | null, force: boolean): Detail {
+/**
+ * An actor's level of detail, polled from the camera distance. Re-renders only when it changes.
+ * `start`: where the actor is as it mounts — it is judged from there at once (begun at mid-detail
+ * whatever its distance, every far-off birth and death ordered a plain skin it threw away at its
+ * first poll). `force`: the selected creature is drawn in full wherever it is (its true level is
+ * still tracked underneath, so it is right the moment the selection moves on).
+ */
+function useLod(get: () => THREE.Vector3 | null, force: boolean, start: (v: THREE.Vector3) => THREE.Vector3): Lod {
   const camera = useThree((s) => s.camera);
-  const [detail, setDetail] = useState<Detail>('lite');
-  const cur = useRef<Detail>('lite');
+  const [lod, setLod] = useState<Lod>(() => lodAt(camera.position.distanceTo(start(START)), getQuality().lod, null));
+  const cur = useRef(lod);
   const timer = useRef(Math.random() * 0.3);
   useFrame((_, dt) => {
     timer.current -= dt;
@@ -188,21 +199,14 @@ function useDetail(get: () => THREE.Vector3 | null, force: boolean): Detail {
     timer.current = 0.3;
     const p = get();
     if (!p) return;
-    const d = camera.position.distanceTo(p);
-    const was = cur.current;
     // (the bands scale with the creature-detail option)
-    const k = getQuality().lod;
-    let next: Detail = d < LOD_FULL * k ? 'full' : d < LOD_LITE * k ? 'lite' : 'none';
-    // hysteresis: hold the finer level until 15% past its band edge
-    if (was === 'full' && next !== 'full' && d < LOD_FULL * k * 1.15) next = 'full';
-    if (was === 'lite' && next === 'none' && d < LOD_LITE * k * 1.15) next = 'lite';
-    if (force) next = 'full';
-    if (next !== was) {
+    const next = lodAt(camera.position.distanceTo(p), getQuality().lod, cur.current);
+    if (next.detail !== cur.current.detail || next.distant !== cur.current.distant) {
       cur.current = next;
-      setDetail(next);
+      setLod(next);
     }
   });
-  return force ? 'full' : detail;
+  return force ? { detail: 'full', distant: lod.distant } : lod;
 }
 
 /** Shadows are for near things: features cast only at full detail, bodies until the far band. */
@@ -241,17 +245,40 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
   const jaw = useMemo<JawControl>(() => ({ open: 0 }), []);
   const flight = useMemo<FlightControl | null>(() => (traits.winged ? { spread: 0, flap: 0 } : null), [traits.winged]);
   const lids = useMemo<LidControl>(() => ({ shut: 0 }), []);
-  const detail = useDetail(() => ref.current?.position ?? null, selected);
-  const near = useNear(() => ref.current?.position ?? null, NEAR_FINE);
-  // the skin its distance calls for: fine under the camera (and for the selected creature up close —
+  // (judged from the body's own eased position, which is right from the moment it mounts: the group
+  // is only placed by this actor's first frame, and a poll that ran before it measured from the
+  // world's origin — a newborn across the valley could order a fine skin, or one at the camera's
+  // feet a distant one)
+  const here = () => HERE.set(pose.current.x, c.y, pose.current.z);
+  const lod = useLod(here, selected, (v) => v.set(c.x, c.y, c.z));
+  const detail = lod.detail;
+  const near = useNear(here, NEAR_FINE);
+  // the skin its distance calls for: fine under the camera (and for the selected creature —
   // built in the background, not inside the click that selects it), distant past the detail bands
-  const skin = useSkin(phenotype, near || (selected && detail === 'full') ? 'high' : detail === 'none' ? 'far' : 'low');
-  useEffect(() => applyShadows(ref.current, detail), [detail, skin]);
+  const want: Skin = near || selected ? 'high' : lod.distant ? 'far' : 'low';
+  const skin = useSkin(phenotype, want);
+  // (a new body's meshes are new: their shadows are set again)
+  useEffect(() => applyShadows(ref.current, detail), [detail, skin, phenotype]);
+  // growing up: the adult body takes over once it has a skin built. It is asked of the scheduler; were
+  // the bodies simply swapped, the render that swapped them would build the adult's skin itself — a
+  // stall of tens of milliseconds every time a youngster came of age (and of far longer under the camera).
+  // The order is for the plain or the distant skin, whichever the distance calls for NOW (it follows
+  // the camera), never the fine one: that is ordered like any other body's, once the adult is worn.
+  const distant = useRef(lod.distant);
+  distant.current = lod.distant;
+  const growUp = useRef<SkinOrder | null>(null);
+  useEffect(
+    () => () => {
+      growUp.current?.cancel();
+      growUp.current = null;
+    },
+    [],
+  );
 
-  useFrame((_, dt) => {
+  useFrame((st, dt) => {
     const g = ref.current;
     if (!g) return;
-    if (young && !youngNow()) setYoung(false); // grown up: the adult body takes over
+    if (young && !youngNow()) (growUp.current ??= skinOrder(bodyOf(c.genome).phenotype, () => setYoung(false))).ask(plainSkin(distant.current));
     const k = Math.min(1, dt * 10);
     const P = pose.current;
     const px = P.x, pz = P.z, ph = P.h;
@@ -374,7 +401,10 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
       bubble.current.visible = sh.e !== null;
       if (sh.e) {
         sh.pop = Math.min(1, sh.pop + dt * 5);
-        const size = (0.7 + 0.18 * place.height * s) / s;
+        // (a world-sized tag was as big as a mouse once the camera came close, and hid the animal it
+        // spoke for: near, it is held to a share of the camera's distance — a small tag over the head)
+        const near = st.camera.position.distanceTo(BUBBLE_AT.set(P.x, y + place.height * s, P.z)) * BUBBLE_NEAR;
+        const size = Math.min(0.7 + 0.18 * place.height * s, near) / s;
         const pop = sh.pop < 1 ? 1 + 0.25 * Math.sin(sh.pop * Math.PI) : 1;
         bubble.current.scale.setScalar(size * pop * THREE.MathUtils.smoothstep(sh.pop, 0, 0.4));
         bubble.current.position.set(0, place.height - place.lift + size * 0.75 + Math.sin(world.time * 2.2 + c.id) * 0.05 / s, 0);
@@ -403,7 +433,9 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
               <LidContext.Provider value={lids}>
                 {/* the creature you're watching up close gets the fine skin: at the herd's low resolution
                     a bird's thin shanks broke into jagged shards a cell or two across */}
-                <CreatureMesh phenotype={phenotype} skinMode={skin ? 'hybrid' : 'capsules'} quality={skin ?? 'low'} rig={rig} detail={detail} carved={false} fur={selected && detail === 'full'} />
+                {/* (in the kit, a shelled body draws a shell only if one is built already: the scheduler
+                    builds it with the skin — see lazyShell) */}
+                <CreatureMesh phenotype={phenotype} skinMode={skin ? 'hybrid' : 'capsules'} quality={skin ?? plainSkin(lod.distant)} lazyShell={!skin} rig={rig} detail={detail} carved={false} fur={selected && detail === 'full'} />
               </LidContext.Provider>
             </FlightContext.Provider>
           </JawContext.Provider>
@@ -453,14 +485,14 @@ export function Carcass({ k, world }: { k: Corpse; world: World }) {
     g.scale.setScalar(k.growth * (1 - 0.35 * eaten));
   });
   // (a carcass keeps the plain skin while the camera is anywhere near: a kill is watched up close)
-  const detail = useDetail(() => ref.current?.position ?? null, false);
-  const skin = useSkin(phenotype, detail === 'none' ? 'far' : 'low');
+  const lod = useLod(() => HERE.set(k.x, heightAt(world.terrain, k.x, k.z), k.z), false, (v) => v.set(k.x, heightAt(world.terrain, k.x, k.z), k.z));
+  const skin = useSkin(phenotype, plainSkin(lod.distant));
   useEffect(() => applyShadows(ref.current, 'none'), [skin]);
   return (
     <group ref={ref}>
       <group position={[-rig.center[0], 0, -rig.center[2]]}>
         <LidContext.Provider value={lids}>
-          <CreatureMesh phenotype={phenotype} skinMode={skin ? 'hybrid' : 'capsules'} quality={skin ?? 'low'} rig={limp} detail="none" carved={false} />
+          <CreatureMesh phenotype={phenotype} skinMode={skin ? 'hybrid' : 'capsules'} quality={skin ?? plainSkin(lod.distant)} lazyShell={!skin} rig={limp} detail="none" carved={false} />
         </LidContext.Provider>
       </group>
     </group>

@@ -72,6 +72,17 @@ export interface RigTemplate {
    *  down to the grass */
   graze: number;
   grazeDip: number;
+  /** …and each later neck / head joint's pitch (parallel to `neck`; the first entry unused) */
+  grazeCurl: number[];
+  /** …and, for a two-legged feeder, how far the whole body shifts (up, forward) as it tips, so that it
+   *  see-saws about its hips instead of swinging them off their legs (see solveGraze) */
+  grazeShift: [number, number];
+  /** a two-legged feeder tips as ONE piece, about its rump (the shift then holds its hips in place):
+   *  bent joint by joint like a grazer's, its back curled under and its folded wings stood off it */
+  grazeRigid: boolean;
+  /** how far the whole body pitches forward on the wing (rad, at its root): an upright body lies
+   *  along its line of flight; 0 for a level one (see flightLevel) */
+  flyLevel: number;
   /** a long legless body's resting line: at rest it lies in a loose S (see restBends) */
   rest: RestLine | null;
   /** how each arm (parallel to `arms`) folds as the body lies down, and how it feeds */
@@ -188,8 +199,51 @@ export const LOOK_MAX = 1.1;
 
 /** the second and later neck joints' share of a feeding head's curl (the face turns down to the grass) */
 const GRAZE_CURL = 0.12;
+/** …and the most a joint of a LONG neck (three links and more, before the head's own) may add: an
+ *  ostrich's neck arches down along its whole length — its root alone leaves the head hanging far
+ *  above the ground on legs as long as an ostrich's. A head's own links are never bent more than the
+ *  small curl (a skull is not a hose), nor is a short neck's. */
+const GRAZE_ARCH_MAX = 0.45;
+/** the most the first neck joint pitches to feed (rad): a neck carried high (a deer's, a dragon's,
+ *  an ostrich's — raised 80° and more at rest) has that much to come down before it even points at
+ *  the ground; at 1.5 such a neck only reached level, and its owner grazed the air */
+const GRAZE_NECK_MAX = 2.0;
 /** the most a feeder's chest dips (rad) — past this a body reads as kneeling, not grazing */
-const GRAZE_DIP_MAX = 0.42;
+const GRAZE_DIP_MAX = 0.55;
+/** …and a two-legged body's: a bird pecks by tipping its whole body forward over its legs, tail up —
+ *  its chest stands high (and higher the more upright it stands), and no neck of its own reaches the
+ *  ground from there. */
+const GRAZE_DIP_BIPED = 1.0;
+/** …and a body that stands UPRIGHT (a hawk's: rump to shoulders, its trunk rises more than this off
+ *  the level) has all of that rise to come down through before it has tipped at all: held to the
+ *  dip of a level bird, a hawk bowed to the horizontal and tore at the air half its own height above
+ *  its kill. Past the band it may dip by its own rise as well. (By degrees, so a bird bred a little
+ *  more upright does not suddenly feed differently; no level or leaning body is inside it.) */
+const GRAZE_UPRIGHT_FROM = 0.5;
+const GRAZE_UPRIGHT_FULL = 0.58;
+/** how nose-up an upright body still flies, once it has levelled out (rad) */
+const FLY_NOSE_UP = 0.15;
+
+/** How far a body's trunk rises off the level, rump to shoulders (rad), and how UPRIGHT that makes
+ *  it: 0 a level or a leaning body (every songbird, every theropod) … 1 a hawk's. */
+export function trunkRise(p: Phenotype): { rise: number; upright: number } {
+  const trunk = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0);
+  if (trunk.length < 2) return { rise: 0, upright: 0 };
+  const rump = trunk[0].pos, chest = trunk[trunk.length - 1].pos;
+  const rise = Math.atan2(chest[1] - rump[1], chest[2] - rump[2]);
+  return { rise, upright: smooth01((rise - GRAZE_UPRIGHT_FROM) / (GRAZE_UPRIGHT_FULL - GRAZE_UPRIGHT_FROM)) };
+}
+
+/**
+ * How far an upright body pitches forward to fly (rad): a hawk stands tall but flies flat, its back
+ * along its line of flight. (Carried through the air as it stood, it flew like a rocket — chest
+ * first, tail hanging, its spread wings a pair of oars at its neck.) 0 for any level or leaning body.
+ * The spread wing is built tilted back by as much (see the viewer's Wing), so it comes out level.
+ */
+export function flightLevel(p: Phenotype): number {
+  const { rise, upright } = trunkRise(p);
+  return upright * Math.max(0, rise - FLY_NOSE_UP);
+}
 
 /**
  * How a feeder reaches the ground. Feeding used to pitch the first neck joint by one fixed 0.55 rad:
@@ -201,37 +255,66 @@ const GRAZE_DIP_MAX = 0.42;
  * (The searches walk only the chains that move — the mouth's ancestry, then each leg — so a new body
  * costs a millisecond or two, not a frame.)
  */
-function solveGraze(p: Phenotype, parent: Int32Array, trunk: number[], neck: number[], legs: LegChain[], handFed: boolean): { neck: number; dip: number } {
-  const DEF = { neck: 0.55, dip: 0 };
+function solveGraze(p: Phenotype, parent: Int32Array, trunk: number[], neck: number[], legs: LegChain[], handFed: boolean): { neck: number; dip: number; curl: number[]; shift: [number, number]; rigid: boolean } {
+  const plain = neck.map(() => GRAZE_CURL);
+  const DEF = { neck: 0.55, dip: 0, curl: plain, shift: [0, 0] as [number, number], rigid: false };
   const mouth = p.nodes.findIndex((n) => n.terminal === 'mouth');
   // (a hand-feeder only nods to meet its hand — see ArmPose)
-  if (handFed) return { neck: FEED_NOD, dip: 0 };
+  if (handFed) return { neck: FEED_NOD, dip: 0, curl: plain, shift: [0, 0], rigid: false };
   if (neck.length === 0 || legs.length === 0 || trunk.length === 0 || mouth < 0) return DEF;
   const ground = Math.min(...legs.map((l) => p.nodes[l.nodes[l.nodes.length - 1]].pos[1] - p.nodes[l.nodes[l.nodes.length - 1]].radius));
   const n = p.nodes.length;
   const nT = trunk.length;
   const trunkIdx = new Map(trunk.map((i, k) => [i, k]));
   const neckIdx = new Map(neck.map((i, k) => [i, k]));
-  const pitchOf = (i: number, dip: number, a: number): number => {
+  // (a two-legged body tips as one piece, at its root; a grazer's back curves, joint by joint)
+  const biped = legs.length <= 2;
+  // the neck proper: the links before the head's own section (the last section of the spine)
+  const headSection = Math.max(...neck.map((i) => p.nodes[i].segment ?? 0));
+  const arching = neck.map((i, k) => k > 0 && (p.nodes[i].segment ?? 0) < headSection);
+  const longNeck = arching.filter(Boolean).length >= 2;
+  const pitchOf = (i: number, dip: number, a: number, arch = GRAZE_CURL): number => {
     const t = trunkIdx.get(i);
-    if (t !== undefined) return t >= 1 && nT > 1 ? dip / (nT - 1) : 0;
+    if (t !== undefined) return biped ? (t === 0 ? dip : 0) : t >= 1 && nT > 1 ? dip / (nT - 1) : 0;
     const k = neckIdx.get(i);
-    if (k !== undefined) return k === 0 ? a : GRAZE_CURL;
+    if (k !== undefined) return k === 0 ? a : arching[k] ? arch : GRAZE_CURL;
     return 0;
   };
   // the mouth's ancestry, root first: the only chain its height depends on
   const path: number[] = [];
   for (let i = mouth; i >= 0; i = parent[i]) path.unshift(i);
-  const mouthY = (dip: number, a: number): number => {
+  const mouthY = (dip: number, a: number, arch: number): number => {
     let y = p.nodes[path[0]].pos[1];
-    let cum = pitchOf(path[0], dip, a);
+    let cum = pitchOf(path[0], dip, a, arch);
     for (let j = 1; j < path.length; j++) {
       const i = path[j], par = path[j - 1];
       const dy = p.nodes[i].pos[1] - p.nodes[par].pos[1], dz = p.nodes[i].pos[2] - p.nodes[par].pos[2];
       y += dy * Math.cos(cum) - dz * Math.sin(cum);
-      cum += pitchOf(i, dip, a);
+      cum += pitchOf(i, dip, a, arch);
     }
     return y;
+  };
+  // A TWO-LEGGED feeder (a bird, a theropod) tips over its hips: tail up, head down, the body a
+  // see-saw on its legs. The trunk's joints turn about themselves, which swings the hips forward and
+  // down off the feet — so the whole body is shifted back by as much, and the hips stay where they
+  // were. (Without it a bird could tip only as far as its legs could fold to follow: its mouth hung
+  // half its own height above the ground it was pecking at.)
+  const hipPath: number[] = [];
+  if (biped) for (let i = legs[0].nodes[0]; i >= 0; i = parent[i]) hipPath.unshift(i);
+  const shiftOf = (dip: number): [number, number] => {
+    if (!biped || dip === 0) return [0, 0];
+    let y = p.nodes[hipPath[0]].pos[1], z = p.nodes[hipPath[0]].pos[2];
+    let cum = pitchOf(hipPath[0], dip, 0);
+    for (let j = 1; j < hipPath.length; j++) {
+      const i = hipPath[j], par = hipPath[j - 1];
+      const dy = p.nodes[i].pos[1] - p.nodes[par].pos[1], dz = p.nodes[i].pos[2] - p.nodes[par].pos[2];
+      const ny = y + dy * Math.cos(cum) - dz * Math.sin(cum);
+      z = z + dy * Math.sin(cum) + dz * Math.cos(cum);
+      y = ny;
+      if (trunkIdx.has(i)) cum += pitchOf(i, dip, 0);
+    }
+    const hip = p.nodes[hipPath[hipPath.length - 1]].pos;
+    return [hip[1] - y, hip[2] - z];
   };
   // the mouth at the grass (just above it: its node sits inside the lips)
   const target = ground + p.nodes[mouth].radius * 0.5 + 0.03;
@@ -240,20 +323,34 @@ function solveGraze(p: Phenotype, parent: Int32Array, trunk: number[], neck: num
   // (the miss is weighed against the shoulder height, so a mouse and a moose trade a dip alike; a
   // low-slung head may even lift a touch)
   const tall = Math.max(0.1, Math.max(...legs.map((l) => p.nodes[l.nodes[0]].pos[1])) - ground);
-  for (let dip = 0; dip <= (nT > 1 ? GRAZE_DIP_MAX : 0) + 1e-9; dip += 0.03) {
-    for (let a = -0.3; a <= 1.5 + 1e-9; a += 0.025) {
-      const c = Math.abs(mouthY(dip, a) - target) / tall + dip * 0.25 + Math.abs(a - 0.55) * 0.02;
-      if (c < cost) {
-        cost = c;
-        best = { neck: a, dip };
+  // (a body on ARCHED legs — a frog's, a crab's, a lizard's splayed out to its sides — keeps its
+  // trunk still: those legs are not refolded to follow a dipping chest, so a dip dragged every foot
+  // across the ground — a feeding frog's slid 0.4 of its height. Its head is near the ground anyway.)
+  const { rise, upright } = trunkRise(p);
+  const dipMax = legs.some((l) => l.arched) ? 0 : biped ? GRAZE_DIP_BIPED + upright * rise : nT > 1 ? GRAZE_DIP_MAX : 0;
+  for (let dip = 0; dip <= dipMax + 1e-9; dip += 0.03) {
+    const shift = shiftOf(dip);
+    // (the usual small curl first; a long neck may arch further where that buys reach)
+    for (let arch = GRAZE_CURL; arch <= (longNeck ? GRAZE_ARCH_MAX : GRAZE_CURL) + 1e-9; arch += 0.055) {
+      for (let a = -0.3; a <= GRAZE_NECK_MAX + 1e-9; a += 0.025) {
+        const c = Math.abs(mouthY(dip, a, arch) + shift[0] - target) / tall + dip * 0.25 + Math.abs(a - 0.55) * 0.02 + (arch - GRAZE_CURL) * 0.06;
+        if (c < cost) {
+          cost = c;
+          best = { neck: a, dip, curl: neck.map((_, k) => (arching[k] ? arch : GRAZE_CURL)), shift, rigid: biped };
+        }
       }
     }
   }
   // each leg keeps its foot where it stood: undo the trunk's turn at its hip, then fold the leg to take
   // up the height its hip has lost (a search over the hip and knee; the ankle keeps the foot level)
   const base = new Float64Array(n);
-  for (let i = 0; i < n; i++) base[i] = pitchOf(i, best.dip, best.neck);
+  const archBest = best.curl.find((_, k) => arching[k]) ?? GRAZE_CURL;
+  for (let i = 0; i < n; i++) base[i] = pitchOf(i, best.dip, best.neck, archBest);
   const fk = planarFK(p, parent, base);
+  for (let i = 0; i < n; i++) {
+    fk.y[i] += best.shift[0];
+    fk.z[i] += best.shift[1];
+  }
   for (const l of legs) {
     l.graze = [0, 0, 0];
     const hip = l.nodes[0];
@@ -727,6 +824,11 @@ export function rigTemplate(p: Phenotype): RigTemplate {
     belly,
     graze: 0,
     grazeDip: 0,
+    grazeCurl: neck.map(() => GRAZE_CURL),
+    grazeShift: [0, 0],
+    grazeRigid: false,
+    // (only a winged body is ever on the wing: an ape stands as upright as a hawk)
+    flyLevel: legs.length <= 2 && roles.includes('wing') ? flightLevel(p) : 0,
     rest: null,
     armPose: [],
   };
@@ -737,6 +839,9 @@ export function rigTemplate(p: Phenotype): RigTemplate {
   const g = solveGraze(p, parent, trunk, neck, legs, tmpl.armPose.some((a) => a.feed !== null));
   tmpl.graze = g.neck;
   tmpl.grazeDip = g.dip;
+  tmpl.grazeCurl = g.curl;
+  tmpl.grazeShift = g.shift;
+  tmpl.grazeRigid = g.rigid;
   if (tmpl.legless) tmpl.rest = restLine(p, parent, trunk, tails);
   TEMPLATES.set(p, tmpl);
   return tmpl;
@@ -1048,6 +1153,14 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
   // sprawler's planted feet hold the ground while the body wiggles between them
   if (r.trunkYaw.length !== nT) r.trunkYaw = new Array(nT).fill(0);
   r.trunkYaw[0] = restOn ? r.restT[0] : 0;
+  // (a two-legged feeder see-saws about its hips: the body is carried back as it tips — see solveGraze)
+  if (nT > 0) {
+    const rootBone = r.bones[T.trunk[0]];
+    const home = r.rest[T.trunk[0]];
+    const tip = inp.eat * awake;
+    rootBone.position.set(home.x, home.y + T.grazeShift[0] * tip, home.z + T.grazeShift[1] * tip);
+    if (!restOn) setRot(rootBone, (T.grazeRigid ? T.grazeDip * tip : 0) + T.flyLevel * fly, 0, 0);
+  }
   for (let k = 1; k < nT; k++) {
     const u = k / Math.max(1, nT - 1);
     let yaw = 0;
@@ -1062,7 +1175,7 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
     const flex = k === Math.max(1, Math.floor(nT / 2)) ? 0.2 * gal * moving * Math.sin(P + 0.6) : 0;
     // feeding, a long-legged grazer tips its chest down toward the grass (spread over the trunk's
     // joints, so the back curves rather than kinking at one; the legs fold to keep their feet planted)
-    const dip = (T.grazeDip * inp.eat * awake) / Math.max(1, nT - 1);
+    const dip = T.grazeRigid ? 0 : (T.grazeDip * inp.eat * awake) / Math.max(1, nT - 1);
     const lie = restOn ? r.restT[k] : 0;
     setRot(r.bones[T.trunk[k]], flex * awake + dip, yaw * awake + lie, 0);
     r.trunkYaw[k] = r.trunkYaw[k - 1] + yaw * awake + lie;
@@ -1091,7 +1204,7 @@ export function poseRig(r: RigInstance, inp: PoseInput): void {
     // courting, the head is held high and bobs to the display's beat
     // stalking, the head drops level with the shoulders and the eyes fix ahead (the next link lifts
     // the head back to level)
-    const pitch = (first ? T.graze * inp.eat + 0.35 * inp.sleep - 0.12 * fly - 0.32 * show + 0.35 * stalk : GRAZE_CURL * inp.eat - 0.08 * show - 0.25 * stalk) + bob * (1 - stalk) + 0.1 * strut;
+    const pitch = (first ? T.graze * inp.eat + 0.35 * inp.sleep - 0.12 * fly - 0.32 * show + 0.35 * stalk : (T.grazeCurl[k] ?? GRAZE_CURL) * inp.eat - 0.08 * show - 0.25 * stalk) + bob * (1 - stalk) + 0.1 * strut;
     // the glance is shared down the neck so the head turns smoothly rather than at one joint
     const nN = Math.max(1, T.neck.length);
     const lookYaw = inp.look ? Math.max(-LOOK_MAX, Math.min(LOOK_MAX, inp.look[0])) / nN : 0;

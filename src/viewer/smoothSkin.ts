@@ -14,6 +14,9 @@
  * recess in the head with a soft lip rim, and every vertex gets an `aFlesh` weight (1 inside the
  * cavity → 0 at `band` outside it) that the covering shader turns into dark wet mouth-flesh.
  *
+ * A limb link too thin for the grid (a spider's leg, a tail's tip, an arm's last links) leaves the field
+ * and is drawn exact — round cones swept through their joints — in the same buffers (limbTubes.ts).
+ *
  * It's a *viewer* concern and gated behind the capsule path: `grow()` stays static, thumbnails
  * keep capsules, and the build is one-time per creature (off the render loop). Deterministic
  * from the phenotype; bounded & finite on any topology (asserted by the test).
@@ -22,6 +25,7 @@ import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
 import { buildFieldPrims, fieldAt, fieldAtCarved, carveDist, type Carve, type FieldPrims } from './bodyField';
 import { polygonize, gridCells } from './polygonize';
+import { splitThin, limbTubes, type Tubes } from './limbTubes';
 
 // Grid resolution, in cells along the creature's longest padded extent. The grid is sampled as a
 // NARROW BAND (exact field only near the skin — see polygonize) so resolution costs surface area.
@@ -29,36 +33,61 @@ export const SKIN_RES = { high: 84, low: 44, far: 26 } as const;
 export type SkinQuality = keyof typeof SKIN_RES;
 
 function meanRadius(prims: FieldPrims): number {
-  let meanR = 0;
-  for (let i = 0; i < prims.nc; i++) meanR += prims.pr[i];
-  return meanR / Math.max(prims.nc, 1);
+  return prims.meanR;
 }
 
 /** Floor every cone radius at a little over half a grid cell's diagonal, so a thin limb (a leg, a
  *  tail tip) always holds a sample inside it wherever it runs and can't be missed by the marching
  *  tets (M24). At 0.6 of a cell a thin tube slipped between the samples: a mouse's tail or a spider's
  *  legs came out as rows of dashes — a third of the thumbnails had such fragments. */
-function floorRadii(prims: FieldPrims, cell: number): void {
+function floorRadii(prims: FieldPrims, cell: number, handoff?: Uint8Array): void {
   const rFloor = 0.88 * cell;
   for (let m = 0; m < prims.nc; m++) {
     if (prims.pr[m] < rFloor) prims.pr[m] = rFloor;
-    if (prims.ra[m] < rFloor) prims.ra[m] = rFloor;
-    if (prims.rb[m] < rFloor) prims.rb[m] = rFloor;
+    // (an end that hands a limb on to an exact tube is tucked inside the tube's joint: floored, it would
+    // stand proud of it as a knob)
+    if (prims.ra[m] < rFloor && !(handoff && handoff[m] & 1)) prims.ra[m] = rFloor;
+    if (prims.rb[m] < rFloor && !(handoff && handoff[m] & 2)) prims.rb[m] = rFloor;
   }
 }
 
 function toGeometry(
   poly: ReturnType<typeof polygonize>,
   flesh?: Float32Array,
+  tubes?: Tubes | null,
 ): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(poly.positions, 3));
-  geo.setAttribute('normal', new THREE.BufferAttribute(poly.normals, 3));
-  geo.setIndex(new THREE.BufferAttribute(poly.indices, 1));
+  geo.userData.cell = poly.cell;
   const n = poly.positions.length / 3;
   // aFlesh — mouth-cavity weight (the covering shader's wet gum-flesh); zeros when there is none
-  geo.setAttribute('aFlesh', new THREE.BufferAttribute(flesh ?? new Float32Array(n), 1));
-  geo.setAttribute('aAO', new THREE.BufferAttribute(poly.ao, 1));
+  const fl = flesh ?? new Float32Array(n);
+  if (!tubes || tubes.indices.length === 0) {
+    geo.setAttribute('position', new THREE.BufferAttribute(poly.positions, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(poly.normals, 3));
+    geo.setIndex(new THREE.BufferAttribute(poly.indices, 1));
+    geo.setAttribute('aFlesh', new THREE.BufferAttribute(fl, 1));
+    geo.setAttribute('aAO', new THREE.BufferAttribute(poly.ao, 1));
+    geo.userData.tubeFrom = { vertex: n, index: poly.indices.length };
+    return geo;
+  }
+  // the exact tubes of the thin limbs follow the polygonized surface in the same buffers
+  const nt = tubes.positions.length / 3;
+  const cat = (a: Float32Array, b: Float32Array) => {
+    const o = new Float32Array(a.length + b.length);
+    o.set(a);
+    o.set(b, a.length);
+    return o;
+  };
+  const index = new Uint32Array(poly.indices.length + tubes.indices.length);
+  index.set(poly.indices);
+  for (let i = 0; i < tubes.indices.length; i++) index[poly.indices.length + i] = tubes.indices[i] + n;
+  geo.setAttribute('position', new THREE.BufferAttribute(cat(poly.positions, tubes.positions), 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(cat(poly.normals, tubes.normals), 3));
+  geo.setIndex(new THREE.BufferAttribute(index, 1));
+  geo.setAttribute('aFlesh', new THREE.BufferAttribute(cat(fl, new Float32Array(nt)), 1));
+  geo.setAttribute('aAO', new THREE.BufferAttribute(cat(poly.ao, tubes.ao), 1));
+  // where the tubes start (tests look at the polygonized surface on its own)
+  geo.userData.tubeFrom = { vertex: n, index: poly.indices.length };
   return geo;
 }
 
@@ -70,21 +99,24 @@ export function buildSmoothGeometry(
 ): THREE.BufferGeometry {
   // the shared body field as flat typed arrays — `full` (hybrid) meshes every part for full
   // definition; otherwise just the locomotor body (see bodyField for the filters + fallbacks).
-  const prims = buildFieldPrims(p, full ? 'hybrid' : 'body');
-  const np = prims.nc + prims.ne;
-  const meanR = meanRadius(prims);
-  prims.k = (full ? 0.34 : 0.5) * meanR; // hybrid blends tighter → keeps more part definition
+  const whole = buildFieldPrims(p, full ? 'hybrid' : 'body');
+  const np = whole.nc + whole.ne;
+  const meanR = meanRadius(whole);
+  whole.k = (full ? 0.34 : 0.5) * meanR; // hybrid blends tighter → keeps more part definition
 
   // grid bounds: the body bounds padded so the inflated surface stays inside — including any
   // ellipsoid node's overshoot past its scalar radius (a stretched snout, a broad slab body)
-  const pad = meanR * 1.5 + prims.k + prims.excess + 0.05;
+  const pad = meanR * 1.5 + whole.k + whole.excess + 0.05;
   const min = [p.bounds.min[0] - pad, p.bounds.min[1] - pad, p.bounds.min[2] - pad];
   const max = [p.bounds.max[0] + pad, p.bounds.max[1] + pad, p.bounds.max[2] + pad];
   // a very many-part creature steps the resolution down a touch so its per-sample cost stays bounded
   const res = SKIN_RES[quality] * (np > 160 ? 0.8 : 1);
   const g = gridCells(min, max, res);
   const cell = Math.max(g.dx, g.dy, g.dz);
-  floorRadii(prims, cell);
+  // limb links too thin for this grid are drawn exact (limbTubes) — the rest is polygonized
+  const split = splitThin(p, whole, cell);
+  const prims = split ? split.field : whole;
+  floorRadii(prims, cell, split?.handoff);
 
   // a carve rim thinner than a grid cell aliases into stair-steps — soften it to the cell size
   const carved: Carve[] =
@@ -111,12 +143,16 @@ export function buildSmoothGeometry(
       flesh[v] = w < 0 ? 0 : w > 1 ? 1 : w;
     }
   }
-  return toGeometry(poly, flesh);
+  return toGeometry(poly, flesh, split ? limbTubes(whole, split, cell, poly.aoAt, poly) : null);
 }
 
 // =============================================================================
 // Carapace shell
 // =============================================================================
+
+/** how far a horn shell swells out over a leg's root (×the root's radius), and over how wide a patch */
+const HIP_COVER = 1.15;
+const HIP_COVER_REACH = 2.4;
 
 /**
  * A carapace that CONFORMS to the body: the trunk's own field inflated by a shell thickness (more on
@@ -128,6 +164,22 @@ export function buildSmoothGeometry(
  * Returns null when the creature has no carapace part (or no trunk to cover).
  */
 export function buildShellGeometry(p: Phenotype, quality: SkinQuality = 'high'): THREE.BufferGeometry | null {
+  const sf = shellField(p);
+  if (!sf) return null;
+  const poly = polygonize(sf.field, sf.min, sf.max, { res: SKIN_RES[quality] * 0.75, aoScale: sf.rMax * 0.15 });
+  return toGeometry(poly);
+}
+
+/** The carapace's field (≤ 0 inside the shell), the box it lies in, and the measures it was built from. */
+interface ShellField {
+  field: (x: number, y: number, z: number) => number;
+  min: number[];
+  max: number[];
+  rMax: number;
+  yCut: number;
+  thin: boolean;
+}
+function shellField(p: Phenotype): ShellField | null {
   const shellNode = p.nodes.find((n) => n.terminal === 'carapace');
   if (!shellNode) return null;
   const trunk = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0);
@@ -175,16 +227,46 @@ export function buildShellGeometry(p: Phenotype, quality: SkinQuality = 'high'):
   // a turtle's horn shell is thick and domed; a crab's carapace or a beetle's wing-cases are a thin
   // chitin skin over the body's own shape (domed like a turtle's, a flat crab became a beetle)
   const thin = p.genomeRef.covering.type === 'chitin';
-  const t0 = rMax * (thin ? 0.07 : 0.1) * prominence; // flank thickness
-  const dome = rMax * (thin ? 0.06 : 0.22) * prominence; // extra on top — the domed back
-  const yCut = yMid - rMax * 0.28; // the skirt: covers the back and upper flanks, not the belly
-  const flare = rMax * 0.18; // the rim lips outward over the legs
+  // flank thickness — in the field's units, which on a wide flat body are worth several times as
+  // much sideways as upward: a "thin" 0.07 stood a crab's shell a quarter of its radius out past its
+  // flanks
+  const t0 = rMax * (thin ? 0.035 : 0.1) * prominence;
+  // extra on top — the domed back (a tortoise's horn shell stands high over the flat body inside it)
+  const dome = rMax * (thin ? 0.06 : 0.32) * prominence;
+  // the skirt: covers the back and upper flanks, not the belly — a turtle's horn shell comes well down
+  // its sides and lips outward over the legs; a crab's carapace (and a beetle's wing-cases) ends at the
+  // body's widest line, its edge barely proud. (Cut low and flared like the turtle's, a crab's shell
+  // was a hat: a brim standing out all round, the belly hanging under it — a flying saucer side-on.)
+  // (a horn shell comes down to just above the flat underside: cut higher, the belly hung below its
+  // rim as a ball and the shell was a cap on a round animal)
+  let depth = 0;
+  for (const n of trunk) depth = Math.max(depth, n.radius * (n.scale?.[1] ?? 1));
+  const yCut = yMid - (thin ? rMax * 0.04 : Math.max(rMax * 0.28, depth * 0.7));
+  const flare = rMax * (thin ? 0.025 : 0.18);
+  // …and a horn shell swells out over each leg's root and its first joint, so the leg comes out from
+  // under its edge. (A tortoise's legs run out level from its widest line to a knee at the shell's
+  // edge, then down: the knee, as thick as a quarter of the shell, stood outside its wall and the leg
+  // was a column up the side of the shell, a periscope.)
+  const parentOf = new Map(p.edges.map(([a, b]) => [b, a]));
+  const roots = new Set<number>();
+  if (!thin)
+    p.nodes.forEach((n, i) => {
+      if (n.part?.kind !== 'leg' || n.kind === 'spine' || p.nodes[parentOf.get(i) ?? -1]?.kind !== 'spine') return;
+      roots.add(i);
+      for (const [a, b] of p.edges) if (a === i && p.nodes[b].part?.kind === 'leg') roots.add(b);
+    });
+  const hips = [...roots].map((i) => p.nodes[i]);
 
   const field = (x: number, y: number, z: number): number => {
     const up = Math.min(1, Math.max(0, (y - yCut) / (rMax * 1.4)));
     // inflate: thicker toward the crown; flare at the rim (just above the cut)
     const rim = Math.max(0, 1 - (y - yCut) / (rMax * 0.35));
-    const t = t0 + dome * up * up + flare * rim;
+    let over = 0;
+    for (const h of hips) {
+      const d = Math.hypot(x - h.pos[0], y - h.pos[1], z - h.pos[2]) / (HIP_COVER_REACH * h.radius);
+      if (d < 1) over = Math.max(over, h.radius * HIP_COVER * (1 - d) * (1 - d));
+    }
+    const t = t0 + dome * up * up + flare * rim + over;
     const body = fieldAt(prims, x, y, z) - t;
     const cut = yCut - y; // > 0 below the skirt → outside
     return body > cut ? body : cut;
@@ -198,6 +280,67 @@ export function buildShellGeometry(p: Phenotype, quality: SkinQuality = 'high'):
   }
   const min = [xMin - pad, yCut - rMax * 0.1, zMin - pad];
   const max = [xMax + pad, yMax + pad, zMax + pad];
-  const poly = polygonize(field, min, max, { res: SKIN_RES[quality] * 0.75, aoScale: rMax * 0.15 });
-  return toGeometry(poly);
+  return { field, min, max, rMax, yCut, thin };
+}
+
+/** A tortoise's shell is laid out in rows of horn plates: five VERTEBRAL scutes down its midline, four
+ *  COSTAL scutes either side between them, and a ring of MARGINAL scutes round the rim (one over the neck,
+ *  the rest in pairs). Their centres, body space, packed (x, y, z, …), each seated on the shell's surface —
+ *  the shader draws the seams between them (the shell's covering: see creatureMaterial uScutes). Null for a
+ *  thin shell (a crab's carapace, a beetle's wing-cases) or none. (Seamed by a random net, a tortoise's
+ *  shell was crazy paving.) */
+export const SHELL_SCUTES = { vertebral: 5, costal: 4, marginal: 24 } as const;
+export function shellScutes(p: Phenotype): Float32Array | null {
+  const sf = shellField(p);
+  if (!sf || sf.thin) return null;
+  const { field, min, max, yCut } = sf;
+  // the shell's top over (x, z) — its outer surface, found from above — or null where there is none
+  const topAt = (x: number, z: number): number | null => {
+    let hi = max[1], lo = yCut;
+    if (field(x, lo + 1e-4, z) > 0) return null;
+    for (let i = 0; i < 40; i++) {
+      const m = (hi + lo) / 2;
+      if (field(x, m, z) > 0) hi = m;
+      else lo = m;
+    }
+    return (hi + lo) / 2;
+  };
+  // the rim's reach from (cx, cz) along (dx, dz) at height y, by bisection
+  const reach = (cx: number, cz: number, dx: number, dz: number, y: number): number => {
+    let lo = 0, hi = Math.hypot(max[0] - min[0], max[2] - min[2]);
+    if (field(cx, y, cz) > 0) return 0;
+    for (let i = 0; i < 40; i++) {
+      const m = (hi + lo) / 2;
+      if (field(cx + dx * m, y, cz + dz * m) > 0) hi = m;
+      else lo = m;
+    }
+    return lo;
+  };
+  // the midline's run, front to back, a little above the skirt
+  const yLow = yCut + (max[1] - yCut) * 0.05;
+  const zMid = (min[2] + max[2]) / 2;
+  const front = zMid + reach(0, zMid, 0, 1, yLow);
+  const back = zMid - reach(0, zMid, 0, -1, yLow);
+  const L = front - back;
+  if (!(L > 1e-3)) return null;
+  const out: number[] = [];
+  const seat = (x: number, z: number) => {
+    const y = topAt(x, z);
+    if (y !== null) out.push(x, y, z);
+  };
+  for (let i = 0; i < SHELL_SCUTES.vertebral; i++) seat(0, back + L * (0.14 + (0.72 * i) / (SHELL_SCUTES.vertebral - 1)));
+  for (let j = 0; j < SHELL_SCUTES.costal; j++) {
+    const z = back + L * (0.23 + (0.54 * j) / (SHELL_SCUTES.costal - 1));
+    const w = reach(0, z, 1, 0, yLow);
+    for (const side of [1, -1]) seat(side * 0.52 * w, z);
+  }
+  // the marginals: round the rim, from over the neck, a little in from its edge and up off the skirt
+  const yRim = yCut + (max[1] - yCut) * 0.12;
+  for (let k = 0; k < SHELL_SCUTES.marginal; k++) {
+    const a = (2 * Math.PI * k) / SHELL_SCUTES.marginal;
+    const dx = Math.sin(a), dz = Math.cos(a);
+    const d = reach(0, zMid, dx, dz, yRim) * 0.95;
+    out.push(dx * d, yRim, zMid + dz * d);
+  }
+  return Float32Array.from(out);
 }

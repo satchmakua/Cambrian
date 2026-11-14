@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { bareLegsOf, footPlanOf, legWeights, toedFootGeometry } from '../../src/viewer/feet';
+import { bareLegsOf, bareOf, footPlanOf, isHindFoot, legWeights, partWeights, ratLike, skinPartWeights, toedFootGeometry } from '../../src/viewer/feet';
 import { buildSmoothGeometry } from '../../src/viewer/smoothSkin';
 import { randomGenome } from '../../src/engine/random';
 
@@ -19,6 +19,83 @@ describe('feet', () => {
       expect(bare!.y).toBeLessThan(Math.min(...trunk.map((n) => n.pos[1])));
       expect(footPlanOf(p)).toBe('bird');
     }
+  });
+
+  it("a mouse stands on bare pink paws; a cat, a dog, a bear and a weasel on furred ones", () => {
+    // (a mouse in a dark disc of a foot, then in a fuzzy coat-coloured mitten, stood on stilts in slippers)
+    for (let seed = 1; seed <= 16; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'rodent'));
+      expect(p.nodes.some((n) => n.part?.kind === 'leg' && n.terminal === 'paw'), `rodent #${seed}`).toBe(true);
+      expect(ratLike(p), `rodent #${seed}`).toBe(true);
+      for (const id of ['felid', 'canid', 'ursid', 'mustelid']) expect(ratLike(grow(genomeOfMorphotype(seed, id))), `${id} #${seed}`).toBe(false);
+    }
+    // a tailless one too (a hamster's, a guinea pig's: a bred mouse can lose its tail)
+    for (let seed = 1; seed <= 8; seed++) {
+      const g = genomeOfMorphotype(seed, 'rodent');
+      for (let s: typeof g.body | undefined = g.body; s; s = s.child) s.appendages = s.appendages.filter((a) => a.kind !== 'tail');
+      const p = grow(g);
+      expect(p.nodes.some((n) => n.part?.kind === 'tail'), `tailless rodent #${seed}`).toBe(false);
+      expect(ratLike(p), `tailless rodent #${seed}`).toBe(true);
+    }
+  });
+
+  it("a rat's tail is naked from root to tip; its body and a weasel's brush keep their coat", () => {
+    // (in the coat, a mouse trailed a furred rope)
+    for (let seed = 1; seed <= 8; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'rodent'));
+      const b = bareOf(p);
+      expect(b?.kind, `rodent #${seed}`).toBe('tail');
+      // every node's own centre: the tail's bare, the trunk's and the legs' not
+      const pos = p.nodes.flatMap((n) => [...n.pos]);
+      const w = partWeights(p, pos, p.nodes.length, 'tail');
+      p.nodes.forEach((n, i) => {
+        if (n.part?.kind === 'tail' && i !== p.nodes.findIndex((m) => m.part?.kind === 'tail')) expect(w[i], `rodent #${seed} tail`).toBeGreaterThan(0.9);
+        if (n.kind === 'spine' || n.part?.kind === 'leg') expect(w[i], `rodent #${seed} ${n.kind}`).toBeLessThan(0.1);
+      });
+      // nothing above the gate: the whole tail, wherever it lies
+      expect(b!.bare.y).toBeGreaterThan(p.bounds.max[1]);
+      for (const id of ['mustelid', 'felid', 'canid']) expect(bareOf(grow(genomeOfMorphotype(seed, id))), `${id} #${seed}`).toBeNull();
+      expect(bareOf(grow(genomeOfMorphotype(seed, 'bird')))?.kind, `bird #${seed}`).toBe('leg');
+    }
+  });
+
+  it("a furred body's skin knows its legs (the spots fade down them as on the paw), a rat's its tail", () => {
+    // (gated only on bodies with bare parts, a cat's legs wore their spots full strength down to the paw,
+    // which wore them faded: a dark spot cut off square at the wrist on every leg, the top of a sock)
+    for (const [id, seed] of [['felid', 23], ['canid', 2], ['ursid', 5], ['ungulate', 7], ['arachnid', 3]] as const) {
+      const p = grow(genomeOfMorphotype(seed, id));
+      expect(bareOf(p), `${id} has no bare part`).toBeNull();
+      const geo = buildSmoothGeometry(p, true, [], 'low');
+      const pos = geo.getAttribute('position');
+      const w = skinPartWeights(p, pos.array, pos.count);
+      expect(w, id).not.toBeNull();
+      const feet = p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg');
+      const trunk = p.nodes.filter((n) => n.kind === 'spine');
+      let foot = 0, footLeg = 0, back = 0, backLeg = 0;
+      for (let v = 0; v < pos.count; v++) {
+        const x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
+        if (feet.some((f) => Math.hypot(x - f.pos[0], y - f.pos[1], z - f.pos[2]) < f.radius * 2)) {
+          foot++;
+          if (w![v] > 0.5) footLeg++;
+        } else if (trunk.some((t) => y > t.pos[1] && Math.hypot(x - t.pos[0], z - t.pos[2]) < t.radius * 0.5)) {
+          // the top of the trunk, over its spine
+          back++;
+          if (w![v] > 0.5) backLeg++;
+        }
+      }
+      expect(foot, id).toBeGreaterThan(0);
+      expect(footLeg / foot, `${id} lower legs`).toBeGreaterThan(0.8);
+      expect(backLeg / Math.max(back, 1), `${id} back`).toBeLessThan(0.05);
+    }
+    // a rat's gate is its naked tail; a legless snake bakes none
+    const rat = grow(genomeOfMorphotype(3, 'rodent'));
+    const at = rat.nodes.flatMap((n) => [...n.pos]);
+    const rw = skinPartWeights(rat, at, rat.nodes.length)!;
+    rat.nodes.forEach((n, i) => {
+      if (n.part?.kind === 'leg' && n.kind === 'terminal') expect(rw[i], 'rat foot').toBeLessThan(0.1);
+    });
+    const snake = grow(genomeOfMorphotype(3, 'serpent'));
+    expect(skinPartWeights(snake, snake.nodes.flatMap((n) => [...n.pos]), snake.nodes.length)).toBeNull();
   });
 
   it('pelts and shells keep their covering all the way down', () => {
@@ -76,5 +153,69 @@ describe('feet', () => {
     }
     expect(checked).toBeGreaterThan(0);
   });
-});
 
+  it('a frog\'s hind feet are its hind feet, its hands are not; a bird has none', () => {
+    for (const seed of [1, 4, 11]) {
+      const p = grow(genomeOfMorphotype(seed, 'anuran'));
+      const feet = p.nodes.map((n, i) => ({ n, i })).filter(({ n }) => n.kind === 'terminal' && n.part?.kind === 'leg');
+      const hind = feet.filter(({ i }) => isHindFoot(p, i));
+      expect(hind.length, `#${seed}`).toBe(2);
+      // the hind pair is the one rooted further back
+      const z = (i: number) => p.nodes[i].pos[2];
+      for (const h of hind) for (const f of feet.filter((x) => !hind.includes(x))) expect(z(h.i), `#${seed}`).toBeLessThan(z(f.i) + 0.5);
+    }
+    const bird = grow(genomeOfMorphotype(3, 'bird'));
+    bird.nodes.forEach((n, i) => {
+      if (n.kind === 'terminal' && n.part?.kind === 'leg') expect(isHindFoot(bird, i)).toBe(false);
+    });
+  });
+
+  it("a frog's hind foot is webbed between its toes, out most of their length; its hand is not", () => {
+    // (pad-tipped toes splayed on bare ground: a tree frog's hand on the end of a swimmer's leg)
+    const r = 0.12, link = 0.5;
+    const covered = (g: ReturnType<typeof toedFootGeometry>['toes'], x: number, z: number) => {
+      const pos = g.getAttribute('position');
+      const idx = g.getIndex();
+      const n = idx ? idx.count : pos.count;
+      const at = (k: number) => (idx ? idx.getX(k) : k);
+      for (let t = 0; t < n; t += 3) {
+        const [a, b, c] = [at(t), at(t + 1), at(t + 2)];
+        const ax = pos.getX(a), az = pos.getZ(a), bx = pos.getX(b), bz = pos.getZ(b), cx = pos.getX(c), cz = pos.getZ(c);
+        const d1 = (x - bx) * (az - bz) - (ax - bx) * (z - bz);
+        const d2 = (x - cx) * (bz - cz) - (bx - cx) * (z - cz);
+        const d3 = (x - ax) * (cz - az) - (cx - ax) * (z - az);
+        const neg = d1 < 0 || d2 < 0 || d3 < 0, pos3 = d1 > 0 || d2 > 0 || d3 > 0;
+        if (!(neg && pos3)) return true;
+      }
+      return false;
+    };
+    // midway between the middle toe and the next, at three-fifths of their length
+    const probe = (webbed: boolean) => {
+      const g = toedFootGeometry('frog', r, link, false, webbed).toes;
+      const L = Math.max(r * 2.8, link * 0.42) * (webbed ? 1.3 : 1);
+      const az = 0.55 * (webbed ? 1.12 : 1) * 0.5;
+      const s = 0.6 * L * 0.94;
+      return covered(g, Math.sin(az) * s, Math.cos(az) * s);
+    };
+    expect(probe(true)).toBe(true);
+    expect(probe(false)).toBe(false);
+  });
+
+  it("a feathered theropod's plumage ends at its ankle, not a third of the way down its shin", () => {
+    // (at a bird's 0.55 of the leg's height the plumage stopped mid-shank: stockings pulled up to the knee)
+    let checked = 0;
+    for (let seed = 1; seed <= 24; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'biped'));
+      const bare = bareLegsOf(p);
+      if (!bare) continue;
+      // one leg's chain, hip to foot (its links in order)
+      const leg = p.nodes.map((n, i) => [n, i] as const).filter(([n]) => n.part?.kind === 'leg' && n.pos[0] > 0);
+      const ys = leg.map(([n]) => n.pos[1]).sort((a, b) => b - a);
+      const span = ys[0] - ys[ys.length - 1];
+      const ankle = ys[ys.length - 2];
+      expect(Math.abs(bare.y - ankle), `biped #${seed}`).toBeLessThan(0.1 * span);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(3);
+  });
+});

@@ -48,29 +48,37 @@ export function hasGeometry(p: Phenotype, key: string): boolean {
   return entry(p, key) !== undefined;
 }
 
-export function retainGeometry(p: Phenotype, key: string): void {
+/** Count a user of a built surface. Returns whether there was one to count (a caller that keeps
+ *  surfaces for later — the World's actors — must release only what it really retained). */
+export function retainGeometry(p: Phenotype, key: string): boolean {
   const e = entry(p, key);
-  if (!e) return;
+  if (!e) return false;
   e.refs++;
   if (e.timer) {
     clearTimeout(e.timer);
     e.timer = null;
   }
+  return true;
 }
 
-export function releaseGeometry(p: Phenotype, key: string): void {
+/** Give a surface up. With no users left it is disposed after `graceMs` — a moment by default (a
+ *  remount re-retains it), longer for a surface likely to be wanted again soon (a creature's fine skin
+ *  when the camera has only just moved off). */
+export function releaseGeometry(p: Phenotype, key: string, graceMs = GRACE_MS): void {
   const e = entry(p, key);
   if (!e) return;
   e.refs = Math.max(0, e.refs - 1);
-  if (e.refs === 0) scheduleSweep(p, key, e);
+  if (e.refs === 0) scheduleSweep(p, key, e, graceMs);
 }
 
-function scheduleSweep(p: Phenotype, key: string, e: Entry): void {
+function scheduleSweep(p: Phenotype, key: string, e: Entry, graceMs = GRACE_MS): void {
   if (e.timer) clearTimeout(e.timer);
   e.timer = setTimeout(() => {
     e.timer = null;
     if (e.refs > 0) return;
     e.geo.dispose();
+    // (a crystal skin carries its cut stone: see facets.ts gemGeometry)
+    (e.geo.userData.gem as { dispose(): void } | null | undefined)?.dispose();
     CACHE.get(p)?.delete(key);
-  }, GRACE_MS);
+  }, graceMs);
 }

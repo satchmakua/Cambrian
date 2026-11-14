@@ -33,6 +33,11 @@ export function coatPattern(pal: Palette): THREE.Color {
   return srgbHSL(pal.hueB, wornSat(pal.sat) * 1.25, 0.08 + pal.light * 0.42);
 }
 
+/** A fawn's dapples: small spots paler than its coat — its belly's cream, lighter still (face.ts dappled). */
+export function coatDapple(pal: Palette): THREE.Color {
+  return srgbHSL(pal.hueA, wornSat(pal.sat) * 0.35, Math.min(0.9, 0.18 + pal.light * 0.72 + 0.34));
+}
+
 /** The darker accent in the cores of strong markings, shifted a touch toward umber. */
 export function coatAccent(pal: Palette): THREE.Color {
   return srgbHSL(pal.hueB - 0.02, wornSat(pal.sat) * 1.1, 0.05 + pal.light * 0.28);

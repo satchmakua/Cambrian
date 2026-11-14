@@ -9,8 +9,9 @@ export function billColor(seed: number): number {
   return h < 0.4 ? 0xd99a2b : h < 0.75 ? 0x34373c : 0xcbb98d;
 }
 
-/** The shanks and feet a shade duller than the bill (horn sheath vs. scaly skin). */
+/** The shanks and feet a shade duller than the bill (horn sheath vs. scaly skin) — and a slate bill's
+ *  legs a mid grey: as dark as the bill, under a pale bird they were black stockings. */
 export function shankColor(seed: number): number {
   const c = billColor(seed);
-  return c === 0xd99a2b ? 0xc08a3a : c === 0x34373c ? 0x3a3b3e : 0xa89a80;
+  return c === 0xd99a2b ? 0xc08a3a : c === 0x34373c ? 0x66686d : 0xa89a80;
 }

@@ -28,3 +28,6 @@ tmp/
 node_modules/
 .vite/
 *.tsbuildinfo
+
+# Other checkouts of this repository (git worktrees used by parallel sessions)
+.claude/worktrees/

@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { stepWorld, STEP, dayPhase, isNight, climate, growthOf, type World } from '../sim/world';
 import { SOUND } from './audio';
 import { heightAt, WATER_LEVEL } from '../sim/terrain';
+import { droughtOf } from '../sim/weather';
 import { PAN_KEYS, keysToAxes, panDelta } from './keyPan';
 import { TerrainMesh, Water, Bushes, Decor, updateSeasonLook } from './Landscape';
 import { Grass } from './Flora';
@@ -25,6 +26,7 @@ import { Actor, Carcass, useSkinScheduler } from './Actors';
 import { getWorld, useWorldUi, worldVersion, bumpVersion, worldSceneLive } from './worldStore';
 import { StudioEnvironment } from '../viewer/StudioEnvironment';
 import { useQuality } from '../ui/settings';
+import { useStore } from '../ui/store';
 
 const MAX_STEPS_PER_FRAME = 90;
 
@@ -37,7 +39,7 @@ function SimDriver() {
   useFrame((_, dtRaw) => {
     const { running, speed, refresh } = useWorldUi.getState();
     const w = getWorld();
-    updateSeasonLook(w.time);
+    updateSeasonLook(w.time, droughtOf(w.seed, w.time));
     updateWeatherLook(w, dtRaw);
     const dt = Math.min(dtRaw, 0.1);
     if (running) {
@@ -74,9 +76,31 @@ function SimDriver() {
   return null;
 }
 
+/** The sun's shadow map is redrawn once in this many frames (see DayNight). */
+export const SHADOW_EVERY = 2;
+
 /** Sun, moon and sky from the time of day. */
 function DayNight() {
   const q = useQuality();
+  const gl = useThree((s) => s.gl);
+  // The sun's shadow map is redrawn every other frame. Drawing it means drawing every shadow caster
+  // in the valley again from the sun — about half as many triangles as the picture itself — and
+  // nearly all of them are trees and bushes whose shadows move with the sun, a hair a second. On
+  // the frames between, the map and the matrix that reads it are both the last ones drawn, so the
+  // shadows stay exactly where they were; a running animal's shadow is one frame behind it.
+  const frame = useRef(0);
+  useEffect(() => {
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = true;
+    frame.current = 0; // (a new light, a new map size: draw it on the very next frame)
+    return () => {
+      gl.shadowMap.autoUpdate = true;
+      gl.shadowMap.needsUpdate = true;
+    };
+  }, [gl, q.shadows, q.shadowMap]);
+  useFrame(() => {
+    if (frame.current++ % SHADOW_EVERY === 0) gl.shadowMap.needsUpdate = true;
+  });
   const sun = useRef<THREE.DirectionalLight>(null);
   const hemi = useRef<THREE.HemisphereLight>(null);
   const target = useMemo(() => new THREE.Object3D(), []);
@@ -226,6 +250,8 @@ function KeyPan() {
       return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
     };
     const down = (e: KeyboardEvent) => {
+      // (under the game menu the keys are the menu's: nothing is held, and the arrows scroll its lists)
+      if (useStore.getState().menuOpen) return held.current.clear();
       if (e.ctrlKey || e.metaKey || e.altKey || typing(e)) return;
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') held.current.add(e.code);
       if (!PAN_KEYS.has(e.code)) return;
@@ -401,6 +427,20 @@ function DevLook() {
       }
       rows.push({ what: `${actors.n} groups (creatures, carcasses, nests…)`, tris: actors.tris, calls: actors.calls });
       return { base, rows: rows.sort((a, b) => b.tris - a.tris).slice(0, 16).map((r) => `${String(Math.round(r.tris / 1000)).padStart(5)}k tris ${String(r.calls).padStart(4)} calls  ${r.what}`) };
+    };
+    // …and what a frame costs to draw END TO END, the graphics card included: `n` frames drawn in a
+    // row, each waited out (gl.finish), in ms a frame. (The frame loop's own pace says little on a slow
+    // or a software renderer, where the browser decides when a frame may start.)
+    (window as unknown as { __cambrianFrameMs?: (n?: number) => unknown }).__cambrianFrameMs = (n = 3) => {
+      const ctx = gl.getContext();
+      gl.render(scene, camera);
+      ctx.finish();
+      const t0 = performance.now();
+      for (let i = 0; i < n; i++) {
+        gl.render(scene, camera);
+        ctx.finish();
+      }
+      return { ms: (performance.now() - t0) / n, triangles: gl.info.render.triangles, calls: gl.info.render.calls };
     };
     (window as unknown as { __cambrianRender?: () => unknown }).__cambrianRender = () => ({
       calls: gl.info.render.calls,

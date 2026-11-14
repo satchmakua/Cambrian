@@ -7,7 +7,7 @@
  * a function and not state, a saved world needs nothing extra and every replay sees the same skies.
  */
 import { unitHash } from '../engine/rng';
-import { DAY_LENGTH, climate, seasonal } from './world';
+import { DAY_LENGTH, YEAR_DAYS, climate, seasonal } from './world';
 
 /** a spell lasts half a day (a function, not a constant: world.ts imports this module, so its values
  *  can only be read once both have loaded) */
@@ -27,11 +27,26 @@ const smooth = (e0: number, e1: number, x: number): number => {
   return t * t * (3 - 2 * t);
 };
 
+/** how often a year runs dry */
+export const DROUGHT_ODDS = 0.25;
+
+/**
+ * A DROUGHT year: one in four by a hash of (seed, year), never a valley's first. How dry, 0 (an
+ * ordinary year) or 0.5 … 1: its wet spells come that much less often (half, at worst) and the grass
+ * and the fruit come back slower. Pure, like the weather — a saved world needs nothing more. (Every
+ * year was the same year: the valley settled into one balance and stayed there.)
+ */
+export function droughtOf(seed: number, time: number): number {
+  const year = Math.floor(time / (DAY_LENGTH * YEAR_DAYS));
+  if (year < 1 || unitHash(seed, year, 0xd7) >= DROUGHT_ODDS) return 0;
+  return 0.5 + 0.5 * unitHash(seed, year, 0xd8);
+}
+
 export function weatherAt(seed: number, time: number): Weather {
   const S = spell();
   const k = Math.floor(time / S);
   const f = time / S - k; // 0..1 through the spell
-  const odds = seasonal((k + 0.5) * S, [0.38, 0.16, 0.42, 0.4]);
+  const odds = seasonal((k + 0.5) * S, [0.38, 0.16, 0.42, 0.4]) * (1 - 0.5 * droughtOf(seed, (k + 0.5) * S));
   const wet = unitHash(seed, k, 0x7e7) < odds;
   const snow = climate(time).cold > 0.62;
   if (!wet) return { cloud: 0, rain: 0, snow };

@@ -36,7 +36,7 @@ export const GENE_BOUNDS = {
   },
   radialCount: [3, 12] as [number, number], // up to 12 for many-tentacled cephalopods (v2)
   covering: {
-    patternScale: [0.5, 8] as [number, number], // pattern spatial frequency
+    patternScale: [0.5, 12] as [number, number], // pattern spatial frequency
     patternContrast: [0, 1] as [number, number], // pattern strength
     sheen: [0, 1] as [number, number], // matte ↔ wet/iridescent
   },

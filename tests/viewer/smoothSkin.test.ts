@@ -19,10 +19,11 @@ function scan(arr: ArrayLike<number>) {
   return { finite, min, max };
 }
 
-/** The skin's separate pieces, largest first (triangles each), with vertices welded by position. */
+/** The polygonized skin's separate pieces, largest first (triangles each), with vertices welded by
+ *  position (the exact tubes of thin limbs that follow it in the buffers are pieces of their own). */
 function pieces(geo: ReturnType<typeof buildSmoothGeometry>): number[] {
   const pos = geo.getAttribute('position').array as ArrayLike<number>;
-  const idx = geo.getIndex()!.array as ArrayLike<number>;
+  const idx = (geo.getIndex()!.array as Uint32Array).subarray(0, geo.userData.tubeFrom.index);
   const key = new Map<string, number>();
   const id = new Int32Array(pos.length / 3);
   for (let i = 0; i < id.length; i++) {
@@ -219,9 +220,16 @@ describe('smooth skin (M15)', () => {
         const tx1 = Math.max(...trunk.map((n) => n.pos[0] + n.radius * (n.scale?.[0] ?? 1)));
         expect(min[0]).toBeGreaterThan(tx0 - rMax * 0.9);
         expect(max[0]).toBeLessThan(tx1 + rMax * 0.9);
-        // and it is a BACK shell: nothing hangs below the trunk's mid-height skirt
+        // and it is a BACK shell: a crab's chitin ends at its body's widest line; a tortoise's horn
+        // shell comes down most of the way over its flanks — but stops short of its flat underside
         const yMid = trunk.reduce((t, n) => t + n.pos[1], 0) / trunk.length;
-        expect(min[1]).toBeGreaterThan(yMid - rMax * 0.45);
+        if (id === 'crab') expect(min[1]).toBeGreaterThan(yMid - rMax * 0.45);
+        else {
+          const depth = Math.max(...trunk.map((n) => n.radius * (n.scale?.[1] ?? 1)));
+          const belly = Math.min(...trunk.map((n) => n.pos[1] - n.radius * (n.scale?.[1] ?? 1)));
+          expect(min[1], `#${s} over the flanks`).toBeLessThan(yMid - depth * 0.5);
+          expect(min[1], `#${s} not under the belly`).toBeGreaterThan(belly + depth * 0.15);
+        }
       }
     }
   });
@@ -236,6 +244,73 @@ describe('smooth skin (M15)', () => {
       const t = p.nodes.find((n) => n.kind === 'spine' && n.segment === 0)!;
       const back = t.pos[1] + t.radius * (t.scale?.[1] ?? 1);
       expect(max[1] - back, `#${seed}`).toBeLessThan(0.2 * t.radius);
+    }
+  });
+
+  it("a crab's carapace ends at its body's widest line, its edge barely proud — a turtle's comes down its sides", async () => {
+    // (cut low and flared like a turtle's, the crab's shell was a hat: a brim standing a quarter of
+    // the body's radius out all round, the belly hanging below it — a flying saucer from the side)
+    const { buildShellGeometry } = await import('../../src/viewer/smoothSkin');
+    const measure = (id: string, seed: number) => {
+      const p = grow(genomeOfMorphotype(seed, id));
+      const shell = buildShellGeometry(p, 'low');
+      if (!shell) return null;
+      const { min, max } = scan(shell.getAttribute('position').array as ArrayLike<number>);
+      const trunk = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 0);
+      const rMax = Math.max(...trunk.map((n) => n.radius));
+      const yMid = trunk.reduce((t, n) => t + n.pos[1], 0) / trunk.length;
+      const halfW = Math.max(...trunk.map((n) => n.pos[0] + n.radius * (n.scale?.[0] ?? 1)));
+      return { skirt: (yMid - min[1]) / rMax, brim: (max[0] - halfW) / rMax };
+    };
+    let crabs = 0;
+    for (let seed = 1; seed <= 8; seed++) {
+      const m = measure('crab', seed);
+      if (!m) continue;
+      crabs++;
+      expect(m.skirt, `crab #${seed} ends at the widest line`).toBeLessThan(0.12);
+      expect(m.brim, `crab #${seed} no brim`).toBeLessThan(0.18);
+      expect(m.brim, `crab #${seed} an edge all the same`).toBeGreaterThan(0);
+    }
+    expect(crabs).toBeGreaterThan(5);
+    const turtle = measure('chelonian', 5)!;
+    expect(turtle.skirt).toBeGreaterThan(0.2);
+  });
+
+  it("with the skin's own blend, no ring swells round a stretched trunk at each node (the maggot)", async () => {
+    // (an interior node's ellipsoid — kept for any trunk stretched past 1.15 — met the cones' skin at the
+    // node and swelled there by the blend: a shark banded in rings, a lizard's back bumped at every link.
+    // The test above runs with no blend, so it never saw them.)
+    const { buildFieldPrims, fieldAt } = await import('../../src/viewer/bodyField');
+    for (const [id, seed] of [['shark', 23], ['shark', 5], ['lizard', 23], ['crocodilian', 23]] as const) {
+      const p = grow(genomeOfMorphotype(seed, id));
+      const f = buildFieldPrims(p, 'hybrid');
+      f.k = 0.34 * f.meanR; // the hybrid skin's blend
+      const trunk = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 0);
+      // no ellipsoid sits on an interior trunk node
+      for (const n of trunk.slice(1, -1)) {
+        for (let e = 0; e < f.ne; e++) {
+          const d = Math.hypot(f.ec[e * 3] - n.pos[0], f.ec[e * 3 + 1] - n.pos[1], f.ec[e * 3 + 2] - n.pos[2]);
+          expect(d, `${id} #${seed}`).toBeGreaterThan(1e-6);
+        }
+      }
+      // and the back runs smooth: no ripple of a bump per node along it
+      const zs = trunk.map((n) => n.pos[2]).sort((a, b) => a - b);
+      const top = (z: number) => {
+        let lo = 0, hi = 4;
+        for (let i = 0; i < 40; i++) {
+          const m = (lo + hi) / 2;
+          if (fieldAt(f, 0, m, z) < 0) lo = m;
+          else hi = m;
+        }
+        return lo;
+      };
+      const ys: number[] = [];
+      for (let i = 0; i <= 60; i++) ys.push(top(zs[0] + ((zs[zs.length - 1] - zs[0]) * i) / 60));
+      const girth = Math.max(...trunk.map((n) => n.radius));
+      let bumps = 0;
+      for (let i = 1; i < ys.length - 1; i++) if (ys[i] > ys[i - 1] + girth * 0.002 && ys[i] >= ys[i + 1] + girth * 0.002) bumps++;
+      const legPairs = p.genomeRef.body.appendages.filter((a) => a.kind === 'leg').length;
+      expect(bumps, `${id} #${seed}`).toBeLessThanOrEqual(legPairs + 1);
     }
   });
 

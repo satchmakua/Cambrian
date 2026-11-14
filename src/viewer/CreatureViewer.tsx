@@ -25,6 +25,9 @@ function devHead(): boolean {
   return import.meta.env.DEV && new URLSearchParams(location.search).get('head') === '1';
 }
 
+// Dev/headless: ?failstage=1 makes this viewport fail to draw, to see what the screens around it do.
+const DEV_FAIL = import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('failstage') === '1';
+
 interface Focus {
   pt: [number, number, number]; // orbit target, in centered (world) space
   r: number; // focus radius (frame distance derives from it)
@@ -74,6 +77,7 @@ export function CreatureViewer({
   skinMode?: SkinMode;
   trajectory?: Trajectory | null;
 }) {
+  if (DEV_FAIL) throw new Error('the stage failed to draw (dev: ?failstage=1)');
   const quality = useQuality();
   const spin = useSettings((s) => s.gameplay.spin);
   // (the stage holds still while the game menu is over it)
@@ -171,8 +175,11 @@ export function CreatureViewer({
       <OrbitControls
         makeDefault
         target={[0, 0, 0]}
-        autoRotate={!frozen && spin}
+        autoRotate={!frozen && spin && !menuOpen}
         autoRotateSpeed={0.8}
+        // (under the menu the turn stops dead: left to coast, its easing asks for frame after frame —
+        // on a slow machine, for many seconds — behind a menu that should have the machine to itself)
+        enableDamping={!menuOpen}
         enablePan={false}
         minDistance={size * 0.7}
         maxDistance={size * 7}

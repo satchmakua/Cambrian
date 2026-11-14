@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { grow, type Phenotype } from '../../src/engine/grow';
-import { genomeOfMorphotype, randomGenome } from '../../src/engine/random';
+import { genomeOfMorphotype, MORPHOTYPE_IDS, randomGenome } from '../../src/engine/random';
 import { defaultGenome } from '../../src/engine/genome';
-import { buildFieldPrims, fieldAt, fieldAtCarved } from '../../src/viewer/bodyField';
-import { buildMouthLine, mouthCarves, mouthSpecs, type MouthSpec } from '../../src/viewer/mouthLine';
+import { buildFieldPrims, fieldAt, fieldAtCarved, qRotateV } from '../../src/viewer/bodyField';
+import { buildMouthLine, mouthCarves, mouthSpec, mouthSpecs, type MouthSpec, drawnMouths } from '../../src/viewer/mouthLine';
 
 // The invariant the whole mouth overhaul exists for: every lip sample must sit ON the true skin.
 // Ray-trace tolerance is 1e-4; the Newton fallback can be looser on soft-blended saddles.
@@ -92,8 +92,8 @@ describe('mouth line (mouth overhaul)', () => {
     // (on a frog's flat head the gape slid the lower lip, and the drooping corners, round under the
     // jaw: the mouth hung below the head as a loose hooked loop)
     // (a long snout's mouth runs back along its jaw line, a muzzle's mandible drops by design: both
-    // are left as traced)
-    for (const kind of ['anuran', 'slime', 'dragon']) {
+    // are left as traced; and a slug's mouth is under the front of its body, where it belongs)
+    for (const kind of ['anuran', 'dragon']) {
       for (let seed = 1; seed <= 6; seed++) {
         const p = grow(genomeOfMorphotype(seed, kind));
         const spec = firstMouth(p);
@@ -114,6 +114,58 @@ describe('mouth line (mouth overhaul)', () => {
         for (const sm of line.lower) expect(dot(sm.n, down), `${kind} #${seed} under`).toBeLessThan(0.81);
       }
     }
+  });
+
+  it("a closed mouth doesn't grin: its corners stand no higher on the head than its middle, near enough", () => {
+    // (swept across the face about the mouth's own forward-leaning up, a lip line was a circle on a
+    // tilted plane: its corners rose above its middle by up to two-thirds of the mouth's size — a
+    // shark's, a theropod's, a deer's cartoon grin)
+    let seen = 0;
+    for (const id of MORPHOTYPE_IDS) {
+      for (let seed = 1; seed <= 4; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        if (p.genomeRef.symmetry === 'radial') continue;
+        const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
+        const spec = idx >= 0 ? mouthSpec(p, idx) : null;
+        if (!spec || !['fanged', 'maw', 'herbivore', 'underbite'].includes(spec.variant)) continue;
+        seen++;
+        const line = buildMouthLine(p, spec, [], 17, 'kit');
+        const up = qRotateV(spec.anchor.quat, [0, 1, 0]);
+        const h = (q: readonly number[]) => q[0] * up[0] + q[1] * up[1] + q[2] * up[2];
+        const u = line.upper;
+        const lift = Math.max(h(u[0].p), h(u[u.length - 1].p)) - h(u[u.length >> 1].p);
+        expect(lift / spec.r, `${id} #${seed}`).toBeLessThan(0.2);
+        // …nor, shut as a seam (not a muzzle), a frown: its corners no lower than its middle, near enough
+        // (its lips split a wide gape about the line, and the upper one arched up in the middle — from
+        // in front every frog, fish and slug was sulking)
+        if (!spec.muzzled) expect(lift / spec.r, `${id} #${seed} frown`).toBeGreaterThan(-0.1);
+      }
+    }
+    expect(seen).toBeGreaterThan(50);
+  });
+
+  it('a mandibled mouth is a small one: no wider than its jaws can close across', () => {
+    // (a mouth line spans an angle about the body it sits on. On a head that is a mouth's width; on
+    // a crab — its mouth on its trunk — the lips ran the whole breadth of the animal, and an ant's
+    // ran from one side of its head to the other)
+    let seen = 0;
+    for (const id of ['crab', 'insectoid', 'arthro-alien']) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const spec = firstMouth(p);
+        if (!spec || spec.variant !== 'mandibles') continue;
+        seen++;
+        const line = buildMouthLine(p, spec, [], 17, 'hybrid');
+        expect(line.width / spec.r, `${id} #${seed}`).toBeLessThan(2.1);
+        if (id === 'crab') {
+          const body = p.nodes.find((n) => n.kind === 'spine')!;
+          expect(line.width / (2 * body.radius * (body.scale?.[0] ?? 1)), `crab #${seed} a small mouth under the front`).toBeLessThan(0.4);
+        }
+        // (still a mouth: its corners apart, its lips on the skin)
+        expect(line.width / spec.r, `${id} #${seed}`).toBeGreaterThan(0.8);
+      }
+    }
+    expect(seen).toBeGreaterThan(20);
   });
 
   it('mouth carves remove matter exactly where the maw is', () => {
@@ -160,9 +212,7 @@ describe('mouth line (mouth overhaul)', () => {
       const line = buildMouthLine(p, spec, [], 17, 'smooth');
       // the exact field smoothSkin polygonizes in smooth mode: body prims, k = 0.5·meanR
       const f = buildFieldPrims(p, 'body');
-      let meanR = 0;
-      for (let i = 0; i < f.nc; i++) meanR += f.pr[i];
-      f.k = 0.5 * (meanR / Math.max(f.nc, 1));
+      f.k = 0.5 * f.meanR;
       for (const sm of [...line.upper, ...line.lower]) {
         expect(Math.abs(fieldAt(f, sm.p[0], sm.p[1], sm.p[2]))).toBeLessThan(ON_SURFACE);
       }
@@ -233,6 +283,24 @@ describe('mouth line (mouth overhaul)', () => {
       for (const c of carves) {
         expect(c.pos.every(Number.isFinite)).toBe(true);
         expect(c.radii.every((r) => Number.isFinite(r) && r > 0)).toBe(true);
+      }
+    }
+  });
+
+  it("a radial body's central maw is drawn once, not once per arm", () => {
+    // (an urchin's eight copies, aimed not quite straight down, traced eight seams round its underside —
+    // a ball in a net bag — and a sea star's five a swirl of dark arcs under its disc)
+    for (let seed = 1; seed <= 6; seed++) {
+      for (const id of ['urchin', 'starfish', 'cephalopod', 'horror']) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        expect(p.nodes.filter((n) => n.terminal === 'mouth').length, `${id} #${seed}`).toBeGreaterThan(1);
+        expect(drawnMouths(p).size, `${id} #${seed}`).toBe(1);
+        expect(mouthSpecs(p).length, `${id} #${seed}`).toBe(1);
+      }
+      // a bilateral body draws every mouth it has
+      for (const id of ['felid', 'bird', 'fish']) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        expect(drawnMouths(p).size, `${id} #${seed}`).toBe(p.nodes.filter((n) => n.terminal === 'mouth').length);
       }
     }
   });

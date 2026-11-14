@@ -13,7 +13,7 @@
  */
 import { mulberry32, mix32, range, type Rng } from './rng';
 import { GENE_BOUNDS, DEPTH_MAX, clamp } from './bounds';
-import type { Genome, SegmentGene, AppendageGene, Symmetry, Terminal, PartKind, CoveringType, PatternType } from './genome';
+import type { Genome, SegmentGene, AppendageGene, Terminal, PartKind, CoveringType, PatternType } from './genome';
 import { legBearer } from './grow';
 
 const OP_SALT = 0x9e3779b9;
@@ -77,10 +77,10 @@ function applyPointMutations(g: Genome, rng: Rng, rates: MutationRates): void {
   g.palette.light = jitter(rng, g.palette.light, P.light, r, s);
 
   for (const seg of segments(g)) {
-    seg.size[0] = jitter(rng, seg.size[0], B.size, r, s);
-    seg.size[1] = jitter(rng, seg.size[1], B.size, r, s);
-    seg.size[2] = jitter(rng, seg.size[2], B.size, r, s);
-    seg.repeat = jitterInt(rng, seg.repeat, B.repeat, r, s);
+    seg.size[0] = jitterScale(rng, seg.size[0], B.size, r, s);
+    seg.size[1] = jitterScale(rng, seg.size[1], B.size, r, s);
+    seg.size[2] = jitterScale(rng, seg.size[2], B.size, r, s);
+    seg.repeat = jitterCount(rng, seg.repeat, B.repeat, r, s);
     seg.taper = jitter(rng, seg.taper, B.taper, r, s);
     seg.curve[0] = jitter(rng, seg.curve[0], B.curvePitch, r, s);
     seg.curve[1] = jitter(rng, seg.curve[1], B.curveYaw, r, s);
@@ -90,9 +90,9 @@ function applyPointMutations(g: Genome, rng: Rng, rates: MutationRates): void {
       a.attachAzimuth = jitter(rng, a.attachAzimuth, A.attachAzimuth, r, s);
       a.attachElevation = jitter(rng, a.attachElevation, A.attachElevation, r, s);
       a.roll = jitter(rng, a.roll, A.roll, r, s);
-      a.segments = jitterInt(rng, a.segments, A.segments, r, s);
-      a.length = jitter(rng, a.length, A.length, r, s);
-      a.thickness = jitter(rng, a.thickness, A.thickness, r, s);
+      a.segments = jitterCount(rng, a.segments, A.segments, r, s);
+      a.length = jitterScale(rng, a.length, A.length, r, s);
+      a.thickness = jitterScale(rng, a.thickness, A.thickness, r, s);
       a.taper = jitter(rng, a.taper, A.taper, r, s);
       a.curl[0] = jitter(rng, a.curl[0], A.curlPitch, r, s);
       a.curl[1] = jitter(rng, a.curl[1], A.curlYaw, r, s);
@@ -107,6 +107,24 @@ function jitter(rng: Rng, v: number, bound: readonly [number, number], rate: num
 }
 function jitterInt(rng: Rng, v: number, bound: readonly [number, number], rate: number, sigma: number): number {
   return Math.round(jitter(rng, v, bound, rate, sigma));
+}
+
+/**
+ * A SCALE gene (a size, a length, a thickness) varies by a share of itself: a log-normal step,
+ * SCALE_STEP×sigma wide. Stepped by a share of its whole range (0.15–2.5 bu for a size), a child of
+ * a "conservative" litter had a dimension doubled or halved one time in five, an exploratory one
+ * three times in five: a fox's litter held a worm curled up on a sliver of a trunk.
+ */
+const SCALE_STEP = 3.4;
+function jitterScale(rng: Rng, v: number, bound: readonly [number, number], rate: number, sigma: number): number {
+  if (rng() >= rate) return v;
+  return clamp(v * Math.exp(gaussian(rng) * sigma * SCALE_STEP), bound);
+}
+/** …and a COUNT of links by a share of itself, at least as if it were two (so a single link can grow),
+ *  half as freely: the links are what a limb reads as — four a cat's leg, six an insect's */
+function jitterCount(rng: Rng, v: number, bound: readonly [number, number], rate: number, sigma: number): number {
+  if (rng() >= rate) return v;
+  return clamp(Math.round(v + gaussian(rng) * sigma * SCALE_STEP * 0.5 * Math.max(v, 2)), bound);
 }
 
 // --- structural mutation -----------------------------------------------------
@@ -138,14 +156,30 @@ function changeBauplan(g: Genome, rng: Rng): void {
   const grow = rng() < 0.5 ? -1 : 1;
   const target = clampInt(legs.length + grow, [0, 5]);
   if (target === legs.length) return;
+  const B = GENE_BOUNDS.segment;
   if (target < legs.length) {
     const idx = seg.appendages.indexOf(legs[Math.floor(rng() * legs.length)]);
     if (idx >= 0) seg.appendages.splice(idx, 1);
+    // A body that loses its last legs LANDS as a legless one: long and slim, a snake's or an eel's or
+    // a worm's. (On the trunk it had stood on, a bird without legs or wings was a feathered sausage.)
+    if (target === 0) {
+      seg.repeat = clampInt(seg.repeat + LEGLESS_LINKS, B.repeat);
+      seg.size = [clamp(seg.size[0] * LEGLESS_SLIM, B.size), clamp(seg.size[1] * LEGLESS_SLIM, B.size), clamp(seg.size[2] * LEGLESS_LONG, B.size)];
+      // …and lies along the ground: a bird's reared trunk, legless, stood on end like a penguin
+      if (seg.curve[0] < 0) seg.curve[0] *= 0.25;
+    }
   } else {
     if (seg.appendages.length >= GENE_BOUNDS.segment.appendageCount[1]) return;
     seg.appendages.push(legs.length > 0 ? structuredClone(legs[0]) : freshLeg(rng));
+    // …and one that gains a pair grows a link to carry it (three pairs crowded under a cat's belly
+    // made a crab of it)
+    if (legs.length > 0) seg.repeat = clampInt(seg.repeat + 1, B.repeat);
   }
 }
+/** a body that loses its last legs grows this many links, this much slimmer and this much longer */
+const LEGLESS_LINKS = 2;
+const LEGLESS_SLIM = 0.82;
+const LEGLESS_LONG = 1.2;
 
 function freshLeg(rng: Rng): AppendageGene {
   const A = GENE_BOUNDS.appendage;
@@ -169,9 +203,20 @@ function bumpRepeat(g: Genome, rng: Rng): void {
 }
 
 function addAppendage(g: Genome, rng: Rng): void {
-  const seg = pickSeg(rng, g);
+  let seg = pickSeg(rng, g);
   if (seg.appendages.length >= GENE_BOUNDS.segment.appendageCount[1]) return;
-  seg.appendages.push(freshAppendage(rng));
+  const a = freshAppendage(rng);
+  // A head's part grows on the head: an ear, a horn, a crest, whiskers, feelers —
+  // near its crown (the front of its run along the chain is the muzzle) and on its upper half. (On
+  // any section, anywhere round it, a mutant wore an ear on its rump, a horn under its belly.)
+  if (HEAD_KINDS.has(a.kind)) {
+    const chain = segments(g);
+    const head = chain[chain.length - 1];
+    if (head.appendages.length < GENE_BOUNDS.segment.appendageCount[1]) seg = head;
+    a.attachT *= 0.35;
+    a.attachAzimuth %= Math.PI;
+  }
+  seg.appendages.push(a);
 }
 
 function removeAppendage(g: Genome, rng: Rng): void {
@@ -186,13 +231,34 @@ function removeAppendage(g: Genome, rng: Rng): void {
 function changeTerminal(g: Genome, rng: Rng): void {
   const apps = allAppendages(g).filter((a) => !isFace(a)); // don't retype eyes/mouth away
   if (apps.length === 0) return;
-  pick(rng, apps).terminal = pick(rng, TERMINALS);
+  // (a tip its kind can wear: a paw to a hoof, a tail's tuft to a club — not a leg to an eye)
+  const a = pick(rng, apps);
+  a.terminal = pick(rng, KIND_TERMINALS[a.kind]);
 }
 
 function changeKind(g: Genome, rng: Rng): void {
   const apps = allAppendages(g).filter((a) => !isFace(a));
   if (apps.length === 0) return;
-  pick(rng, apps).kind = pick(rng, DECOR_KINDS); // not → leg (legs are bauplan-managed, M24)
+  const a = pick(rng, apps);
+  a.kind = pick(rng, DECOR_KINDS); // not → leg (legs are bauplan-managed, M24)
+  // a part that becomes another keeps its tip only if the new kind can wear it (a tail turned ear
+  // ended in a fin)
+  const tips = KIND_TERMINALS[a.kind];
+  if (!tips.includes(a.terminal)) a.terminal = pick(rng, tips);
+  // …and one that becomes a head's part moves to the head (a tail turned horn stood on the rump)
+  if (HEAD_KINDS.has(a.kind)) {
+    const chain = segments(g);
+    const head = chain[chain.length - 1];
+    const from = chain.find((sg) => sg.appendages.includes(a));
+    if (from && from !== head && head.appendages.length < GENE_BOUNDS.segment.appendageCount[1]) {
+      from.appendages.splice(from.appendages.indexOf(a), 1);
+      head.appendages.push(a);
+    }
+    if (from !== head || from === undefined) {
+      a.attachT *= 0.35;
+      a.attachAzimuth %= Math.PI;
+    }
+  }
 }
 
 // Re-aim a *decorative* part: swing it to a new direction (a side fin → a tail, a horn back). Legs
@@ -234,9 +300,14 @@ function removeChild(g: Genome, rng: Rng): void {
   chain[k - 1].child = chain[k].child;
 }
 
+// A body turned inside out — bilateral to radial or back — is the rarest of hops: a third of the times
+// it is drawn, and never to "none". (Unmirrored, every paired part went one-sided: a fox on two legs
+// down one flank, a lump that could not stand; one saltation child in five flipped. A radial plan
+// — an octopus, a star — is still a "radial" litter away.)
+const FLIP_CHANCE = 0.34;
 function flipSymmetry(g: Genome, rng: Rng): void {
-  const opts: Symmetry[] = (['bilateral', 'radial', 'none'] as const).filter((x) => x !== g.symmetry);
-  g.symmetry = pick(rng, opts);
+  if (rng() >= FLIP_CHANCE) return;
+  g.symmetry = g.symmetry === 'radial' ? 'bilateral' : 'radial';
 }
 
 // --- duplication -------------------------------------------------------------
@@ -246,20 +317,29 @@ function applyDuplication(g: Genome, rng: Rng): void {
   else duplicateSegment(g, rng);
 }
 
+// Copy a DECORATIVE part (a horn, a spine, a fin, a tail…) — never a leg or the face. A copied leg was
+// a third pair crowded under a cat's belly, round the body-plan rules that space the pairs out on a
+// trunk grown to carry them (changeBauplan); a copied eye pair or mouth sat on the first, a second
+// face drawn over the face.
 function duplicateAppendage(g: Genome, rng: Rng): void {
+  const decor = (a: AppendageGene) => !isLeg(a) && !isFace(a);
   const withApps = segments(g).filter(
-    (s) => s.appendages.length > 0 && s.appendages.length < GENE_BOUNDS.segment.appendageCount[1],
+    (s) => s.appendages.some(decor) && s.appendages.length < GENE_BOUNDS.segment.appendageCount[1],
   );
   if (withApps.length === 0) return;
   const seg = pick(rng, withApps);
-  const src = seg.appendages[Math.floor(rng() * seg.appendages.length)];
+  const parts = seg.appendages.filter(decor);
+  const src = parts[Math.floor(rng() * parts.length)];
   seg.appendages.push(structuredClone(src));
 }
 
 function duplicateSegment(g: Genome, rng: Rng): void {
   const chain = segments(g);
   if (chain.length >= DEPTH_MAX) return;
-  const seg = pick(rng, chain);
+  // never the head: a copy spliced in after it grew a second skull out of the first one's face
+  const faceless = chain.filter((sg) => !sg.appendages.some(isFace));
+  if (faceless.length === 0) return;
+  const seg = pick(rng, faceless);
   const copy = structuredClone(seg) as SegmentGene;
   copy.child = seg.child; // splice the duplicate in directly after `seg`
   seg.child = copy;
@@ -269,8 +349,9 @@ function duplicateSegment(g: Genome, rng: Rng): void {
 
 function freshAppendage(rng: Rng): AppendageGene {
   const A = GENE_BOUNDS.appendage;
+  const kind = pick(rng, DECOR_KINDS); // not → leg: legs are added as pairs via changeBauplan (M24)
   return {
-    kind: pick(rng, DECOR_KINDS), // not → leg: legs are added as pairs via changeBauplan (M24)
+    kind,
     style: range(rng, 0, 1),
     attachT: range(rng, 0, 1),
     attachAzimuth: range(rng, 0, Math.PI * 2),
@@ -281,7 +362,7 @@ function freshAppendage(rng: Rng): AppendageGene {
     thickness: range(rng, A.thickness[0], 0.3),
     taper: range(rng, 0.6, 0.95),
     curl: [range(rng, -0.4, 0.4), range(rng, -0.2, 0.2)],
-    terminal: pick(rng, TERMINALS),
+    terminal: pick(rng, KIND_TERMINALS[kind]),
     pair: rng() < 0.7,
   };
 }
@@ -298,18 +379,44 @@ function freshSegment(rng: Rng): SegmentGene {
 
 // --- helpers -----------------------------------------------------------------
 
-const TERMINALS: readonly Terminal[] = [
-  'none', 'foot', 'fin', 'claw', 'eye', 'mouth', 'pincer', 'paw', 'hoof', 'hand',
-  'club', 'barb', 'ear', 'gill', 'crest', 'carapace', 'whisker',
-];
 const KINDS: readonly PartKind[] = [
   'leg', 'arm', 'wing', 'fin', 'tail', 'horn', 'spine', 'frill', 'antenna', 'tentacle', 'eyestalk', 'maw',
   'plate', 'ear', 'gill', 'crest', 'whisker',
 ];
-/** Kinds a free/changed appendage may become — everything but `leg` (legs are bauplan-managed, M24). */
-const DECOR_KINDS: readonly PartKind[] = KINDS.filter((k) => k !== 'leg');
+/** Kinds a free/changed appendage may become — everything but `leg` (legs are bauplan-managed, M24),
+ *  and not a face: a maw's mouth and a stalk's eye count as the face, which is never removed, so one
+ *  sprouted on a flank stayed there for good — a lineage gathered mouths and eyes down its body and
+ *  could never lose them (grow guarantees the face itself) */
+const DECOR_KINDS: readonly PartKind[] = KINDS.filter((k) => k !== 'leg' && k !== 'maw' && k !== 'eyestalk');
+/**
+ * The tips a part of each kind can end in, as the plan library grows them: a horn in a horn's point,
+ * an ear in an ear, a wing or a frill in its membrane, a tail in a tuft, a fin, a barb, a club or a
+ * claw. (Any tip on any part made a horn end in a hoof, a leg in an eye, an ear in a fin: a mutant was
+ * a jumble of mismatched pieces, not a creature.)
+ */
+const KIND_TERMINALS: Record<PartKind, readonly Terminal[]> = {
+  leg: ['foot', 'claw', 'paw', 'hoof'],
+  arm: ['hand', 'claw', 'pincer', 'paw'],
+  wing: ['fin'],
+  fin: ['fin'],
+  tail: ['none', 'fin', 'barb', 'club', 'claw'],
+  horn: ['claw'],
+  spine: ['claw', 'none'],
+  frill: ['fin'],
+  antenna: ['none'],
+  tentacle: ['none', 'claw'],
+  eyestalk: ['eye'],
+  maw: ['mouth'],
+  plate: ['none', 'carapace'],
+  ear: ['ear'],
+  gill: ['gill'],
+  crest: ['crest'],
+  whisker: ['whisker'],
+};
+/** the parts a head carries (a fresh one grows there) */
+const HEAD_KINDS: ReadonlySet<PartKind> = new Set<PartKind>(['ear', 'horn', 'crest', 'whisker', 'antenna']);
 const COH_BOUND: readonly [number, number] = [0, 1];
-const COVERING_TYPES: readonly CoveringType[] = ['skin', 'scales', 'fur', 'feathers', 'chitin', 'slime', 'plates'];
+const COVERING_TYPES: readonly CoveringType[] = ['skin', 'scales', 'fur', 'feathers', 'chitin', 'slime', 'plates', 'crystal'];
 const PATTERN_TYPES: readonly PatternType[] = [
   'plain', 'stripes', 'bands', 'spots', 'ocelli', 'reticulate', 'mottle', 'gradient',
 ];

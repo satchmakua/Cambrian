@@ -11,7 +11,7 @@ import { create } from 'zustand';
 import { SOUND } from './audio';
 import { NARRATOR } from './narrator';
 import { loadWorld, saveWorld } from '../sim/persist';
-import { weatherAt, weatherWord } from '../sim/weather';
+import { droughtOf, weatherAt, weatherWord } from '../sim/weather';
 import { adoptWorld, chronicle, snapshotForChronicle, type Chronicle } from '../sim/fastForward';
 import type { Genome } from '../engine/genome';
 import { genomeOfMorphotype, randomGenome } from '../engine/random';
@@ -24,7 +24,8 @@ import { useSettings } from '../ui/settings';
 import { DEFAULT_SETUP, type Ecosystem, type GameSetup } from '../ui/saves';
 
 let WORLD: World | null = null;
-let FF_WORKER: Worker | null = null;
+/** the fast-forward in flight: its worker, and whether the valley was running when it began */
+let FF: { worker: Worker; wasRunning: boolean } | null = null;
 let VERSION = 0; // bumps whenever the set of live creatures/corpses changes shape (re-render actors)
 
 export function getWorld(): World {
@@ -87,9 +88,11 @@ function resumeWorld(): World | null {
 
 /** Keep the current world in the browser (called periodically and when the page is hidden). */
 export function autosave(): void {
-  if (!WORLD || WORLD.creatures.length === 0) return;
+  // (a valley nobody has opened holds nothing to keep; one whose animals have all died does — it must
+  // come back as it was left, not repopulated)
+  if (!worldStarted()) return;
   try {
-    localStorage.setItem(AUTOSAVE_KEY, saveWorld(WORLD));
+    localStorage.setItem(AUTOSAVE_KEY, saveWorld(WORLD!));
   } catch {
     // storage full or blocked — the world simply won't be there next visit
   }
@@ -122,12 +125,15 @@ export function worldSummary(): { day: number; population: number; species: numb
  */
 export function installWorld(setup: GameSetup, json: string | null): void {
   const next = json !== null ? loadWorld(json) : createWorld(setup.worldSeed >>> 0);
+  abandonFastForward(); // (only now: a save that will not load leaves a run in progress alone)
   WORLD = next;
   SETUP = { ...setup };
   keepSetup();
   try {
+    // (the last game's valley goes first: if the new one cannot be written — the browser's store is
+    // full — Continue must not find the old game's valley beside the new game's lineage)
+    localStorage.removeItem(AUTOSAVE_KEY);
     if (json !== null) localStorage.setItem(AUTOSAVE_KEY, json);
-    else localStorage.removeItem(AUTOSAVE_KEY);
   } catch {
     /* storage full or blocked */
   }
@@ -135,6 +141,20 @@ export function installWorld(setup: GameSetup, json: string | null): void {
   // (the epoch remounts the World screen if it is the one showing: a valley not yet visited is
   // populated when the screen mounts, and a loaded one must not inherit the last one's camera or cast)
   useWorldUi.setState((u) => ({ epoch: u.epoch + 1, selected: null, follow: false, chronicle: null, running: true, snapshot: worldStarted() ? snapshotOf(next, null) : null }));
+}
+
+/**
+ * Give up a fast-forward in flight, because the valley it set out from is being replaced (a game
+ * loaded or started from the menu, a new or an opened world): its worker is stopped — what it was
+ * computing belongs to a valley that is gone, and must never land on another — and the transport
+ * goes back to what it was.
+ */
+function abandonFastForward(): void {
+  if (!FF) return;
+  FF.worker.terminate();
+  const { wasRunning } = FF;
+  FF = null;
+  useWorldUi.setState({ ff: null, running: wasRunning });
 }
 
 /** Download the current world as a file. */
@@ -205,6 +225,8 @@ export interface TreeNode {
 export interface Snapshot {
   tree: TreeNode[];
   season: Season;
+  /** how dry this year is: 0 an ordinary year, 0.5 … 1 a drought */
+  dry: number;
   /** '' when fair, else 'overcast' / 'rain' / 'downpour' / 'snow' / 'heavy snow' */
   weather: string;
   time: number;
@@ -349,6 +371,7 @@ export function snapshotOf(w: World, selected: number | null): Snapshot {
   return {
     tree: w.species.map((sp) => ({ id: sp.id, name: sp.name, hue: sp.hue, parent: sp.parent, born: sp.firstSeen, extinctAt: sp.extinctAt, alive: sp.alive })),
     season: seasonOf(w.time),
+    dry: droughtOf(w.seed, w.time),
     weather: weatherWord(weatherAt(w.seed, w.time)),
     time: w.time,
     day: dayNumber(w.time),
@@ -409,6 +432,7 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
   setFollow: (follow) => set({ follow }),
   refresh: () => set({ snapshot: snapshotOf(getWorld(), get().selected) }),
   reset: (seed, founder) => {
+    abandonFastForward();
     WORLD = createWorld(seed >>> 0);
     // (a new world from the World screen keeps the game's cast but takes the new seed as its own)
     SETUP = { ...SETUP, worldSeed: seed >>> 0 };
@@ -418,7 +442,9 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
     set({ selected: null, follow: false, chronicle: null, snapshot: snapshotOf(WORLD, null) });
   },
   open: (json) => {
-    WORLD = loadWorld(json);
+    const next = loadWorld(json); // (throws, with nothing changed, if it will not load)
+    abandonFastForward();
+    WORLD = next;
     bumpVersion();
     set({ selected: null, follow: false, chronicle: null, snapshot: snapshotOf(WORLD, null) });
   },
@@ -431,38 +457,42 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
     const wasRunning = get().running;
     set({ ff: { f: 0, label: '' }, running: false, chronicle: null });
     const worker = new Worker(new URL('./ffWorker.ts', import.meta.url), { type: 'module' });
-    FF_WORKER = worker;
-    const finish = () => {
+    FF = { worker, wasRunning };
+    /** The run is over (done, failed or refused): stop the worker and hand the valley back. */
+    const end = (patch: Partial<WorldUi> = {}) => {
       worker.terminate();
-      FF_WORKER = null;
+      FF = null;
+      set({ ff: null, running: wasRunning, ...patch });
     };
     worker.onmessage = (e: MessageEvent) => {
+      // (a run that was abandoned — or one whose valley is no longer the live one — has nothing to say)
+      if (FF?.worker !== worker) return;
       const m = e.data as { type: string; f?: number; time?: number; pop?: number; species?: number; json?: string; message?: string };
       if (m.type === 'progress') {
         set({ ff: { f: m.f ?? 0, label: `Day ${dayNumber(m.time ?? 0)} · ${m.pop} alive · ${m.species} species` } });
       } else if (m.type === 'done' && m.json) {
-        finish();
-        const live = getWorld();
-        adoptWorld(live, loadWorld(m.json));
+        if (WORLD !== w) return end();
+        try {
+          adoptWorld(w, loadWorld(m.json));
+        } catch {
+          return end(); // (a result that will not read back: the valley stays as it was)
+        }
         bumpVersion();
         const sel = get().selected;
-        const keep = sel !== null && live.creatures.some((c) => c.id === sel) ? sel : null;
-        set({
-          ff: null,
-          running: wasRunning,
-          selected: keep,
-          follow: keep !== null && get().follow,
-          chronicle: { ...chronicle(before, live), span },
-          snapshot: snapshotOf(live, keep),
-        });
-      } else if (m.type === 'error') {
-        finish();
-        set({ ff: null, running: wasRunning });
+        const keep = sel !== null && w.creatures.some((c) => c.id === sel) ? sel : null;
+        end({ selected: keep, follow: keep !== null && get().follow, chronicle: { ...chronicle(before, w), span }, snapshot: snapshotOf(w, keep) });
+      } else if (m.type === 'error' || m.type === 'done') {
+        end();
       }
+    };
+    // (a worker that cannot start or dies — a script that fails to load — must not leave the valley
+    // stopped behind "Time passes…" for good)
+    worker.onerror = () => {
+      if (FF?.worker === worker) end();
     };
     worker.postMessage({ type: 'run', json: saveWorld(w), seconds });
   },
-  stopFastForward: () => FF_WORKER?.postMessage({ type: 'stop' }),
+  stopFastForward: () => FF?.worker.postMessage({ type: 'stop' }),
   dismissChronicle: () => set({ chronicle: null }),
   releaseGenome: (g, count) => {
     release(getWorld(), g, count);

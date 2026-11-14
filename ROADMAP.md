@@ -698,16 +698,236 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   the Studio's code loads when they are first opened. **Tests:** `tests/world/renderCost.test.ts`
   (no transmissive materials; the distant skin's size and bounds).
 
+- [x] **M76 — The first review, fixed.** A fast-forward never lands on a valley that was swapped
+  under it (a new game, a load, a reset each end the run). A save is one family tree of numbered
+  creatures with every gene inside its bounds, and a load changes nothing unless all of it reads.
+  `Esc` opens the menu from a slider or a tick box (not from a text field), a held key opens it once,
+  the screens behind it stop drawing, and a screen that fails — or whose code cannot be fetched —
+  shows a card with a way out instead of a blank page. World skins are built ahead of the render
+  (surface, skin weights, shell), kept once built, and chosen by a level of detail that does not
+  flicker at its edges. **Tests:** `tests/world/worldStore.test.ts`, `skins.test.ts`,
+  `tests/ui/saves.test.ts`, `game.test.ts`, `keys.test.ts`, `browserKeep.test.ts`,
+  `tests/engine/share.test.ts`, `lineage.test.ts`.
+
+- [x] **M77 — The body plans, one by one.** Twenty-odd plans reworked against proportions measured
+  in chest depths: cats and dogs (one skull, ears on its corners, a wedge of a trunk, a level back);
+  mice and bears; fish (a wedge of a head, a long sail, a keel) and sharks (a snout, a raked blade,
+  slits); birds (one tail) and hawks that are not pigeons; dragons that stand and wyverns that are
+  bipeds; deer with necks that reach the grass; urchins with a coat of spines, a horror of its own,
+  slugs, slender eye stalks; turtles, chimeras, theropods, ostriches; crocodiles with jaws, lizards
+  with necks and whip tails, slim weasels. Feeding keeps every foot planted: bipeds tip at the hips,
+  long necks arch, sprawlers hold still. **Tests:** `tests/engine/bodyplan.test.ts` (per plan),
+  `morphospace.test.ts`, `parts.test.ts`, `tests/viewer/rig.test.ts › feeding`, `wings.test.ts ›
+  fin cuts`, `ear.test.ts`, `nose.test.ts`, `mouths/beak.test.ts`.
+
+- [x] **M78 — The second review, fixed.** Bred bodies keep the rules their founders keep: an ear is
+  one flap on the skull, a one-link trunk is not shrunk by its taper, a trunk rears by degrees
+  (`rearedness`), a youngster's head is big for its body and not bigger than it. Gill covers and
+  slits are traced over the skin (`gills.ts`) and a midline fin's base follows the back. The skin
+  queue is its own module (`skinQueue.ts`): a youngster's adult body is ordered at what the camera
+  calls for now, and a body waiting for its first skin builds no shell in the render. A lineage whose
+  numbering has run away is renumbered on load; the Studio's camera keeps its angle when a pose
+  changes; the main menu no longer depends on the creature being bred. **Tests:**
+  `bodyplan.test.ts › bred bodies`, `juvenile.test.ts`, `tests/viewer/gills.test.ts`,
+  `framing.test.ts`, `tests/world/skins.test.ts › built to order`, `saves.test.ts › runaway
+  numbering`, `keys.test.ts › a part that fails`; in a browser, `?failstage=1` → the failure card →
+  Main menu → the menu.
+
+- [x] **M79 — Surfaces that read.** A shut mouth is one seam in the skin (no crossed strokes, no
+  cords past the cheeks); a relief's slope is measured at every pixel, so scales and plates no
+  longer break into squares (`fineRelief`, on at Medium and High); thinning fur keeps the coat's
+  tone; a trunk, a neck and a tail are curves, not cones with a crease ring at every node.
+  **Tests:** `tests/viewer/mouths/jawed.test.ts`, `mandibles.test.ts`, `mouthLine.test.ts`,
+  `creatureMaterial.test.ts › the relief's slope`, `bodyField.test.ts › chains`.
+- [x] **M80 — Cut stone, plumage, scales.** Crystal is the eighth covering: flat facets that meet in
+  sharp edges and mirror the sky face by face, shard clusters for horns and back spines, and a
+  crystal beast that wears them. Feathers and scales are overlapping scallops laid along the body.
+  **Tests:** `creatureMaterial.test.ts › a crystal hide`, `› plumage and scales`, `shards.test.ts`,
+  `tests/engine/plans/crystalline.test.ts`, `covering.test.ts › every covering is a gene`.
+- [x] **M81 — Crabs, fish and sharks.** A crab has pincers, arched legs and stalk eyes on its
+  shell's rim; a fish and a shark have heads that run on from the body, fins in their places, a gill
+  cover that crosses the flank, and their tail fins in the picture (`finBounds`). **Tests:**
+  `tests/engine/plans/fish.test.ts`, `tests/viewer/claw.test.ts`, `gills.test.ts`,
+  `framing.test.ts › a finned body`, `bodyplan.test.ts › crab`.
+- [x] **M82 — Plans reworked in parallel.** Weasels that arch, hawks that stand, apes with
+  shoulders, brows and fists, chimeras with raised wings and a mane — each fixed in its own checkout
+  against its audit notes, judged before/after by an independent viewer, and merged with a proof
+  that no other plan's founders moved. **Tests:** `tests/engine/plans/mustelid.test.ts`,
+  `raptor.test.ts`, `primate.test.ts`, `chimera.test.ts`, `bodyplan.test.ts › an ape's hips`.
+
+- [x] **M83 — The valley by the square.** Grass, crowns and bushes are drawn a square at a time, each
+  culled on its own in the main pass and the shadow pass; far grass is thinned; a square of grass is
+  re-posed only when it changes; empty berry slots are not drawn; the sun's shadows are redrawn every
+  other frame. **Tests:** `tests/world/cells.test.ts`.
+- [x] **M84 — The last of the parallel plans.** Foxes (a stop, paws, a brush), crocodiles (scutes, a
+  bladed tail, a skull narrower than the body), theropods (a wedge of a skull, clawed hands, three
+  toes), and the many-legged alien as a myriapod of armoured rings. **Tests:**
+  `tests/engine/plans/canid.test.ts`, `crocodilian.test.ts`, `biped.test.ts`, `arthro-alien.test.ts`,
+  `bodyplan.test.ts › a plain tail's style gene has one cut to a band`.
+- [x] **M85 — A second wave of plans.** Sea stars, tortoises, urchins (quills), lizards and every
+  walking sprawler's limb, snakes, deer, frogs, bears; solid spots; scales over the brow. **Tests:**
+  `tests/engine/plans/starfish.test.ts`, `chelonian.test.ts`, `urchin.test.ts`, `lizard.test.ts`,
+  `serpent.test.ts`, `ungulate.test.ts`, `anuran.test.ts`, `ursid.test.ts`.
+
+- [x] **M86 — A third look by eye, and bodies that keep their room.** Slugs with a small soft mouth,
+  wyverns with a dragon's skull, ratites with a small head and no straw of a tail fan; the new meshes
+  checked in the World; animals on the ground no longer stand inside each other, the lighter giving
+  way, a hunter at its prey and a courting pair let be. **Tests:** `tests/engine/plans/slime.test.ts`,
+  `wyvern.test.ts`, `ratite.test.ts`, `tests/sim/world.test.ts › room`.
+
+- [x] **M87 — Octopuses, webbed feet, bears.** An octopus with two eyes, arms broad at the head and
+  fine at the tips, each bending its own way, joined by a web; frogs on webbed hind feet; bears with
+  the hump over their shoulders and a level muzzle; the coat running on over every furred paw.
+  **Tests:** `tests/engine/plans/cephalopod.test.ts`, `tests/viewer/feet.test.ts › webbed`,
+  `tests/engine/plans/ursid.test.ts › hump`.
+
+- [x] **M88 — A fourth look, and breeding that stays coherent.** Natural eyes (browns first) and
+  natural markings on familiar animals, dragons with wings, a slug's small mouth; bred parts whose tips
+  fit their kind, head parts on the head, no mutation-born second faces, and proportions that step by a
+  share of themselves. **Tests:** `tests/viewer/iris.test.ts`, `tests/engine/random.test.ts › a
+  familiar frog`, `tests/engine/mutate.test.ts › bred offspring stay coherent`.
+
+- [x] **M89 — A faster valley, and a fifth look.** A simulated year 40% faster (plants gridded,
+  heights sampled onto tiles), one year in four dry; from an independent look at seed 8: nothing
+  floats, dragons fold their wings at rest and wear reptile heads, birds' feet under their hips, a
+  hawk's hooked two-toned bill, heads kept one tone under bands, a shark's pointed snout and dark eye,
+  a crab's stout legs and heavy claws, face portraits from outside the body.
+  **Tests:** `tests/sim/weather.test.ts › dry years`, `tests/engine/ground.test.ts`,
+  `tests/viewer/wings.test.ts › folded`, `tests/viewer/mouths/beak.test.ts › a hawk's bill`,
+  `tests/engine/plans/wyvern.test.ts › a dragon's head`, `tests/viewer/face.test.ts › a plain head`,
+  `tests/engine/plans/fish.test.ts › a shark's snout`, `tests/engine/bodyplan.test.ts › a crab's legs`,
+  `tests/viewer/framing.test.ts › a face's portrait`.
+
+- [x] **M90 — Cut stone, a mouth of flesh, and hops that land.** The crystalline beast's hide cut into
+  flat faces, outline and all; the horror's crown mouth a funnel of flesh with a knobbed rasp; a
+  saltation child that comes down near no plan takes back its lineage's proportions (structure kept),
+  and one that flipped symmetry lands whole in the nearest plan of its own, in its lineage's colours.
+  **Tests:** `tests/viewer/facets.test.ts`, `tests/viewer/mouths/ring.test.ts › a sucker's throat`,
+  `tests/engine/landing.test.ts`.
+
+- [x] **M91 — A sixth look: grins, a cat's face, a dragon's folded wing.** From an independent review at
+  seed 13: the crystal cut no longer tears (no turned faces; legs and face uncut), closed mouths no
+  longer grin (the lip line sweeps about the head's vertical), the cat has a cat's face (slit eyes, a
+  small rose nose, stripes over the brow), a dragon's folded wing is a great sail on slim bones, a crab's
+  claws fold in before its face, a songbird's head is round on a feathered neck, a feathered tail
+  lies in a trough, and stripes are narrow and dark, giving out under the belly.
+  **Tests:** `tests/viewer/facets.test.ts`, `tests/viewer/mouthLine.test.ts › a closed mouth doesn't
+  grin`, `tests/engine/plans/felid.test.ts`, `tests/viewer/wings.test.ts › hangs from the wrist`.
+
+- [x] **M92 — A seventh look: the scores rise.** Mean 4.06 → 4.29 between looks. Bears always eared,
+  pelts' rare morphs a mammal's; folded wings without a peg; side-set eyes on the ostrich and the
+  songbird; a cut crystal shaded by its own faces; a standing crest; level seam mouths; the World card's
+  portrait drawn first. **Tests:** `tests/engine/plans/ursid.test.ts › always has ears`,
+  `tests/engine/random.test.ts › a familiar pelt's rare colour morph`, `tests/viewer/mouthLine.test.ts
+  › frown`, `tests/engine/plans/ratite.test.ts › looks out of the sides`, `tests/viewer/portraitQueue.test.ts`.
+
+- [x] **M93 — What the seventh look left.** A shark's crescent tail and deep gill slits; an octopus's
+  round eye; a mouse low on bare pink paws; a crab's claws folded in on slim arms, fingers short of
+  each other; alien eyes with a lit iris round a slit, in a rim of hide, and ringless compound domes;
+  arthropod legs that taper to points; a weasel's narrow head tapering to a dark nose. **Tests:**
+  `tests/viewer/wings.test.ts › crescent`, `tests/viewer/gills.test.ts`, `tests/viewer/feet.test.ts ›
+  bare pink paws`, `tests/viewer/claw.test.ts › folded in across its face`, `tests/engine/juvenile.test.ts`,
+  `tests/engine/plans/mustelid.test.ts › wedge of a head`, `tests/viewer/nose.test.ts › weasel`.
+
+- [x] **M94 — An eighth look, harder.** A cut stone without camouflage; dragons and rats always
+  tailed; a hawk's hooked bill; an urchin on its spines, one maw per radial body; an octopus's eye; a
+  tortoise's shell over its legs; flat crab claws; smooth plumage on head and breast; mouths as creases
+  in the hide; a rat's naked tail and pink ears; fur fuzz on the outline; small mood bubbles near; a
+  jaw under a dog's and a bear's muzzle; grey shanks; banded edges blended; swept, ringed horns.
+  **Tests:** `tests/viewer/creatureMaterial.test.ts › crystal`, `tests/engine/bodyplan.test.ts › always
+  have a tail`, `tests/viewer/mouths/beak.test.ts › hawk's bill`, `tests/viewer/mouthLine.test.ts ›
+  drawn once`, `tests/engine/plans/urchin.test.ts › tube feet`, `tests/engine/plans/chelonian.test.ts ›
+  over each leg's root`, `tests/viewer/feet.test.ts › naked`, `tests/viewer/face.test.ts`,
+  `tests/viewer/bodyField.test.ts › has a jaw`, `tests/viewer/horn.test.ts`.
+
+- [x] **M95 — Thin limbs drawn exact, and a tenth look.** Legs, tails and arm tips too thin for the skin's
+  grid drawn as exact swept tubes, at their own girth at every fineness; a dragon's folded wing draped
+  down its flank in pleats; an urchin a low round dome with pale-tipped spines; a crab's legs swept back,
+  a spider's arcing out; a horror's crown mouth its own skin rolled over a rim, ringed by feelers; no
+  ring round a stretched trunk at each node; a fish's tail a broad fan; a dog's and a bear's muzzle a
+  wedge under a straight bridge; a chimera's mouth a jaw or a beak; a cut stone's faces meeting in
+  creases, lit face by face. **Tests:**
+  `tests/viewer/limbTubes.test.ts`, `tests/viewer/wings.test.ts`, `tests/engine/plans/urchin.test.ts`,
+  `crab.test.ts`, `arachnid.test.ts`, `horror.test.ts`, `tests/viewer/mouths/ring.test.ts › rim`,
+  `tests/viewer/smoothSkin.test.ts › the maggot`.
+
+- [x] **M96 — An eleventh look (3.32), and a deer named a deer.** Identification by hide and telltale
+  parts (98% of founders, from 90%); horror feelers round the crown; a wyvern no giraffe; a shark's tail
+  stock; a snake's head; a dog's brush; a frog's round lids; a sea star's smooth arms; level whiskers;
+  an ostrich's shaggy plumes; a hawk's dark hooked bill; a lizard's wedge of a head; eyes seated on flat
+  skulls; paws no wider than the wrist, legs one tone down to them; cupped ears with a pale inside;
+  an insect's eyes seated as domes, its feelers fine, no letterbox mouth; no dark ring where a leg's
+  skin hands on to its exact tube; a weasel's short pile; an ostrich's broad bill and downy head;
+  no seam painted across a slug's face.
+  **Tests:** `morphospace.test.ts › a deer is no dog`, `horror.test.ts`, `wyvern.test.ts`,
+  `fish.test.ts`, `serpent.test.ts`, `canid.test.ts`, `lids.test.ts`, `starfish.test.ts`,
+  `whiskers.test.ts`, `creatureMaterial.test.ts › shaggy`, `beak.test.ts`, `lizard.test.ts`,
+  `eyeSeat.test.ts`, `feet.test.ts › knows its legs`, `ear.test.ts › a deep cup`,
+  `bodyField.test.ts › feelers`, `arthro-alien.test.ts › feelers rise`, `limbTubes.test.ts › no dark ring`,
+  `pile.test.ts`, `beak.test.ts › an ostrich's bill`, `creatureMaterial.test.ts › short down`,
+  `jawed.test.ts › a slug's shut mouth`.
+
+- [x] **M97 — A twelfth look (3.45), and its worst diagnosed in parallel.** Legs with joints; a horror with
+  no face (a band of glowing eyes, rising feelers, a lamprey's maw); a crystal trunk as one cut stone; a
+  theropod's sleek feathers, toothy jaw and bare shanks; a fish's gill cover on its skull and a tail stock;
+  reptile jaws along the side of the head with teeth outside them; brown eyes, not grey ball bearings; a
+  hawk's neck; a centipede's plates; pointed tail and tentacle tips; a crocodile's low keeled plates; a
+  python's net, not crackle glaze; a shark's narrow head over a crescent mouth; horns as one sheath; a
+  bear's barrel on columns, its short snout and its ears facing the camera; a slug's taper and feelers; a
+  weasel's small nose, low ears and full tail; wings at the shoulders and back spines that point out.
+  **Tests:** see PROGRESS M97.
+
+- [x] **M98 — A thirteenth look (3.32, framed wider), spiders' eyes and snakes' heads.** Face eyes
+  pressed into the skin (no goggle past the outline); fur grain along the coat's lay; a cat's fine dense
+  markings and tawny coat; domed plates; a tortoise's scutes in rows; whisker pads only on a cat; a slime
+  hide's soft papillae and a slug's mantle; a chimera's tail sting; an urchin of one colour; shut reptile
+  jaws showing only their animal's teeth; markings of another hue laid solid, an insect's mostly its own;
+  each scale its own shade; eyes seated by the skin along their aim; a snake's spade head on a neck, its
+  open round eye and its seam; a spider's cluster of lenses, short chelicerae, tapering legs; a bird's tail
+  closed at rest under its coverts, barred on a banded coat; an ape's jutting jaw, crest, forearms and
+  broad nose; a wyvern's level tail, arm-wings and parted horns; an ostrich's long flat bill; a dragon's
+  level tail, folded wing laid to its body, spines and horns apart.
+  **Tests:** see PROGRESS M98.
+
 ### Next up (unchecked — pick from here)
 
-- [ ] **Richer world.** Drought years, burrows and nests, a second lake.
+- [ ] **What the thirteenth look left.** A deer's llama neck and dog nose; a bear's pig nose; the
+  crystal's smooth head and legs; the octopus's slit eye that reads as a mouth, its stiff splayed arms;
+  the fish's jawless whale head (its head taper is already at its gene's floor); a cat's throat hanging
+  as a dewlap (its last neck node sits well under its skull, nearly as thick); a chimera's red cross and
+  harness bands.
+
+- [ ] **What the twelfth look left.** The crystal's smooth glass head on its cut stone; a slug's sole;
+  the dragon's pale underwing web; a bear's paw still a step below its wrist.
+
+- [ ] **What the eleventh look left.** The crab's balloon claws; the arthro-alien's string of beads; a
+  cut stone still papery; plush heads (a cat's box of a head, sock muzzles); the bare-shank seams on
+  birds' legs; goggle eyes; painted mouths.
+
+- [ ] **What the tenth look left.** The frog's balloon head with its clamshell seam and wedge-cut
+  eyelids; the ostrich's scaly plumage; the serpent's blunt tail with an upturned nub; the starfish's
+  sausage arms; the songbird's finger crest and slab wings; a cut stone's creases still step where two
+  faces meet at a shallow angle (the mesh is finer than the faces, so the choice of plane flickers).
+
+- [ ] **What the ninth look left.** Ears that are spikes edge-on (the far ear's angle); the weasel end
+  on (its shoulder joints stand out past its flanks); the frog a bun resting on its chin (forelegs
+  under its middle).
+
+- [ ] **What the sixth look left.** The crab's walking legs still arch high like a spider's; the bear's
+  muzzle a hippo's (a tube ending in a bulb, a small nose on it); the ape's coat reads as bare rubber;
+  round slipper feet on bears and apes.
+
+- [ ] **Hops that land in more than one basin.** A flipped cat, songbird or hawk lands as an urchin
+  nearly every time (the coarse measure puts every radial sprawl nearest it). Spread them over the
+  radial plans (octopus, sea star, horror) by what the child kept: its eyes, its limbs' length.
+
+- [ ] **Richer world.** Burrows and nests, a second lake.
+- [ ] **What the fifth look left.** A weasel end on is a ball behind a small head (its shoulder joints
+  set the width); a dog's and a bear's muzzle is a tube ending in a bulb (the dog's test holds its
+  girth to the nose on purpose: it needs a better shape, not a re-taper).
 - [ ] **A lineage film.** A wild species' body changes over the generations, as a strip of portraits.
-- [ ] **More headroom, measured but not yet taken** (the dev hooks `__cambrianRender`,
-  `__cambrianBreakdown` and `__cambrianCost` in the World give the numbers): the grass and the trees
-  are single instanced meshes, drawn whole wherever the camera looks (306k and 363k triangles at
-  High) — split into cells they could be culled; the sun's shadow pass redraws every caster each
-  frame — it could refresh every other frame; the grass re-uploads all its instances twice a second
-  — only the cells that changed need it.
+- [ ] **More headroom.** Skin builds off the main thread (a worker for the marching tetrahedra); the
+  flowers as cells like the grass; level-of-detail crowns for far trees.
 
 ---
 

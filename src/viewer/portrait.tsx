@@ -4,8 +4,9 @@
  *
  * One offscreen R3F root (one WebGL context, created on first use) renders the creature exactly as
  * the breeder does — the same CreatureMesh, hybrid skin, studio light — in a three-quarter view, and
- * the frame is read back as a PNG data URL. Requests queue (one render at a time) and are cached by
- * the genome's share string, so a species' portrait is drawn once.
+ * the frame is read back as a PNG data URL. Requests queue (one render at a time, an urgent one —
+ * the card being looked at — first) and are cached by the genome's share string, so a species'
+ * portrait is drawn once.
  */
 import { createRoot, useThree } from '@react-three/fiber';
 import { PerspectiveCamera } from '@react-three/drei';
@@ -25,10 +26,8 @@ const AWAKE = { shut: 0, blink: false };
 
 const W = 176;
 const H = 132;
-const CACHE = new Map<string, Promise<string>>();
 let root: ReturnType<typeof createRoot> | null = null;
 let canvas: HTMLCanvasElement | null = null;
-let chain: Promise<unknown> = Promise.resolve();
 
 function Scene({ phenotype, onReady }: { phenotype: Phenotype; onReady: (draw: () => void) => void }) {
   const f = framingOf(phenotype);
@@ -98,29 +97,79 @@ function idle(): Promise<void> {
   });
 }
 
-/** A PNG (object/data) URL of this genome's creature (cached; drawn one at a time, when the page is idle). */
-export function portraitOf(genome: Genome): Promise<string> {
-  const key = encodeGenome(genome);
-  let p = CACHE.get(key);
-  if (!p) {
-    p = chain.then(idle).then(() => render(grow(genome)));
-    chain = p.catch(() => undefined);
-    CACHE.set(key, p);
-  }
-  return p;
+export interface RenderQueue<T> {
+  /** queue a job (or, if it is queued already, find it), urgent or not; resolves when it has run */
+  add(key: string, job: () => Promise<T>, urgent: boolean): Promise<T>;
 }
 
-/** React: the portrait's data URL once drawn (null until then). */
-export function usePortrait(genome: Genome | null | undefined): string | null {
+/**
+ * Jobs run one at a time: an urgent one next, ahead of any waiting (a request that comes again as
+ * urgent is moved up), and each of the others only when the page is idle. (First come first served,
+ * the portrait of the animal just clicked waited behind every census icon of the World: eight
+ * portraits, each after an idle wait.) A job's result is kept, so asking again is free.
+ */
+export function createRenderQueue<T>(waitIdle: () => Promise<void>): RenderQueue<T> {
+  type Job = { key: string; run: () => Promise<T>; urgent: boolean; resolve: (v: T) => void; reject: (e: unknown) => void };
+  const done = new Map<string, Promise<T>>();
+  const waiting: Job[] = [];
+  let busy = false;
+  const pump = async (): Promise<void> => {
+    if (busy) return;
+    busy = true;
+    while (waiting.length) {
+      let i = waiting.findIndex((j) => j.urgent);
+      if (i < 0) {
+        await waitIdle();
+        // (an urgent request may have come while it waited)
+        i = Math.max(0, waiting.findIndex((j) => j.urgent));
+      }
+      const job = waiting.splice(i, 1)[0];
+      try {
+        job.resolve(await job.run());
+      } catch (e) {
+        job.reject(e);
+      }
+    }
+    busy = false;
+  };
+  return {
+    add(key, run, urgent) {
+      const known = done.get(key);
+      if (known) {
+        if (urgent) {
+          const j = waiting.find((w) => w.key === key);
+          if (j) j.urgent = true;
+        }
+        return known;
+      }
+      const p = new Promise<T>((resolve, reject) => waiting.push({ key, run, urgent, resolve, reject }));
+      done.set(key, p);
+      void pump();
+      return p;
+    },
+  };
+}
+
+const QUEUE = createRenderQueue<string>(idle);
+
+/** A PNG (object/data) URL of this genome's creature (cached; drawn one at a time — an `urgent` one
+ *  next, the others when the page is idle). */
+export function portraitOf(genome: Genome, urgent = false): Promise<string> {
+  return QUEUE.add(encodeGenome(genome), () => render(grow(genome)), urgent);
+}
+
+/** React: the portrait's data URL once drawn (null until then). `urgent` for the one being looked at
+ *  (a creature's own card), not for a row of icons. */
+export function usePortrait(genome: Genome | null | undefined, urgent = false): string | null {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     setUrl(null);
     if (!genome) return;
     let live = true;
-    void portraitOf(genome).then((u) => live && setUrl(u));
+    void portraitOf(genome, urgent).then((u) => live && setUrl(u));
     return () => {
       live = false;
     };
-  }, [genome]);
+  }, [genome, urgent]);
   return url;
 }

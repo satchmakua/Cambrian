@@ -4,7 +4,7 @@
  * Both live in a box around the camera's focus and are animated wholly in their vertex shaders
  * (one draw each); how many show follows the hour, the season and the weather.
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { getWorld } from './worldStore';
@@ -162,6 +162,17 @@ export function Ambient() {
     o.frustumCulled = false;
     return o;
   }, [u, share]);
+
+  // (a swarm is rebuilt when the "weather and insects" option changes; the one it replaces — and the
+  // last one, when the valley is left — gives its buffers and its shader back)
+  useEffect(() => () => {
+    flies.geometry.dispose();
+    (flies.material as THREE.Material).dispose();
+  }, [flies]);
+  useEffect(() => () => {
+    bugs.geometry.dispose();
+    (bugs.material as THREE.Material).dispose();
+  }, [bugs]);
 
   useFrame((st, dt) => {
     const w = getWorld();

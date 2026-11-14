@@ -96,12 +96,7 @@ export function surfacePrims(p: Phenotype, surface: SkinSurface): FieldPrims {
   if (hit) return hit;
 
   const prims = buildFieldPrims(p, surface === 'hybrid' ? 'hybrid' : 'body');
-  if (surface !== 'kit') {
-    let meanR = 0;
-    for (let i = 0; i < prims.nc; i++) meanR += prims.pr[i];
-    meanR = meanR / Math.max(prims.nc, 1);
-    prims.k = (surface === 'hybrid' ? 0.34 : 0.5) * meanR; // mirror smoothSkin's blend exactly
-  }
+  if (surface !== 'kit') prims.k = (surface === 'hybrid' ? 0.34 : 0.5) * prims.meanR; // mirror smoothSkin's blend exactly
   per.set(surface, prims);
   return prims;
 }
@@ -142,7 +137,11 @@ export function mouthSpec(p: Phenotype, mouthIdx: number): MouthSpec | null {
   // how far the slit wraps around the muzzle — a mammal's lip line ends under the eye, not back by
   // the ear (a long wrap read as a cartoon grin)
   const arc = (muzzled ? 0.62 : 0.85) + hash01(seed, mouthIdx + 23) * (muzzled ? 0.22 : 0.5);
-  const droop = 0.12 + hash01(seed, mouthIdx + 37) * 0.22;
+  // How far the corners fall below level. A seam (a reptile's, a fish's, a shark's) a little: no longer
+  // lifted by the sweep (see traceCurve), the old droop of a fifth of a radian and more turned it down
+  // into a frown. A muzzle's lip line falls back to its corners, as a dog's or an ape's does — and it
+  // wraps a round muzzle, which seen from above and in front bends a level line up into a grin.
+  const droop = muzzled ? 0.34 + hash01(seed, mouthIdx + 37) * 0.22 : 0.03 + hash01(seed, mouthIdx + 37) * 0.08;
   return {
     idx: mouthIdx,
     variant,
@@ -160,10 +159,37 @@ export function mouthSpec(p: Phenotype, mouthIdx: number): MouthSpec | null {
 }
 
 /** All of a phenotype's mouth specs (usually one — the guaranteed face). */
+/**
+ * The mouths a body is drawn with. A radial body grows its central maw once per arm, the copies all
+ * round the axis within a mouth's width or so of each other: an urchin's eight, aimed not quite
+ * straight down, traced eight seams round its underside (a ball in a net bag), a sea star's five a
+ * swirl of dark arcs, a horror's crown a ring of overlapping funnels. A radial body draws the first
+ * of each gene's copies (one per style), and only that one carves its cavity; any other body draws
+ * every mouth it has. (Cached per phenotype.)
+ */
+const DRAWN_MOUTHS = new WeakMap<Phenotype, Set<number>>();
+export function drawnMouths(p: Phenotype): Set<number> {
+  let s = DRAWN_MOUTHS.get(p);
+  if (s) return s;
+  const kept = new Set<number>();
+  const styles = new Set<number>();
+  const radial = p.genomeRef.symmetry === 'radial';
+  p.nodes.forEach((n, i) => {
+    if (n.terminal !== 'mouth') return;
+    const style = n.part?.style ?? -1;
+    if (radial && styles.has(style)) return;
+    styles.add(style);
+    kept.add(i);
+  });
+  DRAWN_MOUTHS.set(p, (s = kept));
+  return s;
+}
+
 export function mouthSpecs(p: Phenotype): MouthSpec[] {
   const out: MouthSpec[] = [];
+  const drawn = drawnMouths(p);
   for (let i = 0; i < p.nodes.length; i++) {
-    if (p.nodes[i].terminal === 'mouth') {
+    if (p.nodes[i].terminal === 'mouth' && drawn.has(i)) {
       const s = mouthSpec(p, i);
       if (s) out.push(s);
     }
@@ -208,8 +234,13 @@ export function mouthCarves(p: Phenotype): Carve[] {
         ],
         quat: [...s.node.quat] as [number, number, number, number],
         radii: [s.r * 0.78, s.r * 0.78, depth],
-        blend: s.r * 0.2,
-        band: s.r * 0.55,
+        // (a soft rim, the skin rounding over into the hole: cut at a fifth of the mouth's size, the
+        // hole's edge stair-stepped in the mesh and caught the light — a torn white rim)
+        blend: s.r * 0.36,
+        // (the wet flesh stays in the hole: shaded out to half the mouth's size past the cavity's wall,
+        // it ran over the rim onto the skin in a ragged dark-red band — on a horror's crown, from the
+        // side, a broken eggshell with its red inside showing)
+        band: s.r * FUNNEL_BAND,
       };
     }
     if (carve) out.push(spareTheEyes(p, carve));
@@ -249,6 +280,61 @@ function spareTheEyes(p: Phenotype, c: Carve): Carve {
  * (radians below the aim; positive = downward), each traced to the skin. `carves` lets the lower
  * lip land on the carved cavity rim instead of the pristine skin.
  */
+/** a seam mouth's half-gape at its least (rad): parted enough to read as a mouth, not to arch */
+const SEAM_GAPE = 0.05;
+/** …and how far its corners fall below its middle (× the mouth's size): a hair, not a frown */
+const SEAM_DROP = 0.04;
+
+/**
+ * Trace a lip at the pitches `pitch` gives, then nudge each sample's pitch (secant steps: a point at
+ * distance d from the origin moves about d·Δpitch) until its height along `up` is `target(t, the
+ * middle's height)`. The middle sample keeps its pitch.
+ */
+function levelCurve(
+  f: FieldPrims,
+  carves: readonly Carve[],
+  s: MouthSpec,
+  origin: Vec3,
+  samples: number,
+  pitch: (t: number) => number,
+  up: Vec3,
+  target: (t: number, midH: number) => number,
+): MouthSample[] {
+  const mid = samples >> 1;
+  const offs = new Float64Array(samples);
+  const at = (t: number) => pitch(t) + offs[Math.round(((t + 1) / 2) * (samples - 1))];
+  let out = traceCurve(f, carves, s, origin, samples, at);
+  for (let it = 0; it < 6; it++) {
+    const mh = dot3(out[mid].p, up);
+    let worst = 0;
+    for (let i = 0; i < samples; i++) {
+      if (i === mid) continue;
+      const t = -1 + (2 * i) / (samples - 1);
+      const err = dot3(out[i].p, up) - target(t, mh); // too high: pitch further down
+      const q = out[i].p;
+      const d = Math.hypot(q[0] - origin[0], q[1] - origin[1], q[2] - origin[2]);
+      offs[i] = Math.max(-LEVEL_MAX, Math.min(LEVEL_MAX, offs[i] + err / Math.max(d, 1e-3)));
+      worst = Math.max(worst, Math.abs(err));
+    }
+    if (worst < 1e-3 * s.r) break;
+    out = traceCurve(f, carves, s, origin, samples, at);
+  }
+  return out;
+}
+/** the most a sample's pitch is nudged to level it (rad) */
+const LEVEL_MAX = 0.7;
+
+/** a mouth aimed closer than this (cosine) to the head's vertical sweeps about its own up instead */
+const SWEEP_ALONG = 0.9;
+
+/** `v` turned by `a` about the unit axis `k` (Rodrigues) */
+function rotateAbout(v: Vec3, k: Vec3, a: number): Vec3 {
+  const c = Math.cos(a), sn = Math.sin(a);
+  const kv = cross3(k, v);
+  const d = dot3(k, v) * (1 - c);
+  return [v[0] * c + kv[0] * sn + k[0] * d, v[1] * c + kv[1] * sn + k[1] * d, v[2] * c + kv[2] * sn + k[2] * d];
+}
+
 function traceCurve(
   f: FieldPrims,
   carves: readonly Carve[],
@@ -258,22 +344,27 @@ function traceCurve(
   pitch: (t: number) => number,
 ): MouthSample[] {
   const out: MouthSample[] = [];
+  // The line sweeps across the face about the HEAD's vertical, not about the mouth's own up. A mouth
+  // aims down onto the front of the face, so its up leans forward; swept about that, the lip line was
+  // a circle on a tilted plane, and from in front its corners rose above its middle — a cartoon grin
+  // on every face. About the head's vertical the corners keep the middle's height, and the droop alone
+  // bends them. (A mouth aimed along the head's vertical — under a sea star — sweeps about its own up.)
+  const headUp = norm3(qRotateV(s.anchor.quat, [0, 1, 0]));
+  const axis = Math.abs(dot3(headUp, s.aim)) < SWEEP_ALONG ? headUp : s.up;
+  // (turned the way the mouth's own frame turns: +t toward its right)
+  const turn = dot3(cross3(axis, s.aim), s.right) < 0 ? -1 : 1;
   for (let i = 0; i < samples; i++) {
     const t = -1 + (2 * i) / (samples - 1);
-    const yawA = t * s.arc;
+    const yawA = t * s.arc * turn;
     const pitchA = pitch(t);
-    // direction = aim yawed about `up` by t·arc, then pitched down about the yawed `right`
-    const cy = Math.cos(yawA), sy = Math.sin(yawA);
-    const dirYaw: Vec3 = [
-      s.aim[0] * cy + s.right[0] * sy,
-      s.aim[1] * cy + s.right[1] * sy,
-      s.aim[2] * cy + s.right[2] * sy,
-    ];
+    // direction = aim yawed about the sweep axis by t·arc, then pitched down about the yawed `right`
+    const dirYaw = rotateAbout(s.aim, axis, yawA);
+    const upYaw = rotateAbout(s.up, axis, yawA);
     const cp = Math.cos(pitchA), sp = Math.sin(pitchA);
     const dir = norm3([
-      dirYaw[0] * cp - s.up[0] * sp,
-      dirYaw[1] * cp - s.up[1] * sp,
-      dirYaw[2] * cp - s.up[2] * sp,
+      dirYaw[0] * cp - upYaw[0] * sp,
+      dirYaw[1] * cp - upYaw[1] * sp,
+      dirYaw[2] * cp - upYaw[2] * sp,
     ]);
     const hit =
       rayToSurface(f, carves, origin, dir) ??
@@ -308,15 +399,46 @@ const FACE_MIN = 0.45;
 const UNDERSIDE = 0.8;
 /** a head node stretched longer than this (× its radius) is a snout, its mouth along its jaw line */
 const LONG_SNOUT = 1.3;
+/** a mandibled mouth is at most this many of its own radii from corner to corner */
+const MANDIBLE_SPAN = 2.0;
+/** …and so is a mouth set on a headless body's trunk (a slug's): its line's span is an angle about the
+ *  whole body there, and it ran from flank to flank — a grin across the front of the animal. (At 2.4 of
+ *  its radii it was still half the body's breadth: a long double slot, a mail slot.) */
+/** how far past a funnel mouth's cavity wall its wet flesh shading reaches (× the mouth's size) */
+export const FUNNEL_BAND = 0.2;
+/** the cone angles (rad, off the mouth's aim) a rim-searched mouth ring may take */
+const RIM_MIN_SPREAD = 0.08;
+const RIM_MAX_SPREAD = 1.25;
+export const TRUNK_MOUTH_SPAN = 1.5;
+/** An UNDERSLUNG mouth (see isUnderslung) wraps at least this far round its head (rad), and its corners
+ *  stand this far up its jaw (× the mouth's size, at the corners)… */
+export const CRESCENT_ARC = 1.75;
+export const CRESCENT_RISE = 0.06;
+/** …a mouth aimed further below its head's level than this (aim · head up): grow floors every other mouth
+ *  at elevation 0.95 (−0.58) */
+const UNDERSLUNG_AIM = -0.62;
+
+/** Is this mouth UNDERSLUNG — set back under a snout that runs on ahead of it, and aimed at the floor (a
+ *  shark's)? */
+export function isUnderslung(p: Phenotype, s: MouthSpec): boolean {
+  if (p.genomeRef.symmetry === 'radial' || s.muzzled || !JAWED.has(s.variant) || s.anchor.kind !== 'spine') return false;
+  const ahead = p.edges.some(([a, b]) => p.nodes[a] === s.anchor && p.nodes[b].kind === 'spine' && p.nodes[b].segment === s.anchor.segment);
+  return ahead && dot3(s.aim, norm3(qRotateV(s.anchor.quat, [0, 1, 0]))) < UNDERSLUNG_AIM;
+}
 
 export function buildMouthLine(
   p: Phenotype,
-  s: MouthSpec,
+  spec: MouthSpec,
   carves: readonly Carve[] = [],
   samples = 17,
   surface: SkinSurface = 'kit',
 ): MouthLine {
+  let s = spec;
   const f = surfacePrims(p, surface);
+  // a shark's mouth under its snout is a CRESCENT: wide, its corners swept back under the eye onto the jaw
+  // (traced like any other, it was a short chord across the flat of its chin: from the side, no mouth)
+  const under = isUnderslung(p, s);
+  if (under) s = { ...s, arc: Math.max(s.arc, CRESCENT_ARC) };
   // ray origin: inside the anchor node, pulled a touch back from the mouth so rays always exit
   // through the face (a mouth seated proud of a snout tip still traces onto the snout).
   const origin: Vec3 = [
@@ -333,6 +455,10 @@ export function buildMouthLine(
   // apart on a typical head — a hairline that swallowed its own interior and teeth. Opened up so
   // the dark throat and the tooth rows actually have room to show.
   let gapeHalf = 0.5 * s.gape + 0.14;
+  // …but a jawed mouth that shuts as a seam (a reptile's, a frog's, a fish's, a slug's) parts only a
+  // sliver: its lips split the gape about the line, so the upper one arched up in the middle by as
+  // much as a fifth of a radian and more, and from in front the seam was a frown on every such face
+  if (!s.muzzled && JAWED.has(s.variant)) gapeHalf = SEAM_GAPE + 0.08 * s.gape;
   // a muzzle's upper lip is part of the skull: it sits a little below the muzzle's midline and only
   // the mandible drops to open (the whole gape opens downward); everything else splits the gape
   // about the mouth line
@@ -362,12 +488,46 @@ export function buildMouthLine(
   const snout = (s.anchor.scale?.[2] ?? 1) > LONG_SNOUT;
   // (nor a radial body: it has no head, and its mouth is where it is — under the disc, say)
   const headed = p.genomeRef.symmetry !== 'radial';
-  for (let k = 0; k < 5 && headed && !s.muzzled && !snout && offFace(); k++) {
+  for (let k = 0; k < 5 && headed && !s.muzzled && !snout && !under && offFace(); k++) {
     gapeHalf *= 0.72;
     droop *= 0.6;
     setDown -= 0.06;
     upper = traceCurve(f, [], s, origin, samples, upperPitch);
     lower = traceCurve(f, carves, s, origin, samples, lowerPitch);
+  }
+
+  // A MANDIBLED mouth is a small one: its blades hinge at its corners and close across it, so it is
+  // no wider than they reach. (The line's span is an angle about the body it sits on: on a head that
+  // is a mouth's width — on a crab, whose mouth sits on its trunk, the lips ran the whole breadth of
+  // the animal, a dark wire strung under its front from claw to claw.)
+  const onTrunk = headed && p.nodes[p.edges.find(([, b]) => b === s.idx)?.[0] ?? 0]?.segment === 0 && !p.nodes.some((n) => n.kind === 'spine' && (n.segment ?? 0) > 0);
+  const span = s.variant === 'mandibles' ? MANDIBLE_SPAN : onTrunk ? TRUNK_MOUTH_SPAN : 0;
+  if (span > 0) {
+    for (let k = 0; k < 5; k++) {
+      const a = upper[0].p, b = upper[samples - 1].p;
+      const w = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+      if (w <= span * s.r) break;
+      s = { ...s, arc: (s.arc * span * s.r) / w };
+      upper = traceCurve(f, [], s, origin, samples, upperPitch);
+      lower = traceCurve(f, carves, s, origin, samples, lowerPitch);
+    }
+  }
+
+  // A SEAM lies level across the face. Swept at one pitch, a ray to the side of a narrow snout met the
+  // skin sooner and dropped less than the one down the middle, so the corners rose (a theropod's grin),
+  // and on a broad round head they fell (a frog's frown). Each sample's pitch is nudged until it sits at
+  // the middle's height on the head's own vertical, less a hair at the corners; the lower lip runs
+  // below the upper by the gape in the middle and meets it at the corners.
+  if (headed && !s.muzzled && JAWED.has(s.variant)) {
+    const headUp = norm3(qRotateV(s.anchor.quat, [0, 1, 0]));
+    const h = (q: Vec3) => dot3(q, headUp);
+    const drop = (t: number) => SEAM_DROP * s.r * Math.abs(t);
+    // (an underslung crescent's corners stand a little up its jaw: levelled at its middle's height — the flat
+    // of the chin — it lay under the head)
+    const rise = (t: number) => (under ? CRESCENT_RISE * s.r * t * t : 0);
+    upper = levelCurve(f, [], s, origin, samples, upperPitch, headUp, (t, mh) => mh - drop(t) + rise(t));
+    const uMid = h(upper[mid].p);
+    lower = levelCurve(f, carves, s, origin, samples, lowerPitch, headUp, (t, mh) => uMid - drop(t) + rise(t) - (uMid - mh) * Math.cos((t * Math.PI) / 2));
   }
 
   // weld the corners exactly (shared start/end), then fix `away` signs: the top lip's `away`
@@ -401,6 +561,164 @@ function flipAway(sm: MouthSample): void {
   sm.away = [-sm.away[0], -sm.away[1], -sm.away[2]];
 }
 
+/** how far past its eye a reptile's shut seam runs back to its hinge (× the eye's radius): a
+ *  crocodile's grin runs on behind its eye, a lizard's to its back edge */
+export const HINGE_PAST_EYE = 0.6;
+/** how far up the side of the head (from its underside, × its depth there) a reptile's shut seam runs:
+ *  a crocodile's lower jaw is a third of its snout's depth */
+export const JAW_LINE_UP = 0.33;
+/** samples round the snout's tip, and along each side's run back to the hinge */
+const FAN_SAMPLES = 17;
+const RUN_BACK_SAMPLES = 6;
+/** a shut seam's lower lip under its upper at the front (× the mouth's size): parted a sliver */
+const SEAM_PART = 0.05;
+
+/** Is this mouth a reptile's shut seam, drawn along its jaw (see runSeamBack)? A bilateral body's
+ *  sealed jawed mouth in scales, plates, bare skin or feathers — a crocodile's, a lizard's, a frog's, a
+ *  snake's, a dragon's, a theropod's — but not a fish's or a shark's (a swimmer's mouth is its own). */
+export function reptileSeam(p: Phenotype, s: MouthSpec): boolean {
+  if (s.muzzled || !JAWED.has(s.variant) || p.genomeRef.symmetry !== 'bilateral') return false;
+  const cov = p.genomeRef.covering.type;
+  if (cov !== 'scales' && cov !== 'plates' && cov !== 'skin' && cov !== 'feathers') return false;
+  let legs = false, fins = false;
+  for (const n of p.nodes) {
+    if (n.part?.kind === 'leg') legs = true;
+    else if (n.part?.kind === 'fin') fins = true;
+  }
+  return legs || !fins;
+}
+
+/**
+ * A REPTILE's shut mouth is a seam along its jaw, a third of the way up the side of its head, from the
+ * tip of its snout back to the hinge under or behind its eye: a crocodile's grin the length of its
+ * snout, a lizard's line to the back of its eye. Traced from its node — grown on the underside of the
+ * snout's tip — and swept round the tip a mouth's width either way, it lay along the underside of the
+ * snout: from the side the animal had no mouth at all, and its teeth hung under its chin. The seam is
+ * a fan of level rays round the tip, each at the seam's height where it lands, then a run back along
+ * each side; the lips part a sliver at the front and meet along the sides. Rows come back resampled
+ * evenly by length (a tooth row reads them as uniform in `t`).
+ */
+export function runSeamBack(p: Phenotype, s: MouthSpec, line: MouthLine, surface: SkinSurface = 'kit'): MouthLine {
+  if (!reptileSeam(p, s)) return line;
+  const f = surfacePrims(p, surface);
+  const headUp = norm3(qRotateV(s.anchor.quat, [0, 1, 0]));
+  const fwd = qRotateV(s.anchor.quat, [0, 0, 1]);
+  const ahead = norm3([fwd[0] - headUp[0] * dot3(fwd, headUp), fwd[1] - headUp[1] * dot3(fwd, headUp), fwd[2] - headUp[2] * dot3(fwd, headUp)]);
+  const tip = s.anchor.pos;
+  const back = (q: readonly number[]) => -((q[0] - tip[0]) * ahead[0] + (q[1] - tip[1]) * ahead[1] + (q[2] - tip[2]) * ahead[2]);
+  // the head's centre line, by how far back it is (its spine nodes, front to back; held at either end)
+  const head = p.nodes.filter((nd) => nd.kind === 'spine' && nd.segment === s.anchor.segment).sort((a, b) => back(a.pos) - back(b.pos));
+  if (head.length === 0) return line;
+  const centreAt = (b: number): Vec3 => {
+    if (b <= back(head[0].pos)) return [...head[0].pos] as Vec3;
+    for (let i = 1; i < head.length; i++) {
+      const b0 = back(head[i - 1].pos), b1 = back(head[i].pos);
+      if (b <= b1) {
+        const u = b1 > b0 ? (b - b0) / (b1 - b0) : 0;
+        const a = head[i - 1].pos, c = head[i].pos;
+        return [a[0] + (c[0] - a[0]) * u, a[1] + (c[1] - a[1]) * u, a[2] + (c[2] - a[2]) * u];
+      }
+    }
+    return [...head[head.length - 1].pos] as Vec3;
+  };
+  const down: Vec3 = [-headUp[0], -headUp[1], -headUp[2]];
+  // the head's underside and top at a station, along its vertical
+  const depthAt = (b: number): [number, number] | null => {
+    const c = centreAt(b);
+    const top = rayToSurface(f, [], c, headUp), bottom = rayToSurface(f, [], c, down);
+    return top && bottom ? [dot3(bottom.p, headUp), dot3(top.p, headUp)] : null;
+  };
+  const seamAt = (b: number): number => {
+    const d = depthAt(b);
+    return d ? d[0] + JAW_LINE_UP * (d[1] - d[0]) : dot3(centreAt(b), headUp);
+  };
+  // where it hinges: past the eyes on this head (a stalked eye rides its own part, not the skull)
+  let hinge = 0;
+  for (const [a, b] of p.edges) {
+    const n = p.nodes[b];
+    if (n.terminal === 'eye' && p.nodes[a].kind === 'spine' && p.nodes[a].segment === s.anchor.segment) hinge = Math.max(hinge, back(n.pos) + HINGE_PAST_EYE * n.radius);
+  }
+  // the fan's rays leave from inside the tip, held within its depth (from outside, a ray finds the skin
+  // going in)
+  const o0: Vec3 = [tip[0] - ahead[0] * 0.2 * s.anchor.radius, tip[1] - ahead[1] * 0.2 * s.anchor.radius, tip[2] - ahead[2] * 0.2 * s.anchor.radius];
+  const tipDepth = depthAt(back(o0));
+  const within = (h: number) => (tipDepth ? Math.min(tipDepth[1] - 0.15 * (tipDepth[1] - tipDepth[0]), Math.max(tipDepth[0] + 0.15 * (tipDepth[1] - tipDepth[0]), h)) : h);
+  const cast = (o: Vec3, dir: Vec3): Vec3 => (rayToSurface(f, [], o, dir) ?? projectToSurface(f, [], [o[0] + dir[0] * s.r, o[1] + dir[1] * s.r, o[2] + dir[2] * s.r])).p;
+  const lift = (o: Vec3, h: number): Vec3 => {
+    const k = h - dot3(o, headUp);
+    return [o[0] + headUp[0] * k, o[1] + headUp[1] * k, o[2] + headUp[2] * k];
+  };
+  // (+t toward the mouth's own right, as the traced line runs)
+  const turn = dot3(cross3(headUp, ahead), s.right) < 0 ? -1 : 1;
+  // the upper lip: each ray levelled to the seam's height where it lands; the lower lip parts below it
+  // at the front by SEAM_PART (and meets it round the sides and along the run back)
+  const upperFan: Vec3[] = [];
+  const lowerFan: Vec3[] = [];
+  for (let i = 0; i < FAN_SAMPLES; i++) {
+    const t = -1 + (2 * i) / (FAN_SAMPLES - 1);
+    const yaw = (t * Math.PI) / 2;
+    const dir = rotateAbout(ahead, headUp, yaw * turn);
+    let h = seamAt(back(o0));
+    let q = cast(lift(o0, within(h)), dir);
+    for (let it = 0; it < 3; it++) {
+      const h2 = seamAt(back(q));
+      if (Math.abs(h2 - h) < 1e-3 * s.r) break;
+      h = h2;
+      q = cast(lift(o0, within(h)), dir);
+    }
+    upperFan.push(q);
+    const drop = SEAM_PART * s.r * Math.cos(yaw);
+    lowerFan.push(drop > 1e-4 * s.r ? cast(lift(o0, within(h - drop)), dir) : q);
+  }
+  // …and on back along each side to the hinge
+  const run = (from: Vec3, side: Vec3): Vec3[] => {
+    const b0 = back(from);
+    const out: Vec3[] = [];
+    if (hinge <= b0 + 0.05 * s.r) return out;
+    for (let k = 1; k <= RUN_BACK_SAMPLES; k++) {
+      const b = b0 + ((hinge - b0) * k) / RUN_BACK_SAMPLES;
+      out.push(cast(lift(centreAt(b), seamAt(b)), side));
+    }
+    return out;
+  };
+  const left = run(upperFan[0], rotateAbout(ahead, headUp, (-Math.PI / 2) * turn)).reverse();
+  const right = run(upperFan[FAN_SAMPLES - 1], rotateAbout(ahead, headUp, (Math.PI / 2) * turn));
+  const upperPts = [...left, ...upperFan, ...right];
+  const lowerPts = [...left, ...lowerFan, ...right];
+  const count = Math.max(upperPts.length, lowerPts.length);
+  // resampled evenly by length; each sample's normal from the field, its tangent and `away` from its
+  // neighbours (the upper lip's `away` up the face, the lower's down the chin)
+  const resample = (pts: Vec3[], up: boolean): MouthSample[] => {
+    const len = [0];
+    for (let i = 1; i < pts.length; i++) len.push(len[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1], pts[i][2] - pts[i - 1][2]));
+    const total = len[len.length - 1] || 1;
+    const out: MouthSample[] = [];
+    for (let i = 0, j = 0; i < count; i++) {
+      const at = (total * i) / (count - 1);
+      while (j < len.length - 2 && len[j + 1] < at) j++;
+      const u = len[j + 1] > len[j] ? Math.min(1, Math.max(0, (at - len[j]) / (len[j + 1] - len[j]))) : 0;
+      const a = pts[j], b = pts[j + 1];
+      const hit = projectToSurface(f, [], [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u]);
+      out.push({ t: -1 + (2 * i) / (count - 1), p: hit.p, n: hit.n, tan: [1, 0, 0], away: [0, 1, 0] });
+    }
+    for (let i = 0; i < out.length; i++) {
+      const a = out[Math.max(0, i - 1)].p, b = out[Math.min(out.length - 1, i + 1)].p;
+      out[i].tan = norm3([b[0] - a[0], b[1] - a[1], b[2] - a[2]]);
+      out[i].away = norm3(cross3(out[i].n, out[i].tan));
+      if ((dot3(out[i].away, s.up) < 0) === up) flipAway(out[i]);
+    }
+    return out;
+  };
+  const upper = resample(upperPts, true);
+  const lower = resample(lowerPts, false);
+  // the corners weld
+  lower[0] = { ...upper[0], away: lower[0].away };
+  lower[count - 1] = { ...upper[count - 1], away: lower[count - 1].away };
+  const cl = upper[0].p, cr = upper[count - 1].p;
+  return { ...line, upper, lower, width: Math.hypot(cr[0] - cl[0], cr[1] - cl[1], cr[2] - cl[2]) };
+}
+
+
 /**
  * A CLOSED ring on the true skin around the mouth's aim — the anchor for radial mouths (lamprey
  * funnels, suckers) and for socket collars (beak ceres, trunk roots). `spread` is the cone
@@ -416,6 +734,7 @@ export function buildMouthRing(
   carves: readonly Carve[] = [],
   samples = 20,
   surface: SkinSurface = 'kit',
+  rim?: { carves: readonly Carve[]; outside: number },
 ): MouthSample[] {
   const f = surfacePrims(p, surface);
   const origin: Vec3 = [
@@ -424,20 +743,49 @@ export function buildMouthRing(
     s.anchor.pos[2] - s.aim[2] * s.anchor.radius * 0.2,
   ];
   const out: MouthSample[] = [];
-  const cs = Math.cos(spread);
-  const ss = Math.sin(spread);
   for (let i = 0; i < samples; i++) {
     const t = -1 + (2 * i) / samples;
     const a = t * Math.PI;
     const ca = Math.cos(a), sa = Math.sin(a);
-    const dir = norm3([
-      s.aim[0] * cs + (s.right[0] * ca + s.up[0] * sa) * ss,
-      s.aim[1] * cs + (s.right[1] * ca + s.up[1] * sa) * ss,
-      s.aim[2] * cs + (s.right[2] * ca + s.up[2] * sa) * ss,
-    ]);
-    const hit =
-      rayToSurface(f, carves, origin, dir) ??
-      projectToSurface(f, carves, [origin[0] + dir[0] * s.r, origin[1] + dir[1] * s.r, origin[2] + dir[2] * s.r]);
+    const dirAt = (th: number): Vec3 => {
+      const cs = Math.cos(th), ss = Math.sin(th);
+      return norm3([
+        s.aim[0] * cs + (s.right[0] * ca + s.up[0] * sa) * ss,
+        s.aim[1] * cs + (s.right[1] * ca + s.up[1] * sa) * ss,
+        s.aim[2] * cs + (s.right[2] * ca + s.up[2] * sa) * ss,
+      ]);
+    };
+    const hitAt = (th: number) => {
+      const dir = dirAt(th);
+      return (
+        rayToSurface(f, carves, origin, dir) ??
+        projectToSurface(f, carves, [origin[0] + dir[0] * s.r, origin[1] + dir[1] * s.r, origin[2] + dir[2] * s.r])
+      );
+    };
+    // a ring round a cut cavity: each sample's cone angle searched to the cavity's RIM, `outside` past
+    // its wall (on the uncut skin), so a lip traced on it rolls over the cut edge — at one cone angle for
+    // every mouth, the lip lay out on the skin with bare cut rim between, or down in the hole
+    let th = spread;
+    if (rim && rim.carves.length) {
+      const past = (x: number): number => {
+        const q = hitAt(x).p;
+        let d = Infinity;
+        for (const c of rim.carves) d = Math.min(d, carveDist(c, q[0], q[1], q[2]));
+        return d - rim.outside;
+      };
+      let lo = RIM_MIN_SPREAD, hi = RIM_MAX_SPREAD;
+      if (past(lo) >= 0) th = lo;
+      else if (past(hi) < 0) th = hi;
+      else {
+        for (let k = 0; k < 14; k++) {
+          const mid = (lo + hi) / 2;
+          if (past(mid) < 0) lo = mid;
+          else hi = mid;
+        }
+        th = hi;
+      }
+    }
+    const hit = hitAt(th);
     out.push({ t, p: hit.p, n: hit.n, tan: [1, 0, 0], away: [0, 1, 0] });
   }
   // tangents wrap around the ring; `away` = in-surface, radially outward

@@ -94,7 +94,38 @@ function fbm(x: number, z: number, salt: number, octaves = 5): number {
 // --- the shaped heightfield ------------------------------------------------------------------------
 
 /** Ground height at (x, z), in bu. Negative = under water. */
+/**
+ * Height is SAMPLED: once onto a grid HEIGHT_STEP bu apart, a tile at a time as the ground is first
+ * asked for there, and read back bilinearly. Fractal noise and the river's course cost microseconds
+ * a sample, and the sim asks for each creature's ground several times a step: a third of a fast-
+ * forward was spent here. Sim, landscape and creatures all read this one surface.
+ */
+const HEIGHT_STEP = 0.5;
+const HEIGHT_TILE = 32; // cells along a tile's edge (its samples overlap the next tile's by one)
+const HEIGHT_TILES = new WeakMap<Terrain, Map<number, Float32Array>>();
+
 export function heightAt(t: Terrain, x: number, z: number): number {
+  const gx = x / HEIGHT_STEP, gz = z / HEIGHT_STEP;
+  const ix = Math.floor(gx), iz = Math.floor(gz);
+  const tx = Math.floor(ix / HEIGHT_TILE), tz = Math.floor(iz / HEIGHT_TILE);
+  let tiles = HEIGHT_TILES.get(t);
+  if (!tiles) HEIGHT_TILES.set(t, (tiles = new Map()));
+  const key = (tx + 4096) * 8192 + (tz + 4096);
+  let tile = tiles.get(key);
+  const W = HEIGHT_TILE + 1;
+  if (!tile) {
+    tile = new Float32Array(W * W);
+    for (let a = 0; a < W; a++)
+      for (let b = 0; b < W; b++) tile[a * W + b] = exactHeightAt(t, (tx * HEIGHT_TILE + a) * HEIGHT_STEP, (tz * HEIGHT_TILE + b) * HEIGHT_STEP);
+    tiles.set(key, tile);
+  }
+  const i = (ix - tx * HEIGHT_TILE) * W + (iz - tz * HEIGHT_TILE);
+  const fx = gx - ix, fz = gz - iz;
+  return (tile[i] * (1 - fz) + tile[i + 1] * fz) * (1 - fx) + (tile[i + W] * (1 - fz) + tile[i + W + 1] * fz) * fx;
+}
+
+/** The height itself, from the noise and the river (what the sampled surface is made of). */
+export function exactHeightAt(t: Terrain, x: number, z: number): number {
   const s = 1 / 38; // feature scale: rolling hills a few dozen bu across
   const n = fbm(x * s, z * s, t.hashA); // 0..1
   // the basin: low toward the lake centre, rising to highlands at the rim

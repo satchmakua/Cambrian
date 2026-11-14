@@ -49,7 +49,7 @@ export function Mouth({
   }
   if (v === 'beak') return <BeakMouth {...shared} />;
   if (v === 'mandibles') return <MandiblesMouth {...shared} />;
-  if (v === 'sucker' || v === 'lamprey') return <RingMouth {...shared} />;
+  if (v === 'sucker' || v === 'lamprey') return <RingMouth {...shared} skin={skin} />;
   if (v === 'baleen') return <BaleenMouth {...shared} />;
   // proboscis · trunk
   return <ProbeMouth {...shared} />;

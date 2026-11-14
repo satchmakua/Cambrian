@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   createWorld, release, stepWorld, worldHash, bodyOf, liveCount, preysOn, STEP, DAY_LENGTH, MAX_POP, AIRBORNE, climate, seasonOf, YEAR_DAYS, COURT_TIME,
+  footprintGap,
 } from '../../src/sim/world';
 import { traitsOf } from '../../src/sim/traits';
 import { saveWorld, loadWorld } from '../../src/sim/persist';
@@ -273,10 +274,69 @@ describe('a living balance', () => {
     kinds.forEach(([kind, n], i) => release(w, genomeOfMorphotype((seed * 97 + i * 13) >>> 0, kind), n, undefined, kind));
     run(w, DAY_LENGTH * YEAR_DAYS);
     const alive = new Set(w.creatures.map((c) => w.species.find((s) => s.id === c.species)!.name.split(' ')[0]));
-    expect(alive.size).toBeGreaterThanOrEqual(5);
+    // (most of its seven kinds: four or more — over fourteen valleys a year ends with four to seven,
+    // 5.8 on average, which valley holding four being chance)
+    expect(alive.size).toBeGreaterThanOrEqual(4);
     // and the hunters are still hunting
     expect(w.creatures.some((c) => c.traits.diet === 'carnivore')).toBe(true);
   }, 60000);
+});
+
+describe('room', () => {
+  // released on one spot, or drawn together by the herd, animals stood inside one another: two
+  // crocodiles crossed like scissors, centipedes ran through centipedes
+  it('bodies keep their room: herds released on one spot stand apart, not inside one another', () => {
+    const w = createWorld(3);
+    for (const k of ['crocodilian', 'arthro-alien', 'ungulate', 'rodent', 'ursid']) release(w, g(k), 6);
+    run(w, 30);
+    // (among the animals standing about — grazing, resting, watching: one walking past another is
+    // eased aside more slowly than it walks, and passes through it for a moment)
+    const live = w.creatures.filter((c) => c.alive && c.alt <= AIRBORNE && c.speed < 1);
+    let deep = 0;
+    for (let i = 0; i < live.length; i++)
+      for (let j = i + 1; j < live.length; j++) {
+        const a = live[i], b = live[j];
+        if ((a.traits.habitat === 'water') !== (b.traits.habitat === 'water')) continue;
+        if (footprintGap(a, b) < -0.25 * (a.traits.radius + b.traits.radius)) deep++;
+      }
+    expect(deep).toBeLessThanOrEqual(1);
+  });
+
+  it('the lighter gives way: a mouse pressed against a bear is the one that moves', () => {
+    const w = createWorld(3);
+    const [bear] = release(w, g('ursid'), 1);
+    const [mouse] = release(w, g('rodent'), 1);
+    mouse.x = bear.x + bear.traits.radius * 0.5;
+    mouse.z = bear.z;
+    for (const c of [bear, mouse]) {
+      c.action = 'sleep';
+      c.fatigue = 1;
+      c.decideIn = 100;
+      c.speed = 0;
+    }
+    const b0 = { x: bear.x, z: bear.z }, m0 = { x: mouse.x, z: mouse.z };
+    const gap0 = footprintGap(bear, mouse);
+    expect(gap0).toBeLessThan(0);
+    run(w, 1);
+    const bearMoved = Math.hypot(bear.x - b0.x, bear.z - b0.z);
+    const mouseMoved = Math.hypot(mouse.x - m0.x, mouse.z - m0.z);
+    expect(footprintGap(bear, mouse)).toBeGreaterThan(gap0 * 0.2); // mostly eased apart in a second
+    expect(mouseMoved).toBeGreaterThan(bearMoved * 5);
+  });
+
+  it('a long hunter still reaches its prey: the pair at the kill are let be', () => {
+    // a snake's footprint runs metres down its back: were it kept off its prey like any neighbour,
+    // its jaws (measured from its middle) would never close
+    const w = createWorld(3);
+    const [snake] = release(w, g('serpent'), 1);
+    const prey = release(w, g('rodent'), 5, { x: snake.x, z: snake.z });
+    expect(preysOn(snake, prey[0])).toBe(true);
+    snake.energy = snake.traits.maxEnergy * 0.3;
+    snake.fatigue = 0;
+    for (const p of prey) p.fatigue = 0;
+    run(w, 150);
+    expect(w.tally.kills).toBeGreaterThan(0);
+  });
 });
 
 describe('nests and eggs', () => {

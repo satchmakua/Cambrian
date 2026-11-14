@@ -136,6 +136,11 @@ export interface PartGene {
   curl: [number, number];       // per-segment bend (joints)
   pair: boolean;                // mirror across X=0
   terminal: Terminal;           // tip cap (claw/talon/pincer/hoof/foot/fin/none/…)
+  // (as built, optional — absent on every older genome, which grows as it always did:)
+  radialPair?: boolean;         // on a RADIAL body, one mirrored pair either side of the front instead
+                                //   of one per sector (an octopus's two eyes, not a ring of eight)
+  web?: number;                 // a web of skin joining this ring of parts out to this share of their
+                                //   length (0..0.6; an octopus's arms) — a flat panel between each and the next
 }
 
 export type PartKind =
@@ -166,7 +171,7 @@ export interface MouthGene {
 export interface TailGene { length: number; style: TailStyle; thickness: number; curl: number; }
 
 export interface Covering {
-  type: CoveringType;           // 'skin'|'scales'|'fur'|'feathers'|'chitin'|'slime'|'plates'
+  type: CoveringType;           // 'skin'|'scales'|'fur'|'feathers'|'chitin'|'slime'|'plates'|'crystal'
   pattern: PatternType;         // 'plain'|'stripes'|'spots'|'bands'|'ocelli'|'reticulate'|'mottle'|'gradient'
   patternScale: number; patternContrast: number;
   sheen: number;                // 0 matte … 1 wet/iridescent
@@ -221,7 +226,7 @@ strong.
 | **Amorphous (slime)** | blobby, few rigid parts | 0–2 vestigial | many scattered eyes | pseudopods | slime/translucent · gradient | ooze/pulse |
 | **Many-eyed horror** | radial-ish | radial arms | eye clusters, mouths in odd places | many eyes, spines | skin · ocelli/glowing | writhe |
 | **Arthro-alien** | wrong-arthropod | 10+ legs, odd posture | vertical eyes, multi-mandible | spines, plates | chitin · iridescent | ripple-scuttle |
-| **Crystalline** | angular, segmented | rigid limbs | facet "head", glowing core | spikes, plates | plates/metallic · gradient | jitter/hover |
+| **Crystalline** | a four-legged beast of cut stone | rigid limbs | blocky head, glowing eyes | a row of shard clusters down the back, shard horns | crystal · plain/gradient | walk |
 
 *(20 familiar-leaning + 8 uncanny here; ship ≥ 24, expand freely — they're cheap data.)*
 
@@ -256,7 +261,7 @@ reads as a cat at any absolute size.
 | | `spines` | none ↔ full dorsal ridge |
 | | `frill` | none ↔ big (collar/sail/fan) |
 | | `fins` | none ↔ full set |
-| **Surface** | `covering` | skin/scales/fur/feathers/chitin/slime/plates |
+| **Surface** | `covering` | skin/scales/fur/feathers/chitin/slime/plates/crystal |
 | | `pattern` | plain/stripes/spots/bands/ocelli/reticulate/mottle |
 | | `sheen` | matte ↔ wet/iridescent |
 | **Demeanor** | `predator` | prey-cues (side eyes, no teeth/claws, herbivore mouth) ↔ predator-cues (front eyes, fangs, claws, maw) |
@@ -363,16 +368,33 @@ textures are allocated; fall back to a generated tiling `DataTexture` where a de
 
 | Covering | Height field | Reads as |
 |---|---|---|
-| `scales` | voronoi cells, each a raised lens, row-offset | reptile/fish scales |
-| `fur` | high-freq directional fbm streaks | mammal pelt |
-| `feathers` | overlapping rounded rows (shingles) | bird plumage |
-| `chitin` | large smooth plates + hard creases | insect/crab shell |
+| `scales` | small overlapping scallops shingled toward the tail (`scallops`) | reptile/fish scales |
+| `fur` | high-freq directional fbm streaks (+ shell strands up close) | mammal pelt |
+| `feathers` | larger overlapping scallops, each with a fine shaft (`scallops`) | bird plumage |
+| `chitin` | a smooth lacquered cuticle, fine punctures | insect/crab shell |
 | `plates` | big voronoi scutes with deep gaps | croc/turtle/armor |
-| `slime` | low bump + high `sheen` + slight transmission | wet alien |
+| `slime` | low bump + high `sheen` | wet alien |
+| `crystal` | flat facets meeting in sharp edges (`facets`, cut twice) | cut stone |
 | `skin` | very low mottle bump | generic |
 
 Materials per covering: roughness/metalness presets (fur matte, scales semi-gloss, chitin
-glossy, slime wet, plates hard). All deterministic from `(seed, covering)`.
+glossy, slime wet, plates hard, crystal polished under a clear coat that follows its facets). All
+deterministic from `(seed, covering)`.
+
+**How the imbricated coats are built.** A feather or a scale is not a cell with borders (that is a
+crazed glaze). Each cell of a staggered grid roots one scallop — a ball whose height ramps from its
+root to its tip along the *lay* — and the highest scallop over a point shows, so every tip lies over
+the roots behind it and ends in a round edge. The lay is a direction field on the skin: toward the
+tail and a little down, projected flat onto the surface from the body's rest normal.
+
+**How the facets are built.** Space is divided into tetrahedra; each corner takes a height and the
+height inside a tetrahedron is the flat blend of its corners — flat across a face, continuous
+everywhere, creased where faces meet. Two such grids at different angles and sizes are overlaid and
+the higher shows, which breaks the regular net into faces of every shape.
+
+**The slope is per pixel.** The bump reads the relief's height one pixel across and one down,
+evaluated at this pixel (`fineRelief`; the GPU's own derivative is one value per 2×2 pixels and
+turned fine reliefs into a mosaic of squares).
 
 ---
 

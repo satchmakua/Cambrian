@@ -126,7 +126,7 @@ describe('beak mouth (mouth overhaul)', () => {
     }
   });
 
-  it('the bill runs out mostly ahead of the face (not down at the ground), under 1.7r, with an accelerating 0.25r–0.45r hook', () => {
+  it('the bill runs out mostly ahead of the face (not down at the ground), under 1.7r, with an accelerating 0.25r–0.6r hook (0.95r hooked)', () => {
     let checked = 0;
     for (const p of [grow(defaultGenome()), grow(randomGenome(2)), grow(randomGenome(7))]) {
       const built = beakOn(p);
@@ -145,7 +145,9 @@ describe('beak mouth (mouth overhaul)', () => {
       const tip = built.upperPath[built.upperPath.length - 1];
       expect(dot3(sub3(tip, seat.p), dir)).toBeGreaterThan(0.5 * r);
       expect(built.hook).toBeGreaterThanOrEqual(0.25 * r - 1e-9);
-      expect(built.hook).toBeLessThanOrEqual(0.45 * r + 1e-9);
+      // (a hooked bill — a hawk's — drops by more than half its depth: at 0.6r its underside ran near
+      // level to the point, a straight cone)
+      expect(built.hook).toBeLessThanOrEqual((built.hooked ? 0.95 : 0.6) * r + 1e-9);
       // acceleration: half-way along the spine the drop is still well under half the full hook
       const dropAt = (k: number): number => -dot3(sub3(built.upperPath[k], built.upperPath[0]), up);
       expect(dropAt(8)).toBeCloseTo(built.hook, 6);
@@ -156,14 +158,15 @@ describe('beak mouth (mouth overhaul)', () => {
     expect(checked).toBeGreaterThan(1);
   });
 
-  it('the lower mandible is a 0.75-scale counter-piece resting just open below the upper', () => {
+  it('the lower mandible is a 0.75-scale counter-piece resting just open below the upper (0.64 under a hook)', () => {
     const p = grow(defaultGenome());
     const built = beakOn(p);
     expect(built).not.toBeNull();
     if (!built) return;
     expect(built.upperPath.length).toBe(9);
     expect(built.lowerPath.length).toBe(9);
-    expect(built.lowerLen).toBeCloseTo(0.75 * built.upperLen, 9);
+    // (under a hooked bill it is shorter, so the hook overhangs it)
+    expect(built.lowerLen).toBeCloseTo((built.hooked ? 0.64 : 0.75) * built.upperLen, 9);
     const up = built.up;
     // roots below the upper's, spine pitched a hair down off the bill axis — closed, but two parts
     expect(dot3(sub3(built.lowerPath[0], built.upperPath[0]), up)).toBeLessThan(0);
@@ -185,7 +188,143 @@ describe('beak mouth (mouth overhaul)', () => {
     expect(hi).not.toBeNull();
     if (!lo || !hi) return;
     expect(hi.upperLen - lo.upperLen).toBeGreaterThan(0.2 * lo.r); // slenderness: longer up-band
-    expect(hi.hook).toBeGreaterThan(lo.hook); // and more hooked
+    // …and the hook goes with the build: the short stout bill (a hawk's, a parrot's) is the deeply
+    // hooked one, the long slim one (a dove's, a wader's) near straight
+    expect(lo.hook).toBeGreaterThan(1.5 * hi.hook);
+    expect(lo.hook / lo.r).toBeGreaterThan(0.4);
+    expect(hi.hook / hi.r).toBeLessThan(0.3);
+  });
+
+  it('a turtle’s beak lies flat across its jaws, at its mouth — not on edge down the middle of its face', () => {
+    // (built like a bird's — a tall narrow blade, ridden up toward the brow — but too short to read as
+    // a bill, it was a black slot between the eyes)
+    for (let seed = 11; seed <= 16; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'chelonian'));
+      const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const built = buildBeak(p, idx, [], false, 'hybrid')!;
+      expect(built, `#${seed}`).not.toBeNull();
+      built.upper.computeBoundingBox();
+      const b = built.upper.boundingBox!;
+      const wide = b.max.x - b.min.x;
+      const tall = b.max.y - b.min.y;
+      expect(wide / tall, `#${seed} wide and low`).toBeGreaterThan(1.5);
+      // rooted at the mouth: its top no higher above the seat than the beak's own size
+      expect(b.max.y - built.seat.p[1], `#${seed} at the mouth`).toBeLessThan(0.75 * built.r);
+    }
+    // a bird's stays a blade on edge
+    const bird = grow(genomeOfMorphotype(12, 'bird'));
+    const bb = buildBeak(bird, bird.nodes.findIndex((n) => n.terminal === 'mouth'), [], false, 'hybrid')!;
+    bb.upper.computeBoundingBox();
+    expect(bb.upper.boundingBox!.max.x - bb.upper.boundingBox!.min.x).toBeLessThan(bb.upper.boundingBox!.max.y - bb.upper.boundingBox!.min.y);
+  });
+
+  it("an ostrich's bill is broad and flat, round at its tip — not a songbird's slim blade, a thorn on its head", () => {
+    // (the same tall narrow blade a songbird wears, on a flightless bird's small round head)
+    const shape = (id: string, seed: number) => {
+      const p = grow(genomeOfMorphotype(seed, id));
+      const b = buildBeak(p, p.nodes.findIndex((n) => n.terminal === 'mouth'), [], false, 'hybrid')!;
+      const pos = b.upper.getAttribute('position');
+      const root = b.upperPath[0];
+      let w0 = Infinity, w1 = -Infinity, d0 = Infinity, d1 = -Infinity;
+      for (let i = 0; i < pos.count; i++) {
+        const v: Vec3 = [pos.getX(i) - root[0], pos.getY(i) - root[1], pos.getZ(i) - root[2]];
+        const along = dot3(v, b.dir);
+        if (along < 0.35 * b.upperLen || along > 0.6 * b.upperLen) continue;
+        const side = dot3(v, b.spec.right), up = dot3(v, b.up);
+        w0 = Math.min(w0, side);
+        w1 = Math.max(w1, side);
+        d0 = Math.min(d0, up);
+        d1 = Math.max(d1, up);
+      }
+      return (w1 - w0) / (d1 - d0);
+    };
+    for (let seed = 1; seed <= 8; seed++) {
+      expect(shape('ratite', seed), `ratite #${seed} broad`).toBeGreaterThan(1.6);
+      expect(shape('bird', seed), `bird #${seed} a blade`).toBeLessThan(1);
+    }
+  });
+
+  it("an ostrich's bill is as long as its head is wide, and shut: one flat bill, not two puffy pills", () => {
+    // (a songbird's length, half of it in the face: two small cream lobes, the lower pitched open under the
+    // upper and as deep as it — a pair of lips on a round head)
+    for (let seed = 1; seed <= 8; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'ratite'));
+      const mi = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const b = buildBeak(p, mi, [], false, 'hybrid')!;
+      const spine = p.nodes.filter((n) => n.kind === 'spine');
+      const last = Math.max(...spine.map((n) => n.segment ?? 0));
+      const skull = spine.find((n) => n.segment === last)!;
+      // the bill from where it leaves the skin to its tip
+      const f = buildFieldPrims(p, 'hybrid');
+      f.k = 0.34 * f.meanR;
+      const o = p.nodes[mi].pos;
+      const path = b.upperPath;
+      let out = path.length - 1;
+      for (let i = 0; i < path.length; i++) if (fieldAt(f, path[i][0] + o[0], path[i][1] + o[1], path[i][2] + o[2]) > 0) { out = i; break; }
+      const visible = dot3(sub3(path[path.length - 1], path[out]), b.dir);
+      expect(visible / (2 * skull.radius), `#${seed} long`).toBeGreaterThan(0.6);
+      // shut: down its length, the lower mandible lies under the upper with no daylight between them
+      for (let i = 1; i < b.lowerPath.length - 1; i++) {
+        const u = i / (b.lowerPath.length - 1);
+        const j = Math.round(u * (b.lowerLen / b.upperLen) * (path.length - 1));
+        const gap = dot3(sub3(path[j], b.lowerPath[i]), b.up);
+        expect(gap, `#${seed} gape at ${u.toFixed(2)}`).toBeLessThan(0.5 * b.r);
+      }
+    }
+  });
+
+  it('a bird of prey wears a hawk’s bill and a songbird a slim one, whatever the seed', () => {
+    // (the hook was half a coin toss: the two plans drew from the same bills and looked alike)
+    for (let seed = 1; seed <= 12; seed++) {
+      const style = (id: string) => {
+        let seg = genomeOfMorphotype(seed, id).body;
+        while (seg.child) seg = seg.child;
+        return seg.appendages.find((a) => a.terminal === 'mouth')!.style;
+      };
+      expect(style('raptor'), `raptor #${seed}`).toBeLessThan(0.29);
+      expect(style('bird'), `bird #${seed}`).toBeGreaterThan(0.3);
+      expect(style('bird'), `bird #${seed}`).toBeLessThan(0.375);
+      expect(style('raptor'), `raptor #${seed}`).toBeGreaterThanOrEqual(0.25);
+    }
+  });
+
+  it("a hawk's bill is solid dark horn with a band of yellow cere — not a thin pale blade", () => {
+    // (a third as wide as deep and a pale blue-grey, it was a silver blade from the side, a needle from the
+    // front, its cere a sliver)
+    for (const seed of [1, 2, 23]) {
+      const p = grow(genomeOfMorphotype(seed, 'raptor'));
+      const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const b = buildBeak(p, idx, [], false)!;
+      expect(b.hooked, `#${seed}`).toBe(true);
+      // its width against its depth, a third of the way along: the upper mandible's ring of vertices there
+      const pos = b.upper.getAttribute('position');
+      const right = b.spec.right, up = b.up, dir = b.dir;
+      const root = b.upperPath[0];
+      let wMax = 0, hMax = 0;
+      for (let v = 0; v < pos.count; v++) {
+        const d = [pos.getX(v) - root[0], pos.getY(v) - root[1], pos.getZ(v) - root[2]];
+        const u = (d[0] * dir[0] + d[1] * dir[1] + d[2] * dir[2]) / b.upperLen;
+        if (Math.abs(u - 0.33) > 0.04) continue;
+        wMax = Math.max(wMax, Math.abs(d[0] * right[0] + d[1] * right[1] + d[2] * right[2]));
+      }
+      for (let v = 0; v < pos.count; v++) {
+        const d = [pos.getX(v) - root[0], pos.getY(v) - root[1], pos.getZ(v) - root[2]];
+        const u = (d[0] * dir[0] + d[1] * dir[1] + d[2] * dir[2]) / b.upperLen;
+        if (Math.abs(u - 0.33) > 0.04) continue;
+        hMax = Math.max(hMax, Math.abs(d[0] * up[0] + d[1] * up[1] + d[2] * up[2] - (b.upperPath[3][0] - root[0]) * up[0] - (b.upperPath[3][1] - root[1]) * up[1] - (b.upperPath[3][2] - root[2]) * up[2]));
+      }
+      expect(wMax / hMax, `#${seed} solid`).toBeGreaterThan(0.45);
+      // painted dark: its point near black, and a yellow band where it leaves the face
+      const col = b.upper.getAttribute('color');
+      let darkest = 3, yellow = 0;
+      for (let v = 0; v < col.count; v++) {
+        const r = col.getX(v), g = col.getY(v), bl = col.getZ(v);
+        darkest = Math.min(darkest, r + g + bl);
+        if (r > 0.6 && g > 0.4 && bl < 0.3) yellow++;
+      }
+      expect(darkest, `#${seed} dark horn`).toBeLessThan(0.45);
+      expect(yellow / col.count, `#${seed} cere`).toBeGreaterThan(0.1);
+    }
   });
 
   it('recessed sinks the interior wedge into the cavity; the capsule kit keeps it a hair proud', () => {
@@ -225,6 +364,62 @@ describe('beak mouth (mouth overhaul)', () => {
     }
   });
 
+  it("a hawk's bill is short, deep-hooked and two-toned; a songbird's and an ostrich's are not", () => {
+    // (hooked only at its very tip and pale all over, a hawk's bill was a candy-corn wedge — a pigeon's)
+    const bill = (seed: number, id: string) => {
+      const p = grow(genomeOfMorphotype(seed, id));
+      return buildBeak(p, p.nodes.findIndex((n) => n.terminal === 'mouth'), [], false)!;
+    };
+    for (let seed = 1; seed <= 8; seed++) {
+      const hawk = bill(seed, 'raptor');
+      expect(hawk.hooked, `raptor #${seed}`).toBe(true);
+      expect(hawk.hook, `raptor #${seed}`).toBeGreaterThan(0.48 * hawk.r);
+      // the hook turns the tip down past the lower mandible: the upper mandible's point lies below the
+      // lower's, and below its own root by more than the root's half-depth
+      const tipU = hawk.upperPath[hawk.upperPath.length - 1];
+      const tipL = hawk.lowerPath[hawk.lowerPath.length - 1];
+      const upOf = (v: number[]) => v[0] * hawk.up[0] + v[1] * hawk.up[1] + v[2] * hawk.up[2];
+      expect(upOf(tipU), `raptor #${seed} overhangs`).toBeLessThan(upOf(tipL));
+      expect(upOf(hawk.upperPath[0]) - upOf(tipU), `raptor #${seed} hooks down`).toBeGreaterThan(0.6 * hawk.r);
+      // painted: yellow at the face, darker toward the hook
+      const col = hawk.upper.getAttribute('color');
+      expect(col, `raptor #${seed}`).toBeTruthy();
+      for (const id of ['bird', 'ratite']) {
+        const b = bill(seed, id);
+        expect(b.hooked, `${id} #${seed}`).toBe(false);
+        expect(b.hook, `${id} #${seed}`).toBeLessThan(0.48 * b.r);
+      }
+    }
+  });
+
+  it("a bill's buried root stays buried: no ring still inside the head pokes out through the brow", () => {
+    // (a tall blade-bill rooted up the face stood its root's top edge out above a sloping brow — a
+    // plate fixed upright on the forehead)
+    for (const id of ['raptor', 'bird']) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
+        const b = buildBeak(p, idx, [], false)!;
+        const f = buildFieldPrims(p, 'body');
+        const o = p.nodes[idx].pos;
+        const pos = b.upper.getAttribute('position');
+        let buried = 0;
+        for (let i = 0; i < b.upperPath.length; i++) {
+          const s = b.upperPath[i];
+          // (a ring whose spine point is within a hair of the skin is the bill's base, not its root)
+          if (fieldAt(f, s[0] + o[0], s[1] + o[1], s[2] + o[2]) > -0.02 * b.r) break;
+          buried++;
+          for (let j = 0; j < 10; j++) {
+            const k = i * 10 + j;
+            const d = fieldAt(f, pos.getX(k) + o[0], pos.getY(k) + o[1], pos.getZ(k) + o[2]);
+            expect(d, `${id} #${seed} ring ${i}`).toBeLessThan(0.01 * b.r);
+          }
+        }
+        expect(buried, `${id} #${seed}`).toBeGreaterThan(0); // the bill roots inside the head
+      }
+    }
+  });
+
   it("a turtle wears a short horny beak under a shell of its own, its soft parts leathery", () => {
     // (a bird's bill on a turtle hung off its chin like a thorn; plates everywhere left no shell edge)
     for (let seed = 1; seed <= 6; seed++) {
@@ -233,8 +428,12 @@ describe('beak mouth (mouth overhaul)', () => {
       const p = grow(g);
       const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
       const b = buildBeak(p, idx, [], false)!;
-      expect(b.upperLen, `#${seed}`).toBeLessThan(0.65 * b.r);
-      expect(b.hook, `#${seed}`).toBeLessThan(0.2 * b.r);
+      // short and blunt — shorter than any bird's bill (1.1 of the mouth's size and more), a little
+      // hooked — but there to be seen: at half the mouth's size it was sunk in the snout
+      expect(b.upperLen, `#${seed}`).toBeLessThan(1.0 * b.r);
+      expect(b.upperLen, `#${seed}`).toBeGreaterThan(0.75 * b.r);
+      expect(b.hook, `#${seed}`).toBeLessThan(0.3 * b.r);
+      expect(b.hook, `#${seed}`).toBeGreaterThan(0.18 * b.r);
     }
   });
 });

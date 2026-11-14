@@ -158,44 +158,93 @@ function checkSetup(v: unknown): GameSetup {
   };
 }
 
+/** A lineage id is the breeder's counter ("0", "1", …): nothing else is one — so a name like
+ *  "constructor" or "__proto__" can never be looked up in the node map as if it were a creature. */
+const NODE_ID = /^\d{1,15}$/;
+/** A menagerie cell is "column:row". */
+const CELL_KEY = /^\d{1,2}:\d{1,2}$/;
+const GENERATION_MAX = 1e9;
+/** The highest number a lineage read from a file may be counting from. No game the breeder makes
+ *  comes within a millionth of it; a file past it has had its numbering tampered with or damaged. */
+const COUNTER_MAX = 1e9;
+
+/** The same family tree numbered from 0, in the order its creatures were made (their ids' order). */
+function renumbered(nodes: LineageNodes, currentId: string): { nodes: LineageNodes; currentId: string } {
+  const order = Object.keys(nodes).sort((a, b) => Number(a) - Number(b) || (a < b ? -1 : 1));
+  const to = new Map(order.map((id, i) => [id, String(i)]));
+  const out: LineageNodes = {};
+  for (const id of order) {
+    const n = nodes[id];
+    const mine = to.get(id)!;
+    out[mine] = { ...n, id: mine, parentId: n.parentId === null ? null : to.get(n.parentId)! };
+  }
+  return { nodes: out, currentId: to.get(currentId)! };
+}
+
 function checkBreeder(v: unknown): BreederSave {
   if (!isObj(v) || !isObj(v.nodes)) return fail('This save has no lineage in it.');
   const nodes: LineageNodes = {};
   let top = -1;
   for (const [id, raw] of Object.entries(v.nodes)) {
-    if (!isObj(raw)) return fail('This save is damaged (a creature in its lineage is unreadable).');
+    if (!NODE_ID.test(id) || !isObj(raw)) return fail('This save is damaged (a creature in its lineage is unreadable).');
     let genome: Genome;
     try {
       genome = checkGenome(raw.genome);
     } catch (e) {
       return fail(`This save is damaged (creature ${id}: ${e instanceof Error ? e.message : 'unreadable'}).`);
     }
-    const parentId = typeof raw.parentId === 'string' ? raw.parentId : null;
-    nodes[id] = { id, genome, parentId, generation: finite(raw.generation) ? Math.max(0, Math.floor(raw.generation)) : 0 };
-    if (/^\d+$/.test(id)) top = Math.max(top, Number(id));
+    // (a parent is another creature's id or nothing at all: anything else — a number, say — is damage,
+    // not a second founder)
+    const parent = raw.parentId ?? null;
+    if (parent !== null && !(typeof parent === 'string' && NODE_ID.test(parent))) return fail('This save is damaged (a creature points at a parent that is not there).');
+    nodes[id] = { id, genome, parentId: parent, generation: finite(raw.generation) ? Math.min(GENERATION_MAX, Math.max(0, Math.floor(raw.generation))) : 0 };
+    top = Math.max(top, Number(id));
   }
   const ids = Object.keys(nodes);
   if (ids.length === 0) return fail('This save has no lineage in it.');
   for (const n of Object.values(nodes)) {
     if (n.parentId !== null && !nodes[n.parentId]) return fail('This save is damaged (a creature points at a parent that is not there).');
   }
-  if (typeof v.currentId !== 'string' || !nodes[v.currentId]) return fail('This save is damaged (it does not say which creature was being bred).');
+  // One family tree: a single founder, and every creature descended from it. (The breeder draws the
+  // tree from its founder; a second founder or a ring of parents would be creatures it cannot place.)
+  const founders = ids.filter((id) => nodes[id].parentId === null);
+  if (founders.length !== 1) return fail('This save is damaged (its lineage is not one family tree).');
+  const placed = new Set<string>(founders);
+  for (const id of ids) {
+    const trail = new Set<string>();
+    let cur: string | null = id;
+    while (cur !== null && !placed.has(cur)) {
+      if (trail.has(cur)) return fail('This save is damaged (its lineage is not one family tree).');
+      trail.add(cur);
+      cur = nodes[cur].parentId;
+    }
+    trail.forEach((t) => placed.add(t));
+  }
+  if (typeof v.currentId !== 'string' || !NODE_ID.test(v.currentId) || !nodes[v.currentId]) return fail('This save is damaged (it does not say which creature was being bred).');
   const mode = v.symmetryMode === 'bilateral' || v.symmetryMode === 'radial' ? v.symmetryMode : 'auto';
   // the menagerie is a collection, not the game: a cell that will not read is left out, not fatal
   const menagerie: Menagerie = {};
   if (isObj(v.menagerie)) {
     for (const [key, raw] of Object.entries(v.menagerie)) {
-      if (!isObj(raw) || !Array.isArray(raw.desc) || !raw.desc.every(finite)) continue;
+      if (!CELL_KEY.test(key) || !isObj(raw) || !Array.isArray(raw.desc) || raw.desc.length > 32 || !raw.desc.every(finite)) continue;
       try {
-        menagerie[key] = { genome: checkGenome(raw.genome), desc: raw.desc as number[], score: finite(raw.score) ? raw.score : 0, nearest: typeof raw.nearest === 'string' ? raw.nearest : '' };
+        menagerie[key] = { genome: checkGenome(raw.genome), desc: raw.desc as number[], score: finite(raw.score) ? raw.score : 0, nearest: typeof raw.nearest === 'string' ? raw.nearest.slice(0, 24) : '' };
       } catch {
         /* skip the cell */
       }
     }
   }
-  // (the next id must clear every id in use, whatever the file claims)
-  const counter = Math.max(finite(v.counter) ? Math.floor(v.counter) : 0, top + 1);
-  return { nodes, currentId: v.currentId, counter, symmetryMode: mode, menagerie };
+  // The next id must clear every id in use, whatever the file claims. And it must stay a number ids
+  // can go on being minted from: an id may have 15 digits, so a lineage counting from up near that —
+  // by its counter or by an id — was one whose every creature bred after loading would be refused by
+  // this very check: the save written, listed, and never to open again. A counter that has run away
+  // is ignored; ids that have are renumbered from 0 (any ceiling on them would only move that edge).
+  const claimed = Number.isSafeInteger(v.counter) && (v.counter as number) >= 0 && (v.counter as number) <= COUNTER_MAX ? (v.counter as number) : 0;
+  if (top + 1 > COUNTER_MAX) {
+    const tidy = renumbered(nodes, v.currentId);
+    return { nodes: tidy.nodes, currentId: tidy.currentId, counter: ids.length, symmetryMode: mode, menagerie };
+  }
+  return { nodes, currentId: v.currentId, counter: Math.max(claimed, top + 1), symmetryMode: mode, menagerie };
 }
 
 function checkSummary(v: unknown, breeder: BreederSave): SaveSummary {

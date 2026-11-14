@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './ui/App';
+import { ScreenBoundary } from './ui/ScreenBoundary';
 import { useStore, type SkinMode } from './ui/store';
 import type { SymmetryMode } from './engine/random';
 import { decodeGenome } from './engine/share';
@@ -45,6 +46,8 @@ if (!root) throw new Error('#app mount point not found');
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <ScreenBoundary>
+      <App />
+    </ScreenBoundary>
   </StrictMode>,
 );

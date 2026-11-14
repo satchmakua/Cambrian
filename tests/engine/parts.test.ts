@@ -92,8 +92,21 @@ describe('part vocabulary (M23 — §6)', () => {
     expect(dominantMouth('cephalopod')).toBe('beak');
     expect(dominantMouth('shark')).toBe('fanged');
     expect(morphoReachesMouth('horror', 'lamprey')).toBe(true);
-    // the new styles (proboscis / trunk) stay reachable via the clashing chimera + the wild tail
-    expect(morphoReachesMouth('chimera', 'trunk', 80)).toBe(true);
+    // the tube mouths (proboscis / trunk) stay reachable through the wild tail of the sampler — no
+    // library animal wears one now (a chimera's was a ring and a stick on the side of its head), so
+    // a roll of the dice is where they come from, and breeding where they go
+    const seen = new Set<string>();
+    for (let s = 0; s < 1500 && !(seen.has('trunk') && seen.has('proboscis')); s++) {
+      const m = grow(randomGenome(s)).nodes.find((x) => x.terminal === 'mouth');
+      if (m) seen.add(mouthVariant(m.part?.style ?? 0));
+    }
+    expect(seen.has('trunk')).toBe(true);
+    expect(seen.has('proboscis')).toBe(true);
+    // …and a chimera's own mouth is a jaw, a beak or a set of mandibles
+    for (let s = 0; s < 40; s++) {
+      const m = grow(genomeOfMorphotype(s * 13 + 3, 'chimera')).nodes.find((x) => x.terminal === 'mouth')!;
+      expect(['herbivore', 'maw', 'fanged', 'beak', 'mandibles']).toContain(mouthVariant(m.part?.style ?? 0));
+    }
   });
 
   it('mutation can reach the new kinds and terminals (evolvability — Pillar 1)', () => {

@@ -22,11 +22,12 @@ in-game menu (save, load, settings, exit) over any of its three screens:
 - **World** — release creatures into a living ecosystem: a lake, meadows that yellow where herds
   graze, fruit-bearing woods, day and night. Every creature's diet, speed, senses, weapons and armour
   are read off its anatomy; it eats, sleeps, flees, hunts, breeds (offspring mutate — new species
-  branch off on screen) and dies. Bodies walk with a procedural skinned gait. A census, a creature
+  branch off on screen) and dies. Bodies walk with a procedural skinned gait and keep their room (a
+  herd stands shoulder to shoulder, never inside itself; the lighter animal gives way). A census, a creature
   card with follow-cam, and a field journal narrate it; take any wild creature home to breed.
 
 Creatures are smooth organic bodies (an implicit round-cone field, welded and skinned) with
-anti-aliased procedural coverings — fur, scales, feathers, chitin, slime, plates. Full variety spec in
+anti-aliased procedural coverings — fur, scales, feathers, chitin, slime, plates, crystal. Full variety spec in
 [MORPHOLOGY.md](MORPHOLOGY.md); milestones in [ROADMAP.md](ROADMAP.md).
 
 **Saves and settings.** The game in progress is kept in the browser as you play (Continue returns to
@@ -60,7 +61,9 @@ and the ecosystem; `Esc` (or ☰) opens the menu.
 Headless captures (dev server running): `node scripts/shoot.mjs out/ "seed=3&morph=felid&bare=1&spin=0"`
 — see `src/main.tsx` and the Studio/World sources for the dev URL params (`?studio=1`, `?bestiary=1`,
 `?world=1&warm=120&follow=felid`, …). A dev page opened with parameters skips the menu; `?menu=1`
-shows it (`&screen=new|load|settings|controls`), `?pause=1` the in-game one.
+shows it (`&screen=new|load|settings|controls`), `?pause=1` the in-game one; `?juvenile=1` puts a
+youngster on the Studio bench, and `?failstage=1` makes the stage fail to draw, to see the failure
+card and its way back to the menu.
 
 ## Layout
 

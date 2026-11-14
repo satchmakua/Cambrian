@@ -23,11 +23,11 @@ import type { Vec3 } from '../../engine/genome';
 import type { Carve } from '../bodyField';
 import { basisToQuat, buildFieldPrims, projectToSurface, rayToSurface } from '../bodyField';
 import type { MeshFeature } from '../meshData';
-import { buildMouthRing, hash01, mouthSpec, type MouthSample, type SkinSurface } from '../mouthLine';
+import { buildMouthRing, hash01, mouthSpec, surfacePrims, type MouthSample, type SkinSurface } from '../mouthLine';
 import { sweepTube, type SweepPoint } from '../sweep';
 import { fangGeometry, setToothInstances, toothRing, type ToothXform } from '../teeth';
-import { INTERIOR, KERATIN } from './palette';
-import { relRow } from './shared';
+import { GUM, INTERIOR, KERATIN, TONGUE } from './palette';
+import { bakeBodySpace, relRow } from './shared';
 
 export type RingVariant = 'sucker' | 'lamprey';
 
@@ -46,6 +46,17 @@ const LAMPREY_RINGS = [
 // pucker ridge ring indices — chosen in mirror pairs under i ↦ (n/2 − i) mod n (0↔10, 3↔7,
 // 13↔17), so a midline sucker stays bilaterally exact (M18) while the spacing stays organic
 const PUCKERS = [0, 3, 7, 10, 13, 17] as const;
+/** the lip's girth (× the mouth's radius): a full fleshy roll over the rim of the cavity. (At 0.14 the lip
+ *  was a thin cord laid along the cut the cavity makes in the skin, and the cut showed past it: on a
+ *  horror's crown, seen from the side, a ragged rim round a red hole — a broken eggshell.) */
+export const RING_LIP = 0.17;
+/** how far past a carved cavity's wall the lip's line runs (× the mouth's radius): just over the cut */
+const LIP_PAST_RIM = 0.06;
+/** how far up its normal a lip seated on the carved rim rides (× the lip's girth: about half its flattened
+ *  half-girth, so it rolls over the cut rather than floating on it or sinking into it) */
+export const LIP_SEAT = 0.3;
+/** a sucker's rasp: how many keratin knobs ring it (odd, so the ring never reads as a machined part) */
+const RASP_KNOBS = 15;
 
 export interface RingBuild {
   variant: RingVariant;
@@ -79,19 +90,38 @@ export function buildRing(
   const o = spec.node.pos; // node-relative frame origin
 
 
-  // outer lip — traced on the real (possibly carved) surface so it hugs whatever rim exists
-  const lipSamples = relRow(buildMouthRing(phenotype, spec, SPREAD, carves, SAMPLES, surface), o);
+  // outer lip — traced on the PRISTINE skin, so it rolls over the rim of the cavity. (Traced on the
+  // carved skin, its rays fell into the hole: on a horror's crown the lip lay at the bottom of the
+  // funnel, and the cavity's bare cut edge was the mouth's rim — a broken eggshell from the side.)
+  // (round a carved cavity, each sample is found on its RIM: a little past the cut, under the lip's roll)
+  const rim = recessed && carves.length ? { carves, outside: r * LIP_PAST_RIM } : undefined;
+  let traced = buildMouthRing(phenotype, spec, SPREAD, [], SAMPLES, surface, rim);
+  // …and SEATED on the cut: the cavity's soft rim (its blend, 0.36 of the mouth) has already sunk the
+  // carved skin under that line — on a horror's crown by twice the lip's half-girth, so the lip hovered
+  // over its hole, a loose ring with the ragged cut showing under it. Each sample drops onto the carved
+  // skin, LIP_SEAT of the lip's girth up its normal.
+  if (rim) {
+    const f = surfacePrims(phenotype, surface);
+    const lift = LIP_SEAT * r * RING_LIP;
+    traced = traced.map((sm) => {
+      const q = projectToSurface(f, carves, sm.p);
+      return { ...sm, p: [q.p[0] + q.n[0] * lift, q.p[1] + q.n[1] * lift, q.p[2] + q.n[2] * lift] as Vec3, n: q.n };
+    });
+  }
+  const lipSamples = relRow(traced, o);
 
   // seeded lip girth wobble keyed on sin(angle): invariant under the ring's X-mirror (a → π−a),
   // so twin samples draw identical girth (M18) while the ring still swells and thins organically
   const lipR = (u: number): number => {
     const key = Math.round((Math.sin((2 * u - 1) * Math.PI) + 1) * 512);
-    return r * 0.14 * (1 + (hash01(seed, idx * 131 + key) * 2 - 1) * 0.18);
+    return r * RING_LIP * (1 + (hash01(seed, idx * 131 + key) * 2 - 1) * 0.18);
   };
   const lip = sweepTube(
     lipSamples.map((s): SweepPoint => ({ p: s.p, n: s.n })),
     { radius: lipR, flatten: 0.6, radialSegments: 10, closed: true },
   );
+  // (the lip is the body's own skin rolled over the rim: it wears the covering, so it needs body space)
+  bakeBodySpace(lip, o);
 
   // funnel levels — concentric rings of the SAME fan, traced on the pristine skin (the recess is
   // applied below by depth, so tracing inside the cavity would double-count it)
@@ -152,9 +182,12 @@ export function buildRing(
   const ridges: THREE.BufferGeometry[] = [];
   let disc: RingBuild['disc'] = null;
   if (variant === 'sucker') {
+    // the rasp is a ring of little keratin knobs, not a hoop: a smooth pale torus round a black hole
+    // read as the iron rim of a drain. (Beads by a smooth bump on the radius — RASP_KNOBS of them, an
+    // odd count so it never reads machined; the ring is resampled finer so each knob is round.)
     rasp = sweepTube(
-      shell[1].map((s): SweepPoint => ({ p: s.p, n: s.n })),
-      { radius: () => r * 0.038, flatten: 0.7, radialSegments: 8, closed: true },
+      resampleClosed(shell[1], RASP_KNOBS * 4).map((s): SweepPoint => ({ p: s.p, n: s.n })),
+      { radius: (u) => r * (0.03 + 0.05 * Math.pow(Math.max(0, Math.cos(u * Math.PI * 2 * RASP_KNOBS)), 2)), flatten: 0.8, radialSegments: 8, closed: true },
     );
     for (const j of PUCKERS) {
       const pts: SweepPoint[] = [];
@@ -178,6 +211,7 @@ export function RingMouth({
   recessed,
   dark,
   surface = 'kit',
+  skin,
 }: {
   f: MeshFeature;
   phenotype: Phenotype;
@@ -185,6 +219,7 @@ export function RingMouth({
   recessed: boolean; // true when the smooth skin actually carved the funnel behind this mouth
   dark: number;
   surface?: SkinSurface; // which rendered skin to trace the ring onto (kit vs blended smooth/hybrid)
+  skin?: THREE.Material; // the body's covering: the lip is its own skin rolled over the rim
 }) {
   const built = useMemo(
     () => buildRing(phenotype, f.idx, carves, recessed, surface),
@@ -196,9 +231,12 @@ export function RingMouth({
     const pucker = new THREE.Color(dark).lerp(new THREE.Color(0x4a2026), 0.55);
     return {
       lip: new THREE.MeshStandardMaterial({ color: lip, roughness: 0.5 }),
-      funnel: new THREE.MeshStandardMaterial({ color: INTERIOR, roughness: 0.3, side: THREE.DoubleSide }),
+      // (painted along it: lip-flesh at the rim darkening to the throat — see funnelShell. Near-black and
+      // glossy all over, its facets caught the light like cut glass: a drain grate, not a mouth)
+      funnel: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, side: THREE.DoubleSide }),
       teeth: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42 }),
-      rasp: new THREE.MeshStandardMaterial({ color: KERATIN, roughness: 0.55 }),
+      // (horn dulled toward the lip's flesh: bright, the ring was a brass rim in the dark)
+      rasp: new THREE.MeshStandardMaterial({ color: new THREE.Color(KERATIN).lerp(lip, 0.35), roughness: 0.6 }),
       pucker: new THREE.MeshStandardMaterial({ color: pucker, roughness: 0.45 }),
       disc: new THREE.MeshStandardMaterial({ color: 0x0b0203, roughness: 0.25 }),
     };
@@ -224,7 +262,9 @@ export function RingMouth({
   return (
     <group>
       <mesh geometry={built.funnel} material={mats.funnel} />
-      <mesh geometry={built.lip} material={mats.lip} castShadow />
+      {/* (in a flesh tone of its own, a deep maroon roll on a pink body, the lip sat on the crown like a
+          beret: the body's own skin, rolled over into the hole, is a mouth) */}
+      <mesh geometry={built.lip} material={skin ?? mats.lip} castShadow />
       {built.rasp && <mesh geometry={built.rasp} material={mats.rasp} />}
       {built.ridges.map((g, i) => (
         <mesh key={i} geometry={g} material={mats.pucker} />
@@ -256,10 +296,22 @@ function funnelShell(shell: readonly MouthSample[][], apex: Vec3): THREE.BufferG
   const K = shell.length;
   const n = shell[0].length;
   const positions: number[] = [];
+  const colors: number[] = [];
   const indices: number[] = [];
-  for (const ring of shell) for (const s of ring) positions.push(s.p[0], s.p[1], s.p[2]);
+  // wet flesh at the rim, darkening ring by ring to the near-black of the throat
+  const c = new THREE.Color();
+  const tone = (t: number): THREE.Color => c.copy(FUNNEL_RIM).lerp(GUM_C, Math.min(1, t * 1.6)).lerp(INTERIOR_C, Math.max(0, t * 1.6 - 0.6));
+  shell.forEach((ring, k) => {
+    tone(k / K);
+    for (const s of ring) {
+      positions.push(s.p[0], s.p[1], s.p[2]);
+      colors.push(c.r, c.g, c.b);
+    }
+  });
   const apexIdx = K * n;
   positions.push(apex[0], apex[1], apex[2]);
+  tone(1);
+  colors.push(c.r, c.g, c.b);
   for (let k = 0; k < K - 1; k++) {
     for (let i = 0; i < n; i++) {
       const i2 = (i + 1) % n;
@@ -272,7 +324,36 @@ function funnelShell(shell: readonly MouthSample[][], apex: Vec3): THREE.BufferG
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geo.setIndex(indices);
   geo.computeVertexNormals();
   return geo;
+}
+
+const FUNNEL_RIM = new THREE.Color(TONGUE);
+const GUM_C = new THREE.Color(GUM);
+const INTERIOR_C = new THREE.Color(INTERIOR);
+
+/** a closed ring of samples, resampled to `m` evenly along its length (position and normal lerped) */
+function resampleClosed(ring: readonly MouthSample[], m: number): MouthSample[] {
+  const n = ring.length;
+  const cum = [0];
+  for (let i = 0; i < n; i++) {
+    const a = ring[i].p, b = ring[(i + 1) % n].p;
+    cum.push(cum[i] + Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]));
+  }
+  const L = cum[n];
+  const out: MouthSample[] = [];
+  let j = 0;
+  for (let k = 0; k < m; k++) {
+    const d = (k / m) * L;
+    while (j < n - 1 && cum[j + 1] < d) j++;
+    const t = (d - cum[j]) / Math.max(1e-9, cum[j + 1] - cum[j]);
+    const a = ring[j], b = ring[(j + 1) % n];
+    const lerp = (x: Vec3, y: Vec3): Vec3 => [x[0] + (y[0] - x[0]) * t, x[1] + (y[1] - x[1]) * t, x[2] + (y[2] - x[2]) * t];
+    const nn = lerp(a.n, b.n);
+    const l = Math.hypot(nn[0], nn[1], nn[2]) || 1;
+    out.push({ ...a, p: lerp(a.p, b.p), n: [nn[0] / l, nn[1] / l, nn[2] / l] });
+  }
+  return out;
 }

@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import type { BufferGeometry } from 'three';
 import { grow, type Phenotype } from '../../../src/engine/grow';
 import { defaultGenome } from '../../../src/engine/genome';
-import { randomGenome } from '../../../src/engine/random';
-import { buildFieldPrims, fieldAt, fieldAtCarved } from '../../../src/viewer/bodyField';
+import { genomeOfMorphotype, randomGenome } from '../../../src/engine/random';
+import { buildFieldPrims, carveDist, fieldAt, fieldAtCarved } from '../../../src/viewer/bodyField';
 import { mouthCarves, mouthSpec } from '../../../src/viewer/mouthLine';
 import { buildRing, type RingBuild } from '../../../src/viewer/mouths/ring';
 
@@ -134,6 +134,32 @@ describe('ring mouth (sucker · lamprey)', () => {
     }
   });
 
+  it("a recessed ring mouth's lip rolls over the cavity's rim — it does not lie at the bottom of the hole", () => {
+    // (traced on the carved skin, the lip's rays fell into the cavity: on a horror's crown it lay at the
+    // bottom of the funnel, and the hole's bare cut edge was the mouth's rim — a broken eggshell)
+    let checked = 0;
+    for (let seed = 1; seed <= 6; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'horror'));
+      const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const spec = mouthSpec(p, idx);
+      if (!spec || (spec.variant !== 'sucker' && spec.variant !== 'lamprey')) continue;
+      const carves = mouthCarves(p);
+      const own = carves.filter((c) => Math.hypot(c.pos[0] - spec.node.pos[0], c.pos[1] - spec.node.pos[1], c.pos[2] - spec.node.pos[2]) < 2 * spec.r);
+      expect(own.length, `#${seed}`).toBeGreaterThan(0);
+      const b = buildRing(p, idx, carves, true, 'hybrid')!;
+      const o = spec.node.pos;
+      for (const sm of b.lipSamples) {
+        const q = [sm.p[0] + o[0], sm.p[1] + o[1], sm.p[2] + o[2]];
+        // on the cavity's wall or out past it, within the lip's own girth of the rim
+        const d = Math.min(...own.map((c) => carveDist(c, q[0], q[1], q[2])));
+        expect(d, `#${seed}`).toBeGreaterThan(-0.1 * spec.r);
+        expect(d, `#${seed}`).toBeLessThan(0.6 * spec.r);
+      }
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(2);
+  });
+
   it('recessed=true sinks the funnel into the carved cavity', () => {
     const p = grow(defaultGenome());
     const idx = forceRing(p, LAMPREY);
@@ -193,6 +219,31 @@ describe('ring mouth (sucker · lamprey)', () => {
     expect(b.disc).not.toBeNull();
     expect(b.lip.getAttribute('position').count).toBe(200); // 20 ring samples × 10 radial, closed
     expect(b.funnel.getAttribute('position').count).toBe(81); // 4 rings × 20 + throat apex
+  });
+
+  it("a sucker's throat is flesh darkening inward, and its rasp a ring of knobs — not a drain's black hole and iron rim", () => {
+    // (a near-black, glossy funnel caught the light in facets like cut glass, and a smooth pale hoop
+    // ringed it: on the horror's crown it read as a drain grate)
+    const p = grow(defaultGenome());
+    const b = buildRing(p, forceRing(p, SUCKER), [], false)!;
+    const col = b.funnel.getAttribute('color');
+    expect(col).toBeTruthy();
+    const lum = (i: number) => 0.3 * col.getX(i) + 0.59 * col.getY(i) + 0.11 * col.getZ(i);
+    const rim = lum(0);
+    const throat = lum(col.count - 1);
+    expect(rim).toBeGreaterThan(throat * 3);
+    expect(col.getX(0), 'the rim is red flesh').toBeGreaterThan(col.getY(0) * 1.6);
+    // the rasp's section swells and thins round the ring: knobs
+    const pos = b.rasp!.getAttribute('position');
+    const ring = b.levels[1];
+    let lo = Infinity, hi = 0;
+    for (let i = 0; i < pos.count - 2; i++) {
+      let near = Infinity;
+      for (const s of ring) near = Math.min(near, Math.hypot(pos.getX(i) - s.p[0], pos.getY(i) - s.p[1], pos.getZ(i) - s.p[2]));
+      lo = Math.min(lo, near);
+      hi = Math.max(hi, near);
+    }
+    expect(hi / Math.max(lo, 1e-6)).toBeGreaterThan(1.8);
   });
 
   it('lamprey: 28 ragged teeth in three shrinking rings, and no sucker accents', () => {

@@ -115,10 +115,10 @@ describe('morphotype library (M22 — full catalogue §4)', () => {
       const chim = grow(genomeOfMorphotype(s * 11 + 3, 'chimera'));
       expect(hasPart(chim, 'wing')).toBe(true);
       expect(hasPart(chim, 'tail')).toBe(true);
-      // crystalline — a spiked, glowing-eyed plated thing
+      // crystalline — a spiked, glowing-eyed thing of cut stone
       const crys = grow(genomeOfMorphotype(s * 11 + 3, 'crystalline'));
       expect(hasPart(crys, 'spine')).toBe(true);
-      expect(crys.genomeRef.covering.type).toBe('plates');
+      expect(crys.genomeRef.covering.type).toBe('crystal');
     }
   });
 
@@ -147,6 +147,41 @@ describe('marking colours harmonise with the body', () => {
       expect(off).toBeLessThanOrEqual(6); // only the rare vivid (exotic) coats break the rule
     }
   });
+
+  it('a familiar frog, lizard or snake mostly wears its own hue or umber: an arbitrary colour is the exception', () => {
+    // (a third to half of them took any hue, and a complementary flash on top: a green frog with
+    // purple spots, a yellow snake banded in violet)
+    const dist = (a: number, b: number) => Math.min(Math.abs(a - b), 1 - Math.abs(a - b));
+    for (const kind of ['anuran', 'lizard', 'serpent']) {
+      let off = 0;
+      const n = 80;
+      for (let seed = 1; seed <= n; seed++) {
+        const { hueA, hueB } = genomeOfMorphotype(seed, kind).palette;
+        const kin = dist(hueA, hueB) <= 0.061;
+        const umber = hueB >= 0.06 && hueB <= 0.106;
+        if (!kin && !umber) off++;
+      }
+      expect(off / n, kind).toBeLessThan(0.35);
+    }
+  });
+
+  it("an insect's, a spider's or a crab's markings are mostly its own hue or umber, a warning colour now and then", () => {
+    // (free to be any hue every time, orange spiders wore teal blotches and green beetles mauve: mould)
+    const dist = (a: number, b: number) => Math.min(Math.abs(a - b), 1 - Math.abs(a - b));
+    for (const kind of ['insectoid', 'arachnid', 'crab']) {
+      let off = 0;
+      const n = 80;
+      for (let seed = 1; seed <= n; seed++) {
+        const g = genomeOfMorphotype(seed, kind);
+        if (g.covering.type !== 'chitin') continue;
+        const { hueA, hueB } = g.palette;
+        const kin = dist(hueA, hueB) <= 0.061;
+        const umber = hueB >= 0.06 && hueB <= 0.106;
+        if (!kin && !umber) off++;
+      }
+      expect(off / n, kind).toBeLessThan(0.4);
+    }
+  });
 });
 
 describe('mouth bands', () => {
@@ -160,5 +195,19 @@ describe('mouth bands', () => {
         expect(mouthVariant(m.part!.style), `${kind} seed ${seed}`).toBe(v);
       }
     }
+  });
+
+  it("a familiar pelt's rare colour morph is a mammal's: dark charcoal or pale cream in its own hue, never a vivid one", () => {
+    // (any vivid hue, it was a hot-pink bear: a plush toy)
+    let morphs = 0;
+    for (const id of ['felid', 'canid', 'rodent', 'ungulate', 'ursid', 'primate', 'mustelid']) {
+      for (let seed = 1; seed <= 80; seed++) {
+        const p = genomeOfMorphotype(seed, id).palette;
+        expect(p.hueA, `${id} #${seed}`).toBeGreaterThanOrEqual(0.04);
+        expect(p.hueA, `${id} #${seed}`).toBeLessThanOrEqual(0.12);
+        if ((p.light <= 0.2 || p.light >= 0.8) && p.sat < 0.15) morphs++;
+      }
+    }
+    expect(morphs).toBeGreaterThan(5); // the morphs are still there, a few in a hundred
   });
 });

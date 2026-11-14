@@ -24,7 +24,7 @@ import { grow, type Phenotype } from '../engine/grow';
 import type { Genome } from '../engine/genome';
 import { describe, nearestKinds, DESCRIPTOR_LABELS } from '../engine/morphospace';
 import { genomeOfMorphotype, MORPHOTYPE_IDS } from '../engine/random';
-import type { SkinMode } from '../ui/store';
+import { useStore, type SkinMode } from '../ui/store';
 import { CreatureMesh } from './CreatureMesh';
 import { SkeletonOverlay, BONE_COLORS } from './SkeletonOverlay';
 import { StudioEnvironment } from './StudioEnvironment';
@@ -33,7 +33,7 @@ import { mouthVariant, eyeVariant } from './partStyles';
 import type { SkinQuality } from './smoothSkin';
 import { createRig, poseDead, poseRig, restPosed, SLEEP_DROP, type RigInstance } from './rig';
 import { dprOf, useQuality } from '../ui/settings';
-import { framingOf, type Framing } from './framing';
+import { faceCamera, framingOf, reachOf, type Framing } from './framing';
 import { juvenileGenome } from '../engine/juvenile';
 import { JawContext, type JawControl } from './mouths/jaw';
 import { FlightContext, wingbeat, type FlightControl } from './flight';
@@ -67,6 +67,9 @@ function devRigTime(): number | null {
   return v === null ? null : Number(v);
 }
 
+/** how many frames a held dev pose is drawn (see useMotion) */
+const HELD_FRAMES = 6;
+
 /** Animate a rig in place for the Studio preview (the canvas renders on demand, so keep asking). */
 function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl, flight: FlightControl): RigInstance | null {
   const rig = useMemo(() => (motion === 'still' ? null : createRig(phenotype)), [phenotype, motion]);
@@ -76,8 +79,19 @@ function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl, flight
   const invalidate = useThree((s) => s.invalidate);
   const frozen = devGaitPhase();
   const heldT = devRigTime();
+  // (a pose held by those dev params is drawn a few times and then left alone: drawn again every
+  // frame, a heavy furred body under software GL kept the page too busy for a screenshot to be taken)
+  const heldFrames = useRef(0);
+  useEffect(() => {
+    heldFrames.current = 0;
+  }, [rig]);
+  // (the preview holds still while the game menu is over it, and picks up when the menu closes)
+  const menuOpen = useStore((s) => s.menuOpen);
+  useEffect(() => {
+    if (!menuOpen) invalidate();
+  }, [menuOpen, invalidate]);
   useFrame((_, dt) => {
-    if (!rig) return;
+    if (!rig || menuOpen) return;
     if (heldT !== null) rig.t = heldT;
     if (motion === 'dead') {
       // (dev: the World's carcass pose, upright so the limp legs and sagging neck can be judged)
@@ -102,7 +116,7 @@ function useMotion(phenotype: Phenotype, motion: Motion, jaw: JawControl, flight
       swim,
       turn: 0,
     });
-    invalidate();
+    if ((frozen === null && heldT === null) || heldFrames.current++ < HELD_FRAMES) invalidate();
   });
   return rig;
 }
@@ -231,11 +245,14 @@ function PlateCamera({ kind, framing, px }: { kind: PlateKind; framing: Framing;
       if (!cam) return;
       const f = framing.face ?? { pt: [0, 0, framing.ext[2] / 2] as [number, number, number], r: framing.size * 0.25 };
       // look at the face from front, a touch high and to the side (a three-quarter portrait)
-      const d = Math.max(f.r * 3.6, framing.size * 0.55);
-      cam.position.set(f.pt[0] + d * 0.42, f.pt[1] + d * 0.22, f.pt[2] + d * 0.88);
+      // (a long low body — a lizard, a crocodile, a snake — is far longer than its head is big: at half
+      // its length the portrait was mostly ground, the head a sliver at its edge. The head's own size,
+      // and the body's height, set it.)
+      const view = faceCamera(framing, Math.max(f.r * 3.6, Math.min(framing.size * 0.55, Math.max(framing.ext[0], framing.ext[1]) * 1.4)));
+      cam.position.set(...view.from);
       cam.near = Math.max(0.01, framing.size * 0.005);
       cam.far = framing.size * 40;
-      cam.lookAt(f.pt[0], f.pt[1], f.pt[2]);
+      cam.lookAt(...view.at);
       cam.updateProjectionMatrix();
     } else {
       const cam = ref.current;
@@ -329,18 +346,21 @@ function Plate({
 function MainView({
   phenotype,
   framing,
+  reach,
   skinMode,
   overlays,
   motion,
 }: {
   phenotype: Phenotype;
   framing: Framing;
+  /** the camera's stand-off scale: the same for every pose of this creature (see `reachOf`) */
+  reach: number;
   skinMode: SkinMode;
   overlays: Overlays;
   motion: Motion;
 }) {
   const track = useRef<HTMLDivElement>(null);
-  const d = framing.size * 1.9;
+  const d = reach * 1.9;
   // dev/headless: ?studiocam=side|front|top|face|headside|feet|eye for a canonical main-view angle
   const cam = import.meta.env.DEV && typeof location !== 'undefined' ? new URLSearchParams(location.search).get('studiocam') : null;
   const f = framing.face ?? { pt: [0, 0, framing.ext[2] / 2] as [number, number, number], r: framing.size * 0.25 };
@@ -368,15 +388,15 @@ function MainView({
   const camPos: [number, number, number] =
     cam === 'side' ? [d * 0.95, d * 0.12, 0.01] : cam === 'front' ? [0.01, d * 0.15, d * 0.95] : cam === 'top' ? [0.01, d, 0.02]
       : cam === 'feet' ? [fp[0] + footD * 0.75 * Math.sign(fp[0] || 1), fp[1] + footD * 0.35, fp[2] + footD * 0.65]
-      : cam === 'face' ? [f.pt[0] + fd * 0.42, f.pt[1] + fd * 0.22, f.pt[2] + fd * 0.88]
+      : cam === 'face' ? faceCamera(framing, fd).from
       : cam === 'headside' ? [f.pt[0] + fd, f.pt[1] + fd * 0.05, f.pt[2]]
       : cam === 'eye' ? eyeCam
       : [d * 0.62, d * 0.38, d * 0.7];
   return (
     <div className="studio-main" ref={track}>
       <View className="studio-main-view" track={track as MutableRefObject<HTMLElement>}>
-        <PerspectiveCamera makeDefault position={camPos} fov={38} near={Math.max(0.02, framing.size * 0.01)} far={framing.size * 40} />
-        <OrbitControls makeDefault target={target} enablePan={false} minDistance={cam === 'eye' ? 0.01 : framing.size * 0.4} maxDistance={framing.size * 7} />
+        <PerspectiveCamera makeDefault position={camPos} fov={38} near={Math.max(0.02, reach * 0.01)} far={reach * 40} />
+        <OrbitControls makeDefault target={target} enablePan={false} minDistance={cam === 'eye' ? 0.01 : reach * 0.4} maxDistance={reach * 7} />
         <SpecimenContent phenotype={phenotype} framing={framing} skinMode={skinMode} overlays={overlays} motion={motion} />
       </View>
     </div>
@@ -480,19 +500,28 @@ function Inspector({ genome, phenotype, framing }: { genome: Genome; phenotype: 
 const DEV_JUVENILE = import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('juvenile') === '1';
 
 function Bench({ genome, skinMode, overlays, motion }: { genome: Genome; skinMode: SkinMode; overlays: Overlays; motion: Motion }) {
-  const phenotype = useMemo(() => grow(DEV_JUVENILE ? juvenileGenome(genome) : genome), [genome]);
-  const framing = useMemo(() => framingOf(phenotype), [phenotype]);
+  const grown = useMemo(() => grow(DEV_JUVENILE ? juvenileGenome(genome) : genome), [genome]);
+  const measured = useMemo(() => framingOf(grown), [grown]);
+  // At rest the specimen lies as it does everywhere else — a snake in its S, not laid out like a ruler
+  // (the bench drew the body exactly as grown: dead straight). A motion's rig bends the body itself,
+  // so it starts from the body as grown; and the inspector measures that body, not its pose.
+  const phenotype = useMemo(() => (motion === 'still' ? restPosed(grown) : grown), [grown, motion]);
+  const framing = useMemo(() => (phenotype === grown ? measured : framingOf(phenotype)), [phenotype, grown, measured]);
+  // (each pose is centred and its plates fitted on its own box — but the main view's camera stands off
+  // by one distance for both, or it was moved, and the angle it had been turned to lost, each time a
+  // snake was set moving or stopped)
+  const reach = useMemo(() => reachOf(grown, restPosed(grown)), [grown]);
   return (
     <div className="bench">
       <div className="bench-views">
-        <MainView phenotype={phenotype} framing={framing} skinMode={skinMode} overlays={overlays} motion={motion} />
+        <MainView phenotype={phenotype} framing={framing} reach={reach} skinMode={skinMode} overlays={overlays} motion={motion} />
         <div className="plates">
           {PLATES.map((pl) => (
             <Plate key={pl.kind} kind={pl.kind} label={pl.label} phenotype={phenotype} framing={framing} skinMode={skinMode} overlays={overlays} motion={motion} />
           ))}
         </div>
       </div>
-      <Inspector genome={genome} phenotype={phenotype} framing={framing} />
+      <Inspector genome={genome} phenotype={grown} framing={measured} />
     </div>
   );
 }
