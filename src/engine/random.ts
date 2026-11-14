@@ -806,7 +806,9 @@ function markingHue(hueA: number, u: number, cover: CoveringType, wild: boolean)
   // contrasting colour is the exception — a warning (a poison frog's, a coral snake's) or a bird's
   // plumage. (Any hue a third to half of the time, and a complementary flash on top, made a green frog
   // with purple spots, a yellow snake banded in violet: toys.) Birds keep the most colour.
-  const free = wild ? 1 : cover === 'fur' ? 0 : cover === 'feathers' ? 0.4 : cover === 'scales' ? 0.2 : cover === 'skin' || cover === 'plates' ? 0.12 : 1;
+  // (an insect's or a spider's markings are mostly black, brown or its own hue too, a warning colour now and
+  // then: free to be any hue every time, orange spiders wore teal blotches, green beetles mauve — mould)
+  const free = wild ? 1 : cover === 'fur' ? 0 : cover === 'feathers' ? 0.4 : cover === 'scales' || cover === 'chitin' ? 0.2 : cover === 'skin' || cover === 'plates' ? 0.12 : 1;
   if (u < free) return wrap(u / free + hueA); // any hue
   const k = (u - free) / (1 - free); // 0..1
   const kin = cover === 'fur' ? 0.55 : 0.6;

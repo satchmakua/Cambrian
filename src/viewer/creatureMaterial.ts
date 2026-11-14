@@ -107,6 +107,18 @@ const FINE_RELIEF = { value: 1 };
  *  makeCreatureMaterial). Its faces are exact planes now (facets.ts gemGeometry), each mirroring its own
  *  part of the studio's softboxes — crisp light and dark faces with glints. (Cut in place, their ragged
  *  borders took a satin coat of 0.35 at roughness 0.3 to hide them.) */
+/** How solidly a marking is laid over the coat: its contrast gene for markings in the coat's own hue (a
+ *  half-blend of a darker shade is a darker shade), rising to MARK_SOLID for a marking of another hue — a
+ *  complement half-blended into a coat is grey: a frog's pink spots on green, a spider's teal on orange,
+ *  were washed-out grey patches, mould. */
+export const MARK_SOLID = 0.9;
+export function markWeight(pal: { hueA: number; hueB: number }, contrast: number): number {
+  const d = Math.abs(pal.hueA - pal.hueB) % 1;
+  const gap = Math.min(d, 1 - d);
+  const t = THREE.MathUtils.smoothstep(gap, 0.12, 0.3);
+  return contrast + (Math.max(contrast, MARK_SOLID) - contrast) * t;
+}
+
 /** How many scute centres a tortoise shell's material takes (smoothSkin shellScutes lays out 37). */
 export const MAX_SCUTES = 40;
 export const CUT_COAT = 0.8;
@@ -195,6 +207,7 @@ export function makeCreatureMaterial(
     shader.uniforms.uCover = { value: COVERING_INDEX[cov.type] };
     shader.uniforms.uPScale = { value: cov.patternScale };
     shader.uniforms.uContrast = { value: cov.patternContrast };
+    shader.uniforms.uMarkW = { value: markWeight(pal, cov.patternContrast) };
     shader.uniforms.uSheen = { value: cov.sheen };
     shader.uniforms.uBump = { value: preset.bump };
     shader.uniforms.uOff = { value: off };
@@ -326,7 +339,7 @@ export function makeCreatureMaterial(
             float ht = clamp(dot(vBodyPos - uHeadA.xyz, hab) / max(dot(hab, hab), 1e-6), 0.0, 1.0);
             pat *= smoothstep(uHeadA.w * 1.1, uHeadA.w * 1.5, length(vBodyPos - uHeadA.xyz - hab * ht));
           }
-          skin = mix(skin, uPattern, clamp(pat * uContrast, 0.0, 1.0));
+          skin = mix(skin, uPattern, clamp(pat * uMarkW, 0.0, 1.0)); // (see markWeight)
           // a deeper accent in the cores of strong markings (rosette rings, ocelli) → richness
           skin = mix(skin, uPattern2, smoothstep(0.55, 0.95, pat) * uContrast * 0.4);
           // low-frequency tonal break-up so the surface never reads as flat plastic
@@ -529,7 +542,7 @@ varying float vCut;
 uniform vec3 uMain; uniform vec3 uBack; uniform vec3 uBelly; uniform vec3 uPattern; uniform vec3 uPattern2; uniform vec3 uRim;
 uniform vec3 uBlood;
 uniform int uPType; uniform int uCover;
-uniform float uPScale; uniform float uContrast; uniform float uSheen; uniform float uBump;
+uniform float uPScale; uniform float uContrast; uniform float uMarkW; uniform float uSheen; uniform float uBump;
 uniform vec3 uOff;
 uniform int uDebug;
 uniform float uBareY; uniform float uBareBand; uniform vec3 uBareCol;

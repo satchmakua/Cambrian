@@ -164,6 +164,24 @@ describe('marking colours harmonise with the body', () => {
       expect(off / n, kind).toBeLessThan(0.35);
     }
   });
+
+  it("an insect's, a spider's or a crab's markings are mostly its own hue or umber, a warning colour now and then", () => {
+    // (free to be any hue every time, orange spiders wore teal blotches and green beetles mauve: mould)
+    const dist = (a: number, b: number) => Math.min(Math.abs(a - b), 1 - Math.abs(a - b));
+    for (const kind of ['insectoid', 'arachnid', 'crab']) {
+      let off = 0;
+      const n = 80;
+      for (let seed = 1; seed <= n; seed++) {
+        const g = genomeOfMorphotype(seed, kind);
+        if (g.covering.type !== 'chitin') continue;
+        const { hueA, hueB } = g.palette;
+        const kin = dist(hueA, hueB) <= 0.061;
+        const umber = hueB >= 0.06 && hueB <= 0.106;
+        if (!kin && !umber) off++;
+      }
+      expect(off / n, kind).toBeLessThan(0.4);
+    }
+  });
 });
 
 describe('mouth bands', () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { makeCreatureMaterial, setFineRelief, CUT_COAT, CUT_COAT_ROUGH } from '../../src/viewer/creatureMaterial';
+import { makeCreatureMaterial, markWeight, MARK_SOLID, setFineRelief, CUT_COAT, CUT_COAT_ROUGH } from '../../src/viewer/creatureMaterial';
 import { PRESETS, qualityOf } from '../../src/ui/settings';
 import { defaultGenome, type CoveringType } from '../../src/engine/genome';
 
@@ -487,6 +487,18 @@ describe('creature material shader injection', () => {
     expect(branch).toMatch(/smoothstep\(0\.0, 0\.4\d? \+ gFw \* PLATE_CELL, F\.y - F\.x\)/);
     // its grooves only a shade darker: the grime's height runs 0.3–0.72, not 0–1
     expect(branch).toContain('return clamp(0.72 - dome * 0.42, 0.0, 1.0);');
+  });
+
+  it("a marking of another hue is laid solid; one of the coat's own hue keeps its contrast gene", () => {
+    // (a complement half-blended into a coat is grey: a frog's pink spots on green, a spider's teal on
+    // orange, were washed-out grey patches — mould)
+    expect(markWeight({ hueA: 0.3, hueB: 0.32 }, 0.5)).toBeCloseTo(0.5, 6); // a darker shade of its own hue
+    expect(markWeight({ hueA: 0.44, hueB: 0.87 }, 0.5)).toBeCloseTo(MARK_SOLID, 6); // a frog's pink on green
+    expect(markWeight({ hueA: 0.95, hueB: 0.45 }, 0.5)).toBeCloseTo(MARK_SOLID, 6); // across the wrap
+    expect(markWeight({ hueA: 0.3, hueB: 0.8 }, 0.95)).toBeCloseTo(0.95, 6); // (never weaker than its gene)
+    // and the shader lays the marking by it
+    const f = compileShaderStrings().fragmentShader;
+    expect(f).toContain('skin = mix(skin, uPattern, clamp(pat * uMarkW, 0.0, 1.0));');
   });
 
   it('a slime hide wears soft papillae laid along the body, under its wet ripple — not a glossy pickle, not hammered foil', () => {
