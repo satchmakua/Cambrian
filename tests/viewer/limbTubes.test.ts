@@ -3,17 +3,35 @@ import { grow, type Phenotype } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
 import { buildSmoothGeometry, type SkinQuality } from '../../src/viewer/smoothSkin';
 import { buildFieldPrims, roundConeDist, type FieldPrims } from '../../src/viewer/bodyField';
-import { TUBE_THIN } from '../../src/viewer/limbTubes';
+import { TUBE_THIN, PODO_WAIST, PODO_EASE, podomeres } from '../../src/viewer/limbTubes';
 
 type Geo = ReturnType<typeof buildSmoothGeometry>;
 
-/** the limb links the skin draws exact at this grid cell (as splitThin picks them) */
+/** the limb links the skin draws exact at this grid cell (as splitThin picks them: the thin ones, and
+ *  a jointed shell's leg links at any girth) */
 function thinLinks(p: Phenotype, f: FieldPrims, cell: number): number[] {
   const out: number[] = [];
+  const podo = podomeres(p, f);
   for (let m = 0; m < f.nc; m++) {
     if (f.ia[m] === f.ib[m] || f.an[m]) continue;
     if (p.nodes[f.ia[m]].kind === 'spine' || p.nodes[f.ib[m]].kind === 'spine') continue;
-    if (Math.max(f.ra[m], f.rb[m]) < TUBE_THIN * cell) out.push(m);
+    if (Math.max(f.ra[m], f.rb[m]) < TUBE_THIN * cell || podo?.[m]) out.push(m);
+  }
+  return out;
+}
+
+/** the knees of a jointed shell's legs: each joint where one podomere hands on to the next — its
+ *  centre, girth (the wider of the two links' ends there) and the two links */
+function podoJoints(p: Phenotype, f: FieldPrims): { c: number[]; r: number; inLink: number; outLink: number }[] {
+  const podo = podomeres(p, f);
+  const out: { c: number[]; r: number; inLink: number; outLink: number }[] = [];
+  if (!podo) return out;
+  for (let m = 0; m < f.nc; m++) {
+    if (!podo[m]) continue;
+    for (let n = 0; n < f.nc; n++) {
+      if (!podo[n] || Math.hypot(f.ax[n] - f.bx[m], f.ay[n] - f.by[m], f.az[n] - f.bz[m]) > 1e-6) continue;
+      out.push({ c: [f.bx[m], f.by[m], f.bz[m]], r: Math.max(f.rb[m], f.ra[n]), inLink: m, outLink: n });
+    }
   }
   return out;
 }
@@ -107,8 +125,11 @@ describe('thin limbs drawn exact', () => {
       const pos = g.getAttribute('position');
       const from = g.userData.tubeFrom.vertex as number;
       expect(pos.count).toBeGreaterThan(from);
+      // (a jointed shell's leg is pinched in at its knees, inside its link by design: see the next test)
+      const knees = podoJoints(p, f);
       let on = 0;
       let off = 0;
+      let pinched = 0;
       for (let v = from; v < pos.count; v++) {
         let d = Infinity;
         let r = 0;
@@ -121,11 +142,12 @@ describe('thin limbs drawn exact', () => {
         }
         // (a swept ring is a frustum's: a hair inside the round cone where the link tapers)
         if (d > 1e-4) off++;
-        if (Math.abs(d) < 0.03 * r) on++;
+        if (knees.some((k) => Math.hypot(pos.getX(v) - k.c[0], pos.getY(v) - k.c[1], pos.getZ(v) - k.c[2]) < (PODO_EASE + 1) * k.r)) pinched++;
+        else if (Math.abs(d) < 0.03 * r) on++;
       }
       expect(off, `${kind}: tube vertices outside every thin link`).toBe(0);
       // (the rest sit just inside a neighbouring link: corners of the triangles that straddle a joint)
-      expect(on / (pos.count - from), kind).toBeGreaterThan(0.75);
+      expect(on / (pos.count - from - pinched), kind).toBeGreaterThan(0.75);
     }
   });
 
@@ -218,5 +240,88 @@ describe('thin limbs drawn exact', () => {
       }
     }
     expect(checked).toBeGreaterThanOrEqual(8);
+  });
+
+  it("a jointed shell's leg is a row of segments, pinched in at each knee and dark there — not a straw strung with beads", () => {
+    // (drawn as the field has it, every knee was a ball of the leg's girth: an insect, a crab, a centipede
+    // stood on smooth straws strung with beads, a doll's ball joints)
+    let checked = 0;
+    for (const [kind, seed] of [['insectoid', 1], ['insectoid', 2], ['crab', 23], ['arthro-alien', 3]] as const) {
+      const { p, f, g } = build(kind, seed, 'high');
+      const pos = g.getAttribute('position');
+      const ao = g.getAttribute('aAO');
+      const from = g.userData.tubeFrom.vertex as number;
+      const knees = podoJoints(p, f);
+      expect(knees.length, `${kind} #${seed} has knees`).toBeGreaterThan(0);
+      const dist = (v: number, c: readonly number[]) => Math.hypot(pos.getX(v) - c[0], pos.getY(v) - c[1], pos.getZ(v) - c[2]);
+      for (const k of knees) {
+        const m = k.inLink;
+        const L = Math.hypot(f.bx[m] - f.ax[m], f.by[m] - f.ay[m], f.bz[m] - f.az[m]);
+        const u = [(f.bx[m] - f.ax[m]) / L, (f.by[m] - f.ay[m]) / L, (f.bz[m] - f.az[m]) / L];
+        let waist = 0, dark = 0, shell = 0, ns = 0;
+        for (let v = from; v < pos.count; v++) {
+          const d = dist(v, k.c);
+          // the leg's skin at the knee, well inside the leg's girth of the joint's centre (a ball of the
+          // leg's girth kept it all at one girth out)…
+          if (d < 0.8 * k.r) {
+            waist++;
+            dark += ao.getX(v);
+          }
+          // …and back up the segment, past the pinch, for the shell's own shade
+          const t = (pos.getX(v) - k.c[0]) * u[0] + (pos.getY(v) - k.c[1]) * u[1] + (pos.getZ(v) - k.c[2]) * u[2];
+          if (d > (PODO_EASE + 0.5) * k.r && d < (PODO_EASE + 1.2) * k.r && t < -PODO_EASE * k.r) {
+            shell += ao.getX(v);
+            ns++;
+          }
+        }
+        if (ns === 0) continue; // (a segment too short to show its own shade past the pinch)
+        expect(waist, `${kind} #${seed} knee of link ${m}: pinched`).toBeGreaterThan(0);
+        expect(dark / waist, `${kind} #${seed} knee of link ${m}: the membrane's shade`).toBeLessThan(0.85 * (shell / ns));
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(20);
+  });
+
+  it('a knee keeps its whole membrane: a pose that bends it further than the rest shape opens no hole', () => {
+    // (cut to the rest shape — the half of each knee's ball sunk in its segments dropped — a crab walking
+    // bent its knees further, opened their outer side, and you could see the ground through the gap)
+    let checked = 0;
+    for (const [kind, seed] of [['crab', 23], ['insectoid', 1]] as const) {
+      const { p, f, g } = build(kind, seed, 'high');
+      const pos = g.getAttribute('position');
+      const from = g.userData.tubeFrom.vertex as number;
+      for (const k of podoJoints(p, f)) {
+        const m = k.inLink;
+        const L = Math.hypot(f.bx[m] - f.ax[m], f.by[m] - f.ay[m], f.bz[m] - f.az[m]);
+        const u = [(f.bx[m] - f.ax[m]) / L, (f.by[m] - f.ay[m]) / L, (f.bz[m] - f.az[m]) / L];
+        const jr = PODO_WAIST * k.r;
+        let sunk = 0;
+        for (let v = from; v < pos.count; v++) {
+          const d = [pos.getX(v) - k.c[0], pos.getY(v) - k.c[1], pos.getZ(v) - k.c[2]];
+          // a vertex of the knee's ball on the side sunk deep in the segment the knee ends
+          if (Math.abs(Math.hypot(d[0], d[1], d[2]) - jr) < 0.02 * jr && d[0] * u[0] + d[1] * u[1] + d[2] * u[2] < -0.6 * jr) sunk++;
+        }
+        expect(sunk, `${kind} #${seed} knee of link ${m}`).toBeGreaterThan(0);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(12);
+  });
+
+  it("a furred spider's legs, and every limb but a shell's, keep their round knees", () => {
+    // (the pinch is a jointed shell's: a hairy leg, a tail, a tentacle are drawn as they were)
+    let furred = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'arachnid'));
+      if (p.genomeRef.covering.type === 'chitin') continue;
+      expect(podomeres(p, buildFieldPrims(p, 'hybrid')), `arachnid #${seed} (${p.genomeRef.covering.type})`).toBeNull();
+      furred++;
+    }
+    expect(furred).toBeGreaterThan(0);
+    for (const kind of ['felid', 'cephalopod', 'horror', 'lizard']) {
+      const p = grow(genomeOfMorphotype(3, kind));
+      expect(podomeres(p, buildFieldPrims(p, 'hybrid')), kind).toBeNull();
+    }
   });
 });

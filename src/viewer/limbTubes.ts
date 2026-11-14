@@ -23,6 +23,34 @@ const TUCK_SLIM = 0.6;
 
 const keyOf = (x: number, y: number, z: number) => `${x.toFixed(6)},${y.toFixed(6)},${z.toFixed(6)}`;
 
+/**
+ * A JOINTED SHELL's leg — an insect's, a spider's, a crab's, a centipede's — is a row of stiff
+ * podomeres, not a hose: each of its links is drawn as a segment of its own, pinched in to PODO_WAIST
+ * of its girth at every joint it shares with the next and darker there (the joint's membrane). Drawn
+ * as the field has it — round cones with a ball of the joint's girth at each knee — every arthropod
+ * stood on smooth tubes strung with beads: a doll's ball joints.
+ */
+export const PODO_WAIST = 0.72;
+/** the shade at a podomere joint (× the skin's own: the membrane between two plates) */
+export const PODO_DARK = 0.62;
+/** how far a podomere's pinch reaches from its joint, in its girths (at most a quarter of its length) */
+export const PODO_EASE = 0.6;
+
+/** Which of the field's cones are a jointed shell's leg links (podomeres), or null when none is. */
+export function podomeres(p: Phenotype, full: FieldPrims): Uint8Array | null {
+  if (p.genomeRef.covering.type !== 'chitin') return null;
+  const out = new Uint8Array(full.nc);
+  let any = false;
+  for (let m = 0; m < full.nc; m++) {
+    if (full.ia[m] === full.ib[m] || full.an[m]) continue;
+    const a = p.nodes[full.ia[m]], b = p.nodes[full.ib[m]];
+    if (a.kind === 'spine' || b.kind === 'spine' || a.part?.kind !== 'leg' || b.part?.kind !== 'leg') continue;
+    out[m] = 1;
+    any = true;
+  }
+  return any ? out : null;
+}
+
 export interface ThinSplit {
   /** the field without its thin limb links, the cones that hand on to one tucked in under its joint */
   field: FieldPrims;
@@ -32,19 +60,23 @@ export interface ThinSplit {
   tubes: number[];
   /** the ends of the field's own cones (keyOf) — a tube's joint there meets the polygonized skin */
   fieldEnds: Set<string>;
+  /** per cone of the full field: 1 — a podomere (drawn as a tube whatever its girth), or null */
+  podo: Uint8Array | null;
 }
 
-/** Which of the field's limb links are too thin for the grid (`cell`), and the field without them —
- *  or null when none is (or nothing else would be left to polygonize). */
+/** Which of the field's limb links are too thin for the grid (`cell`) — or are a jointed shell's leg
+ *  links, drawn exact at any girth — and the field without them; or null when there are none (or
+ *  nothing else would be left to polygonize). */
 export function splitThin(p: Phenotype, full: FieldPrims, cell: number): ThinSplit | null {
   const thin = new Uint8Array(full.nc);
   const tubes: number[] = [];
+  const podo = podomeres(p, full);
   for (let m = 0; m < full.nc; m++) {
     // a limb's own links only: a cone from the trunk is the limb's root (it blends into the body), a
     // shaped link keeps its cross-section in the field
     if (full.ia[m] === full.ib[m] || full.an[m]) continue;
     if (p.nodes[full.ia[m]].kind === 'spine' || p.nodes[full.ib[m]].kind === 'spine') continue;
-    if (Math.max(full.ra[m], full.rb[m]) >= TUBE_THIN * cell) continue;
+    if (Math.max(full.ra[m], full.rb[m]) >= TUBE_THIN * cell && !podo?.[m]) continue;
     thin[m] = 1;
     tubes.push(m);
   }
@@ -98,7 +130,7 @@ export function splitThin(p: Phenotype, full: FieldPrims, cell: number): ThinSpl
     const at = (t: number) => [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t];
     setCone(field, i, at(tA), at(1 - tB), rA, rB);
   }
-  return { field, handoff, tubes, fieldEnds: new Set(fieldAt.keys()) };
+  return { field, handoff, tubes, fieldEnds: new Set(fieldAt.keys()), podo };
 }
 
 export interface Tubes {
@@ -125,27 +157,35 @@ interface Joint {
   outs: number[];
   /** swept through: one link in, one out, gently bent, and no field skin here */
   smooth: boolean;
+  /** a podomere joint: links in and out, every one a podomere, and no field skin here */
+  pinch: boolean;
 }
 
 /**
  * The thin links as meshes. A chain of links bent gently at each joint (a tail, a tentacle cut into
  * its spline) is swept as one tube; a sharp joint (a knee), a fork, a free tip and the joint where the
  * field hands a limb on are each a ball of the joint's girth — less what lies buried inside the links
- * it joins. `aoAt` is the skin's occlusion probe (the body above a leg shades it).
+ * it joins. A jointed shell's leg links (`split.podo`) are each a segment of their own, pinched in at
+ * the joints between them (see PODO_WAIST). `aoAt` is the skin's occlusion probe (the body above a leg
+ * shades it).
  */
 export function limbTubes(
   full: FieldPrims,
-  split: Pick<ThinSplit, 'tubes' | 'fieldEnds'>,
+  split: Pick<ThinSplit, 'tubes' | 'fieldEnds'> & { podo?: Uint8Array | null },
   cell: number,
   aoAt: (x: number, y: number, z: number, nx: number, ny: number, nz: number) => number,
   skin?: { positions: Float32Array; ao: Float32Array },
 ): Tubes {
   const tubes = split.tubes;
+  const podo = split.podo ?? null;
   const pos: number[] = [];
   const nrm: number[] = [];
+  /** per vertex: the membrane's shade at a podomere joint (1 elsewhere) */
+  const mem: number[] = [];
   const idx: number[] = [];
   const A = (m: number) => [full.ax[m], full.ay[m], full.az[m]];
   const B = (m: number) => [full.bx[m], full.by[m], full.bz[m]];
+  const lenOf = (m: number) => Math.hypot(full.bx[m] - full.ax[m], full.by[m] - full.ay[m], full.bz[m] - full.az[m]);
   const dirOf = (m: number) => {
     const a = A(m), b = B(m);
     const L = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) || 1;
@@ -155,7 +195,7 @@ export function limbTubes(
   const joint = (p: number[], r: number): Joint => {
     const k = keyOf(p[0], p[1], p[2]);
     let j = joints.get(k);
-    if (!j) joints.set(k, (j = { c: p, r, ins: [], outs: [], smooth: false }));
+    if (!j) joints.set(k, (j = { c: p, r, ins: [], outs: [], smooth: false, pinch: false }));
     j.r = Math.max(j.r, r);
     return j;
   };
@@ -170,13 +210,36 @@ export function limbTubes(
     endOf.set(m, jb);
   }
   for (const [k, j] of joints) {
-    if (j.ins.length !== 1 || j.outs.length !== 1 || split.fieldEnds.has(k)) continue;
+    if (split.fieldEnds.has(k)) continue;
+    if (podo && j.ins.length > 0 && j.outs.length > 0 && [...j.ins, ...j.outs].every((m) => podo[m])) {
+      j.pinch = true;
+      continue;
+    }
+    if (j.ins.length !== 1 || j.outs.length !== 1) continue;
     const u = dirOf(j.ins[0]), w = dirOf(j.outs[0]);
     j.smooth = Math.acos(Math.max(-1, Math.min(1, u[0] * w[0] + u[1] * w[1] + u[2] * w[2]))) < SWEEP_BEND;
   }
 
+  // a podomere's PINCH at each end: how far it reaches back from a podomere joint (0 — none), its girth
+  // along it, and the membrane's shade
+  const pinA = new Float64Array(full.nc);
+  const pinB = new Float64Array(full.nc);
+  for (const m of tubes) {
+    if (!podo?.[m]) continue;
+    const L = lenOf(m);
+    if (startOf.get(m)!.pinch) pinA[m] = Math.min(PODO_EASE * full.ra[m], 0.25 * L);
+    if (endOf.get(m)!.pinch) pinB[m] = Math.min(PODO_EASE * full.rb[m], 0.25 * L);
+  }
+  const ease = (d: number, e: number) => (e <= 0 || d >= e ? 1 : PODO_WAIST + (1 - PODO_WAIST) * (1 - (1 - d / e) ** 2));
+  const girthAt = (m: number, t: number, L: number) => (full.ra[m] + ((full.rb[m] - full.ra[m]) * t) / L) * ease(t, pinA[m]) * ease(L - t, pinB[m]);
+  const shadeOf = (d: number, e: number) => (e <= 0 ? 1 : PODO_DARK + (1 - PODO_DARK) * Math.min(1, d / (0.6 * e)) ** 2);
+  const membrane = (m: number, t: number, L: number) => Math.min(shadeOf(t, pinA[m]), shadeOf(L - t, pinB[m]));
+
   // a piece's vertices, then its triangles — dropping a triangle whose corners all lie inside one of
-  // the links it meets (the inside of a bent knee, the half of a joint ball sunk in its own links)
+  // the links it meets (the inside of a bent knee, the half of a joint ball sunk in its own links).
+  // (Nothing is cut at a podomere joint: its ball is slimmer than the segments either side, and a pose
+  // that bends the knee further than the rest shape did opens the joint's outer side — cut to the rest
+  // shape's wedge, the ball left a hole there you could see the ground through.)
   const piece = (base: number, near: readonly number[], margin: number, tris: number[]) => {
     const n = pos.length / 3 - base;
     const buried = new Uint8Array(n);
@@ -222,13 +285,30 @@ export function limbTubes(
     let rMax = 0;
     for (const m of run) rMax = Math.max(rMax, full.ra[m], full.rb[m]);
     const segs = segsFor(rMax, cell);
-    const rings: { p: number[]; t: number[]; r: number; s: number }[] = [];
+    const rings: { p: number[]; t: number[]; r: number; s: number; k: number }[] = [];
     run.forEach((m, k) => {
       const a = A(m), b = B(m), u = dirOf(m);
       const L = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
       const s = L > 1e-9 ? (full.ra[m] - full.rb[m]) / L : 0; // the flank's lean (sin of its half-angle)
       const along = Math.min(6, Math.max(1, Math.round(L / (2 * Math.max(full.ra[m], full.rb[m])))));
-      if (k === 0) rings.push({ p: a, t: u, r: full.ra[m], s });
+      const at = (t: number) => [a[0] + u[0] * t, a[1] + u[1] * t, a[2] + u[2] * t];
+      if (pinA[m] > 0 || pinB[m] > 0) {
+        // a pinched podomere (always a run of its own): rings close enough through each pinch to draw
+        // its shoulder, each leaning as the girth there runs in
+        const ts = new Set<number>();
+        for (let j = 0; j <= along; j++) ts.add((j / along) * L);
+        for (const f of [0.2, 0.45, 0.7, 1]) {
+          if (pinA[m] > 0) ts.add(f * pinA[m]);
+          if (pinB[m] > 0) ts.add(L - f * pinB[m]);
+        }
+        const h = 1e-4 * L;
+        for (const t of [...ts].sort((x, y) => x - y)) {
+          const dr = (girthAt(m, Math.min(L, t + h), L) - girthAt(m, Math.max(0, t - h), L)) / (Math.min(L, t + h) - Math.max(0, t - h));
+          rings.push({ p: at(t), t: u, r: girthAt(m, t, L), s: -dr / Math.sqrt(1 + dr * dr), k: membrane(m, t, L) });
+        }
+        return;
+      }
+      if (k === 0) rings.push({ p: a, t: u, r: full.ra[m], s, k: 1 });
       else {
         // the shared ring at the joint: the mean heading and lean of the links either side
         const prev = rings[rings.length - 1];
@@ -239,7 +319,7 @@ export function limbTubes(
       }
       for (let j = 1; j <= along; j++) {
         const f = j / along;
-        rings.push({ p: [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f], t: u, r: full.ra[m] + (full.rb[m] - full.ra[m]) * f, s });
+        rings.push({ p: at(f * L), t: u, r: full.ra[m] + (full.rb[m] - full.ra[m]) * f, s, k: 1 });
       }
     });
     const base = pos.length / 3;
@@ -260,6 +340,7 @@ export function limbTubes(
         const dx = e1[0] * c + e2[0] * sj, dy = e1[1] * c + e2[1] * sj, dz = e1[2] * c + e2[2] * sj;
         pos.push(ring.p[0] + dx * ring.r, ring.p[1] + dy * ring.r, ring.p[2] + dz * ring.r);
         nrm.push(dx * cs + t[0] * sn, dy * cs + t[1] * sn, dz * cs + t[2] * sn);
+        mem.push(ring.k);
       }
     }
     const tris: number[] = [];
@@ -270,33 +351,38 @@ export function limbTubes(
         tris.push(v00, v01, v10, v01, v11, v10);
       }
     }
-    const ends = [startOf.get(run[0])!, endOf.get(run[run.length - 1])!];
+    const ends = [startOf.get(run[0])!, endOf.get(run[run.length - 1])!].filter((j) => !j.pinch);
     const inRun = new Set(run);
-    const near = [...new Set([...ends[0].ins, ...ends[0].outs, ...ends[1].ins, ...ends[1].outs])].filter((o) => !inRun.has(o));
+    const near = [...new Set(ends.flatMap((j) => [...j.ins, ...j.outs]))].filter((o) => !inRun.has(o));
     piece(base, near, 0.03 * rMax, tris);
   }
 
-  // --- the balls: every joint not swept through ---
+  // --- the balls: every joint not swept through (a podomere joint's, its links' pinched girth) ---
   for (const j of joints.values()) {
     if (j.smooth) continue;
-    const segs = segsFor(j.r, cell);
+    const jr = j.pinch ? PODO_WAIST * j.r : j.r;
+    const k0 = j.pinch ? PODO_DARK : 1;
+    const segs = segsFor(jr, cell);
     const bands = Math.max(3, Math.ceil(segs / 2));
     const base = pos.length / 3;
     const [cx, cy, cz] = j.c;
-    pos.push(cx, cy + j.r, cz);
+    pos.push(cx, cy + jr, cz);
     nrm.push(0, 1, 0);
+    mem.push(k0);
     for (let i = 1; i < bands; i++) {
       const th = (Math.PI * i) / bands;
       const y = Math.cos(th), rr = Math.sin(th);
       for (let k = 0; k < segs; k++) {
         const ph = (2 * Math.PI * k) / segs;
         const x = rr * Math.cos(ph), z = rr * Math.sin(ph);
-        pos.push(cx + x * j.r, cy + y * j.r, cz + z * j.r);
+        pos.push(cx + x * jr, cy + y * jr, cz + z * jr);
         nrm.push(x, y, z);
+        mem.push(k0);
       }
     }
-    pos.push(cx, cy - j.r, cz);
+    pos.push(cx, cy - jr, cz);
     nrm.push(0, -1, 0);
+    mem.push(k0);
     const last = 1 + (bands - 1) * segs;
     const ring = (i: number, k: number) => 1 + (i - 1) * segs + (k % segs);
     const tris: number[] = [];
@@ -305,7 +391,7 @@ export function limbTubes(
       for (let k = 0; k < segs; k++) tris.push(ring(i, k), ring(i + 1, k), ring(i + 1, k + 1), ring(i, k), ring(i + 1, k + 1), ring(i, k + 1));
     }
     for (let k = 0; k < segs; k++) tris.push(last, ring(bands - 1, k + 1), ring(bands - 1, k));
-    piece(base, [...j.ins, ...j.outs], 0.03 * j.r, tris);
+    piece(base, j.pinch ? [] : [...j.ins, ...j.outs], 0.03 * jr, tris);
   }
 
   // THE SHADE of a tube where the field hands it on. The joint's ball meets the field's limb, tucked in
@@ -352,7 +438,7 @@ export function limbTubes(
       positions[w * 3 + a] = pos[v * 3 + a];
       normals[w * 3 + a] = nrm[v * 3 + a];
     }
-    ao[w] = tubeShade(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2], nrm[v * 3], nrm[v * 3 + 1], nrm[v * 3 + 2]);
+    ao[w] = tubeShade(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2], nrm[v * 3], nrm[v * 3 + 1], nrm[v * 3 + 2]) * mem[v];
   }
   return { positions, normals, ao, indices: Uint32Array.from(idx, (v) => remap[v]) };
 }
