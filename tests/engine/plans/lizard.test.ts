@@ -74,4 +74,22 @@ describe('a walking sprawler: lizard, crocodile, a frog’s arms', () => {
       for (const leg of legsOf(p)) expect(leg[1].pos[1] - leg[0].pos[1], `#${seed}`).toBeLessThan(0.08 * leg[0].radius);
     }
   });
+  it("a lizard's head is broader than its slim neck, wedging to a snout ahead of its eyes — not a newt's round end", () => {
+    for (const seed of SEEDS) {
+      const p = grow(genomeOfMorphotype(seed, 'lizard'));
+      const spine = p.nodes.filter((n) => n.kind === 'spine');
+      const last = Math.max(...spine.map((n) => n.segment ?? 0));
+      const head = spine.filter((n) => n.segment === last);
+      const neck = spine.filter((n) => n.segment === last - 1);
+      expect(neck.length, `#${seed} a neck`).toBeGreaterThan(0);
+      // broader than the neck behind it (it was no wider)
+      expect(rx(head[0]) / rx(neck[neck.length - 1]), `#${seed} broad`).toBeGreaterThan(1.4);
+      // its eyes stand well back on the head: the snout runs on a third of it ahead of them (half its
+      // founders had the eye at the very tip, four-fifths along)
+      const eye = p.nodes.find((n) => n.terminal === 'eye')!;
+      const tip = head[head.length - 1];
+      const along = (eye.pos[2] - head[0].pos[2]) / (tip.pos[2] + tip.radius * (tip.scale?.[2] ?? 1) - head[0].pos[2]);
+      expect(along, `#${seed} eye set back`).toBeLessThan(0.66);
+    }
+  });
 });
