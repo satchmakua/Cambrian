@@ -27,7 +27,8 @@ import type { Vec3 } from '../../engine/genome';
 import type { Carve } from '../bodyField';
 import { norm3 } from '../bodyField';
 import type { MeshFeature } from '../meshData';
-import { buildMouthLine, hash01, mouthSpec, type MouthSample, type SkinSurface } from '../mouthLine';
+import { buildMouthLine, hash01, mouthSpec, runSeamBack, type MouthSample, type SkinSurface } from '../mouthLine';
+import { isSwimmer } from '../eyeSeat';
 import { sweepTube, type SweepPoint } from '../sweep';
 import { bluntGeometry, fangGeometry, setToothInstances, toothRow, type ToothProfile, type ToothXform } from '../teeth';
 import { INTERIOR, LIP } from './palette';
@@ -232,7 +233,26 @@ export function buildJawed(
       };
   const r = spec.r;
   const seed = phenotype.genomeRef.seed;
-  const line = buildMouthLine(phenotype, spec, carves, 17, surface);
+  const traced = buildMouthLine(phenotype, spec, carves, 17, surface);
+  // a long-headed reptile's seam runs back along its jaw to the hinge under its eye (a fish's and a
+  // slug's mouths are their own: see runSeamBack)
+  const line = sealed && !isSwimmer(phenotype) && phenotype.genomeRef.covering.type !== 'slime' ? runSeamBack(phenotype, spec, traced, surface) : traced;
+  // …and a row of teeth along it keeps its spacing: as many more as the seam is longer
+  if (line !== traced) {
+    const more = seamLength(line.upper) / Math.max(seamLength(traced.upper), 1e-6);
+    const grow = (t: ToothProfile | null) => (t ? { ...t, count: Math.min(RUN_TEETH_MAX, Math.round(t.count * more)) } : null);
+    params.upper = grow(params.upper);
+    params.lower = grow(params.lower);
+  }
+  // A shut reptile's teeth hang OUTSIDE its closed jaw — a crocodile's grin, a dragon's: raked in toward
+  // the throat like an open mouth's, every crown ran down from the seam into the shut lower jaw, under
+  // the skin, and the animal had no teeth at all. (A snake shows none: its mouth shuts over them.)
+  if (line !== traced) {
+    const legged = phenotype.nodes.some((n) => n.part?.kind === 'leg');
+    const out = (t: ToothProfile | null) => (t && legged ? { ...t, curl: -TEETH_OUT } : null);
+    params.upper = out(params.upper);
+    params.lower = out(params.lower);
+  }
   const o = spec.node.pos; // node-relative frame origin
 
   // PROJECT the muzzle. The lip curves are traced onto the existing skull surface, so on their own
@@ -256,13 +276,20 @@ export function buildJawed(
   const lower = project(lowerBase);
 
   // lips — swept along the true-lip curves, flattened onto the skin, thinning into the corners
-  const lipPts = (row: MouthSample[]): SweepPoint[] => row.map((s) => ({ p: s.p, n: s.n }));
-  const upperLip = sweepTube(lipPts(upper), {
+  // (a reptile's seam along its jaw is a groove: its line sunk into the skin by SEAM_SINK of its own
+  // thickness — laid on the skin, a dark wire ran along the face and stood off the head's outline)
+  const sink = line !== traced ? SEAM_SINK : 0;
+  const lipPts = (row: MouthSample[], lr: (u: number) => number = () => 0): SweepPoint[] =>
+    row.map((s) => {
+      const d = sink * r * lr(Math.abs(s.t));
+      return { p: [s.p[0] - s.n[0] * d, s.p[1] - s.n[1] * d, s.p[2] - s.n[2] * d] as Vec3, n: s.n };
+    });
+  const upperLip = sweepTube(lipPts(upper, params.lipR), {
     radius: (u) => r * params.lipR(Math.abs(u * 2 - 1)),
     flatten: 0.45,
     radialSegments: 10,
   });
-  const lowerLip = sweepTube(lipPts(lower), {
+  const lowerLip = sweepTube(lipPts(lower, params.lowerLipR), {
     radius: (u) => r * params.lowerLipR(Math.abs(u * 2 - 1)),
     flatten: 0.45,
     radialSegments: 10,
@@ -395,6 +422,19 @@ export function buildJawed(
 function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
+
+/** a lip row's length along its samples */
+function seamLength(row: readonly MouthSample[]): number {
+  let L = 0;
+  for (let i = 1; i < row.length; i++) L += Math.hypot(row[i].p[0] - row[i - 1].p[0], row[i].p[1] - row[i - 1].p[1], row[i].p[2] - row[i - 1].p[2]);
+  return L;
+}
+/** the most teeth a row run back along a jaw carries */
+const RUN_TEETH_MAX = 22;
+/** how far a shut reptile's teeth tilt out from its skin (rad) so their crowns clear the closed jaw */
+export const TEETH_OUT = 0.32;
+/** how deep a reptile's seam along its jaw lies in the skin (× its own thickness): a groove, not a wire */
+export const SEAM_SINK = 0.55;
 
 /**
  * How far a muzzle runs out ahead of its braincase: the mouth's distance from its head section's first

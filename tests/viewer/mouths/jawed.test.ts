@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { grow, type Phenotype } from '../../../src/engine/grow';
 import { defaultGenome } from '../../../src/engine/genome';
 import { randomGenome, genomeOfMorphotype } from '../../../src/engine/random';
-import { buildFieldPrims, fieldAt } from '../../../src/viewer/bodyField';
+import { buildFieldPrims, fieldAt, qRotateV, rayToSurface } from '../../../src/viewer/bodyField';
 import { buildJawed, jawDrawn, seamShown, teethDrawn, JAW_SHOWN, TEETH_SHOWN, JAWED_PARAMS, type JawedVariant } from '../../../src/viewer/mouths/jawed';
 import { mouthCarves, mouthSpec, surfacePrims } from '../../../src/viewer/mouthLine';
 
@@ -182,7 +182,8 @@ describe('jawed mouth build (mouth overhaul)', () => {
       if (variant === 'maw') {
         expect(sealed.upperTeeth.length + sealed.lowerTeeth.length).toBe(0);
       } else {
-        expect(sealed.upperTeeth.length).toBeLessThanOrEqual(9);
+        // (a crocodile's row runs back along its jaw, more of them and as small: see the seam's own tests)
+        if (kind === 'shark') expect(sealed.upperTeeth.length).toBeLessThanOrEqual(9);
         const grin = JAWED_PARAMS.fanged.upper.len(0.55);
         for (const t of sealed.upperTeeth) expect(t.len).toBeLessThan(grin * sealed.r);
       }
@@ -205,5 +206,74 @@ describe('jawed mouth build (mouth overhaul)', () => {
     // a furred muzzle's lip line stays
     const cat = grow(genomeOfMorphotype(2, 'felid'));
     expect(seamShown(cat, false)).toBe(true);
+  });
+
+  it("a reptile's shut mouth runs along its jaw, a third of the way up its head's side, back past its eye", () => {
+    // (traced from its node, grown under the snout's tip, and swept round the tip a mouth's width either
+    // way, the seam lay along the underside of the snout: from the side a crocodile had no mouth at all)
+    let checked = 0;
+    for (const id of ['crocodilian', 'lizard', 'wyvern', 'dragon', 'biped', 'serpent']) {
+      for (let seed = 1; seed <= 4; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const idx = mouthIdx(p);
+        const spec = mouthSpec(p, idx);
+        if (!spec || !['herbivore', 'maw', 'fanged'].includes(spec.variant)) continue;
+        const b = buildJawed(p, idx, [], false, spec.variant as JawedVariant)!;
+        const o = spec.node.pos;
+        const f = surfacePrims(p, 'kit');
+        const up = qRotateV(spec.anchor.quat, [0, 1, 0]);
+        const fwd = qRotateV(spec.anchor.quat, [0, 0, 1]);
+        const back = (q: readonly number[]) => -((q[0] - spec.anchor.pos[0]) * fwd[0] + (q[1] - spec.anchor.pos[1]) * fwd[1] + (q[2] - spec.anchor.pos[2]) * fwd[2]);
+        const world = b.upper.map((s) => [s.p[0] + o[0], s.p[1] + o[1], s.p[2] + o[2]]);
+        // back past the eye
+        const eye = Math.max(...p.nodes.filter((n) => n.terminal === 'eye').map((n) => back(n.pos)));
+        const hinge = Math.max(back(world[0]), back(world[world.length - 1]));
+        expect(hinge, `${id} #${seed} hinge back past the eye`).toBeGreaterThan(eye);
+        // up the side of the head, not under it: how high each sample is in the head's depth there
+        // (measured from the head's axis at each sample's station: its depth there, top to underside)
+        let side = 0, measured = 0;
+        const a = spec.anchor.pos;
+        for (const q of world) {
+          const along = (q[0] - a[0]) * fwd[0] + (q[1] - a[1]) * fwd[1] + (q[2] - a[2]) * fwd[2];
+          const c = [a[0] + fwd[0] * along, a[1] + fwd[1] * along, a[2] + fwd[2] * along];
+          if (fieldAt(f, c[0], c[1], c[2]) > 0) continue; // (past the tip)
+          const top = rayToSurface(f, [], c as [number, number, number], up);
+          const bottom = rayToSurface(f, [], c as [number, number, number], [-up[0], -up[1], -up[2]]);
+          if (!top || !bottom) continue;
+          const h = (v: readonly number[]) => v[0] * up[0] + v[1] * up[1] + v[2] * up[2];
+          const frac = (h(q) - h(bottom.p)) / Math.max(h(top.p) - h(bottom.p), 1e-6);
+          measured++;
+          if (frac > 0.15 && frac < 0.6) side++;
+        }
+        expect(side / Math.max(measured, 1), `${id} #${seed} on the side of the head`).toBeGreaterThan(0.7);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(16);
+  });
+
+  it("a shut reptile's teeth hang outside its closed jaw; a snake shows none", () => {
+    // (raked in toward the throat like an open mouth's, every crown ran from the seam into the shut lower
+    // jaw, under the skin: a crocodile, a dragon, a theropod had no teeth)
+    for (const [id, shown] of [['crocodilian', true], ['dragon', true], ['wyvern', true], ['serpent', false]] as const) {
+      for (let seed = 1; seed <= 4; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const idx = mouthIdx(p);
+        const spec = mouthSpec(p, idx);
+        if (!spec || spec.variant !== 'fanged') continue;
+        const b = buildJawed(p, idx, [], false, 'fanged')!;
+        const f = surfacePrims(p, 'kit');
+        const o = spec.node.pos;
+        let out = 0;
+        for (const t of b.upperTeeth) {
+          const Y = qRotateV(t.quat, [0, 1, 0]);
+          const tip = [t.pos[0] + o[0] + Y[0] * t.len, t.pos[1] + o[1] + Y[1] * t.len, t.pos[2] + o[2] + Y[2] * t.len];
+          if (fieldAt(f, tip[0], tip[1], tip[2]) > 0) out++;
+        }
+        const share = out / Math.max(b.upperTeeth.length, 1);
+        if (shown) expect(share, `${id} #${seed}`).toBeGreaterThan(0.75);
+        else expect(out, `${id} #${seed}`).toBe(0);
+      }
+    }
   });
 });
