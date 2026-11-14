@@ -867,11 +867,23 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   `pile.test.ts`, `beak.test.ts › an ostrich's bill`, `creatureMaterial.test.ts › short down`,
   `jawed.test.ts › a slug's shut mouth`.
 
+- [x] **M97 — A twelfth look (3.45), and legs with joints.** A jointed shell's leg links each drawn as
+  a segment of its own, pinched in and dark at every knee (no straws strung with beads), its knees'
+  membranes whole so a walking crab's bent knee shows no gap.
+  **Tests:** `limbTubes.test.ts › a row of segments`, `› a knee keeps its whole membrane`, `› a furred
+  spider's legs keep their round knees`.
+
 ### Next up (unchecked — pick from here)
 
-- [ ] **What the eleventh look left.** A crab's arching legs and balloon claws; the arthro-alien's
-  string of beads; a cut stone still papery; plush heads (a cat's box of a head, sock muzzles); the
-  bare-shank seams on birds' legs; goggle eyes; painted mouths.
+- [ ] **What the twelfth look left.** The horror a cute octopus doll with a torn crown (2/5); a cut
+  stone still a flaky potato with glued-on prisms; the theropod's noisy moss of a coat and jawless head;
+  the fish's gill arc two-thirds back on an untapered loaf; the shark's dolphin head; the bear a dog on
+  stilts; the weasel's hamster face; the chimera's chest tube; the dragon's wings over its hips; the far
+  eye bulging out of the outline (bird, hawk, chimera, stone, cat, lizard).
+
+- [ ] **What the eleventh look left.** The crab's balloon claws; the arthro-alien's string of beads; a
+  cut stone still papery; plush heads (a cat's box of a head, sock muzzles); the bare-shank seams on
+  birds' legs; goggle eyes; painted mouths.
 
 - [ ] **What the tenth look left.** The frog's balloon head with its clamshell seam and wedge-cut
   eyelids; the ostrich's scaly plumage; the serpent's blunt tail with an upturned nub; the starfish's

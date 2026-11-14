@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M94: an eighth look, harder; M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M97: a twelfth look, and legs with joints; M96: an eleventh look, and a deer named a deer; M95: thin limbs drawn exact, and a tenth look; M94: an eighth look, harder; M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -55,6 +55,24 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M97 — A twelfth look, and legs with joints · 2026-11-14
+
+- **A twelfth look** (same brief, seed 23, renders of 37a603b — before M96's last fixes: the dark leg
+  ring, the weasel's pile, the ostrich, the slug) scored **3.45**, up from 3.32: fourteen plans at 4,
+  sixteen at 3, and one at 2 — the horror, read as a cute octopus doll with a torn crown. Crab, insect,
+  spider, frog, cat, dog, bird, ostrich, sea star and urchin rose to 4. Its summary is the work list.
+- **Legs with joints** (`src/viewer/limbTubes.ts`) — *drinking-straw limbs* (crab, spider, insect,
+  centipede). A jointed shell's leg links are each drawn as a segment of their own, at any girth (a
+  crab's thick upper legs left the polygonized skin for it), pinched in to 0.72 of the leg's girth at
+  every knee they share with the next segment, and darker there: the joint's membrane. Drawn as the
+  field had them — round cones, a ball of the leg's girth at each knee — every arthropod stood on smooth
+  straws with a doll's ball joints. The small membrane ball at a knee and the segments either side are
+  not cut against each other: cut to the rest shape, a walking crab bent its knees further, opened their
+  outer side, and showed the ground through the gap. A furred spider's legs, tails and tentacles are
+  drawn as they were; the skin builds no slower.
+- **Tests:** `tests/viewer/limbTubes.test.ts › a row of segments, pinched in at each knee`, `› a knee
+  keeps its whole membrane`, `› a furred spider's legs keep their round knees`.
 
 ## M96 — An eleventh look, and a deer named a deer · 2026-11-14
 
