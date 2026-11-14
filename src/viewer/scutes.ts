@@ -357,3 +357,23 @@ export function scuteGeometries(p: Phenotype, scutes: readonly Scute[]): { node:
   }
   return out;
 }
+
+/**
+ * A BACK SPINE (a dragon's, a wyvern's, a chimera's) stands out of the hide along its node's aim: a cone
+ * DORSAL_SPIKE[0] × the node's radius long, its base sunk DORSAL_SPIKE[1] × into the hide, its point
+ * raked back DORSAL_SPIKE[2] rad (for a node aimed up, its own +Y runs back along the body). Built in
+ * the node's frame, turned by its quat. (Drawn as a leg's claw — a cone stood point-down on its node,
+ * never turned to its aim, its flat base standing over the skin — each was a dark disc on a lump: a
+ * bolt-head beside the wing root, two square pads from above.)
+ */
+export const DORSAL_SPIKE: readonly [number, number, number] = [3.4, 0.7, 0.3];
+export function dorsalSpikeGeometry(r: number, quat: readonly number[]): THREE.BufferGeometry {
+  const [len, sink, rake] = DORSAL_SPIKE;
+  const g = new THREE.ConeGeometry(r, len * r, 9, 1);
+  g.translate(0, (len / 2 - sink) * r, 0); // the base sunk into the hide, the point out
+  g.rotateX(Math.PI / 2); // its point (+Y) along the node's aim (+Z)
+  g.rotateX(-rake); // …raked back
+  g.applyQuaternion(new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3]));
+  g.computeVertexNormals();
+  return g;
+}

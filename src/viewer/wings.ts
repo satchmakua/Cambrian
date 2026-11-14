@@ -145,6 +145,54 @@ export const FOLD_PLEAT = [0.05, -0.02, 0.045, -0.01] as const;
  * pleated. (Held spread and raised all the time, a dragon walking the valley carried two poles on its
  * back, each a narrow strip of skin seen edge on.)
  */
+/**
+ * Where a membrane wing (a dragon's, a bat's) or a four-legged body's raised wing roots: at the
+ * SHOULDERS — over the forelegs' root when the trunk carries two or more pairs of legs, else a little
+ * ahead of the chest link's centre (a wyvern's wings are its arms) — at the upper corner of the trunk
+ * there: out 0.55 of its half-width, up half its radius. The girth and height there are read between
+ * the two trunk links either side. (Anchored on the trunk link nearest the grown wing root — the middle
+ * of a three-link trunk, for most of them — the wrist stood behind the forelegs, the elbow behind the
+ * hind legs, and the sail hung over the haunch and the root of the tail.)
+ */
+export function wingShoulder(p: Phenotype, side: number): [number, number, number] | null {
+  const trunk = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0).sort((a, b) => a.pos[2] - b.pos[2]);
+  if (!trunk.length) return null;
+  const chest = trunk[trunk.length - 1];
+  // the legs rooted on the trunk, by where they root
+  const roots: number[] = [];
+  for (const [a, b] of p.edges) {
+    const A = p.nodes[a], B = p.nodes[b];
+    if (B.part?.kind === 'leg' && A.kind === 'spine' && (A.segment ?? 0) === 0) roots.push(B.pos[2]);
+  }
+  const z = roots.length >= 4 ? Math.max(...roots) : chest.pos[2] + 0.2 * chest.radius;
+  let i = 0;
+  while (i < trunk.length - 2 && trunk[i + 1].pos[2] < z) i++;
+  const a = trunk[i], b = trunk[Math.min(i + 1, trunk.length - 1)];
+  const t = b === a ? 0 : Math.min(1, Math.max(0, (z - a.pos[2]) / (b.pos[2] - a.pos[2])));
+  const lerp = (x: number, y: number) => x + (y - x) * t;
+  const r = lerp(a.radius, b.radius);
+  const rx = lerp(a.radius * (a.scale?.[0] ?? 1), b.radius * (b.scale?.[0] ?? 1));
+  return [lerp(a.pos[0], b.pos[0]) + (side >= 0 ? 1 : -1) * rx * 0.55, lerp(a.pos[1], b.pos[1]) + r * 0.5, z];
+}
+
+/** a wing's open span off the trunk it has to carry (its length and girth), nudged by the wing's own
+ *  thickness gene: the same at a typical 0.4, half again at 0.9 (see Wing in CreatureMesh) */
+export function wingOpenSpan(p: Phenotype, tipRadius: number): { openS: number; trunkLen: number; girth: number; gene: number } {
+  let z0 = Infinity, z1 = -Infinity, girth = 0;
+  for (const n of p.nodes) {
+    if (n.kind !== 'spine' || (n.segment ?? 0) !== 0) continue;
+    z0 = Math.min(z0, n.pos[2] - n.radius);
+    z1 = Math.max(z1, n.pos[2] + n.radius);
+    girth = Math.max(girth, n.radius);
+  }
+  const trunkLen = Number.isFinite(z1 - z0) ? z1 - z0 : 1;
+  const gene = Math.max(tipRadius, 0.06) / Math.max(girth, 0.1); // ~0.4–0.6 typical
+  return { openS: Math.max(trunkLen * 1.15, girth * 3) * (0.55 + gene), trunkLen, girth, gene };
+}
+
+/** a folded membrane wing's span ×its open one: folded along the flank, its fingers reach further back */
+export const MEMBRANE_FOLD = 1.35;
+
 export function buildFoldedMembraneWing(side: number, S: number): WingBuild {
   const s = side >= 0 ? 1 : -1;
   const out = v3(s, 0, 0); // the side: the folded wing's skin faces out from the flank
@@ -200,7 +248,9 @@ export function buildFoldedMembraneWing(side: number, S: number): WingBuild {
       }
     }
   };
-  panel(P0, E, W, 0.0); // between the upper arm and the forearm (the folded leading edge)
+  // (between the upper arm and the forearm, the folded leading edge — slack, bowed a little out from the
+  // flank: an exact plane from the back up to the wrist, lit flat, it was a pale slab on the withers)
+  panel(P0, E, W, 0.0, 0.025);
   panel(roots[0], tips[0], tips[1], 0.2, 0.02);
   panel(roots[1], tips[1], tips[2], 0.22, -0.015);
   panel(roots[2], tips[2], tips[3], 0.22, 0.02);

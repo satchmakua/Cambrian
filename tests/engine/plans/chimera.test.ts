@@ -193,4 +193,31 @@ describe('chimera', () => {
       expect(mouths, `#${seed}`).toBeGreaterThan(0);
     }
   });
+
+  it('carries its tail out behind it, clear of the ground — never hanging under its belly', () => {
+    // (drooped and curling down, a thick tail ran back and under the belly line: from the front, a pale
+    // tube down the chest between the forelegs, its fan of feathers on the floor behind)
+    for (let seed = 1; seed <= 40; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'chimera'));
+      const trunk = trunkOf(p);
+      const belly = Math.min(...trunk.map((n) => n.pos[1] - ry(n)));
+      const tail = p.nodes.filter((n) => n.part?.kind === 'tail');
+      expect(tail.length, `#${seed}`).toBeGreaterThan(0);
+      expect(Math.min(...tail.map((n) => n.pos[1] - n.radius)), `#${seed}`).toBeGreaterThanOrEqual(belly - 0.05);
+    }
+  });
+
+  it("a dragon's tail runs back from its rump: on most it doesn't sag under the belly", () => {
+    // (curling down at every link, 38 in 40 dragons' tails hung under the belly line — from the front a
+    // dark club between the forelegs)
+    let under = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'dragon'));
+      const trunk = trunkOf(p);
+      const belly = Math.min(...trunk.map((n) => n.pos[1] - ry(n)));
+      const tail = p.nodes.filter((n) => n.part?.kind === 'tail');
+      under += Math.max(0, belly - Math.min(...tail.map((n) => n.pos[1] - n.radius)));
+    }
+    expect(under / 40).toBeLessThan(0.2);
+  });
 });

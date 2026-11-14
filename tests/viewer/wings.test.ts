@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { buildFin, buildMembraneWing, buildFoldedMembraneWing, buildFeatheredWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface } from '../../src/viewer/wings';
+import { buildFin, buildMembraneWing, buildFoldedMembraneWing, buildFeatheredWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, MEMBRANE_FOLD, wingOpenSpan, wingShoulder } from '../../src/viewer/wings';
+import { dorsalSpikeGeometry, DORSAL_SPIKE } from '../../src/viewer/scutes';
+import { grow } from '../../src/engine/grow';
+import { genomeOfMorphotype } from '../../src/engine/random';
 
 function finite(g: THREE.BufferGeometry): boolean {
   const a = g.getAttribute('position').array as ArrayLike<number>;
@@ -248,6 +251,79 @@ describe('wings (shoulder-built, body frame)', () => {
   });
 });
 
+
+describe('a winged quadruped (a dragon, a chimera)', () => {
+  it('roots its wings at its shoulders: the wrist over the forelegs, the elbow ahead of the hind legs', () => {
+    // (anchored on the trunk link nearest the grown wing root — the middle of a three-link trunk, for
+    // most of them — the wrist stood 0.4 behind the forelegs and the sail hung over the haunch)
+    for (const id of ['dragon', 'chimera']) {
+      for (let seed = 1; seed <= 40; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const legRoots: number[] = [];
+        for (const [a, b] of p.edges) if (p.nodes[b].part?.kind === 'leg' && p.nodes[a].kind === 'spine' && (p.nodes[a].segment ?? 0) === 0) legRoots.push(p.nodes[b].pos[2]);
+        const fore = Math.max(...legRoots), hind = Math.min(...legRoots);
+        for (const side of [1, -1]) {
+          const at = wingShoulder(p, side)!;
+          expect(Math.abs(at[2] - fore), `${id} #${seed} over the forelegs`).toBeLessThan(0.01);
+          expect(Math.sign(at[0]), `${id} #${seed} on its own side`).toBe(side);
+        }
+        if (p.genomeRef.covering.type === 'feathers') continue; // (a raised feathered wing: no fold)
+        const tip = p.nodes.find((n) => n.part?.kind === 'wing' && n.terminal && n.pos[0] > 0)!;
+        const S = wingOpenSpan(p, tip.radius).openS * MEMBRANE_FOLD;
+        const w = buildFoldedMembraneWing(1, S);
+        const at = wingShoulder(p, 1)!;
+        expect(at[2] + w.wrist!.z, `${id} #${seed} wrist`).toBeGreaterThan(fore - 0.1);
+        expect(at[2] - 0.2 * S, `${id} #${seed} elbow`).toBeGreaterThan(hind);
+        w.surface.dispose();
+      }
+    }
+  });
+
+  it("a wyvern's wings are its arms: they root at its chest", () => {
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'wyvern'));
+      const trunk = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0).sort((a, b) => a.pos[2] - b.pos[2]);
+      const chest = trunk[trunk.length - 1];
+      expect(wingShoulder(p, 1)![2], `#${seed}`).toBeCloseTo(chest.pos[2] + 0.2 * chest.radius, 6);
+    }
+  });
+
+  it("a folded wing's leading web is slack skin, bowed out, not an exact plane", () => {
+    // (one flat plane from the back up to the wrist, lit flat: a pale slab on the withers)
+    const g = buildFoldedMembraneWing(1, 4.6).surface;
+    const n = g.getAttribute('normal');
+    const ns: THREE.Vector3[] = [];
+    for (let v = 0; v < 54; v++) if (v % 6 !== 0) ns.push(new THREE.Vector3().fromBufferAttribute(n, v));
+    const mean = ns.reduce((a, b) => a.add(b), new THREE.Vector3()).normalize();
+    const worst = Math.max(...ns.map((x) => (Math.acos(Math.min(1, x.dot(mean))) * 180) / Math.PI));
+    expect(worst).toBeGreaterThan(8);
+  });
+
+  it('wears its back spines point out along their aim, raked back — never a cone stood point-down', () => {
+    // (drawn as a leg's claw, each was a dark disc on a lump: a bolt-head beside the wing root)
+    const up = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0));
+    const r = 0.08;
+    const g = dorsalSpikeGeometry(r, [up.x, up.y, up.z, up.w]);
+    const pos = g.getAttribute('position');
+    let top = -Infinity;
+    for (let v = 0; v < pos.count; v++) top = Math.max(top, pos.getY(v));
+    expect(top / r).toBeGreaterThan(2.5);
+    // the far end is a point: every vertex out there is the one point
+    const far: THREE.Vector3[] = [];
+    for (let v = 0; v < pos.count; v++) if (pos.getY(v) > top - 0.05 * r) far.push(new THREE.Vector3().fromBufferAttribute(pos, v));
+    for (const q of far) expect(q.distanceTo(far[0]) / r).toBeLessThan(0.05);
+    // no flat face (the base's ring) stands out over the hide: the base is sunk
+    const base: number[] = [];
+    for (let v = 0; v < pos.count; v++) {
+      const q = new THREE.Vector3().fromBufferAttribute(pos, v);
+      if (q.distanceTo(far[0]) > DORSAL_SPIKE[0] * r * 0.9) base.push(q.y);
+    }
+    expect(Math.max(...base) / r).toBeLessThan(0.5);
+    // …and its point leans back along the body (−Z)
+    expect(far[0].z).toBeLessThan(-0.3 * r);
+    g.dispose();
+  });
+});
 
 describe('spread feathered wing (flight posture)', () => {
   it('reaches out along its own side in a near-horizontal plane, never across the midline', () => {

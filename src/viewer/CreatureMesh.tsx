@@ -18,7 +18,7 @@ import { blinkAt, LidContext } from './eyelids';
 import { legBearer, pointedLegs, type Phenotype } from '../engine/grow';
 import { unitHash } from '../engine/rng';
 import { buildMeshData, type MeshFeature } from './meshData';
-import { scutePlan, scuteGeometries } from './scutes';
+import { dorsalSpikeGeometry, scutePlan, scuteGeometries } from './scutes';
 import { eyeVariant, earVariant } from './partStyles';
 import { earGeometry, lowEar } from './ear';
 import { Mouth } from './mouths';
@@ -28,7 +28,7 @@ import { makeCreatureMaterial } from './creatureMaterial';
 import { bareOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, ratLike, shaggyPlumage, skinPartWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, LONG_WING, type FinBuild } from './wings';
+import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, type FinBuild } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
 import { BROW_TILT, bulgingEye, eyeClearings, eyeSeat, eyeTilt, FEELER_KNOB, FEELER_SPOT, feelerTip, isSwimmer } from './eyeSeat';
@@ -787,6 +787,8 @@ function Feature({
         );
       }
       if (f.kind === 'horn') return <Horn f={f} color={footColor} seed={phenotype.genomeRef.seed} phenotype={phenotype} />;
+      // a back spine stands out along its aim (scutes.ts dorsalSpikeGeometry)
+      if (f.kind === 'spine') return <DorsalSpike f={f} color={footColor} />;
       const reach = phenotype.nodes[f.idx].pos[1] - phenotype.bounds.min[1];
       if (f.kind === 'leg' && arthropodLegs(phenotype)) return <LegTip f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} reach={reach} />;
       const plan = f.kind === 'leg' ? footPlanOf(phenotype) : null;
@@ -882,9 +884,6 @@ function capGeometry(theta: number, limbal: boolean, squeezeX = 1): THREE.Sphere
   }
   return g;
 }
-/** a membrane wing folded at rest, against its open span: a dragon's folded wing is a great sail over
- *  its back (at the open span's scale, folded, it was a fan the size of the head) */
-const MEMBRANE_FOLD = 1.35;
 const REPTILE_IRIS = [0xb08a2e, 0xa8661f, 0x7d8a33, 0x9a4f24, 0x8f8a6e, 0xc2a046];
 /** a cat's iris round its slit (a slit eye in a coat of fur): gold, amber, green, a pale copper, rarely a
  *  pale blue. (A reptile's russet on a cat glared like a demon's.) */
@@ -1490,6 +1489,18 @@ function ToedFoot({ f, plan, skin, phenotype }: { f: MeshFeature; plan: FootPlan
 }
 
 // A claw: a darker, pointed talon.
+function DorsalSpike({ f, color }: { f: MeshFeature; color: number }) {
+  const r = Math.max(f.radius, 0.06);
+  const geo = useMemo(() => dorsalSpikeGeometry(r, f.quat), [r, f.quat]);
+  useEffect(() => () => geo.dispose(), [geo]);
+  const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.7).getHex(), [color]);
+  return (
+    <mesh geometry={geo} castShadow>
+      <meshStandardMaterial color={dark} roughness={0.55} metalness={0.05} />
+    </mesh>
+  );
+}
+
 function Claw({ f, color }: { f: MeshFeature; color: number }) {
   const r = Math.max(f.radius, 0.06);
   const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.7).getHex(), [color]);
@@ -1778,14 +1789,7 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
     const side = shoulder[0] >= 0 ? 1 : -1;
     // size the wing off the trunk it has to carry, nudged by the part's own thickness gene
     const trunk = phenotype.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0);
-    let z0 = Infinity, z1 = -Infinity, girth = 0;
-    for (const n of trunk) {
-      z0 = Math.min(z0, n.pos[2] - n.radius);
-      z1 = Math.max(z1, n.pos[2] + n.radius);
-      girth = Math.max(girth, n.radius);
-    }
-    const trunkLen = Number.isFinite(z1 - z0) ? z1 - z0 : 1;
-    const gene = Math.max(f.radius, 0.06) / Math.max(girth, 0.1); // ~0.4–0.6 typical
+    const { openS, trunkLen, girth, gene } = wingOpenSpan(phenotype, f.radius);
     const pal = g.palette;
     const plumage = coatMain(pal);
     const accent = coatPattern(pal);
@@ -1793,8 +1797,7 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
     const long = feathered && !raised && f.style >= LONG_WING ? longWingFold(phenotype, side) : null;
     const foldS = long ? long.S : (trunkLen * 1.05 + girth * 0.9) * (0.85 + gene * 0.3);
     // (the wing's own gene counts for more than it did — the same at a typical 0.4, half again
-    // at 0.9 — so a body bred or built for big wings gets them)
-    const openS = Math.max(trunkLen * 1.15, girth * 3) * (0.55 + gene);
+    // at 0.9 — so a body bred or built for big wings gets them: see wingOpenSpan)
     // a feathered wing on a four-legged body is held up and half open, to the span a membrane wing
     // on the same body would have (wings.ts wingCarriage)
     // (a membrane wing folds along the flank at rest, as a bat's or a dragon's does, and opens to fly)
@@ -1820,9 +1823,10 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
       const rx = near.radius * (near.scale?.[0] ?? 1);
       // (a membrane wing's arm roots at the upper corner of the shoulder, its humerus buried in the
       // body — from the dorsal attach point it stuck out of the spine like a broom handle)
+      // (…at the shoulders: see wingShoulder)
       anchor = feathered && !raised
         ? [near.pos[0] + side * rx * 0.86, near.pos[1] + near.radius * 0.28, near.pos[2] + near.radius * 0.35]
-        : [near.pos[0] + side * rx * 0.55, near.pos[1] + near.radius * 0.5, near.pos[2] + near.radius * 0.2];
+        : (wingShoulder(phenotype, side) ?? [near.pos[0] + side * rx * 0.55, near.pos[1] + near.radius * 0.5, near.pos[2] + near.radius * 0.2]);
     }
     if (long) anchor = long.anchor;
     const off: [number, number, number] = [anchor[0] - tip[0], anchor[1] - tip[1], anchor[2] - tip[2]];
