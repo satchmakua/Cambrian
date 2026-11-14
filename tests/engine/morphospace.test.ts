@@ -1,5 +1,5 @@
 import { describe as group, it, expect } from 'vitest';
-import { describe, distance, coherence } from '../../src/engine/morphospace';
+import { describe, distance, coherence, nearestKinds } from '../../src/engine/morphospace';
 import { breederLitter, breederOffspring } from '../../src/engine/selection';
 import { randomGenome, genomeOfMorphotype, MORPHOTYPE_IDS } from '../../src/engine/random';
 import { grow } from '../../src/engine/grow';
@@ -111,6 +111,23 @@ group('descriptor dims (M26 — §11.1)', () => {
     expect(chimera.self).toBeGreaterThan(12);
   });
 
+  it('names a body by its hide and its telltale parts too: a deer is no dog, a turtle no bear, an ostrich no ape', () => {
+    // (by the descriptor alone a deer was named a dog or a bear 38 times in 40, a turtle 31, and a
+    // tailless ostrich an ape — what the Specimen panel and the menu showed)
+    const self = (id: string) => {
+      let n = 0;
+      for (let s = 1; s <= 40; s++) if (nearestKinds(grow(genomeOfMorphotype(s, id)), 1)[0].id === id) n++;
+      return n;
+    };
+    expect(self('ungulate')).toBeGreaterThanOrEqual(36);
+    expect(self('chelonian')).toBeGreaterThanOrEqual(36);
+    expect(self('ratite')).toBeGreaterThanOrEqual(38);
+    // …and coherence names it the same, its closeness still the descriptor's
+    const p = grow(genomeOfMorphotype(23, 'ratite'));
+    expect(coherence(p).nearest).toBe('ratite');
+    expect(coherence(p).nearest).toBe(nearestKinds(p, 1)[0].id);
+  });
+
   it('self-labelling across the whole catalogue improved and stays there', () => {
     let hits = 0;
     let total = 0;
@@ -120,8 +137,9 @@ group('descriptor dims (M26 — §11.1)', () => {
         total++;
       }
     }
-    // 47.1% on the 8-D descriptor → 57.3% on the full 10-D one; guard the gain, not the exact number
-    expect(hits / total).toBeGreaterThan(0.52);
+    // 47.1% on the 8-D descriptor → 57.3% on the full 10-D one → 90% as the plans sharpened → 98% named
+    // by hide and telltale parts too; guard the gain, not the exact number
+    expect(hits / total).toBeGreaterThan(0.94);
   });
 });
 
