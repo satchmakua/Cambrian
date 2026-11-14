@@ -352,7 +352,9 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   }
   // …and the webs between a ring of webbed arms (an octopus's), each panel an ellipsoid too
   const webs = edges ? webPanels(p, include) : [];
-  const ne = shaped.length + webs.length;
+  // …and a slug's mantle over the front of its back (see slugMantle)
+  const mantle = edges ? slugMantle(p) : null;
+  const ne = shaped.length + webs.length + (mantle ? 1 : 0);
   // A swimmer's snout TIP — its chain's front end — keeps its ellipsoid only for the length it adds to the
   // cones' end cap: the two surfaces coincide round the tip, and smooth-unioned at the full k they swelled
   // it by k/4 (a shark's last link a third fatter than its own: a dolphin's bottle-nose). It blends as its
@@ -384,6 +386,14 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     eq.set(w.q, i * 4);
     er.set(w.r, i * 3);
   });
+  if (mantle) {
+    const i = shaped.length + webs.length;
+    ec.set(mantle.c, i * 3);
+    eq.set(mantle.q, i * 4);
+    er.set(mantle.r, i * 3);
+    eb[i] = MANTLE.blend;
+    excess = Math.max(excess, mantle.over);
+  }
   const cx = new Float64Array(nc), cy = new Float64Array(nc), cz = new Float64Array(nc), hl = new Float64Array(nc);
   for (let i = 0; i < nc; i++) {
     cx[i] = (ax[i] + bx[i]) / 2;
@@ -673,6 +683,38 @@ function quatOfBasis(X: Vec3, Y: Vec3, Z: Vec3): [number, number, number, number
  * between them (and a little into each), half as thick as they are. Without it the arms left the
  * mantle as separate rods, a spider's legs; with it they spread from one skirt.
  */
+/**
+ * A SLUG's MANTLE (a slime body whose eyes ride feelers — see eyeSeat feelerTip): the low shield over the
+ * front of its back, behind its head, every slug's saddle. An ellipsoid from MANTLE.from to MANTLE.to of the
+ * body's length, MANTLE.wide × the body's half-width there and MANTLE.high × its half-depth, its middle
+ * MANTLE.lift × the half-depth above the body's axis — so it stands a little proud of the back and its rim
+ * stands off the flanks — blended in at MANTLE.blend × the union's radius, a crease round its edge. (With
+ * none, a slug was a glossy teardrop: an aubergine with feelers.) Null for anything else; `over` is how far
+ * it reaches past its nodes' radii (the grid's padding).
+ */
+export const MANTLE = { from: 0.4, to: 0.84, wide: 1.07, high: 0.6, lift: 0.52, blend: 0.3 } as const;
+export function slugMantle(p: Phenotype): { c: Vec3; q: [number, number, number, number]; r: Vec3; over: number } | null {
+  if (p.genomeRef.covering.type !== 'slime' || p.genomeRef.symmetry !== 'bilateral') return null;
+  const feeler = p.nodes.some((n, i) => n.terminal === 'eye' && p.edges.some(([a, b]) => b === i && p.nodes[a].kind === 'limb' && p.nodes[a].part?.kind === 'eyestalk'));
+  if (!feeler) return null;
+  const trunk = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0).sort((a, b) => a.pos[2] - b.pos[2]);
+  if (trunk.length < 3) return null;
+  const head = trunk[trunk.length - 1], tail = trunk[0];
+  const z0 = tail.pos[2] - tail.radius, z1 = head.pos[2] + head.radius;
+  const za = z0 + (z1 - z0) * MANTLE.from, zb = z0 + (z1 - z0) * MANTLE.to;
+  const zc = (za + zb) / 2;
+  // the body's section at the mantle's middle, between the two links either side
+  let i = 0;
+  while (i < trunk.length - 2 && trunk[i + 1].pos[2] < zc) i++;
+  const a = trunk[i], b = trunk[i + 1];
+  const t = Math.min(1, Math.max(0, (zc - a.pos[2]) / Math.max(b.pos[2] - a.pos[2], 1e-6)));
+  const lerp = (x: number, y: number) => x + (y - x) * t;
+  const hw = lerp(a.radius * (a.scale?.[0] ?? 1), b.radius * (b.scale?.[0] ?? 1));
+  const hh = lerp(a.radius * (a.scale?.[1] ?? 1), b.radius * (b.scale?.[1] ?? 1));
+  const r: Vec3 = [MANTLE.wide * hw, MANTLE.high * hh, (zb - za) / 2];
+  return { c: [lerp(a.pos[0], b.pos[0]), lerp(a.pos[1], b.pos[1]) + MANTLE.lift * hh, zc], q: [0, 0, 0, 1], r, over: Math.max(r[0] - hw, MANTLE.lift * hh + r[1] - hh, 0) };
+}
+
 export function webPanels(p: Phenotype, include: (n: BodyNode) => boolean): { c: Vec3; q: [number, number, number, number]; r: Vec3 }[] {
   const out: { c: Vec3; q: [number, number, number, number]; r: Vec3 }[] = [];
   // (a web joins a RING of arms round a radial body: on a bilateral one — a mutant carrying webbed

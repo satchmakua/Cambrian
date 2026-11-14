@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { grow, type Phenotype } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { buildFieldPrims, CHAIN_CUTS, type FieldPrims, jawOf, fieldAt, bridgeOf, withoutCones } from '../../src/viewer/bodyField';
+import { buildFieldPrims, CHAIN_CUTS, type FieldPrims, jawOf, fieldAt, bridgeOf, withoutCones, slugMantle, MANTLE } from '../../src/viewer/bodyField';
 
 const body = (id: string, seed: number) => grow(genomeOfMorphotype(seed, id));
 
@@ -159,5 +159,48 @@ describe('body field chains', () => {
         expect(feelers, `${id} #${seed}`).toBeGreaterThan(0);
       }
     }
+  });
+
+  it("a slug wears a mantle over the front of its back: proud of the back, its rim standing off the flanks", () => {
+    // (with none, a slug was a glossy teardrop: an aubergine with feelers)
+    for (let seed = 1; seed <= 8; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'slime'));
+      const m = slugMantle(p)!;
+      expect(m, `#${seed}`).not.toBeNull();
+      const prims = buildFieldPrims(p, 'hybrid');
+      const trunk = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0).sort((a, b) => a.pos[2] - b.pos[2]);
+      const z0 = trunk[0].pos[2] - trunk[0].radius, z1 = trunk[trunk.length - 1].pos[2] + trunk[trunk.length - 1].radius;
+      // over the front of the back, behind the head
+      expect((m.c[2] - z0) / (z1 - z0), `#${seed} forward`).toBeGreaterThan(0.55);
+      expect((m.c[2] + m.r[2] - z0) / (z1 - z0), `#${seed} behind the head`).toBeLessThan(0.9);
+      // the skin with the mantle stands proud of the skin without it, over the back and out past the flank
+      const bare = buildFieldPrims(p, 'hybrid');
+      bare.ne -= 1; // (the mantle is the last ellipsoid)
+      const above = (f: FieldPrims, x: number, z: number) => {
+        let lo = m.c[1] - 2 * m.r[1], hi = m.c[1] + 2 * m.r[1];
+        for (let i = 0; i < 40; i++) {
+          const y = (lo + hi) / 2;
+          if (fieldAt(f, x, y, z) > 0) hi = y;
+          else lo = y;
+        }
+        return lo;
+      };
+      expect(above(prims, 0, m.c[2]) - above(bare, 0, m.c[2]), `#${seed} proud of the back`).toBeGreaterThan(0.02 * m.r[0]);
+      const side = (f: FieldPrims) => {
+        let lo = 0, hi = 3 * m.r[0];
+        for (let i = 0; i < 40; i++) {
+          const x = (lo + hi) / 2;
+          if (fieldAt(f, x, m.c[1], m.c[2]) > 0) hi = x;
+          else lo = x;
+        }
+        return lo;
+      };
+      expect(side(prims) - side(bare), `#${seed} its rim off the flank`).toBeGreaterThan(0.04 * m.r[0]);
+    }
+    // a slime body without feelers (an octopus) and anything else wears none
+    expect(slugMantle(grow(genomeOfMorphotype(23, 'cephalopod')))).toBeNull();
+    expect(slugMantle(grow(genomeOfMorphotype(23, 'crab')))).toBeNull();
+    expect(slugMantle(grow(genomeOfMorphotype(23, 'serpent')))).toBeNull();
+    expect(MANTLE.blend).toBeLessThan(0.5); // (blended in with a crease round its edge, not smoothed away)
   });
 });
