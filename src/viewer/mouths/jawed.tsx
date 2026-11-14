@@ -231,7 +231,7 @@ export function buildJawed(
         // a theropod's: blades along its whole jaw, whatever band its mouth drew (see THEROPOD_TEETH)
         ...(isTheropod(phenotype) ? { upper: THEROPOD_TEETH } : {}),
         project: base.project * 0.03,
-        lipR: (u) => base.lipR(u) * 0.32,
+        lipR: (u) => base.lipR(u) * 0.45,
         lowerLipR: (u) => base.lowerLipR(u) * 0.3,
         muzzleR: base.muzzleR * 0.55,
         jawR: base.jawR * 0.7,
@@ -439,8 +439,11 @@ function seamLength(row: readonly MouthSample[]): number {
 const RUN_TEETH_MAX = 22;
 /** how far a shut reptile's teeth tilt out from its skin (rad) so their crowns clear the closed jaw */
 export const TEETH_OUT = 0.32;
-/** how deep a reptile's seam along its jaw lies in the skin (× its own thickness): a groove, not a wire */
-export const SEAM_SINK = 0.55;
+/** how deep a reptile's seam along its jaw lies in the skin (× its own thickness): a groove, not a wire.
+ *  (Its tube is pressed flat to 0.45 of that along the skin's normal — the lips' `flatten` — so sunk 0.55 it lay
+ *  wholly under the skin: along the jaw a snake, a crocodile had no mouth at all. At 0.2 a quarter of it stands
+ *  out, nine-tenths of its width showing.) */
+export const SEAM_SINK = 0.2;
 /** A THEROPOD's upper teeth: ten blades along its jaw, most of each crown showing below the shut lip, the
  *  biggest a third of the way back, each its own length. (A crocodile's small pegs, sunk 0.42 of their
  *  length, stood a fiftieth of a unit off a theropod's skin — no teeth in its face — and an underbite's upper

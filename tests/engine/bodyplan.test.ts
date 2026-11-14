@@ -495,11 +495,13 @@ describe('body plans', () => {
     for (let seed = 1; seed <= 12; seed++) {
       const p = grow(genomeOfMorphotype(seed, 'serpent'));
       const t = trunkOf(p);
-      const r = t.map((n) => n.radius);
-      // (it was a cone: the neck 34% of the rump)
+      // (it was a cone: the neck 34% of the rump) — even behind its neck, which draws in under its head
+      // (grow's NECK_PINCH, over the trunk's last links)
+      const body = t.slice(0, -3);
+      const r = body.map((n) => n.radius);
       expect(Math.min(...r) / Math.max(...r), `#${seed}`).toBeGreaterThan(0.6);
       const ys = t.map((n) => n.pos[1]);
-      expect(Math.max(...ys) - Math.min(...ys), `#${seed}`).toBeLessThan(Math.max(...r) * 2);
+      expect(Math.max(...ys) - Math.min(...ys), `#${seed}`).toBeLessThan(Math.max(...t.map((n) => n.radius)) * 2);
       expect(p.nodes.some((n) => n.part?.kind === 'tail'), `#${seed}`).toBe(true);
     }
   });

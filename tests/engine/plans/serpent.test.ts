@@ -53,4 +53,14 @@ describe('serpent', () => {
       expect(Math.abs(eye.pos[0]) / rx(head[0]), `#${seed} on the sides`).toBeGreaterThan(0.6);
     }
   });
+
+  it('its head is a spade wider than its body, on a neck that draws in under it', () => {
+    // (its head's girth drawn at 0.7–1.05 of the body's under its width, and no neck behind it: the head was
+    // the end of a hose, 0.81–1.16 the body's width, 1.1–1.25 its neck's)
+    for (const seed of [...SEEDS, 29]) {
+      const { trunk, head } = snake(seed);
+      expect(rx(head[0]) / Math.max(...trunk.map(rx)), `#${seed} wider than its body`).toBeGreaterThanOrEqual(1.0);
+      expect(rx(head[0]) / Math.min(...trunk.slice(-3).map(rx)), `#${seed} wider than its neck`).toBeGreaterThanOrEqual(1.6);
+    }
+  });
 });

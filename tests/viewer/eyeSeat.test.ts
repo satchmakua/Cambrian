@@ -14,6 +14,19 @@ function faceEyes(p: Phenotype) {
   return buildMeshData(p).features.filter((f) => f.type === 'eye' && isFaceEye(p, f));
 }
 
+/** how deep a seated eye's centre lies under its skin, along its own aim (× its radius): the TRUE distance —
+ *  on a flattened section the field's value under-reads it (see eyeSeat), so a depth read from the field let
+ *  a snake's eye lie a whole radius under its skin */
+function depthAlong(prims: ReturnType<typeof surfacePrims>, c: readonly number[], aim: readonly number[], r: number): number {
+  let lo = 0, hi = 3 * r;
+  for (let i = 0; i < 40; i++) {
+    const m = (lo + hi) / 2;
+    if (fieldAt(prims, c[0] + aim[0] * m, c[1] + aim[1] * m, c[2] + aim[2] * m) > 0) hi = m;
+    else lo = m;
+  }
+  return lo / r;
+}
+
 describe('eye seats', () => {
   it('every lidded face eye sits a third out of the skin — never bulging, never buried', () => {
     // (a fixed 0.36r sink left the ball's centre anywhere from 1.1r under the skin to right on it)
@@ -27,17 +40,18 @@ describe('eye seats', () => {
           const r = Math.max(f.radius, 0.06);
           const seat = eyeSeat(p, f.idx, f.quat, r);
           const c = seat.centre!;
-          const d = fieldAt(prims, c[0], c[1], c[2]) / r;
-          if (bulgingEye(p, qRotateV(seat.quat, [0, 0, 1]))) {
+          const aim = qRotateV(seat.quat, [0, 0, 1]);
+          const d = depthAlong(prims, c, aim, r);
+          if (bulgingEye(p, aim)) {
             // a frog's bulges from its crown: half the ball proud, but still seated in the skin
-            expect(d, `${id} #${seed} (bulging)`).toBeLessThan(0);
-            expect(Math.abs(d + BULGE_DEPTH), `${id} #${seed} (bulging)`).toBeLessThan(0.12);
+            expect(d, `${id} #${seed} (bulging)`).toBeGreaterThan(0);
+            expect(Math.abs(d - BULGE_DEPTH), `${id} #${seed} (bulging)`).toBeLessThan(0.12);
             continue;
           }
-          expect(d, `${id} #${seed}`).toBeLessThan(-0.15);
-          expect(d, `${id} #${seed}`).toBeGreaterThan(-0.8);
+          expect(d, `${id} #${seed}`).toBeGreaterThan(0.15);
+          expect(d, `${id} #${seed}`).toBeLessThan(0.8);
           n++;
-          if (Math.abs(d + SEAT_DEPTH) < 0.1) near++;
+          if (Math.abs(d - SEAT_DEPTH) < 0.08) near++;
         }
       }
     }
@@ -54,8 +68,8 @@ describe('eye seats', () => {
         const prims = surfacePrims(p, 'hybrid');
         for (const f of faceEyes(p)) {
           const r = Math.max(f.radius, 0.06);
-          const c = eyeSeat(p, f.idx, f.quat, r).centre!;
-          expect(fieldAt(prims, c[0], c[1], c[2]) / r, `${id} #${seed}`).toBeLessThan(-0.4);
+          const seat = eyeSeat(p, f.idx, f.quat, r);
+          expect(depthAlong(prims, seat.centre!, qRotateV(seat.quat, [0, 0, 1]), r), `${id} #${seed}`).toBeGreaterThan(0.4);
         }
       }
     }
@@ -117,11 +131,11 @@ describe('eye seats', () => {
         for (const f of buildMeshData(p).features) {
           if (f.type !== 'eye' || eyeVariant(f.style) !== 'compound') continue;
           const r = Math.max(f.radius, 0.06);
-          const c = eyeSeat(p, f.idx, f.quat, r).centre!;
-          const d = fieldAt(prims, c[0], c[1], c[2]) / r;
-          expect(d, `${id} #${seed}`).toBeLessThan(-0.3); // under the cuticle…
-          expect(d, `${id} #${seed}`).toBeGreaterThan(-0.6); // …with a dome of it still standing out
-          expect(Math.abs(d + COMPOUND_DEPTH), `${id} #${seed}`).toBeLessThan(0.1);
+          const seat = eyeSeat(p, f.idx, f.quat, r);
+          const d = depthAlong(prims, seat.centre!, qRotateV(seat.quat, [0, 0, 1]), r);
+          expect(d, `${id} #${seed}`).toBeGreaterThan(0.3); // under the cuticle…
+          expect(d, `${id} #${seed}`).toBeLessThan(0.6); // …with a dome of it still standing out
+          expect(Math.abs(d - COMPOUND_DEPTH), `${id} #${seed}`).toBeLessThan(0.1);
           n++;
         }
       }
@@ -142,10 +156,10 @@ describe('eye seats', () => {
           const e = p.edges.find(([, b]) => b === f.idx);
           if (!e || p.nodes[e[0]].kind !== 'spine') continue; // (on the face, not up a stalk)
           const r = Math.max(f.radius, 0.06);
-          const c = eyeSeat(p, f.idx, f.quat, r).centre!;
-          const d = fieldAt(prims, c[0], c[1], c[2]) / r;
-          expect(d, `${id} #${seed}`).toBeLessThan(-0.3);
-          expect(d, `${id} #${seed}`).toBeGreaterThan(-0.6);
+          const seat = eyeSeat(p, f.idx, f.quat, r);
+          const d = depthAlong(prims, seat.centre!, qRotateV(seat.quat, [0, 0, 1]), r);
+          expect(d, `${id} #${seed}`).toBeGreaterThan(0.3);
+          expect(d, `${id} #${seed}`).toBeLessThan(0.6);
           n++;
         }
       }
@@ -228,5 +242,33 @@ describe('eye seats', () => {
       }
     }
     expect(checked).toBeGreaterThanOrEqual(60);
+  });
+
+  it("a snake's eye shows: seated by its skin, not buried under a flattened skull", () => {
+    // (seated by the field's value, which under-reads across a flat section's wide axis, a snake's eye sank a
+    // whole radius: the skin closed over the ball and only the tip of its slit showed, a speck)
+    const FIB: number[][] = [];
+    for (let i = 0, g = Math.PI * (3 - Math.sqrt(5)); i < 300; i++) {
+      const y = 1 - (2 * (i + 0.5)) / 300, rr = Math.sqrt(1 - y * y);
+      FIB.push([Math.cos(g * i) * rr, y, Math.sin(g * i) * rr]);
+    }
+    for (const seed of [1, 2, 3, 4, 5, 6, 29]) {
+      const p = grow(genomeOfMorphotype(seed, 'serpent'));
+      const prims = surfacePrims(p, 'hybrid');
+      for (const f of faceEyes(p)) {
+        const r = Math.max(f.radius, 0.06);
+        const seat = eyeSeat(p, f.idx, f.quat, r);
+        const aim = qRotateV(seat.quat, [0, 0, 1]);
+        expect(Math.abs(depthAlong(prims, seat.centre!, aim, r) - SEAT_DEPTH), `#${seed} seated`).toBeLessThan(0.08);
+        let out = 0;
+        for (const d of FIB) {
+          const x = [0, 1, 2].map((k) => seat.centre![k] + d[k] * 0.9 * r);
+          const fl = seat.flat;
+          const y = fl ? x.map((v, k) => v + fl.n[k] * ((x[0] - fl.at[0]) * fl.n[0] + (x[1] - fl.at[1]) * fl.n[1] + (x[2] - fl.at[2]) * fl.n[2]) * (fl.s - 1)) : x;
+          if (fieldAt(prims, y[0], y[1], y[2]) > 0) out++;
+        }
+        expect(out / FIB.length, `#${seed} the eye shows`).toBeGreaterThan(0.2);
+      }
+    }
   });
 });

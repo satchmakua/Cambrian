@@ -18,6 +18,17 @@ export type Quat = [number, number, number, number]; // [x, y, z, w]
 
 /** Fusiform bulge: how much fatter the middle of a body chain is than its ends. */
 const BODY_BULGE = 0.35;
+/** A SLITHERER's neck (a long trunk with no legs, fins, wings or arms anywhere, its head on its front): the
+ *  trunk draws in over its last NECK_LINKS links to NECK_PINCH less than its girth there, so the head it
+ *  carries stands out of it. (Running on at its own girth to the skull, a snake was a hose with its end
+ *  pinched flat: its head 1.1–1.25 its neck's width.) */
+const NECK_PINCH = 0.18;
+const NECK_LINKS = 3;
+const LIMBS = new Set(['leg', 'fin', 'wing', 'arm']);
+function slithers(seg: SegmentGene): boolean {
+  const limbless = (s: SegmentGene | undefined): boolean => !s || (!s.appendages.some((a) => LIMBS.has(a.kind)) && limbless(s.child));
+  return !!seg.child && !seg.child.child && seg.repeat > 2 * NECK_LINKS && limbless(seg);
+}
 /** …and how fast a four-legged runner's deepening chest takes that swell away (per unit of taper
  *  above 1: at a taper of 1.1 a third of it is left). */
 const RUNNER_TUCK = 6.5;
@@ -383,8 +394,11 @@ export function grow(genome: Genome): Phenotype {
     const stop = !seg.child && dev.symmetry === 'bilateral' ? headStop(seg, depth) : 0;
     // (…its muzzle broad at the stop and narrowing to the nose: see muzzleShare; a myriapod's rings draw
     // in to its rump: see isRinged)
+    // (…and a slitherer's trunk draws in to its neck: see NECK_PINCH)
+    const neck = depth === 0 && dev.symmetry === 'bilateral' && slithers(seg);
+    const neckAt = (i: number) => (neck ? 1 - NECK_PINCH * smooth01((i - (seg.repeat - 1 - NECK_LINKS)) / NECK_LINKS) : 1);
     const radiusAt = (i: number) =>
-      girth * Math.pow(seg.taper, i) * profileAt(i) * norm * muzzleShare(i, seg.repeat - 1, stop) * ringAt(i);
+      girth * Math.pow(seg.taper, i) * profileAt(i) * norm * muzzleShare(i, seg.repeat - 1, stop) * ringAt(i) * neckAt(i);
     const muzzle = muzzleShare(1, seg.repeat - 1, stop); // the muzzle's girth at the stop (it sets how low it hangs)
     // (a ring's slim nodes — its two rims, the joint ahead of it — share the links' cross-section;
     // parts seat on the rings' centres alone)

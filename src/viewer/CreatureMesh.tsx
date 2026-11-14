@@ -896,6 +896,28 @@ const FISH_IRIS = [0xc9cdd2, 0xb9bfc4, 0xd2b062, 0xbf9a4a, 0xa9b49c];
 const SHARK_IRIS = [0x2c3336, 0x283330, 0x34383a];
 /** a frog's iris: gold, bronze, copper, an olive gold */
 const FROG_IRIS = [0xc9a23a, 0xb8862e, 0xb06a2a, 0xa6a04a];
+/** the least sRGB distance an eye's iris keeps from its coat and its markings */
+export const IRIS_APART = 0.12;
+/** A slit eye's iris: a reptile's (or, in fur, a cat's) hashed from the seed — stepped on to the next of its
+ *  palette that stands IRIS_APART from the coat and its markings. (An iris the colour of the hide round it
+ *  is lost in it: an olive iris in an olive net left its slit alone, a speck.) */
+export function slitIrisOf(seed: number, phenotype: Phenotype | undefined): number {
+  const pal = phenotype?.genomeRef.covering.type === 'fur' ? CAT_IRIS : REPTILE_IRIS;
+  const k = Math.floor(unitHash(seed, 0x511) * pal.length);
+  if (!phenotype) return pal[k];
+  const hide = [coatMain(phenotype.genomeRef.palette), coatPattern(phenotype.genomeRef.palette)].map((c) => c.clone().convertLinearToSRGB());
+  for (let j = 0; j < pal.length; j++) {
+    const c = new THREE.Color(pal[(k + j) % pal.length]).convertLinearToSRGB();
+    if (hide.every((h) => Math.hypot(c.r - h.r, c.g - h.g, c.b - h.b) > IRIS_APART)) return pal[(k + j) % pal.length];
+  }
+  return pal[k];
+}
+/** A snake has no lids: its eye is open round under a clear scale, and never blinks (a legless, finless,
+ *  wingless body in scales). In an almond of lids it was a lizard's. */
+export function brilleEye(p: Phenotype | undefined): boolean {
+  if (!p || p.genomeRef.symmetry !== 'bilateral' || p.genomeRef.covering.type !== 'scales') return false;
+  return !p.nodes.some((n) => n.part?.kind === 'leg' || n.part?.kind === 'fin' || n.part?.kind === 'wing');
+}
 
 /** One eye's lids in the body's own covering: the shared hemispheres scaled to the eye, with the
  *  covering shader's body-space coordinates baked at the open pose (so the coat runs onto the lids
@@ -1003,11 +1025,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   // (lidded and staring forward over a grin, every fish read as a Muppet)
   const fishEye = useMemo(() => vertebrate && onFace && !!phenotype && isSwimmer(phenotype), [vertebrate, onFace, phenotype]);
   const lidded = vertebrate && !fishEye;
-  const furred = phenotype?.genomeRef.covering.type === 'fur';
-  const slitIris = useMemo(() => {
-    const pal = furred ? CAT_IRIS : REPTILE_IRIS;
-    return pal[Math.floor(unitHash(seed, 0x511) * pal.length)];
-  }, [seed, furred]);
+  const slitIris = useMemo(() => slitIrisOf(seed, phenotype), [seed, phenotype]);
   const sharkEye = fishEye && phenotype?.genomeRef.covering.type === 'skin';
   const radialEye = phenotype?.genomeRef.symmetry === 'radial';
   // a frog's eye (round, bulging from its crown): a gold or bronze iris round a black horizontal pupil
@@ -1041,7 +1059,8 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   // the ball takes the iris's own hue, deep — a brown ball behind a green or blue iris read as a bruise
   const ballColor = useMemo(() => new THREE.Color(iris).multiplyScalar(0.16).lerp(new THREE.Color(0x1c120e), 0.5).getHex(), [iris]);
   const lidColor = useMemo(() => new THREE.Color(lid).multiplyScalar(0.82).getHex(), [lid]);
-  const open = lidOpening(phenotype?.genomeRef.symmetry === 'radial', frogEye);
+  const brille = useMemo(() => brilleEye(phenotype), [phenotype]);
+  const open = lidOpening(phenotype?.genomeRef.symmetry === 'radial' || brille, frogEye);
   const lidGeo = useMemo(() => {
     if (!lidded || !skin || !origin) return null;
     return {
@@ -1085,7 +1104,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   const phase = useMemo(() => ((seed >>> 0) % 997) / 997, [seed]);
   useFrame((st) => {
     if (!lidded || !upper.current || !lower.current) return;
-    const close = Math.max(lids ? lids.shut : 0, lids?.blink === false ? 0 : blinkAt(st.clock.elapsedTime, phase));
+    const close = Math.max(lids ? lids.shut : 0, lids?.blink === false || brille ? 0 : blinkAt(st.clock.elapsedTime, phase));
     // open: the upper margin rides ~35° above the eye's equator, the lower ~42° below; shut: they meet
     // a little below centre
     upper.current.rotation.x = open.upper + close * (LID_SHUT.upper - open.upper);

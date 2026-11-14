@@ -3,7 +3,7 @@ import { grow, type Phenotype } from '../../../src/engine/grow';
 import { defaultGenome } from '../../../src/engine/genome';
 import { randomGenome, genomeOfMorphotype } from '../../../src/engine/random';
 import { buildFieldPrims, fieldAt, qRotateV, rayToSurface } from '../../../src/viewer/bodyField';
-import { buildJawed, jawDrawn, seamShown, teethDrawn, JAW_SHOWN, TEETH_SHOWN, JAWED_PARAMS, type JawedVariant, shutTeeth, DRAGON_FANGS, GRIN_BULGE, GRIN_JITTER } from '../../../src/viewer/mouths/jawed';
+import { buildJawed, jawDrawn, seamShown, teethDrawn, JAW_SHOWN, TEETH_SHOWN, JAWED_PARAMS, type JawedVariant, shutTeeth, DRAGON_FANGS, GRIN_BULGE, GRIN_JITTER, SEAM_SINK } from '../../../src/viewer/mouths/jawed';
 import { mouthCarves, mouthSpec, surfacePrims } from '../../../src/viewer/mouthLine';
 
 const VARIANTS: JawedVariant[] = ['herbivore', 'maw', 'fanged', 'underbite'];
@@ -333,5 +333,31 @@ describe('jawed mouth build (mouth overhaul)', () => {
     // a crocodile's grin is uneven: a band of bigger teeth a little way back
     expect(GRIN_BULGE).toBeGreaterThan(0.3);
     expect(GRIN_JITTER).toBeGreaterThan(0.2);
+  });
+
+  it("a shut reptile's seam shows along its jaw: a groove with a lip in it, not a line buried under the skin", () => {
+    // (pressed flat to 0.45 of its girth and sunk 0.55 of it, the seam's tube lay wholly under the skin along
+    // the jaw: a snake, and a lizard once its teeth were gone, had no mouth at all)
+    for (const id of ['serpent', 'crocodilian', 'lizard']) {
+      for (let seed = 1; seed <= 4; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const idx = mouthIdx(p);
+        const spec = mouthSpec(p, idx);
+        if (!spec || !['herbivore', 'maw', 'fanged', 'underbite'].includes(spec.variant)) continue;
+        const b = buildJawed(p, idx, [], false, spec.variant as JawedVariant, 'hybrid')!;
+        const f = surfacePrims(p, 'hybrid');
+        const o = spec.node.pos;
+        const pos = b.upperLip.getAttribute('position');
+        let out = 0, top = 0;
+        for (let v = 0; v < pos.count; v++) {
+          const d = fieldAt(f, pos.getX(v) + o[0], pos.getY(v) + o[1], pos.getZ(v) + o[2]);
+          if (d > 0) out++;
+          top = Math.max(top, d);
+        }
+        expect(out / pos.count, `${id} #${seed} shows`).toBeGreaterThan(0.15);
+        expect(top / b.r, `${id} #${seed} a groove, not a wire`).toBeLessThan(0.06);
+      }
+    }
+    expect(SEAM_SINK).toBeLessThan(0.45);
   });
 });

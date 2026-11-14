@@ -110,12 +110,39 @@ export function eyeSeat(p: Phenotype, idx: number, quat0: readonly number[], r: 
   const ev = eyeVariant(p.nodes[idx].part?.style ?? 0.5);
   const bulge = ev !== 'compound' && ev !== 'glowing' && bulgingEye(p, aim);
   const depth = ev === 'compound' || ev === 'glowing' ? COMPOUND_DEPTH : bulge ? BULGE_DEPTH : SEAT_DEPTH;
+  // Seated by the SKIN along its aim, not by the field's value: on a flattened section the field is no distance
+  // (ellipticConeDist scales it by the section's smaller axis, so across the wide one it under-reads), and marched
+  // to a field of −depth·r an eye on the side of a flat skull sank depth × its width-to-height: a snake's (1.85 : 1)
+  // a whole radius — the skin closed over the ball and only the tip of its slit showed, a speck — a lizard's,
+  // a cat's or a weasel's a third deeper than it should. The skin is found coming in along the aim from outside
+  // it (the node itself may have grown just under it).
+  const inside = (t: number) => fieldAt(prims, c[0] - aim[0] * t, c[1] - aim[1] * t, c[2] - aim[2] * t) <= 0;
   let s = r * 0.36;
-  for (let i = 0; i < 8; i++) {
-    const d = fieldAt(prims, c[0] - aim[0] * s, c[1] - aim[1] * s, c[2] - aim[2] * s);
+  let out = -1.5 * r, at = NaN;
+  if (!inside(out)) {
+    for (let t = out + r * 0.25; t <= r * (SEAT_MAX_SINK + 1); t += r * 0.25) {
+      if (inside(t)) {
+        at = t;
+        break;
+      }
+      out = t;
+    }
+  }
+  if (!Number.isNaN(at)) {
+    for (let i = 0; i < 16; i++) {
+      const m = (out + at) / 2;
+      if (inside(m)) at = m;
+      else out = m;
+    }
     // (as deep as two radii: an eye grown at a flattened skull's round radius floats a radius over its
     // skin, and stopped at one it sat half out of the head — a bead on a lizard's broad flat crown)
-    s = Math.min(r * SEAT_MAX_SINK, Math.max(-r * 0.6, s + d + r * depth));
+    s = Math.min(r * SEAT_MAX_SINK, Math.max(-r * 0.6, at + r * depth));
+  } else {
+    // (a node grown inside its skin, or an aim that never meets it within reach: marched by the field, as before)
+    for (let i = 0; i < 8; i++) {
+      const d = fieldAt(prims, c[0] - aim[0] * s, c[1] - aim[1] * s, c[2] - aim[2] * s);
+      s = Math.min(r * SEAT_MAX_SINK, Math.max(-r * 0.6, s + d + r * depth));
+    }
   }
   const centre: [number, number, number] = [c[0] - aim[0] * s, c[1] - aim[1] * s, c[2] - aim[2] * s];
   // (a frog's and a crocodile's eyes bulge, an insect's facets are a dome by design, a fish's lie flush, a radial
