@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { earGeometry } from '../../src/viewer/ear';
+import { earVariant } from '../../src/viewer/partStyles';
 import { buildFieldPrims } from '../../src/viewer/bodyField';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
@@ -59,6 +60,24 @@ describe('ears', () => {
       const ql = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(-0.35, 1, 0).normalize());
       const left = meanNormal(earGeometry(v, 0.1, [ql.x, ql.y, ql.z, ql.w]).inner);
       expect(left.x, `${v} mirrored`).toBeCloseTo(-right.x, 6);
+    }
+  });
+
+  it("a bear's round ears both show their hollow to the studio's three-quarter view, the far one never edge-on", () => {
+    // (turned 45° out on an ear already leaning out and forward, a round cup opened out and down: the
+    // far ear was seen dead edge-on, 91–95° from the camera — a spike beside the near one's cup)
+    const cam = new THREE.Vector3(0.62, 0.38, 0.7).normalize();
+    for (let seed = 1; seed <= 16; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'ursid'));
+      const ears = p.nodes.filter((n) => n.terminal === 'ear');
+      expect(ears.length, `#${seed}`).toBe(2);
+      for (const e of ears) {
+        const v = earVariant(e.part?.style ?? 0.5);
+        expect(v, `#${seed}`).toBe('round');
+        const inner = meanNormal(earGeometry(v, Math.max(e.radius, 0.06), e.quat).inner);
+        const deg = (Math.acos(inner.dot(cam)) * 180) / Math.PI;
+        expect(deg, `#${seed} ${e.pos[0] > 0 ? 'near' : 'far'} ear`).toBeLessThan(80);
+      }
     }
   });
 

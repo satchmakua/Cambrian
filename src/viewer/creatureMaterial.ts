@@ -288,8 +288,9 @@ export function makeCreatureMaterial(
           // the belly's, the flank's and the back's tones — pale and dark patches, a camouflage)
           float up = uCut > 0.5 ? 0.5 : clamp(vWNrm.y * 0.5 + 0.5, 0.0, 1.0);
           // (a leg, and a paw on it, wears the flank's tone: facing the ground, a paw took the belly's —
-          // pale puffballs under a dark animal)
-          up = mix(up, 0.5, vLeg);
+          // pale puffballs under a dark animal. Where it faces up it wears the back's, as a back does: in
+          // the flank's tone a paw's flat top, lit by the sky, was the brightest thing on a bear — a slipper)
+          up = mix(up, max(up, 0.5), vLeg);
           // countershading kept to the underside and the spine: the flanks carry the coat's true
           // colour (a flank used to be 58% belly — fixed grey — and 42% darkened back, never the coat)
           vec3 skin = mix(uMain, uBelly, 1.0 - smoothstep(0.1, 0.4, up));
@@ -426,6 +427,7 @@ export function makeCreatureMaterial(
           if (uDebug == 3) diffuseColor.rgb = vec3(gM + 0.5);
           if (uDebug == 4) diffuseColor.rgb = vec3(vAO);
           if (uDebug == 5) diffuseColor.rgb = vec3(gFw * 60.0);
+          if (uDebug == 6) diffuseColor.rgb = vec3(vLeg, up, 0.0);
         }`,
       )
       // roughness: patchy wet/dry, so the skin catches light unevenly like real hide (never uniform gloss)

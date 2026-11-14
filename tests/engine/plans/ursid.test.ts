@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { grow, headStop } from '../../../src/engine/grow';
+import { grow, headStop, type BodyNode } from '../../../src/engine/grow';
 import { genomeOfMorphotype } from '../../../src/engine/random';
 
 const SEEDS = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -43,6 +43,38 @@ describe('ursid', () => {
       const skull = p.nodes.filter((n) => n.kind === 'spine' && n.segment === depth);
       const brain = skull[0], muzzle = skull[skull.length - 1];
       expect((muzzle.pos[1] - brain.pos[1]) / brain.radius, `#${seed} level muzzle`).toBeGreaterThan(-0.55);
+    }
+  });
+
+  it('is a barrel on thick columns, its head at its shoulders on a neck as thick as its skull, its snout short', () => {
+    // (a wedge sloping off steep withers to a small rump, on long thin legs ending in small paws, the
+    // head held up over the withers on a waist of a neck, with a dog's length of muzzle: a hyena)
+    const top = (n: BodyNode) => n.pos[1] + n.radius * (n.scale?.[1] ?? 1);
+    const bot = (n: BodyNode) => n.pos[1] - n.radius * (n.scale?.[1] ?? 1);
+    for (const seed of SEEDS) {
+      const p = grow(genomeOfMorphotype(seed, 'ursid'));
+      const depth = Math.max(...p.nodes.filter((n) => n.kind === 'spine').map((n) => n.segment ?? 0));
+      const trunk = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 0).sort((a, b) => a.pos[2] - b.pos[2]);
+      const neck = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) > 0 && (n.segment ?? 0) < depth);
+      const skull = p.nodes.filter((n) => n.kind === 'spine' && n.segment === depth);
+      const rump = trunk[0], chest = trunk[trunk.length - 1];
+      const brain = skull[0], nose = skull[skull.length - 1];
+      // a barrel: the rump near the chest's girth, the back falling only a little to it
+      expect(rump.radius / chest.radius, `#${seed} rump`).toBeGreaterThan(0.75);
+      expect((top(chest) - top(rump)) / rump.radius, `#${seed} slope`).toBeLessThan(0.8);
+      // on columns: big paws, and the belly low between them
+      const paws = p.nodes.filter((n) => n.terminal === 'paw');
+      expect(Math.min(...paws.map((n) => n.radius)) / chest.radius, `#${seed} paws`).toBeGreaterThan(0.25);
+      const belly = Math.min(...trunk.map(bot)), back = Math.max(...trunk.map(top));
+      const footY = Math.min(...p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg').map((n) => n.pos[1]));
+      expect((belly - footY) / (back - belly), `#${seed} belly`).toBeLessThan(0.62);
+      // the head carried at the withers, on a neck nearly the skull's girth
+      expect((top(brain) - top(chest)) / chest.radius, `#${seed} head`).toBeLessThan(0.2);
+      expect(Math.min(...neck.map((n) => n.radius)) / brain.radius, `#${seed} neck`).toBeGreaterThan(0.82);
+      // a short snout on a broad head: the nose under a skull's radius past the braincase
+      expect((nose.pos[2] + nose.radius - (brain.pos[2] + brain.radius)) / brain.radius, `#${seed} snout`).toBeLessThan(0.9);
+      // and small eyes
+      for (const e of p.nodes.filter((n) => n.terminal === 'eye')) expect(e.radius / brain.radius, `#${seed} eye`).toBeLessThan(0.21);
     }
   });
 

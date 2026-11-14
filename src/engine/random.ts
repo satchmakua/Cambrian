@@ -126,6 +126,8 @@ interface Morpho {
   headSize?: Rg; // head girth ×body girth — default [0.7, 1.05]; a mammal's skull is far narrower than its chest
   muzzle?: Rg; // a mammal skull: a round cranium + a narrower, dropped muzzle (muzzle girth ×cranium, ≥ 0.6)
   muzzleDrop?: Rg; // how far the muzzle hangs below the brow (pitch, rad) — default [0.3, 0.42]
+  /** a long muzzle's length × its usual (a constant: no draw) — a bear's runs shorter from its stop than a dog's */
+  muzzleLong?: number;
   stop?: Rg; // a long muzzle's link-to-link taper, set past 0.9: the skull then has a STOP — a forehead
   //            step down to a muzzle that holds its girth (a dog's), not one cone from ears to nose
   earSize?: Rg; // ear size ×the skull's (a bear's small round ears vs a fennec's) — default [1, 1]
@@ -237,7 +239,10 @@ const MORPHOTYPES: readonly Morpho[] = [
   // broad skull and a muzzle held out level from it. (Level from rump to shoulders, with the muzzle
   // hung from the brow at a hound's droop, it was a tapir — a hippo, in a pink coat.)
   // (its muzzle tapers to the nose, and runs no longer than a dog's: an even tube ending in a round bulb was a hippo's)
-  { id: 'ursid', cluster: 'familiar', weight: 0.6, taper: [1.11, 1.15], rear: [-0.09, -0.05], eyeEl: [0.85, 0.98], girth: [0.54, 0.68], repeat: [3, 4], height: [1.0, 1.12], neck: [0.62, 0.72], neckLift: [-0.25, -0.1], headSize: [0.7, 0.82], muzzle: [0.62, 0.7], muzzleDrop: [0.12, 0.2], legPairs: [2], posture: 'plantigrade', legAz: [4.32, 4.5], legLen: [0.95, 1.15], legThick: [0.68, 0.82], legTerm: ['paw'], snout: [0.46, 0.53], stop: [0.9, 0.915], tail: 0.25, tailSegs: [1, 2], tailLen: [0.25, 0.4], tailThick: [0.26, 0.34], ears: 1, earStyle: [0.7, 1], earSize: [0.65, 0.85], whiskers: 0, headShape: ['broad'], headWide: [1.1, 1.22], headDome: [0.86, 1.02], eyeStyle: [0.22, 0.36], mouthStyle: [0.07, 0.12], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.06, 0.09], sat: [0.3, 0.55], light: [0.2, 0.38] }, // brown to near-black (a light coat on a redder hue was salmon pink)
+  // (a barrel to a rump near the chest's girth, on four-link legs as thick at the wrist as a dog's at the elbow, the head
+  // at the shoulders on a neck as thick as it, the muzzle short of a dog's: as a wedge sloping off steep withers to a
+  // small rump, on long thin legs, the head held up on a waist of a neck with a dog's muzzle, it was a hyena, a capybara)
+  { id: 'ursid', cluster: 'familiar', weight: 0.6, taper: [1.06, 1.09], rear: [-0.055, -0.04], eyeEl: [0.85, 0.98], girth: [0.54, 0.68], repeat: [4, 4], height: [1.0, 1.12], neck: [0.74, 0.82], neckLift: [-0.1, -0.04], neckLong: 0.9, headSize: [0.7, 0.82], muzzle: [0.62, 0.7], muzzleDrop: [0.12, 0.2], muzzleLong: 0.8, legPairs: [2], posture: 'plantigrade', legAz: [4.36, 4.5], legLen: [0.74, 0.86], legThick: [0.68, 0.82], legTaper: [0.88, 0.94], legCurl: [0.2, 0.28], legSegs: 4, legTerm: ['paw'], snout: [0.46, 0.53], stop: [0.9, 0.915], tail: 0.25, tailSegs: [1, 2], tailLen: [0.25, 0.4], tailThick: [0.26, 0.34], ears: 1, earStyle: [0.7, 1], earSize: [0.65, 0.85], whiskers: 0, headShape: ['broad'], headWide: [1.22, 1.32], headDome: [0.9, 0.98], eyeStyle: [0.22, 0.36], eyeSize: 0.75, mouthStyle: [0.07, 0.12], covering: ['fur'], pattern: ['plain', 'mottle'], hue: [0.06, 0.09], sat: [0.3, 0.55], light: [0.2, 0.38] }, // brown to near-black (a light coat on a redder hue was salmon pink)
   // (its head broader than its slim neck at the hinge of the jaws, wedging to the snout, the eye a third of the way
   // back: no wider than its neck, the eye at its tip, the front of a lizard was a newt's round end)
   { id: 'lizard', cluster: 'familiar', weight: 0.6, tailTaper: [0.76, 0.82], tailAz: [4.6, 4.8], tailCurl: [0.04, 0.08], tailDroop: [-1.52, -1.4], tailLen: [0.92, 1.12], tailSegs: [6, 6], tailThick: [0.5, 0.62], eyeT: [0.38, 0.5], head: 1, girth: [0.32, 0.46], repeat: [4, 6], height: [0.6, 0.8], elong: [1.2, 1.5], neck: [0.5, 0.58], taper: [0.97, 1.0], neckLift: [-0.24, -0.14], headSize: [0.8, 0.94], headWide: [1.08, 1.22], headDome: [0.66, 0.8], headLong: [1.3, 1.55], legPairs: [2], posture: 'sprawling', legLen: [0.58, 0.88], legAz: [3.66, 3.86], legTerm: ['claw'], headShape: ['flat', 'wedge'], snout: [0.4, 0.65], tail: 0.95, frill: 0.25, eyeStyle: [0.4, 0.6], mouthStyle: [0.07, 0.18], covering: ['scales'], pattern: ['bands', 'reticulate', 'mottle'], hue: [0.22, 0.42], sat: [0.5, 0.85] },
@@ -734,7 +739,7 @@ function muzzleHead(rng: Rng, g: number, m: Morpho, eyeStyle: number): SegmentGe
   return {
     // z sets the cranium→muzzle stride: a flat face overlaps them (~0.85 radii), a snout reaches
     // further (grow turns any excess past 1.4 into a z-stretch of the node ellipsoids)
-    size: [clamp(g * wide, sb), clamp(g * domed, sb), clamp(g * (long ? 1.0 + snout * 0.5 : 0.85 + snout * 1.3), sb)],
+    size: [clamp(g * wide, sb), clamp(g * domed, sb), clamp(g * (long ? (1.0 + snout * 0.5) * (m.muzzleLong ?? 1) : 0.85 + snout * 1.3), sb)],
     repeat: long ? 3 : 2,
     // a long muzzle narrows over its two links to well under half the skull at the nose (at √ratio
     // per link it stayed a blunt seal's snout)

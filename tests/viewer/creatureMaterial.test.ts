@@ -459,6 +459,20 @@ describe('creature material shader injection', () => {
     expect(f).toContain('float shade = mix(0.62, 1.12, uShellH) * (0.93 + 0.14 * hash13(cid + 9.0));');
   });
 
+  it("a leg's up-facing surfaces (a paw's top) wear the back's tone, its sides the flank's, never the belly's", () => {
+    // (all leg in the flank's tone, a paw's flat top lit by the sky was the brightest thing on a bear:
+    // a pale slipper under a dark animal)
+    const f = compileShaderStrings('fur').fragmentShader;
+    const iUp = f.indexOf('float up = ');
+    const iLeg = f.indexOf('up = mix(up, max(up, 0.5), vLeg);');
+    const iBack = f.indexOf('skin = mix(skin, uBack, smoothstep(0.64, 0.96, up));');
+    expect(iUp).toBeGreaterThan(0);
+    expect(iLeg).toBeGreaterThan(iUp);
+    expect(iBack).toBeGreaterThan(iLeg);
+    // the lines between read the leg's tone from `up` alone: nothing else sets it
+    expect(f.slice(iLeg + 1, iBack)).not.toMatch(/\bup\s*=/);
+  });
+
   it('wears the palette as sRGB: a coat is its own colour, with a belly of its own hue', () => {
     // read as LINEAR HSL a mid lightness rendered as a pale pastel, and the belly was lerped toward
     // a fixed grey that outweighed a brown coat ~4:1 — every pelt came out the same chalky greige

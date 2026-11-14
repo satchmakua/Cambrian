@@ -24,8 +24,10 @@ export function earGeometry(v: ReturnType<typeof earVariant>, r: number, quat: r
   const out = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3])).normalize();
   // the ear's face normal: forward and turned OUT to its own side (a cat's opens ~30° out, a bear's
   // or a mouse's round cup ~45°, a rabbit's or a deer's blade more) — made perpendicular to the
-  // ear's rise. (Faced dead ahead, an ear was seen edge-on from the side: a thin dark horn.)
-  const turn = v === 'pointed' ? 0.52 : v === 'round' ? 0.78 : 0.87;
+  // ear's rise. (Faced dead ahead, an ear was seen edge-on from the side: a thin dark horn. A round
+  // cup turned 45° out, on an ear already leaning out and forward, opened out and down: from a
+  // three-quarter view the far one was seen dead edge-on, a spike beside the near one's cup.)
+  const turn = v === 'pointed' ? 0.52 : v === 'round' ? 0.5 : 0.87;
   const lat = Math.sign(out.x);
   const n = new THREE.Vector3(lat * Math.sin(turn), 0, Math.cos(turn));
   n.addScaledVector(out, -n.dot(out));
