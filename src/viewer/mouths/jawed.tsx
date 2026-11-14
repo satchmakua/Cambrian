@@ -20,7 +20,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { coatMain } from '../palette';
-import { faceMaskOf } from '../face';
+import { faceMaskOf, isApe } from '../face';
 import { isTheropod, tailRootRatio } from '../feet';
 import { headStop, type Phenotype } from '../../engine/grow';
 import type { SegmentGene, Vec3 } from '../../engine/genome';
@@ -400,8 +400,10 @@ export function buildJawed(
     nostrils = mergeGeometries(holes) ?? null;
     for (const h of holes) h.dispose();
     // a short muzzle's WHISKER PADS: two soft lobes either side of the mouth's middle, under the nose
-    // (without them a cat's face was a plush ball with a nose on it: no muzzle at all)
-    if (muzzled && snoutReach(phenotype, idx) < SNOUT_SHORT) {
+    // (without them a cat's face was a plush ball with a nose on it: no muzzle at all) — a cat's, not an
+    // ape's or a bear's: an ape's lip runs flat under its nose, a bear's muzzle stops at its skull's brow
+    // (on them, two round cat's pads under a small nose)
+    if (whiskerPads(phenotype, idx, muzzled)) {
       const lobes: THREE.BufferGeometry[] = [];
       for (const side of [-1, 1]) {
         const lobe = new THREE.SphereGeometry(1, 16, 12);
@@ -473,6 +475,10 @@ const NOSE_LONG = 1.5;
  *  reaches. (By reach alone a weasel's long snout ended in a dog's rhinarium as wide as the muzzle, past
  *  the fur; a deer's in a glossy black rubber ball.) */
 export const NOSE_POINTED = 0.9;
+/** Does this mouth wear a cat's whisker pads? A short muzzle on a skull with no stop, not an ape's. */
+export function whiskerPads(p: Phenotype, mouthIdx: number, muzzled: boolean): boolean {
+  return muzzled && snoutReach(p, mouthIdx) < SNOUT_SHORT && stopOf(p, mouthIdx) < 0.5 && !isApe(p);
+}
 /** the stop of the head section a mouth is on (grow's headStop): 1 on a dog's or a bear's skull */
 export function stopOf(p: Phenotype, mouthIdx: number): number {
   const parent = p.edges.find(([, b]) => b === mouthIdx)?.[0];

@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
 import * as THREE from 'three';
-import { buildJawed, NOSE_POINTED, pinkNoseChance, stopOf, type JawedVariant } from '../../src/viewer/mouths/jawed';
-import { mouthCarves } from '../../src/viewer/mouthLine';
+import { buildJawed, NOSE_POINTED, pinkNoseChance, stopOf, whiskerPads, type JawedVariant } from '../../src/viewer/mouths/jawed';
+import { mouthCarves, mouthSpec } from '../../src/viewer/mouthLine';
 import { mouthVariant } from '../../src/viewer/partStyles';
 
 describe('noses', () => {
@@ -53,5 +53,20 @@ describe('noses', () => {
     // (the dog keeps its broad pad: the bigger nose for its skull of the two)
     expect(dogs / weasels).toBeGreaterThan(1.15);
     expect(NOSE_POINTED).toBeLessThan(1);
+  });
+
+  it("a cat's short muzzle wears whisker pads; an ape's flat lip and a bear's stopped muzzle wear none", () => {
+    // (two round cat's pads under a small nose made an ape's face a cat's, and paled a bear's muzzle)
+    const pads = (id: string, seed: number) => {
+      const p = grow(genomeOfMorphotype(seed, id));
+      const mi = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const spec = mouthSpec(p, mi)!;
+      return whiskerPads(p, mi, spec.muzzled);
+    };
+    for (let seed = 1; seed <= 12; seed++) {
+      expect(pads('felid', seed), `cat #${seed}`).toBe(true);
+      expect(pads('primate', seed), `ape #${seed}`).toBe(false);
+      expect(pads('ursid', seed), `bear #${seed}`).toBe(false);
+    }
   });
 });
