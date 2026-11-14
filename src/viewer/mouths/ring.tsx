@@ -23,7 +23,7 @@ import type { Vec3 } from '../../engine/genome';
 import type { Carve } from '../bodyField';
 import { basisToQuat, buildFieldPrims, projectToSurface, rayToSurface } from '../bodyField';
 import type { MeshFeature } from '../meshData';
-import { buildMouthRing, hash01, mouthSpec, type MouthSample, type SkinSurface } from '../mouthLine';
+import { buildMouthRing, hash01, mouthSpec, surfacePrims, type MouthSample, type SkinSurface } from '../mouthLine';
 import { sweepTube, type SweepPoint } from '../sweep';
 import { fangGeometry, setToothInstances, toothRing, type ToothXform } from '../teeth';
 import { GUM, INTERIOR, KERATIN, TONGUE } from './palette';
@@ -52,6 +52,9 @@ const PUCKERS = [0, 3, 7, 10, 13, 17] as const;
 export const RING_LIP = 0.17;
 /** how far past a carved cavity's wall the lip's line runs (× the mouth's radius): just over the cut */
 const LIP_PAST_RIM = 0.06;
+/** how far up its normal a lip seated on the carved rim rides (× the lip's girth: about half its flattened
+ *  half-girth, so it rolls over the cut rather than floating on it or sinking into it) */
+export const LIP_SEAT = 0.3;
 /** a sucker's rasp: how many keratin knobs ring it (odd, so the ring never reads as a machined part) */
 const RASP_KNOBS = 15;
 
@@ -92,7 +95,20 @@ export function buildRing(
   // funnel, and the cavity's bare cut edge was the mouth's rim — a broken eggshell from the side.)
   // (round a carved cavity, each sample is found on its RIM: a little past the cut, under the lip's roll)
   const rim = recessed && carves.length ? { carves, outside: r * LIP_PAST_RIM } : undefined;
-  const lipSamples = relRow(buildMouthRing(phenotype, spec, SPREAD, [], SAMPLES, surface, rim), o);
+  let traced = buildMouthRing(phenotype, spec, SPREAD, [], SAMPLES, surface, rim);
+  // …and SEATED on the cut: the cavity's soft rim (its blend, 0.36 of the mouth) has already sunk the
+  // carved skin under that line — on a horror's crown by twice the lip's half-girth, so the lip hovered
+  // over its hole, a loose ring with the ragged cut showing under it. Each sample drops onto the carved
+  // skin, LIP_SEAT of the lip's girth up its normal.
+  if (rim) {
+    const f = surfacePrims(phenotype, surface);
+    const lift = LIP_SEAT * r * RING_LIP;
+    traced = traced.map((sm) => {
+      const q = projectToSurface(f, carves, sm.p);
+      return { ...sm, p: [q.p[0] + q.n[0] * lift, q.p[1] + q.n[1] * lift, q.p[2] + q.n[2] * lift] as Vec3, n: q.n };
+    });
+  }
+  const lipSamples = relRow(traced, o);
 
   // seeded lip girth wobble keyed on sin(angle): invariant under the ring's X-mirror (a → π−a),
   // so twin samples draw identical girth (M18) while the ring still swells and thins organically

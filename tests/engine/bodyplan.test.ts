@@ -413,10 +413,11 @@ describe('body plans', () => {
       // (they were dead-straight rods a twentieth of the body's width)
       const roots = p.nodes.filter((n, i) => n.part?.kind === 'tentacle' && p.edges.some(([a, b]) => b === i && p.nodes[a].kind === 'spine'));
       expect(Math.max(...roots.map((n) => n.radius)) / body.radius, `#${seed} thick at the root`).toBeGreaterThan(0.17);
-      // the eyes ring the flank, each on its own (not a knot on the crown), below the maw
+      // the eyes ring the flank, each on its own (not a knot on the crown), below the maw — two to an arm,
+      // a band right round it (one to an arm, every camera saw a pair of them: a face)
       const eyes = p.nodes.filter((n) => n.terminal === 'eye');
       const mouth = p.nodes.find((n) => n.terminal === 'mouth')!;
-      expect(eyes.length, `#${seed} eyes`).toBe(g.radialCount);
+      expect(eyes.length, `#${seed} eyes`).toBe(2 * g.radialCount);
       for (const e of eyes) expect(e.pos[1], `#${seed} eye below the maw`).toBeLessThan(mouth.pos[1] - 0.2 * body.radius);
       for (let i = 0; i < eyes.length; i++) {
         for (let j = i + 1; j < eyes.length; j++) {

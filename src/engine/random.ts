@@ -305,7 +305,7 @@ const MORPHOTYPES: readonly Morpho[] = [
   // tips; TWO eyes, low on the head just above the arms, with a bar of a pupil (one eye per arm — a
   // ring of eight glowing discs round the mantle — read as a googly-eyed egg on a spider's legs)
   { id: 'cephalopod', cluster: 'uncanny', weight: 1.2, symmetry: 'radial', radialCount: [8, 8], girth: [0.5, 0.78], height: [1.3, 1.65], repeat: [1, 1], eyeEl: [-0.22, -0.1], eyeSize: 2.1, eyeStyle: [0.42, 0.58], mouthStyle: [0.26, 0.37], covering: ['slime'], pattern: ['spots', 'ocelli', 'gradient'], sheen: [0.7, 1.0], hue: [0.6, 0.95], sat: [0.4, 0.85] },
-  { id: 'horror', cluster: 'uncanny', weight: 1.0, symmetry: 'radial', radialCount: [5, 8], girth: [0.45, 0.75], repeat: [1, 1], height: [1.25, 1.6], eyeEl: [0.3, 0.55], eyeSize: 0.8, mouthSize: [1.3, 1.6], eyeStyle: [0.7, 1], mouthStyle: [0.5, 0.74], covering: ['skin', 'slime'], pattern: ['ocelli', 'mottle'], sheen: [0.4, 0.8], hue: [0.7, 1.0], sat: [0.3, 0.7] },
+  { id: 'horror', cluster: 'uncanny', weight: 1.0, symmetry: 'radial', radialCount: [5, 8], girth: [0.45, 0.75], repeat: [1, 1], height: [1.25, 1.6], eyeEl: [0.3, 0.55], eyeSize: 0.8, mouthSize: [1.3, 1.6], eyeStyle: [0.82, 1], mouthStyle: [0.63, 0.74], covering: ['skin', 'slime'], pattern: ['ocelli', 'mottle'], sheen: [0.4, 0.8], hue: [0.7, 1.0], sat: [0.3, 0.7], light: [0.24, 0.42] },
   { id: 'slime', cluster: 'uncanny', weight: 0.7, girth: [0.42, 0.6], repeat: [4, 5], height: [0.5, 0.62], elong: [0.95, 1.1], rear: [-0.012, 0.004], taper: [1.1, 1.14], legPairs: [0], stalkEyes: 1, stalkLen: [0.4, 0.5], eyeEl: [0.6, 0.75], eyeAz: [1.22, 1.38], mouthStyle: [0.01, 0.05], mouthSize: [0.45, 0.55], tail: 0.0, head: 0.0, eyeStyle: [0.05, 0.25], covering: ['slime'], pattern: ['gradient', 'mottle'], sheen: [0.8, 1.0], hue: [0.25, 0.7], sat: [0.5, 0.9], light: [0.45, 0.7] },
   // (a single-node body shows its depth only as the z-stretch past the stride clamp's 1.4: elong 1.4 is
   // as deep as it is wide — at 1 an urchin's test was a fifth narrower front to back than across)
@@ -587,9 +587,15 @@ function compileRadial(rng: Rng, seed: number, m: Morpho, girth: number): Genome
   const mo = mouth(rng, girth, m.mouthStyle);
   // (an urchin's and a sea star's straight down, in the middle of the underside: tilted off it like the
   // octopus's beak, the urchin's round mouth showed from the side as a red band round its base)
-  mo.attachElevation = m.id === 'starfish' || m.id === 'urchin' ? -1.52 : m.id === 'cephalopod' ? -1.35 : 1.35;
+  // (a crown maw straight up, in the middle: at 1.35 its drawn copy sat back on the crown, tilted 13° down
+  // the egg's back — a hoop slipping off a hole cut in the shell)
+  mo.attachElevation = m.id === 'starfish' || m.id === 'urchin' ? -1.52 : m.id === 'cephalopod' ? -1.35 : 1.52;
   if (m.mouthSize) mo.thickness = clamp(mo.thickness * rg(rng, m.mouthSize), A.thickness); // (no draw unless set)
   apps.push(mo);
+  // A horror's eyes are a band right round it: the ring again, half a step round (copied, no draw). One to
+  // an arm, five to eight small eyes a fifth of a turn apart, every camera saw two of them either side of
+  // whatever stood between: a face, with a feeler hung between its eyes for a trunk.
+  if (m.id === 'horror') apps.push({ ...ring, attachAzimuth: ring.attachAzimuth + Math.PI / n, curl: [ring.curl[0], ring.curl[1]] });
 
   const body: SegmentGene = {
     size: [girth, girth * height, girth * rg(rng, m.elong, [0.6, 0.95])],
@@ -1212,7 +1218,7 @@ function horrorArms(rng: Rng, girth: number, n: number): AppendageGene[] {
       segments: randint(rng, 5, 6),
       length: clamp(girth * range(rng, 0.7, 0.95), A.length),
       thickness: clamp(girth * range(rng, 0.3, 0.4), A.thickness),
-      taper: range(rng, 0.74, 0.8),
+      taper: range(rng, 0.66, 0.72), // (drawn out to lashes: tapering 0.74–0.8 a link they stayed thick to the tip, an octopus's arms)
       curl: [range(rng, -0.34, -0.24), side * range(rng, 0.14, 0.26)],
     }),
     // the upper ring: thin feelers round the crown, about the mouth (rooted halfway up the body, the
@@ -1225,7 +1231,9 @@ function horrorArms(rng: Rng, girth: number, n: number): AppendageGene[] {
       length: clamp(girth * range(rng, 0.36, 0.5), A.length),
       thickness: clamp(girth * range(rng, 0.11, 0.15), A.thickness),
       taper: range(rng, 0.78, 0.86),
-      curl: [range(rng, 0.16, 0.26), -side * range(rng, 0.02, 0.05)],
+      // (rising, each link a little steeper: drooping 0.16–0.26 a link they reached out level over the face,
+      // and seen from above the front one hung down it between the eyes — a trunk)
+      curl: [range(rng, -0.2, -0.12), -side * range(rng, 0.02, 0.05)],
     }),
   ];
 }
