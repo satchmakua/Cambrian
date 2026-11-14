@@ -3,7 +3,7 @@ import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype, randomGenome } from '../../src/engine/random';
 import { fieldAt, projectToSurface, qRotateV } from '../../src/viewer/bodyField';
 import { buildMeshData } from '../../src/viewer/meshData';
-import { BULGE_DEPTH, bulgingEye, COMPOUND_DEPTH, eyeClearings, eyeSeat, FEELER_KNOB, FEELER_SPOT, feelerTip, isFaceEye, isSwimmer, MAX_EYE_CLEAR, SEAT_DEPTH, SEAT_MAX_TILT } from '../../src/viewer/eyeSeat';
+import { BULGE_DEPTH, bulgingEye, COMPOUND_DEPTH, EYE_PROUD, eyeClearings, eyeSeat, FEELER_KNOB, FEELER_SPOT, feelerTip, isFaceEye, isSwimmer, MAX_EYE_CLEAR, SEAT_DEPTH, SEAT_MAX_TILT, type EyeFlat } from '../../src/viewer/eyeSeat';
 import { eyeVariant } from '../../src/viewer/partStyles';
 import { surfacePrims } from '../../src/viewer/mouthLine';
 import type { Phenotype } from '../../src/engine/grow';
@@ -178,5 +178,55 @@ describe('eye seats', () => {
         if (n.terminal === 'eye') expect(feelerTip(q, j), id).toBe(false);
       });
     }
+  });
+
+  it('no seated face eye stands more than EYE_PROUD out of its skin: the far one stays inside the outline', () => {
+    // (seated a third of the ball proud, every lidded eye was a dome 0.3r high and a glowing one 0.5r: on
+    // the side of a round head the far eye crossed the head's outline — a goggle on a bird, a hawk, a mouse,
+    // a crystal beast)
+    const press = (fl: EyeFlat | null | undefined, x: number[]) => {
+      if (!fl) return x;
+      const k = ((x[0] - fl.at[0]) * fl.n[0] + (x[1] - fl.at[1]) * fl.n[1] + (x[2] - fl.at[2]) * fl.n[2]) * (fl.s - 1);
+      return [x[0] + fl.n[0] * k, x[1] + fl.n[1] * k, x[2] + fl.n[2] * k];
+    };
+    const FIB: number[][] = [];
+    for (let i = 0, g = Math.PI * (3 - Math.sqrt(5)); i < 300; i++) {
+      const y = 1 - (2 * (i + 0.5)) / 300, rr = Math.sqrt(1 - y * y);
+      FIB.push([Math.cos(g * i) * rr, y, Math.sin(g * i) * rr]);
+    }
+    let checked = 0;
+    for (const id of ['bird', 'raptor', 'rodent', 'canid', 'felid', 'primate', 'ratite', 'chimera', 'crystalline', 'wyvern']) {
+      for (const seed of [1, 2, 3, 4]) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const prims = surfacePrims(p, 'hybrid');
+        for (const f of buildMeshData(p).features) {
+          if (f.type !== 'eye') continue;
+          const e = p.edges.find(([, b]) => b === f.idx);
+          if (!e || p.nodes[e[0]].kind !== 'spine') continue;
+          const v = eyeVariant(f.style);
+          const r = Math.max(f.radius, 0.06);
+          const aim0 = qRotateV(f.quat, [0, 0, 1]);
+          if (v === 'compound' || (v !== 'glowing' && bulgingEye(p, aim0))) continue; // (they bulge by design)
+          const seat = eyeSeat(p, f.idx, f.quat, r);
+          const aim = qRotateV(seat.quat, [0, 0, 1]);
+          const z = v === 'slit' ? -0.02 : v === 'glowing' ? 0.02 : -0.04;
+          const c = seat.centre!;
+          let top = -Infinity, outB = 0, outA = 0;
+          for (const d of FIB) {
+            const x = [0, 1, 2].map((k) => c[k] + (d[k] * 0.9 + aim[k] * z) * r);
+            const y = press(seat.flat, x);
+            const f1 = fieldAt(prims, y[0], y[1], y[2]) / r;
+            top = Math.max(top, f1);
+            if (fieldAt(prims, x[0], x[1], x[2]) > 0) outB++;
+            if (f1 > 0) outA++;
+          }
+          expect(top, `${id} #${seed} eye ${f.idx} stands out`).toBeLessThan(EYE_PROUD + 0.03);
+          // …its opening keeping its size: pressed, not buried
+          if (outB > 0) expect(outA / outB, `${id} #${seed} eye ${f.idx} opening`).toBeGreaterThan(0.85);
+          checked++;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThanOrEqual(60);
   });
 });

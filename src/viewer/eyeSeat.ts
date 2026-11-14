@@ -9,7 +9,8 @@
  */
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
-import { fieldAt, projectToSurface, qRotateV } from './bodyField';
+import { cross3, dot3, fieldAt, norm3, projectToSurface, qRotateV, type FieldPrims } from './bodyField';
+import type { Vec3 } from '../engine/genome';
 import type { MeshFeature } from './meshData';
 import { surfacePrims } from './mouthLine';
 import { eyeVariant } from './partStyles';
@@ -45,6 +46,45 @@ export interface EyeSeat {
   quat: readonly number[];
   sink: number;
   centre: [number, number, number] | null; // the seated ball's centre, body space
+  /** how the eye is pressed down into its skin (see eyeFlat), or null: it stands as seated */
+  flat?: EyeFlat | null;
+}
+
+/** The most a seated face eye stands out of its skin (× its radius). Seated a third of the ball proud, every
+ *  lidded eye was a dome 0.3r high (a glowing one 0.5r), and on the side of a round head the far eye crossed
+ *  the head's outline — a goggle on a bird's, a hawk's, a mouse's, a crystal beast's head. What stands further
+ *  out is pressed down along the skin's normal: the opening keeps its size, the dome over it flattens to a
+ *  cornea's. */
+export const EYE_PROUD = 0.12;
+/** …toward the skin's mean height over a ring this far round the eye (× its radius): on a round head the skin
+ *  falls away under the eye's rim, and pressed only toward the skin at its middle, the rim still stood off */
+export const EYE_RING = 0.7;
+/** A squash by `s` along `n` about the plane through `at` (body space): x' = x + n·((x − at)·n)·(s − 1). */
+export interface EyeFlat {
+  at: [number, number, number];
+  n: [number, number, number];
+  s: number;
+}
+function eyeFlat(prims: FieldPrims, centre: Vec3, aim: readonly number[], r: number, ballZ: number): EyeFlat | null {
+  const sp = projectToSurface(prims, [], [centre[0], centre[1], centre[2]]);
+  const n = norm3(sp.n);
+  const t1 = norm3(cross3(n, Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]));
+  const t2 = cross3(n, t1);
+  let sum = 0;
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2;
+    const c = Math.cos(a) * EYE_RING * r, sn = Math.sin(a) * EYE_RING * r;
+    const q = [sp.p[0] + t1[0] * c + t2[0] * sn, sp.p[1] + t1[1] * c + t2[1] * sn, sp.p[2] + t1[2] * c + t2[2] * sn];
+    let h = 0; // the skin's height over q along n
+    for (let i = 0; i < 6; i++) h = Math.max(-2 * r, Math.min(r, h - fieldAt(prims, q[0] + n[0] * h, q[1] + n[1] * h, q[2] + n[2] * h)));
+    sum += h;
+  }
+  const sag = Math.max(0, -sum / 6);
+  const at: [number, number, number] = [sp.p[0] - n[0] * sag, sp.p[1] - n[1] * sag, sp.p[2] - n[2] * sag];
+  const ball = [centre[0] + aim[0] * ballZ * r - at[0], centre[1] + aim[1] * ballZ * r - at[1], centre[2] + aim[2] * ballZ * r - at[2]];
+  const top = dot3(ball as Vec3, n) + 0.9 * r; // the ball's highest point over that plane
+  const s = Math.min(1, Math.max(0.25, (sag + EYE_PROUD * r) / top));
+  return s < 0.999 ? { at, n: [n[0], n[1], n[2]], s } : null;
 }
 const SEATS = new WeakMap<Phenotype, Map<number, EyeSeat>>();
 export function eyeSeat(p: Phenotype, idx: number, quat0: readonly number[], r: number): EyeSeat {
@@ -68,7 +108,8 @@ export function eyeSeat(p: Phenotype, idx: number, quat0: readonly number[], r: 
   }
   // (a compound eye, and an alien's glowing one, sit as low domes in the head)
   const ev = eyeVariant(p.nodes[idx].part?.style ?? 0.5);
-  const depth = ev === 'compound' || ev === 'glowing' ? COMPOUND_DEPTH : bulgingEye(p, aim) ? BULGE_DEPTH : SEAT_DEPTH;
+  const bulge = ev !== 'compound' && ev !== 'glowing' && bulgingEye(p, aim);
+  const depth = ev === 'compound' || ev === 'glowing' ? COMPOUND_DEPTH : bulge ? BULGE_DEPTH : SEAT_DEPTH;
   let s = r * 0.36;
   for (let i = 0; i < 8; i++) {
     const d = fieldAt(prims, c[0] - aim[0] * s, c[1] - aim[1] * s, c[2] - aim[2] * s);
@@ -76,7 +117,11 @@ export function eyeSeat(p: Phenotype, idx: number, quat0: readonly number[], r: 
     // skin, and stopped at one it sat half out of the head — a bead on a lizard's broad flat crown)
     s = Math.min(r * SEAT_MAX_SINK, Math.max(-r * 0.6, s + d + r * depth));
   }
-  const seat: EyeSeat = { quat, sink: s, centre: [c[0] - aim[0] * s, c[1] - aim[1] * s, c[2] - aim[2] * s] };
+  const centre: [number, number, number] = [c[0] - aim[0] * s, c[1] - aim[1] * s, c[2] - aim[2] * s];
+  // (a frog's and a crocodile's eyes bulge, an insect's facets are a dome by design, a fish's lie flush, a radial
+  // body's eyes — an octopus's, a horror's band — are its own; the rest are pressed into the skin)
+  const pressed = p.genomeRef.symmetry === 'bilateral' && !bulge && ev !== 'compound' && (ev === 'glowing' || !isSwimmer(p));
+  const seat: EyeSeat = { quat, sink: s, centre, flat: pressed ? eyeFlat(prims, centre, aim, r, ev === 'slit' ? -0.02 : ev === 'glowing' ? 0.02 : -0.04) : null };
   per.set(idx, seat);
   return seat;
 }

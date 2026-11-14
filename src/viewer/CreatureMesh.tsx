@@ -898,14 +898,13 @@ const FROG_IRIS = [0xc9a23a, 0xb8862e, 0xb06a2a, 0xa6a04a];
 /** One eye's lids in the body's own covering: the shared hemispheres scaled to the eye, with the
  *  covering shader's body-space coordinates baked at the open pose (so the coat runs onto the lids
  *  and the eye sits in the face rather than in a coloured cup). Blinks rotate the meshes. */
-function lidGeometry(base: THREE.BufferGeometry, scale: number, openX: number, sink: number, quat: readonly number[], origin: readonly number[]): THREE.BufferGeometry {
+function lidGeometry(base: THREE.BufferGeometry, scale: number, openX: number, sink: number, quat: readonly number[], origin: readonly number[], press?: THREE.Matrix4 | null): THREE.BufferGeometry {
   const g = base.clone();
   g.scale(scale, scale, scale);
-  const m = new THREE.Matrix4().compose(
-    new THREE.Vector3(origin[0], origin[1], origin[2]),
-    new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3]),
-    new THREE.Vector3(1, 1, 1),
-  )
+  const m = new THREE.Matrix4()
+    .makeTranslation(origin[0], origin[1], origin[2])
+    .multiply(press ?? new THREE.Matrix4())
+    .multiply(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3])))
     .multiply(new THREE.Matrix4().makeTranslation(0, 0, -sink))
     .multiply(new THREE.Matrix4().makeRotationX(openX));
   const pos = g.getAttribute('position') as THREE.BufferAttribute;
@@ -925,14 +924,18 @@ function lidGeometry(base: THREE.BufferGeometry, scale: number, openX: number, s
 
 /** A brow: a low ridge of the body's own covering lying across the top of a tilted eye's opening,
  *  overhanging it a little (baked like the lids, so the coat runs over it). */
-function browGeometry(r: number, sink: number, quat: readonly number[], origin: readonly number[]): THREE.BufferGeometry {
+function browGeometry(r: number, sink: number, quat: readonly number[], origin: readonly number[], press?: THREE.Matrix4 | null): THREE.BufferGeometry {
   const g = new THREE.SphereGeometry(1, 16, 10);
-  g.scale(r * 1.35, r * 0.32, r * 0.38);
-  // (the skin lies ~0.42r ahead of the sunk ball's centre: the ridge sits on it, over the lid's rim)
-  g.translate(0, r * 0.74, r * 0.3);
+  // (a straight bar 2.7r long on a round crown stood off it at both ends: from three-quarters the far one was
+  // a round lump on the forehead beside the bill — narrower and a tenth lower, it lies on the skull)
+  g.scale(r * 1.0, r * 0.32, r * 0.38);
+  // (the skin lies ~0.52r ahead of the sunk ball's centre: the ridge sits on it, over the lid's rim)
+  g.translate(0, r * 0.74, r * 0.2);
   g.computeVertexNormals();
   const m = new THREE.Matrix4()
-    .compose(new THREE.Vector3(origin[0], origin[1], origin[2]), new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3]), new THREE.Vector3(1, 1, 1))
+    .makeTranslation(origin[0], origin[1], origin[2])
+    .multiply(press ?? new THREE.Matrix4())
+    .multiply(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3])))
     .multiply(new THREE.Matrix4().makeTranslation(0, 0, -sink));
   const pos = g.getAttribute('position') as THREE.BufferAttribute;
   const body = new Float32Array(pos.count * 3);
@@ -975,6 +978,8 @@ function rimGeometry(r: number, quat: readonly number[], origin: readonly number
 const COMPOUND = [0x3a2614, 0x4a1a12, 0x1e3420, 0x23252e];
 /** a glowing eye's light: a sickly teal, a bile green, an amber, a violet */
 const GLOW = [0x3fd8a8, 0x9fd84a, 0xe0a030, 0xb070e8];
+/** an eye that stands no further out than it should is not pressed */
+const IDENTITY = new THREE.Matrix4();
 
 function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; socket: number; iris: number; lid: number; seed: number; skin?: THREE.Material; phenotype?: Phenotype }) {
   const r = Math.max(f.radius, 0.06);
@@ -1013,18 +1018,35 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   // marble bolted on, a goggle over the outline.
   const seat = useMemo(() => (onFace && phenotype ? eyeSeat(phenotype, f.idx, f.quat, r) : { quat: f.quat, sink: 0, centre: null }), [onFace, phenotype, f.idx, f.quat, r]);
   const sink = seat.sink;
+  const origin = phenotype?.nodes[f.idx].pos;
+  // What stands more than EYE_PROUD out of the skin is pressed down into it along the skin's normal (eyeSeat's
+  // flat): the opening keeps its size, the dome over it flattens — on the side of a round head the far eye
+  // stood off the outline, a goggle. In the feature's own frame (its node is the origin): x' = x + n((x−d)·n)(s−1).
+  const press = useMemo(() => {
+    const fl = 'flat' in seat ? seat.flat : null;
+    if (!fl || !origin) return null;
+    const [nx, ny, nz] = fl.n;
+    const k = fl.s - 1;
+    const d = (fl.at[0] - origin[0]) * nx + (fl.at[1] - origin[1]) * ny + (fl.at[2] - origin[2]) * nz;
+    // prettier-ignore
+    return new THREE.Matrix4().set(
+      1 + k * nx * nx, k * nx * ny, k * nx * nz, -k * d * nx,
+      k * ny * nx, 1 + k * ny * ny, k * ny * nz, -k * d * ny,
+      k * nz * nx, k * nz * ny, 1 + k * nz * nz, -k * d * nz,
+      0, 0, 0, 1,
+    );
+  }, [seat, origin]);
   // the ball takes the iris's own hue, deep — a brown ball behind a green or blue iris read as a bruise
   const ballColor = useMemo(() => new THREE.Color(iris).multiplyScalar(0.16).lerp(new THREE.Color(0x1c120e), 0.5).getHex(), [iris]);
   const lidColor = useMemo(() => new THREE.Color(lid).multiplyScalar(0.82).getHex(), [lid]);
-  const origin = phenotype?.nodes[f.idx].pos;
   const open = lidOpening(phenotype?.genomeRef.symmetry === 'radial', frogEye);
   const lidGeo = useMemo(() => {
     if (!lidded || !skin || !origin) return null;
     return {
-      upper: lidGeometry(UPPER_LID, r * 0.97, open.upper, sink, seat.quat, origin),
-      lower: lidGeometry(LOWER_LID, r * 0.96, open.lower, sink, seat.quat, origin),
+      upper: lidGeometry(UPPER_LID, r * 0.97, open.upper, sink, seat.quat, origin, press),
+      lower: lidGeometry(LOWER_LID, r * 0.96, open.lower, sink, seat.quat, origin, press),
     };
-  }, [lidded, skin, origin, r, sink, seat.quat, open]);
+  }, [lidded, skin, origin, r, sink, seat.quat, open, press]);
   useEffect(() => () => {
     lidGeo?.upper.dispose();
     lidGeo?.lower.dispose();
@@ -1032,8 +1054,8 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   // a tilted eye (a bird of prey's) scowls from under a brow
   const browGeo = useMemo(() => {
     if (!lidded || !onFace || !skin || !origin || phenotype?.genomeRef.symmetry !== 'bilateral' || eyeTilt(f.quat) < BROW_TILT) return null;
-    return browGeometry(r, sink, seat.quat, origin);
-  }, [lidded, onFace, skin, origin, phenotype, f.quat, r, sink, seat.quat]);
+    return browGeometry(r, sink, seat.quat, origin, press);
+  }, [lidded, onFace, skin, origin, phenotype, f.quat, r, sink, seat.quat, press]);
   useEffect(() => () => browGeo?.dispose(), [browGeo]);
   // a glowing eye sits in a rim of the hide; an insect's compound eye needs none
   const rim = useMemo(() => (v === 'glowing' && skin && origin ? rimGeometry(r, seat.quat, origin) : null), [v, skin, origin, r, seat.quat]);
@@ -1081,6 +1103,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   return (
     <>
     {brow && skin && <mesh geometry={brow} material={skin} castShadow />}
+    <group matrix={press ?? IDENTITY} matrixAutoUpdate={false}>
     <group quaternion={seat.quat as [number, number, number, number]}>
       <group position={[0, 0, -sink]}>
       {lidded && lidGeo && skin ? (
@@ -1225,6 +1248,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
         </>
       )}
       </group>
+    </group>
     </group>
     </>
   );
