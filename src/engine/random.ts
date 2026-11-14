@@ -1209,12 +1209,12 @@ function horrorArms(rng: Rng, girth: number, n: number): AppendageGene[] {
     part('tentacle', 'none', false, range(rng, 0, 1), {
       attachT: 0.7,
       attachAzimuth: Math.PI / n + range(rng, 0, 0.1),
-      attachElevation: range(rng, 1.02, 1.18),
+      attachElevation: range(rng, 0.74, 0.86),
       segments: randint(rng, 4, 5),
       length: clamp(girth * range(rng, 0.36, 0.5), A.length),
       thickness: clamp(girth * range(rng, 0.11, 0.15), A.thickness),
       taper: range(rng, 0.78, 0.86),
-      curl: [range(rng, 0.26, 0.4), -side * range(rng, 0.1, 0.2)],
+      curl: [range(rng, 0.16, 0.26), -side * range(rng, 0.02, 0.05)],
     }),
   ];
 }
