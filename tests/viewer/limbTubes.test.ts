@@ -3,7 +3,7 @@ import { grow, type Phenotype } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
 import { buildSmoothGeometry, type SkinQuality } from '../../src/viewer/smoothSkin';
 import { buildFieldPrims, roundConeDist, type FieldPrims } from '../../src/viewer/bodyField';
-import { TUBE_THIN, PODO_WAIST, PODO_EASE, podomeres } from '../../src/viewer/limbTubes';
+import { TUBE_THIN, PODO_WAIST, PODO_EASE, TIP_POINT, bareTips, podomeres } from '../../src/viewer/limbTubes';
 
 type Geo = ReturnType<typeof buildSmoothGeometry>;
 
@@ -12,13 +12,41 @@ type Geo = ReturnType<typeof buildSmoothGeometry>;
 function thinLinks(p: Phenotype, f: FieldPrims, cell: number): number[] {
   const out: number[] = [];
   const podo = podomeres(p, f);
+  const tips = bareTips(p, f);
   for (let m = 0; m < f.nc; m++) {
     if (f.ia[m] === f.ib[m] || f.an[m]) continue;
     if (p.nodes[f.ia[m]].kind === 'spine' || p.nodes[f.ib[m]].kind === 'spine') continue;
-    if (Math.max(f.ra[m], f.rb[m]) < TUBE_THIN * cell || podo?.[m]) out.push(m);
+    if (Math.max(f.ra[m], f.rb[m]) < TUBE_THIN * cell || podo?.[m] || tips?.[m]) out.push(m);
   }
   return out;
 }
+
+/** the points bare tails and tentacles run on to past their last nodes: each its root, heading, girth */
+function bareTipPoints(p: Phenotype, f: FieldPrims): { b: number[]; u: number[]; r: number }[] {
+  const tips = bareTips(p, f);
+  const leaf = new Set(p.nodes.map((_, i) => i));
+  for (const [a] of p.edges) leaf.delete(a);
+  const out: { b: number[]; u: number[]; r: number }[] = [];
+  if (!tips) return out;
+  for (let m = 0; m < f.nc; m++) {
+    if (!tips[m]) continue;
+    const b = [f.bx[m], f.by[m], f.bz[m]];
+    const n = p.nodes[f.ib[m]];
+    // (only the last piece of the link ends AT the leaf node)
+    if (!leaf.has(f.ib[m]) || Math.hypot(b[0] - n.pos[0], b[1] - n.pos[1], b[2] - n.pos[2]) > 1e-6) continue;
+    const L = Math.hypot(f.bx[m] - f.ax[m], f.by[m] - f.ay[m], f.bz[m] - f.az[m]) || 1;
+    out.push({ b, u: [(f.bx[m] - f.ax[m]) / L, (f.by[m] - f.ay[m]) / L, (f.bz[m] - f.az[m]) / L], r: f.rb[m] });
+  }
+  return out;
+}
+
+/** whether a point lies on one of those points (past its root along its heading, within its girth) */
+const onPoint = (pts: ReturnType<typeof bareTipPoints>, x: number, y: number, z: number) =>
+  pts.some(({ b, u, r }) => {
+    const d = [x - b[0], y - b[1], z - b[2]];
+    const t = d[0] * u[0] + d[1] * u[1] + d[2] * u[2];
+    return t > -1e-6 && t <= TIP_POINT * r * 1.01 && Math.hypot(d[0] - u[0] * t, d[1] - u[1] * t, d[2] - u[2] * t) <= r * 1.01;
+  });
 
 /** the knees of a jointed shell's legs: each joint where one podomere hands on to the next — its
  *  centre, girth (the wider of the two links' ends there) and the two links */
@@ -125,12 +153,18 @@ describe('thin limbs drawn exact', () => {
       const pos = g.getAttribute('position');
       const from = g.userData.tubeFrom.vertex as number;
       expect(pos.count).toBeGreaterThan(from);
-      // (a jointed shell's leg is pinched in at its knees, inside its link by design: see the next test)
+      // (a jointed shell's leg is pinched in at its knees, inside its link by design: see the next test;
+      // a bare tail or tentacle runs on past its last node to a point, past the link by design)
       const knees = podoJoints(p, f);
+      const points = bareTipPoints(p, f);
       let on = 0;
       let off = 0;
       let pinched = 0;
       for (let v = from; v < pos.count; v++) {
+        if (onPoint(points, pos.getX(v), pos.getY(v), pos.getZ(v))) {
+          pinched++;
+          continue;
+        }
         let d = Infinity;
         let r = 0;
         for (const m of thin) {
@@ -323,5 +357,33 @@ describe('thin limbs drawn exact', () => {
       const p = grow(genomeOfMorphotype(3, kind));
       expect(podomeres(p, buildFieldPrims(p, 'hybrid')), kind).toBeNull();
     }
+  });
+
+  it('a bare tail or tentacle runs on past its last node to a point — not a round fingertip', () => {
+    // (capped with a ball of its last node's girth, never under R_MIN, every such tail ended blunt: a
+    // snake's, a mouse's pink rod, a horror's tentacles like hoses)
+    let checked = 0;
+    for (const [kind, seed] of [['rodent', 2], ['serpent', 1], ['cephalopod', 3], ['horror', 1], ['felid', 1]] as const) {
+      const { p, f, g } = build(kind, seed, 'high');
+      const pos = g.getAttribute('position');
+      const from = g.userData.tubeFrom.vertex as number;
+      for (const { b, u, r } of bareTipPoints(p, f)) {
+        let reach = 0, apex = Infinity;
+        for (let v = from; v < pos.count; v++) {
+          const d = [pos.getX(v) - b[0], pos.getY(v) - b[1], pos.getZ(v) - b[2]];
+          const t = d[0] * u[0] + d[1] * u[1] + d[2] * u[2];
+          const rad = Math.hypot(d[0] - u[0] * t, d[1] - u[1] * t, d[2] - u[2] * t);
+          if (rad > 1.2 * r || t < 0) continue;
+          if (t > reach) {
+            reach = t;
+            apex = rad;
+          }
+        }
+        expect(reach / r, `${kind} #${seed} reach`).toBeGreaterThan(1.8);
+        expect(apex / r, `${kind} #${seed} point`).toBeLessThan(0.25);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(10);
   });
 });

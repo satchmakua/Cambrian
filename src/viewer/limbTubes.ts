@@ -51,6 +51,31 @@ export function podomeres(p: Phenotype, full: FieldPrims): Uint8Array | null {
   return any ? out : null;
 }
 
+/**
+ * A bare TIP — a tail's or a tentacle's that ends in nothing (no fin, club, barb or brush drawn there) —
+ * runs on past its last node to a point, TIP_POINT of its girth long. (Capped with a ball of its last
+ * node's girth — never under R_MIN — every such tail ended in a blunt round fingertip: a wyvern's, a
+ * snake's, a mouse's pink rod, a dragon's, a horror's tentacles ending like hoses.)
+ */
+export const TIP_POINT = 2.4;
+
+/** Which of the field's cones end a bare tail or tentacle (see TIP_POINT), or null when none does. */
+export function bareTips(p: Phenotype, full: FieldPrims): Uint8Array | null {
+  const leaf = new Uint8Array(p.nodes.length).fill(1);
+  for (const [a] of p.edges) leaf[a] = 0;
+  const out = new Uint8Array(full.nc);
+  let any = false;
+  for (let m = 0; m < full.nc; m++) {
+    const b = p.nodes[full.ib[m]];
+    if (full.ia[m] === full.ib[m] || !leaf[full.ib[m]] || b.kind === 'spine') continue;
+    if (b.part?.kind !== 'tail' && b.part?.kind !== 'tentacle') continue;
+    if (b.terminal && b.terminal !== 'none') continue;
+    out[m] = 1;
+    any = true;
+  }
+  return any ? out : null;
+}
+
 export interface ThinSplit {
   /** the field without its thin limb links, the cones that hand on to one tucked in under its joint */
   field: FieldPrims;
@@ -62,6 +87,8 @@ export interface ThinSplit {
   fieldEnds: Set<string>;
   /** per cone of the full field: 1 — a podomere (drawn as a tube whatever its girth), or null */
   podo: Uint8Array | null;
+  /** per cone of the full field: 1 — it ends a bare tail or tentacle (drawn on to a point), or null */
+  tips: Uint8Array | null;
 }
 
 /** Which of the field's limb links are too thin for the grid (`cell`) — or are a jointed shell's leg
@@ -71,12 +98,14 @@ export function splitThin(p: Phenotype, full: FieldPrims, cell: number): ThinSpl
   const thin = new Uint8Array(full.nc);
   const tubes: number[] = [];
   const podo = podomeres(p, full);
+  const tips = bareTips(p, full);
   for (let m = 0; m < full.nc; m++) {
     // a limb's own links only: a cone from the trunk is the limb's root (it blends into the body), a
     // shaped link keeps its cross-section in the field
     if (full.ia[m] === full.ib[m] || full.an[m]) continue;
     if (p.nodes[full.ia[m]].kind === 'spine' || p.nodes[full.ib[m]].kind === 'spine') continue;
-    if (Math.max(full.ra[m], full.rb[m]) >= TUBE_THIN * cell && !podo?.[m]) continue;
+    // (a jointed shell's leg links, and a bare tail's or tentacle's last, are drawn exact at any girth)
+    if (Math.max(full.ra[m], full.rb[m]) >= TUBE_THIN * cell && !podo?.[m] && !tips?.[m]) continue;
     thin[m] = 1;
     tubes.push(m);
   }
@@ -130,7 +159,7 @@ export function splitThin(p: Phenotype, full: FieldPrims, cell: number): ThinSpl
     const at = (t: number) => [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t];
     setCone(field, i, at(tA), at(1 - tB), rA, rB);
   }
-  return { field, handoff, tubes, fieldEnds: new Set(fieldAt.keys()), podo };
+  return { field, handoff, tubes, fieldEnds: new Set(fieldAt.keys()), podo, tips };
 }
 
 export interface Tubes {
@@ -159,6 +188,8 @@ interface Joint {
   smooth: boolean;
   /** a podomere joint: links in and out, every one a podomere, and no field skin here */
   pinch: boolean;
+  /** a bare tip: one link in, none out, no field skin here — drawn on to a point (see TIP_POINT) */
+  tip: boolean;
 }
 
 /**
@@ -171,7 +202,7 @@ interface Joint {
  */
 export function limbTubes(
   full: FieldPrims,
-  split: Pick<ThinSplit, 'tubes' | 'fieldEnds'> & { podo?: Uint8Array | null },
+  split: Pick<ThinSplit, 'tubes' | 'fieldEnds'> & { podo?: Uint8Array | null; tips?: Uint8Array | null },
   cell: number,
   aoAt: (x: number, y: number, z: number, nx: number, ny: number, nz: number) => number,
   skin?: { positions: Float32Array; ao: Float32Array },
@@ -195,7 +226,7 @@ export function limbTubes(
   const joint = (p: number[], r: number): Joint => {
     const k = keyOf(p[0], p[1], p[2]);
     let j = joints.get(k);
-    if (!j) joints.set(k, (j = { c: p, r, ins: [], outs: [], smooth: false, pinch: false }));
+    if (!j) joints.set(k, (j = { c: p, r, ins: [], outs: [], smooth: false, pinch: false, tip: false }));
     j.r = Math.max(j.r, r);
     return j;
   };
@@ -211,6 +242,10 @@ export function limbTubes(
   }
   for (const [k, j] of joints) {
     if (split.fieldEnds.has(k)) continue;
+    if (split.tips && j.ins.length === 1 && j.outs.length === 0 && split.tips[j.ins[0]]) {
+      j.tip = true;
+      continue;
+    }
     if (podo && j.ins.length > 0 && j.outs.length > 0 && [...j.ins, ...j.outs].every((m) => podo[m])) {
       j.pinch = true;
       continue;
@@ -322,6 +357,18 @@ export function limbTubes(
         rings.push({ p: at(f * L), t: u, r: full.ra[m] + (full.rb[m] - full.ra[m]) * f, s, k: 1 });
       }
     });
+    // a bare tip runs on past its last node to a point (its girth drawn in, a little full at first)
+    const last = run[run.length - 1];
+    if (endOf.get(last)!.tip) {
+      const b = B(last), u = dirOf(last), rb = full.rb[last];
+      const Lp = TIP_POINT * rb;
+      const K = 5;
+      for (let k = 1; k <= K; k++) {
+        const f = k / K;
+        const dr = (-rb * 0.8 * Math.pow(Math.max(1 - f, 1e-3), -0.2)) / Lp;
+        rings.push({ p: [b[0] + u[0] * f * Lp, b[1] + u[1] * f * Lp, b[2] + u[2] * f * Lp], t: u, r: rb * Math.pow(1 - f, 0.8), s: -dr / Math.sqrt(1 + dr * dr), k: 1 });
+      }
+    }
     const base = pos.length / 3;
     let e1 = perp(rings[0].t);
     for (const ring of rings) {
@@ -359,7 +406,7 @@ export function limbTubes(
 
   // --- the balls: every joint not swept through (a podomere joint's, its links' pinched girth) ---
   for (const j of joints.values()) {
-    if (j.smooth) continue;
+    if (j.smooth || j.tip) continue;
     const jr = j.pinch ? PODO_WAIST * j.r : j.r;
     const k0 = j.pinch ? PODO_DARK : 1;
     const segs = segsFor(jr, cell);
