@@ -21,6 +21,9 @@ const SEAT_MAX_SINK = 2.0;
 export const SEAT_DEPTH = 0.52;
 /** …and a frog's: its eyes bulge from the crown, half the ball proud */
 export const BULGE_DEPTH = 0.06;
+/** …and an insect's compound eye: a low dome on the side of its head, most of the ball under the
+ *  cuticle. (Stood on its node unseated, riding proud of the head, it was a black marble bolted on.) */
+export const COMPOUND_DEPTH = 0.4;
 
 /** A frog's or a toad's eye: bare skin, a walker (not a fish), looking up out of the top of the head.
  *  A crocodile's too (an armoured body — see scutes): its eyes ride raised on the skull's upper
@@ -63,7 +66,7 @@ export function eyeSeat(p: Phenotype, idx: number, quat0: readonly number[], r: 
       aim = qRotateV(quat, [0, 0, 1]);
     }
   }
-  const depth = bulgingEye(p, aim) ? BULGE_DEPTH : SEAT_DEPTH;
+  const depth = eyeVariant(p.nodes[idx].part?.style ?? 0.5) === 'compound' ? COMPOUND_DEPTH : bulgingEye(p, aim) ? BULGE_DEPTH : SEAT_DEPTH;
   let s = r * 0.36;
   for (let i = 0; i < 8; i++) {
     const d = fieldAt(prims, c[0] - aim[0] * s, c[1] - aim[1] * s, c[2] - aim[2] * s);

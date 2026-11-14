@@ -3,7 +3,8 @@ import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype, randomGenome } from '../../src/engine/random';
 import { fieldAt, projectToSurface, qRotateV } from '../../src/viewer/bodyField';
 import { buildMeshData } from '../../src/viewer/meshData';
-import { BULGE_DEPTH, bulgingEye, eyeClearings, eyeSeat, isFaceEye, isSwimmer, MAX_EYE_CLEAR, SEAT_DEPTH, SEAT_MAX_TILT } from '../../src/viewer/eyeSeat';
+import { BULGE_DEPTH, bulgingEye, COMPOUND_DEPTH, eyeClearings, eyeSeat, isFaceEye, isSwimmer, MAX_EYE_CLEAR, SEAT_DEPTH, SEAT_MAX_TILT } from '../../src/viewer/eyeSeat';
+import { eyeVariant } from '../../src/viewer/partStyles';
 import { surfacePrims } from '../../src/viewer/mouthLine';
 import type { Phenotype } from '../../src/engine/grow';
 
@@ -103,5 +104,28 @@ describe('eye seats', () => {
       const p = grow(genomeOfMorphotype(1, id));
       for (const f of faceEyes(p)) expect(bulgingEye(p, qRotateV(eyeSeat(p, f.idx, f.quat, Math.max(f.radius, 0.06)).quat, [0, 0, 1])), id).toBe(false);
     }
+  });
+
+  it("an insect's compound eye is a low dome set in its head — not a marble stood on it", () => {
+    // (unseated, the ball's centre rode a third of a radius OUT of the head: more than half of it stood
+    // proud, a black marble bolted on)
+    let n = 0;
+    for (const id of ['insectoid', 'arthro-alien']) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const prims = surfacePrims(p, 'hybrid');
+        for (const f of buildMeshData(p).features) {
+          if (f.type !== 'eye' || eyeVariant(f.style) !== 'compound') continue;
+          const r = Math.max(f.radius, 0.06);
+          const c = eyeSeat(p, f.idx, f.quat, r).centre!;
+          const d = fieldAt(prims, c[0], c[1], c[2]) / r;
+          expect(d, `${id} #${seed}`).toBeLessThan(-0.3); // under the cuticle…
+          expect(d, `${id} #${seed}`).toBeGreaterThan(-0.6); // …with a dome of it still standing out
+          expect(Math.abs(d + COMPOUND_DEPTH), `${id} #${seed}`).toBeLessThan(0.1);
+          n++;
+        }
+      }
+    }
+    expect(n).toBeGreaterThanOrEqual(20);
   });
 });

@@ -855,11 +855,13 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   parts (98% of founders, from 90%); horror feelers round the crown; a wyvern no giraffe; a shark's tail
   stock; a snake's head; a dog's brush; a frog's round lids; a sea star's smooth arms; level whiskers;
   an ostrich's shaggy plumes; a hawk's dark hooked bill; a lizard's wedge of a head; eyes seated on flat
-  skulls; paws no wider than the wrist, legs one tone down to them; cupped ears with a pale inside.
+  skulls; paws no wider than the wrist, legs one tone down to them; cupped ears with a pale inside;
+  an insect's eyes seated as domes, its feelers fine, no letterbox mouth.
   **Tests:** `morphospace.test.ts › a deer is no dog`, `horror.test.ts`, `wyvern.test.ts`,
   `fish.test.ts`, `serpent.test.ts`, `canid.test.ts`, `lids.test.ts`, `starfish.test.ts`,
   `whiskers.test.ts`, `creatureMaterial.test.ts › shaggy`, `beak.test.ts`, `lizard.test.ts`,
-  `eyeSeat.test.ts`, `feet.test.ts › knows its legs`, `ear.test.ts › a deep cup`.
+  `eyeSeat.test.ts`, `feet.test.ts › knows its legs`, `ear.test.ts › a deep cup`,
+  `bodyField.test.ts › feelers`, `arthro-alien.test.ts › feelers rise`.
 
 ### Next up (unchecked — pick from here)
 

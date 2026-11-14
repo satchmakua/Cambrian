@@ -966,7 +966,9 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   const frogEye = useMemo(() => (v === 'round' || v === 'beady') && onFace && !!phenotype && bulgingEye(phenotype, qRotateV(f.quat, [0, 0, 1])), [v, onFace, phenotype, f.quat]);
   const frogIris = useMemo(() => FROG_IRIS[Math.floor(unitHash(seed, 0xf20) * FROG_IRIS.length)], [seed]);
   const fishIris = useMemo(() => (sharkEye ? SHARK_IRIS : FISH_IRIS)[Math.floor(unitHash(seed, 0xf15) * (sharkEye ? SHARK_IRIS : FISH_IRIS).length)], [seed, sharkEye]);
-  const seat = useMemo(() => (vertebrate && onFace && phenotype ? eyeSeat(phenotype, f.idx, f.quat, r) : { quat: f.quat, sink: 0, centre: null }), [vertebrate, onFace, phenotype, f.idx, f.quat, r]);
+  // (an insect's compound eye is seated too: a low dome in the side of its head — see COMPOUND_DEPTH)
+  const seated = vertebrate || v === 'compound';
+  const seat = useMemo(() => (seated && onFace && phenotype ? eyeSeat(phenotype, f.idx, f.quat, r) : { quat: f.quat, sink: 0, centre: null }), [seated, onFace, phenotype, f.idx, f.quat, r]);
   const sink = seat.sink;
   // the ball takes the iris's own hue, deep — a brown ball behind a green or blue iris read as a bruise
   const ballColor = useMemo(() => new THREE.Color(iris).multiplyScalar(0.16).lerp(new THREE.Color(0x1c120e), 0.5).getHex(), [iris]);
@@ -1135,7 +1137,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
       ) : v === 'compound' ? (
         // compound — an insect's: a big glossy dome of fine facets, dark with a tint of bronze, rust or
         // bottle green (coarse facets were a disco ball; jet black, a marble)
-        <mesh position={[0, 0, r * 0.08]}>
+        <mesh>
           <icosahedronGeometry args={[r * 0.98, 3]} />
           <meshStandardMaterial color={COMPOUND[Math.floor(unitHash(seed, 0xc0e) * COMPOUND.length)]} roughness={0.3} metalness={0.45} flatShading />
         </mesh>

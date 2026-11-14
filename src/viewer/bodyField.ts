@@ -111,6 +111,12 @@ export const CHAIN_CUTS = 3;
 /** limb chains that are smooth curves (a spine's are too); a leg's or an arm's links meet at joints */
 const SMOOTH_LIMBS = new Set(['tail', 'tentacle']);
 
+/** An antenna's skin, ×its links' girth. No node grows thinner than R_MIN, so a feeler was as thick as
+ *  a leg's tip — on an ant's or a centipede's small head, two pipes; drawn at its own fineness it is a
+ *  feeler. */
+export const ANTENNA_SLIM = 0.4;
+const slimOf = (n: BodyNode): number => (n.kind !== 'spine' && n.part?.kind === 'antenna' ? ANTENNA_SLIM : 1);
+
 /** how far below a stopped skull's axis its jaw runs (×the braincase's and the nose's radii), and its
  *  girth there (the same) — the chin a little fuller against a nose that narrows to it */
 export const JAW_DROP: readonly [number, number] = [0.48, 0.42];
@@ -257,11 +263,11 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
       const ell = (bothSpine || bothLimb) && (a.scale || b.scale) ? a : null;
       const sa: [number, number] = ell ? [a.scale?.[0] ?? 1, a.scale?.[1] ?? 1] : [1, 1];
       const sb: [number, number] = ell ? [b.scale?.[0] ?? 1, b.scale?.[1] ?? 1] : [1, 1];
-      const rB = stalkTip(a, b) ? Math.min(a.radius * 0.8, b.radius * 0.45) : b.radius;
+      const rB = stalkTip(a, b) ? Math.min(a.radius * 0.8, b.radius * 0.45) : b.radius * slimOf(b);
       // a limb's root cone starts INSIDE a shaped body node: at the node's scalar radius its base
       // sphere stood proud of a flattened body — a crab's eight leg roots swelled its flat carapace
       // into a ball — so it starts at the node's narrowest cross-section instead
-      const rA = a.kind === 'spine' && b.kind !== 'spine' && a.scale ? a.radius * Math.min(a.scale[0], a.scale[1], 1) : a.radius;
+      const rA = a.kind === 'spine' && b.kind !== 'spine' && a.scale ? a.radius * Math.min(a.scale[0], a.scale[1], 1) : a.radius * slimOf(a);
       girth += (rA + rB) * 0.5;
       included.add(a);
       included.add(b);
@@ -277,7 +283,7 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
         for (let k = 0; k < 3; k++) {
           P[k] = catmullRom(pv ? pv.pos[k] : 2 * a.pos[k] - b.pos[k], a.pos[k], b.pos[k], nx ? nx.pos[k] : 2 * b.pos[k] - a.pos[k], t);
         }
-        const r = catmullRom(pv ? pv.radius : 2 * rA - rB, rA, rB, nx ? nx.radius : 2 * rB - rA, t);
+        const r = catmullRom(pv ? pv.radius * slimOf(pv) : 2 * rA - rB, rA, rB, nx ? nx.radius * slimOf(nx) : 2 * rB - rA, t);
         // (never past the link's own two girths by much: a spline overshoots where a girth steps)
         const lo = Math.min(rA, rB), hi = Math.max(rA, rB);
         return { P, r: Math.min(hi * 1.06, Math.max(lo * 0.94, r)) };

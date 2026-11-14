@@ -104,13 +104,23 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
     rolled half-cone, nearly half as deep as it is wide; it was a dish a fifth to a third as deep), and
     its inside is the belly's pale fur over pink, not the feet's dark tone shaded maroon: seen edge-on,
     the far ear of a three-quarter view was a dark horn.
+  - *Marble eyes bolted on* (ant, centipede) — an insect's compound eye stood on its node unseated,
+    the ball's centre a third of a radius out of the head: more than half of it proud. It is seated as
+    a vertebrate's is, its centre 0.4 of a radius under the cuticle — a low dome in the head's side.
+  - *Feelers like pipes* (ant, centipede) — no node grows thinner than R_MIN, so an antenna was as thick
+    as a leg's tip: two pipes on a small head. The skin draws it at 0.4 of its links' girth. A
+    centipede's feelers rise a little as they reach forward (curled down, the near one hung in front of
+    its face to the ground, a trunk with a knob on its end).
+  - *A letterbox, a frown* (ant, centipede) — the dark sheet across an insect's mouth, between its
+    mandibles, is not drawn: its mouth lies behind them, and its face shows there.
 - **Tests:** `tests/engine/morphospace.test.ts › a deer is no dog`, `tests/engine/plans/horror.test.ts`,
   `wyvern.test.ts › no giraffe`, `fish.test.ts › tail stock`, `serpent.test.ts › a head`,
   `canid.test.ts › brush`, `tests/viewer/lids.test.ts`, `starfish.test.ts › one smooth curve`,
   `tests/viewer/whiskers.test.ts`, `tests/viewer/creatureMaterial.test.ts › shaggy plumage`,
   `tests/viewer/mouths/beak.test.ts › a hawk's bill`, `lizard.test.ts › broader than its slim neck`,
   `tests/viewer/eyeSeat.test.ts › still sinks to its seat`, `tests/viewer/feet.test.ts › knows its
-  legs`, `tests/viewer/ear.test.ts › a deep cup`.
+  legs`, `tests/viewer/ear.test.ts › a deep cup`, `eyeSeat.test.ts › a compound eye is a low dome`,
+  `tests/viewer/bodyField.test.ts › feelers`, `arthro-alien.test.ts › feelers rise`.
 
 ## M95 — Thin limbs drawn exact, and a tenth look · 2026-11-13
 

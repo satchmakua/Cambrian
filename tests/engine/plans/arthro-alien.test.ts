@@ -211,6 +211,21 @@ describe('arthro-alien: a segmented, many-legged arthropod', () => {
     }
   });
 
+  it('its feelers rise a little as they reach forward — they never droop toward the ground', () => {
+    // (curled down, the near one hung in front of the face to the ground: a trunk with a knob on it)
+    for (const seed of SEEDS) {
+      const p = alien(seed);
+      const parent = parentOf(p);
+      p.nodes.forEach((n, i) => {
+        if (n.part?.kind !== 'antenna' || n.kind !== 'terminal') return;
+        // every link of the feeler, root to tip, climbs
+        for (let j = i; p.nodes[parent.get(j)!].part?.kind === 'antenna'; j = parent.get(j)!) {
+          expect(p.nodes[j].pos[1], `#${seed} feeler link`).toBeGreaterThan(p.nodes[parent.get(j)!].pos[1]);
+        }
+      });
+    }
+  });
+
   it('no other body plan grows a ringed trunk', () => {
     for (const id of MORPHOTYPE_IDS) {
       if (id === 'arthro-alien') continue;

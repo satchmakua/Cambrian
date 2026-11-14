@@ -140,4 +140,24 @@ describe('body field chains', () => {
       expect((top(prims) - top(bare)) / m.radius, `canid #${seed}`).toBeGreaterThan(0.04);
     }
   });
+
+  it("an insect's feelers are drawn finer than its legs' thinnest links — not two pipes on its head", () => {
+    // (no node grows thinner than R_MIN: at their nodes' girth, an ant's or a centipede's feelers were as
+    // thick as its legs' tips)
+    for (const id of ['insectoid', 'arthro-alien']) {
+      for (let seed = 1; seed <= 4; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const f = buildFieldPrims(p, 'hybrid');
+        const legs = p.nodes.filter((n) => n.part?.kind === 'leg' && n.kind !== 'spine');
+        const thinnestLeg = Math.min(...legs.map((n) => n.radius));
+        let feelers = 0;
+        for (let m = 0; m < f.nc; m++) {
+          if (p.nodes[f.ia[m]].part?.kind !== 'antenna' || p.nodes[f.ib[m]].part?.kind !== 'antenna') continue;
+          expect(Math.max(f.ra[m], f.rb[m]) / thinnestLeg, `${id} #${seed}`).toBeLessThan(0.6);
+          feelers++;
+        }
+        expect(feelers, `${id} #${seed}`).toBeGreaterThan(0);
+      }
+    }
+  });
 });

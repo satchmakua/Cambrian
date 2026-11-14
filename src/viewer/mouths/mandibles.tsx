@@ -22,7 +22,7 @@ import type { MeshFeature } from '../meshData';
 import { buildMouthLine, hash01, mouthSpec, type MouthSpec, type SkinSurface } from '../mouthLine';
 import { sweepTube, type SweepPoint } from '../sweep';
 import { fangGeometry, setToothInstances, type ToothXform } from '../teeth';
-import { INTERIOR, jig } from './palette';
+import { jig } from './palette';
 import { interiorSheet, relRow } from './shared';
 
 const PATH_PTS = 8; // centerline samples per blade
@@ -293,7 +293,6 @@ function InsectMandibles({
     const chitin = new THREE.Color(dark).lerp(new THREE.Color(0x241d18), 0.55);
     return {
       chitin: new THREE.MeshStandardMaterial({ color: chitin, roughness: 0.35, metalness: 0.12 }),
-      interior: new THREE.MeshStandardMaterial({ color: INTERIOR, roughness: 0.3, side: THREE.DoubleSide }),
       teeth: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42 }),
     };
   }, [dark]);
@@ -314,9 +313,11 @@ function InsectMandibles({
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
 
   if (!built) return null;
+  // (the opening between the blades is not drawn: an insect's mouth lies behind its mandibles, under a
+  // plate of its own cuticle, and its uncarved face shows there. A dark sheet across it, seen from the
+  // front, was a letterbox slot under an ant's eyes, a frown across a centipede's face)
   return (
     <group>
-      <mesh geometry={built.interior} material={mats.interior} />
       <mesh geometry={built.blades[0]} material={mats.chitin} castShadow />
       <mesh geometry={built.blades[1]} material={mats.chitin} castShadow />
       {built.serrations.length > 0 && (
