@@ -72,4 +72,26 @@ describe('a dragon’s head (and a wyvern’s)', () => {
     });
     expect(horns).toBeGreaterThan(20);
   });
+  it("is no giraffe: banded or mottled, its horns swept back along the skull, its neck carried forward", () => {
+    // (in a net of dark cells on tan, two short horns standing up off its crown and its neck upright, the
+    // wyvern read as a giraffe; the dragon's net as cracked glaze)
+    for (const id of ['wyvern', 'dragon']) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const g = genomeOfMorphotype(seed, id);
+        expect(g.covering.pattern, `${id} #${seed}`).not.toBe('reticulate');
+        let horns = 0;
+        for (let s: typeof g.body | undefined = g.body; s; s = s.child) {
+          for (const a of s.appendages) {
+            if (a.kind !== 'horn') continue;
+            horns++;
+            // aimed well back (elevation past −1.1 rad): along the skull, not up off it
+            expect(a.attachElevation, `${id} #${seed}`).toBeLessThan(-1.1);
+          }
+        }
+        // a wyvern's neck leaves its shoulders pitched up no more than a fifth of a radian a link
+        if (id === 'wyvern' && g.body.child) expect(g.body.child.curve[0], `${id} #${seed} neck`).toBeGreaterThan(-0.21);
+        expect(horns, `${id} #${seed}`).toBeLessThanOrEqual(4);
+      }
+    }
+  });
 });
