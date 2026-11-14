@@ -871,14 +871,17 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   no face (a band of glowing eyes, rising feelers, a lamprey's maw); a crystal trunk as one cut stone; a
   theropod's sleek feathers, toothy jaw and bare shanks; a fish's gill cover on its skull and a tail stock;
   reptile jaws along the side of the head with teeth outside them; brown eyes, not grey ball bearings; a
-  hawk's neck; a centipede's plates; pointed tail and tentacle tips; a crocodile's low keeled plates.
+  hawk's neck; a centipede's plates; pointed tail and tentacle tips; a crocodile's low keeled plates; a
+  python's net, not crackle glaze; a shark's narrow head over a crescent mouth; horns as one sheath; a
+  bear's barrel on columns, its short snout and its ears facing the camera; a slug's taper and feelers; a
+  weasel's small nose, low ears and full tail; wings at the shoulders and back spines that point out.
   **Tests:** see PROGRESS M97.
 
 ### Next up (unchecked — pick from here)
 
-- [ ] **What the twelfth look left.** The shark's dolphin head; the bear a dog on stilts; the weasel's
-  hamster face; the chimera's chest tube; the dragon's wings over its hips; the far eye bulging out of the
-  outline (bird, hawk, chimera, cat, lizard); the crystal's smooth glass head on its cut stone.
+- [ ] **What the twelfth look left.** The far eye bulging out of the outline (bird, hawk, chimera, cat,
+  lizard); the crystal's smooth glass head on its cut stone; a slug's mantle, sole and grooved skin; the
+  dragon's pale underwing web; a bear's paw still a step below its wrist.
 
 - [ ] **What the eleventh look left.** The crab's balloon claws; the arthro-alien's string of beads; a
   cut stone still papery; plush heads (a cat's box of a head, sock muzzles); the bare-shank seams on

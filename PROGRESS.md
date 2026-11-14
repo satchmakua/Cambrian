@@ -111,6 +111,39 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   - *Blunt tail tips* (snake, mouse, theropod, octopus, horror) — a tail or tentacle ending in nothing runs on
     past its last node to a point, its last link drawn exact at any girth.
   - *Crocodile: a hairbrush of cone spikes* — its back scutes are low keeled slabs, not pyramids.
+  - *Crackle glaze* (snake, lizard, turtle, chimera) — the reticulate pattern drew hairline cracks round
+    small cells; its cells are a third larger and its rims broad and a little ragged: a python's net.
+  - *Shark: a dolphin* [3] † — its head was 1.45 of the trunk's girth across (cheeks, a melon); a swimmer's
+    snout-tip ellipsoid was blended at the full radius over cones already ending there (a bottle nose); its
+    underslung mouth was levelled at the flat of the chin (no mouth from the side); every fin was sized by
+    its link, not its gene (a second dorsal nearly as tall as the first). Now a narrow head, a snout tip
+    blended as its chain is, a crescent mouth wrapping round the head (`mouthLine isUnderslung`), a lesser
+    fin scaled by its share of the biggest, and gill slits half the flank deep.
+  - *Pencil horns* (deer, wyvern, dragon) — a horn's links were meshed as skin, a fat cone with the
+    keratin sheath on its point as a needle; a horn is now one sheath from its root on the skull.
+  - *Bear: a dog on stilts, a hyena* [3] † — a wedge of a trunk falling off steep withers to a rump
+    two-thirds the chest's girth, on long thin legs, its head held over the withers on a pinched neck, a
+    dog's length of muzzle. Now a barrel (rump ~0.8 of the chest) on four-link columns with big paws, the
+    head level with the withers on a neck nearly its girth, a broad skull, smaller eyes, and a muzzle 0.8 of
+    a long one's length (`muzzleLong`, a Morpho constant: no draw). A round ear turns 0.5 rad out, not
+    0.78 (the far ear was dead edge-on to the studio camera: a spike, on a mouse too), and a leg's
+    up-facing skin wears the back's tone (a paw's top in the flank's was the brightest thing on the bear:
+    a slipper).
+  - *Slug: a pickle with visors* [3] — six links falling away from a round front to a tail under half
+    its girth; feelers of three links (`stalkSegs`, no draw), half to once its depth; each eye the tip of
+    its feeler (`eyeSeat feelerTip`): a knob in its own skin with a dark spot in its point, not a lidded
+    eyeball in green lids.
+  - *Weasel: a hamster's face* [3] † — its long snout (longer than a dog's) wore a dog's rhinarium: the
+    nose pad now grows with the reach only where the skull has a stop (`NOSE_POINTED`; a deer's rubber
+    ball of a nose shrinks too). Its small round ears are low flaps half in the coat, furred inside
+    (`lowEar`); its tail keeps its girth (×0.91 a link, from ×0.8: a rat's whip); its head is broader than
+    its neck.
+  - *Wings over the hips, a bolt on the back* (dragon, chimera) [3] † — a membrane or raised wing was
+    anchored on the trunk link nearest its grown root, the middle one: the wrist stood behind the
+    forelegs, the sail over the haunch. Wings root at the shoulders now (`wingShoulder`), their leading
+    web slack; a back spine is a cone along its aim, its base sunk (`dorsalSpikeGeometry`), not a claw
+    stood point-down; the chimera carries its tail out level (it hung under its belly, a tube down its
+    chest from the front), a dragon's tail sags less.
 - **Tests:** `tests/viewer/limbTubes.test.ts › a row of segments, pinched in at each knee`, `› a knee
   keeps its whole membrane`, `› a furred spider's legs keep their round knees`, `› a bare tail … runs on to
   a point`, `tests/viewer/iris.test.ts › no grey ball bearing`, `raptor.test.ts › not a gourd on a pear`,
@@ -119,7 +152,13 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   `tests/viewer/facets.test.ts` (the cut stone), `eyeSeat.test.ts › a glowing eye is a low dome`,
   `creatureMaterial.test.ts › a cut stone takes a glassy coat`, `pile.test.ts › a feathered theropod`,
   `feet.test.ts › plumage ends at its ankle`, `fish.test.ts › gill cover … back of its head`, `› a slim
-  stalk`, `arthro-alien.test.ts › plates, not beads`, `crocodilian.test.ts › a low keel`.
+  stalk`, `arthro-alien.test.ts › plates, not beads`, `crocodilian.test.ts › a low keel`,
+  `creatureMaterial.test.ts › reticulate`, `› a leg's up-facing surfaces`, `fish.test.ts › shark`,
+  `horn.test.ts › one sheath`, `ursid.test.ts › a barrel on thick columns`, `ear.test.ts › a bear's round
+  ears`, `› a weasel's small round ears`, `bodyplan.test.ts › a slug is long and low`, `eyeSeat.test.ts ›
+  a slug's eyes`, `nose.test.ts › only where the skull has a stop`, `mustelid.test.ts › full down its
+  length`, `› not lost in front of its chest`, `wings.test.ts › roots its wings at its shoulders`, `› a
+  wyvern's`, `› slack skin`, `› back spines`, `chimera.test.ts › carries its tail`, `› a dragon's tail`.
 
 ## M96 — An eleventh look, and a deer named a deer · 2026-11-14
 
