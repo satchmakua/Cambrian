@@ -648,6 +648,9 @@ vec4 cellNear(vec3 p, out float f2) {
 // a reticulate net's cells (× the pattern's scale: under 0.5, bigger patches) and its rims' half-width
 // (in the cells' edge distance)
 const float RETIC_CELL = 0.38;
+const float SLIME_CELL = 9.0;      // a slime hide's tubercles across (per body unit)…
+const float SLIME_LONG = 0.4;      // …fewer along the body: each two and a half times as long as wide
+const float SLIME_TUBERCLE = 0.012; // …and how high each stands (body units)
 const float RETIC_RIM = 0.06;
 
 // --- color pattern field p(x) in [0,1] (MORPHOLOGY §7.1) — domain-warped for organic flow --------
@@ -855,10 +858,18 @@ float surfaceHeight(vec3 p, int cover) {
     gHb = swell * 0.006 - smoothstep(0.62, 0.8, pits) * 0.0012 * aaW(26.0);
     return h;
   }
-  if (cover == 5) {                                             // slime — faint wet ripple
-    float h = fbmA(p * 3.5, 3.5);
-    gHb = h * 0.018;
-    return h * 0.35;
+  if (cover == 5) {                                             // slime — tubercles under a wet ripple
+    // Long tubercles laid along the body between narrow grooves, dark and dull in the grooves, under a
+    // faint wet ripple: a slug's back, an octopus's papillae. (The ripple alone was a glossy pickle,
+    // its highlight one unbroken smear.)
+    // (each a round dome rising from its grooves to its middle, the grooves only a shade darker: flat-topped
+    // cells between dark seams were crazy paving, a turtle's shell)
+    vec2 F = voronoi(vec3(p.x, p.y, p.z * SLIME_LONG) * SLIME_CELL);
+    float w = aaW(SLIME_CELL);
+    float dome = mix(0.6, smoothstep(0.0, 0.55 + gFw * SLIME_CELL, F.y - F.x), w);
+    float ripple = fbmA(p * 3.5, 3.5);
+    gHb = dome * SLIME_TUBERCLE + ripple * 0.01;
+    return clamp(0.62 - dome * 0.3 + ripple * 0.1, 0.0, 1.0);
   }
   if (cover == 6) {                                             // plates — big deep scutes
     vec2 F = voronoi(p * 2.2);

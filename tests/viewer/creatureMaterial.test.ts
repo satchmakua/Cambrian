@@ -459,6 +459,25 @@ describe('creature material shader injection', () => {
     expect(f).toContain('float shade = mix(0.62, 1.12, uShellH) * (0.93 + 0.14 * hash13(cid + 9.0));');
   });
 
+  it('a slime hide wears long tubercles between soft grooves, under its wet ripple — not a smooth glossy pickle', () => {
+    // (a faint ripple alone was a pickle in a smear of highlight; flat-topped cells between dark seams were
+    // crazy paving)
+    const f = compileShaderStrings('slime').fragmentShader;
+    const i = f.indexOf('if (cover == 5) {');
+    expect(i).toBeGreaterThan(0);
+    const branch = f.slice(i, f.indexOf('if (cover == 6) {', i));
+    // cells laid along the body, longer than they are wide
+    expect(branch).toContain('voronoi(vec3(p.x, p.y, p.z * SLIME_LONG) * SLIME_CELL)');
+    const num = (name: string) => Number(new RegExp(`const float ${name} = ([0-9.]+);`).exec(f)![1]);
+    expect(num('SLIME_LONG')).toBeLessThan(0.6);
+    expect(num('SLIME_CELL')).toBeGreaterThan(5);
+    // each a dome to its middle, not a plateau with a hairline seam round it
+    expect(branch).toMatch(/smoothstep\(0\.0, 0\.5\d? \+ gFw \* SLIME_CELL, F\.y - F\.x\)/);
+    // standing proud enough to break the highlight, low enough to stay a skin
+    expect(num('SLIME_TUBERCLE')).toBeGreaterThan(0.006);
+    expect(num('SLIME_TUBERCLE')).toBeLessThan(0.03);
+  });
+
   it("a leg's up-facing surfaces (a paw's top) wear the back's tone, its sides the flank's, never the belly's", () => {
     // (all leg in the flank's tone, a paw's flat top lit by the sky was the brightest thing on a bear:
     // a pale slipper under a dark animal)
