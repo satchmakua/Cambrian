@@ -854,15 +854,18 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
 - [x] **M96 — An eleventh look (3.32), and a deer named a deer.** Identification by hide and telltale
   parts (98% of founders, from 90%); horror feelers round the crown; a wyvern no giraffe; a shark's tail
   stock; a snake's head; a dog's brush; a frog's round lids; a sea star's smooth arms; level whiskers;
-  an ostrich's shaggy plumes. **Tests:** `morphospace.test.ts › a deer is no dog`, `horror.test.ts`,
-  `wyvern.test.ts`, `fish.test.ts`, `serpent.test.ts`, `canid.test.ts`, `lids.test.ts`,
-  `starfish.test.ts`, `whiskers.test.ts`, `creatureMaterial.test.ts › shaggy`.
+  an ostrich's shaggy plumes; a hawk's dark hooked bill; a lizard's wedge of a head; eyes seated on flat
+  skulls; paws no wider than the wrist, legs one tone down to them; cupped ears with a pale inside.
+  **Tests:** `morphospace.test.ts › a deer is no dog`, `horror.test.ts`, `wyvern.test.ts`,
+  `fish.test.ts`, `serpent.test.ts`, `canid.test.ts`, `lids.test.ts`, `starfish.test.ts`,
+  `whiskers.test.ts`, `creatureMaterial.test.ts › shaggy`, `beak.test.ts`, `lizard.test.ts`,
+  `eyeSeat.test.ts`, `feet.test.ts › knows its legs`, `ear.test.ts › a deep cup`.
 
 ### Next up (unchecked — pick from here)
 
-- [ ] **What the eleventh look left.** A raptor's straight blade of a beak; a lizard's round newt head;
-  a crab's arching legs and balloon claws; the arthro-alien's string of beads; a cut stone still papery;
-  slipper paws and spike ears on the furred plans; hard sock seams on legs; goggle eyes; painted mouths.
+- [ ] **What the eleventh look left.** A crab's arching legs and balloon claws; the arthro-alien's
+  string of beads; a cut stone still papery; plush heads (a cat's box of a head, sock muzzles); the
+  bare-shank seams on birds' legs; goggle eyes; painted mouths.
 
 - [ ] **What the tenth look left.** The frog's balloon head with its clamshell seam and wedge-cut
   eyelids; the ostrich's scaly plumage; the serpent's blunt tail with an upturned nub; the starfish's

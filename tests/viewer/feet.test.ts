@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { bareLegsOf, bareOf, footPlanOf, isHindFoot, legWeights, partWeights, ratLike, toedFootGeometry } from '../../src/viewer/feet';
+import { bareLegsOf, bareOf, footPlanOf, isHindFoot, legWeights, partWeights, ratLike, skinPartWeights, toedFootGeometry } from '../../src/viewer/feet';
 import { buildSmoothGeometry } from '../../src/viewer/smoothSkin';
 import { randomGenome } from '../../src/engine/random';
 
@@ -57,6 +57,45 @@ describe('feet', () => {
       for (const id of ['mustelid', 'felid', 'canid']) expect(bareOf(grow(genomeOfMorphotype(seed, id))), `${id} #${seed}`).toBeNull();
       expect(bareOf(grow(genomeOfMorphotype(seed, 'bird')))?.kind, `bird #${seed}`).toBe('leg');
     }
+  });
+
+  it("a furred body's skin knows its legs (the spots fade down them as on the paw), a rat's its tail", () => {
+    // (gated only on bodies with bare parts, a cat's legs wore their spots full strength down to the paw,
+    // which wore them faded: a dark spot cut off square at the wrist on every leg, the top of a sock)
+    for (const [id, seed] of [['felid', 23], ['canid', 2], ['ursid', 5], ['ungulate', 7], ['arachnid', 3]] as const) {
+      const p = grow(genomeOfMorphotype(seed, id));
+      expect(bareOf(p), `${id} has no bare part`).toBeNull();
+      const geo = buildSmoothGeometry(p, true, [], 'low');
+      const pos = geo.getAttribute('position');
+      const w = skinPartWeights(p, pos.array, pos.count);
+      expect(w, id).not.toBeNull();
+      const feet = p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg');
+      const trunk = p.nodes.filter((n) => n.kind === 'spine');
+      let foot = 0, footLeg = 0, back = 0, backLeg = 0;
+      for (let v = 0; v < pos.count; v++) {
+        const x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
+        if (feet.some((f) => Math.hypot(x - f.pos[0], y - f.pos[1], z - f.pos[2]) < f.radius * 2)) {
+          foot++;
+          if (w![v] > 0.5) footLeg++;
+        } else if (trunk.some((t) => y > t.pos[1] && Math.hypot(x - t.pos[0], z - t.pos[2]) < t.radius * 0.5)) {
+          // the top of the trunk, over its spine
+          back++;
+          if (w![v] > 0.5) backLeg++;
+        }
+      }
+      expect(foot, id).toBeGreaterThan(0);
+      expect(footLeg / foot, `${id} lower legs`).toBeGreaterThan(0.8);
+      expect(backLeg / Math.max(back, 1), `${id} back`).toBeLessThan(0.05);
+    }
+    // a rat's gate is its naked tail; a legless snake bakes none
+    const rat = grow(genomeOfMorphotype(3, 'rodent'));
+    const at = rat.nodes.flatMap((n) => [...n.pos]);
+    const rw = skinPartWeights(rat, at, rat.nodes.length)!;
+    rat.nodes.forEach((n, i) => {
+      if (n.part?.kind === 'leg' && n.kind === 'terminal') expect(rw[i], 'rat foot').toBeLessThan(0.1);
+    });
+    const snake = grow(genomeOfMorphotype(3, 'serpent'));
+    expect(skinPartWeights(snake, snake.nodes.flatMap((n) => [...n.pos]), snake.nodes.length)).toBeNull();
   });
 
   it('pelts and shells keep their covering all the way down', () => {

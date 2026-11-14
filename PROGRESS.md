@@ -84,10 +84,33 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
     body's own frame, fanned fore and aft in rows, each tapering and drooping a little at its tip.
   - *Ostrich: fish-scale plumage* — a feathered body with no wing wears shaggy plumes: hair-like strands
     along the lay in locks, and in close-up the pile's shells break its outline.
+  - *Raptor: a straight silver blade of a beak* [3] — the hooked bill was a third as wide as it is deep
+    and a pale blue-grey; it is over half as wide, slate darkening to near-black at the hook, and its
+    yellow cere a band a sixth of the bill long (it was a sliver where the bill left the face).
+  - *Lizard: a round newt head* [3] — the head was no wider than the neck, the eye at the snout's tip on
+    half the founders. It is broader than its slimmer neck at the jaws' hinge and wedges to a snout that
+    runs on ahead of the eyes.
+  - *Goggle eyes on flat skulls* — an eye's seat sinks the ball along its gaze until a third stands out
+    of the skin, but the sink stopped at one radius: an eye grown at a flattened skull's round radius (a
+    lizard's, a shark's, a bear's, a dog's, a theropod's, an ostrich's) floated a radius above the skin,
+    half out of the head. The sink now reaches two radii.
+  - *Slipper paws and sock seams* (cat, dog, bear, weasel) — a paw's sole is little wider than the
+    wrist it ends (it was half again as wide, a cotton-ball slipper with the leg plugged into it). And
+    the skin of every legged body now knows its legs: the leg weight that fades a coat's spots down the
+    legs, and gives them the flank's tone, was baked only on bodies with bare shanks or a naked tail, so
+    a cat's legs wore their spots full strength down to the paw — which, leg through and through, wore
+    them faded: a dark spot cut off square at every wrist, the top of a sock.
+  - *Spike ears* (cat, dog, mouse, bear) — an ear's hollow is twice as deep as it was (a cat's is a
+    rolled half-cone, nearly half as deep as it is wide; it was a dish a fifth to a third as deep), and
+    its inside is the belly's pale fur over pink, not the feet's dark tone shaded maroon: seen edge-on,
+    the far ear of a three-quarter view was a dark horn.
 - **Tests:** `tests/engine/morphospace.test.ts › a deer is no dog`, `tests/engine/plans/horror.test.ts`,
   `wyvern.test.ts › no giraffe`, `fish.test.ts › tail stock`, `serpent.test.ts › a head`,
   `canid.test.ts › brush`, `tests/viewer/lids.test.ts`, `starfish.test.ts › one smooth curve`,
-  `tests/viewer/whiskers.test.ts`, `tests/viewer/creatureMaterial.test.ts › shaggy plumage`.
+  `tests/viewer/whiskers.test.ts`, `tests/viewer/creatureMaterial.test.ts › shaggy plumage`,
+  `tests/viewer/mouths/beak.test.ts › a hawk's bill`, `lizard.test.ts › broader than its slim neck`,
+  `tests/viewer/eyeSeat.test.ts › still sinks to its seat`, `tests/viewer/feet.test.ts › knows its
+  legs`, `tests/viewer/ear.test.ts › a deep cup`.
 
 ## M95 — Thin limbs drawn exact, and a tenth look · 2026-11-13
 

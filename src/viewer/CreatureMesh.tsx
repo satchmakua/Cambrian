@@ -25,14 +25,14 @@ import { Mouth } from './mouths';
 import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
-import { bareOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, partWeights, ratLike, toedFootGeometry, TALONED, type FootPlan } from './feet';
+import { bareOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, ratLike, skinPartWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
 import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, longWingFold, trunkGirth, wingCarriage, LONG_WING, type FinBuild } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
 import { BROW_TILT, bulgingEye, eyeClearings, eyeSeat, eyeTilt, isSwimmer } from './eyeSeat';
-import { coatDark, coatFin, coatMain, coatPattern } from './palette';
+import { coatBelly, coatDark, coatFin, coatMain, coatPattern, srgbHSL } from './palette';
 import { browRidgeGeometry, faceMaskOf, headMaskOf, isApe } from './face';
 import { apeFootGeometry, fistGeometry } from './apeLimbs';
 import { clawGeometry, wristQuat } from './claw';
@@ -137,14 +137,15 @@ function buildSkin(phenotype: Phenotype, full: boolean, carves: readonly Carve[]
   return g;
 }
 
-/** The bare-part gate (aLeg) for a body geometry with baked aBodyPos — only for a creature with bare
- *  shanks or a naked tail (bareOf); a geometry without it reads 0 (not bare) in the shader. */
+/** The leg gate (aLeg) for a body geometry with baked aBodyPos (skinPartWeights); a geometry without
+ *  it reads 0 in the shader. (Baked only for bodies with bare parts, a cat's legs wore their spots full
+ *  strength down to the paw, which — leg through and through — wore them faded: a dark spot cut off
+ *  square at the wrist on every leg, the top of a sock.) */
 function bakeLegs(g: THREE.BufferGeometry, phenotype: Phenotype): void {
-  const b = bareOf(phenotype);
-  if (!b) return;
   const bp = g.getAttribute('aBodyPos') as THREE.BufferAttribute | undefined;
   if (!bp) return;
-  g.setAttribute('aLeg', new THREE.BufferAttribute(partWeights(phenotype, bp.array, bp.count, b.kind), 1));
+  const w = skinPartWeights(phenotype, bp.array, bp.count);
+  if (w) g.setAttribute('aLeg', new THREE.BufferAttribute(w, 1));
 }
 
 /** The geometry cache's key for a carapace shell (turtle, crab, beetle) at a fineness. */
@@ -753,7 +754,7 @@ function Feature({
     case 'barb':
       return <Barb f={f} color={footColor} />;
     case 'ear':
-      return <Ear f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} bare={ratLike(phenotype)} />;
+      return <Ear f={f} color={footColor} belly={coatBelly(phenotype.genomeRef.palette).getHex()} skin={skin} origin={phenotype.nodes[f.idx].pos} bare={ratLike(phenotype)} />;
     case 'gill':
       return <Gill f={f} color={footColor} phenotype={phenotype} surface={surface} />;
     case 'crest':
@@ -1184,6 +1185,9 @@ const PAW_TOES: readonly [number, number][] = [
   [0.23, 1.0],
   [0.66, 0.82],
 ];
+/** a paw's sole (× its node's radius: width, depth, length) and how far apart its toes spread */
+const PAW_SOLE: readonly [number, number, number] = [1.12, 0.7, 1.55];
+const PAW_TOE_SPREAD = 0.84;
 function pawGeometry(r: number, origin: readonly number[], slender = false): { fur: THREE.BufferGeometry; claws: THREE.BufferGeometry } {
   const parts: THREE.BufferGeometry[] = [];
   const sole = new THREE.SphereGeometry(1, 18, 12);
@@ -1194,7 +1198,9 @@ function pawGeometry(r: number, origin: readonly number[], slender = false): { f
     new THREE.Matrix4().compose(
       new THREE.Vector3(0, -r * (slender ? 0.45 : 0.2), r * 0.42),
       new THREE.Quaternion(),
-      slender ? new THREE.Vector3(r * 0.78, r * 0.42, r * 1.3) : new THREE.Vector3(r * 1.5, r * 0.8, r * 1.7),
+      // (a paw is little wider than the wrist it ends: half again as wide, a flattened ball, it was a
+      // cotton-ball slipper with the leg plugged into it)
+      slender ? new THREE.Vector3(r * 0.78, r * 0.42, r * 1.3) : new THREE.Vector3(r * PAW_SOLE[0], r * PAW_SOLE[1], r * PAW_SOLE[2]),
     ),
   );
   parts.push(sole);
@@ -1219,12 +1225,12 @@ function pawGeometry(r: number, origin: readonly number[], slender = false): { f
       claws.push(claw);
       continue;
     }
-    toe.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x * r * 1.1, -r * 0.55, r * 0.42 + z * r * 1.5), new THREE.Quaternion(), new THREE.Vector3(r * 0.44, r * 0.45, r * 0.52)));
+    toe.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x * r * PAW_TOE_SPREAD, -r * 0.55, r * 0.42 + z * r * 1.42), new THREE.Quaternion(), new THREE.Vector3(r * 0.36, r * 0.4, r * 0.46)));
     parts.push(toe);
     const claw = new THREE.ConeGeometry(1, 1, 6);
     claw.applyMatrix4(
       new THREE.Matrix4().compose(
-        new THREE.Vector3(x * r * 1.12, -r * 0.62, r * 0.42 + z * r * 1.5 + r * 0.5),
+        new THREE.Vector3(x * r * PAW_TOE_SPREAD * 1.02, -r * 0.62, r * 0.42 + z * r * 1.42 + r * 0.44),
         new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2 + 0.55, 0, 0)),
         new THREE.Vector3(r * 0.09, r * 0.3, r * 0.09),
       ),
@@ -1928,7 +1934,10 @@ function bakeSkin(g: THREE.BufferGeometry, origin: readonly number[]): THREE.Buf
   return g;
 }
 
-function Ear({ f, color, skin, origin, bare = false }: { f: MeshFeature; color: number; skin?: THREE.Material; origin: readonly number[]; bare?: boolean }) {
+/** the flesh an inner ear's pale fur lets show through */
+const EAR_FLESH = srgbHSL(0.01, 0.38, 0.62);
+
+function Ear({ f, color, belly, skin, origin, bare = false }: { f: MeshFeature; color: number; belly: number; skin?: THREE.Material; origin: readonly number[]; bare?: boolean }) {
   const r = Math.max(f.radius, 0.06);
   const v = earVariant(f.style);
   const geo = useMemo(() => {
@@ -1941,8 +1950,9 @@ function Ear({ f, color, skin, origin, bare = false }: { f: MeshFeature; color: 
     geo.inner.dispose();
   }, [geo]);
   // (a mouse's ear is bare pink skin inside, like its paws: the dusky inner ear every mammal wears was,
-  // in the shadow of a mouse's big round cup, a dark slot)
-  const innerColor = useMemo(() => (bare ? new THREE.Color(BARE_PAW).lerp(new THREE.Color(0xe8b4b0), 0.35).getHex() : new THREE.Color(color).lerp(new THREE.Color(0x8a5552), 0.55).multiplyScalar(0.8).getHex()), [color, bare]);
+  // in the shadow of a mouse's big round cup, a dark slot. Another's is the pale fur of its belly over
+  // pink: in the coat's dark foot tone, maroon, a cat's and a dog's ears were dark paper triangles)
+  const innerColor = useMemo(() => (bare ? new THREE.Color(BARE_PAW).lerp(new THREE.Color(0xe8b4b0), 0.35).getHex() : new THREE.Color(belly).lerp(EAR_FLESH, 0.4).multiplyScalar(0.85).getHex()), [belly, bare]);
   return (
     <group>
       {skin ? (

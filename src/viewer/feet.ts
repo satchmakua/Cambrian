@@ -150,6 +150,17 @@ export function legWeights(p: Phenotype, bodyPos: ArrayLike<number>, count: numb
   return partWeights(p, bodyPos, count, 'leg');
 }
 
+/**
+ * The part gate a body's skin bakes (the shader's aLeg): how much each vertex is leg — where a coat's
+ * spots fade out, the flank's tone runs on down, and a bird's bare shank starts — or, on a rat-like
+ * body, how much is its naked tail. Null for a body with neither.
+ */
+export function skinPartWeights(p: Phenotype, bodyPos: ArrayLike<number>, count: number): Float32Array | null {
+  const kind = bareOf(p)?.kind ?? 'leg';
+  if (!p.nodes.some((n) => n.part?.kind === kind && n.kind !== 'spine')) return null;
+  return partWeights(p, bodyPos, count, kind);
+}
+
 /** …and the same for any one kind of part (a rat's naked TAIL: see bareOf). */
 export function partWeights(p: Phenotype, bodyPos: ArrayLike<number>, count: number, kind: 'leg' | 'tail'): Float32Array {
   const isLeg = (i: number) => p.nodes[i].part?.kind === kind && p.nodes[i].kind !== 'spine';

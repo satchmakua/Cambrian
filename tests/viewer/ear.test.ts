@@ -61,4 +61,33 @@ describe('ears', () => {
       expect(left.x, `${v} mirrored`).toBeCloseTo(-right.x, 6);
     }
   });
+
+  it('an ear is a deep cup: seen edge-on it keeps a good part of its width, never a thin horn', () => {
+    // (a shallow dish a fifth to a third as deep as it was wide: the far ear of a three-quarter view
+    // was a dark spike, like a horn)
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0.35, 0.94, 0).normalize());
+    const out = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+    for (const [v, least] of [['pointed', 0.4], ['round', 0.25], ['leaf', 0.3]] as const) {
+      const pos = earGeometry(v, 0.1, [q.x, q.y, q.z, q.w]).outer.getAttribute('position');
+      // the ear's own frame: up it (out), across it, and through it (its face normal, ⟂ to both)
+      const across = new THREE.Vector3(), through = new THREE.Vector3();
+      const inner = meanNormal(earGeometry(v, 0.1, [q.x, q.y, q.z, q.w]).inner);
+      through.copy(inner).addScaledVector(out, -inner.dot(out)).normalize();
+      across.crossVectors(out, through);
+      let top = 0;
+      for (let i = 0; i < pos.count; i++) top = Math.max(top, new THREE.Vector3().fromBufferAttribute(pos, i).dot(out));
+      for (const t of [0.35, 0.55, 0.75]) {
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        for (let i = 0; i < pos.count; i++) {
+          const p = new THREE.Vector3().fromBufferAttribute(pos, i);
+          if (Math.abs(p.dot(out) - t * top) > 0.04 * top) continue;
+          x0 = Math.min(x0, p.dot(across));
+          x1 = Math.max(x1, p.dot(across));
+          z0 = Math.min(z0, p.dot(through));
+          z1 = Math.max(z1, p.dot(through));
+        }
+        expect((z1 - z0) / (x1 - x0), `${v} at ${t} of its height`).toBeGreaterThan(least);
+      }
+    }
+  });
 });

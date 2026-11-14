@@ -5,6 +5,11 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { earVariant } from './partStyles';
 
+/** how deep an ear's hollow is (× its half-width there): a cat's ear is a rolled half-cone, a bear's
+ *  or a mouse's a cup. (At 0.42 every ear was a shallow dish a fifth to a third as deep as it was wide:
+ *  seen edge-on in a three-quarter view, the far one was a thin horn.) */
+export const EAR_CUP: Record<ReturnType<typeof earVariant>, number> = { pointed: 0.9, round: 0.72, leaf: 0.78 };
+
 /**
  * An ear, built in the BODY frame: it rises along the part's outward aim, its face turned forward
  * and out to its own side (an ear's opening looks forward-out, whatever roll the growth frame happened
@@ -41,12 +46,13 @@ export function earGeometry(v: ReturnType<typeof earVariant>, r: number, quat: r
   // the skin where the skull curves away beneath them, so no seam shows
   const base = -0.5;
   const NU = 14, NV = 14;
+  const cupK = EAR_CUP[v];
   // the ear's surfaces at (u across −1…1, t up 0…1): the front pushed back into a hollow (deepest low
   // in the ear), the back bowed out behind it, thick at the base and thin at the rim and the tip
   const at = (u: number, t: number, layer: 'front' | 'back' | 'inner'): [number, number, number] => {
     const w = Math.max(halfW(t), 0.015);
     const bulge = 1 - u * u;
-    const cup = 0.42 * w * bulge * (1 - 0.55 * t);
+    const cup = cupK * w * bulge * (1 - 0.55 * t);
     const thick = (0.2 - 0.12 * t) * Math.sqrt(bulge);
     const curl = (v === 'leaf' ? 0.35 : 0.18) * t * t * t; // the tip leans back a little
     // (the inner ear lies a hair in front of the hollow, a patch on it)
