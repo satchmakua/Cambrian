@@ -164,6 +164,22 @@ const HIP_COVER_REACH = 2.4;
  * Returns null when the creature has no carapace part (or no trunk to cover).
  */
 export function buildShellGeometry(p: Phenotype, quality: SkinQuality = 'high'): THREE.BufferGeometry | null {
+  const sf = shellField(p);
+  if (!sf) return null;
+  const poly = polygonize(sf.field, sf.min, sf.max, { res: SKIN_RES[quality] * 0.75, aoScale: sf.rMax * 0.15 });
+  return toGeometry(poly);
+}
+
+/** The carapace's field (≤ 0 inside the shell), the box it lies in, and the measures it was built from. */
+interface ShellField {
+  field: (x: number, y: number, z: number) => number;
+  min: number[];
+  max: number[];
+  rMax: number;
+  yCut: number;
+  thin: boolean;
+}
+function shellField(p: Phenotype): ShellField | null {
   const shellNode = p.nodes.find((n) => n.terminal === 'carapace');
   if (!shellNode) return null;
   const trunk = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0);
@@ -264,6 +280,67 @@ export function buildShellGeometry(p: Phenotype, quality: SkinQuality = 'high'):
   }
   const min = [xMin - pad, yCut - rMax * 0.1, zMin - pad];
   const max = [xMax + pad, yMax + pad, zMax + pad];
-  const poly = polygonize(field, min, max, { res: SKIN_RES[quality] * 0.75, aoScale: rMax * 0.15 });
-  return toGeometry(poly);
+  return { field, min, max, rMax, yCut, thin };
+}
+
+/** A tortoise's shell is laid out in rows of horn plates: five VERTEBRAL scutes down its midline, four
+ *  COSTAL scutes either side between them, and a ring of MARGINAL scutes round the rim (one over the neck,
+ *  the rest in pairs). Their centres, body space, packed (x, y, z, …), each seated on the shell's surface —
+ *  the shader draws the seams between them (the shell's covering: see creatureMaterial uScutes). Null for a
+ *  thin shell (a crab's carapace, a beetle's wing-cases) or none. (Seamed by a random net, a tortoise's
+ *  shell was crazy paving.) */
+export const SHELL_SCUTES = { vertebral: 5, costal: 4, marginal: 24 } as const;
+export function shellScutes(p: Phenotype): Float32Array | null {
+  const sf = shellField(p);
+  if (!sf || sf.thin) return null;
+  const { field, min, max, yCut } = sf;
+  // the shell's top over (x, z) — its outer surface, found from above — or null where there is none
+  const topAt = (x: number, z: number): number | null => {
+    let hi = max[1], lo = yCut;
+    if (field(x, lo + 1e-4, z) > 0) return null;
+    for (let i = 0; i < 40; i++) {
+      const m = (hi + lo) / 2;
+      if (field(x, m, z) > 0) hi = m;
+      else lo = m;
+    }
+    return (hi + lo) / 2;
+  };
+  // the rim's reach from (cx, cz) along (dx, dz) at height y, by bisection
+  const reach = (cx: number, cz: number, dx: number, dz: number, y: number): number => {
+    let lo = 0, hi = Math.hypot(max[0] - min[0], max[2] - min[2]);
+    if (field(cx, y, cz) > 0) return 0;
+    for (let i = 0; i < 40; i++) {
+      const m = (hi + lo) / 2;
+      if (field(cx + dx * m, y, cz + dz * m) > 0) hi = m;
+      else lo = m;
+    }
+    return lo;
+  };
+  // the midline's run, front to back, a little above the skirt
+  const yLow = yCut + (max[1] - yCut) * 0.05;
+  const zMid = (min[2] + max[2]) / 2;
+  const front = zMid + reach(0, zMid, 0, 1, yLow);
+  const back = zMid - reach(0, zMid, 0, -1, yLow);
+  const L = front - back;
+  if (!(L > 1e-3)) return null;
+  const out: number[] = [];
+  const seat = (x: number, z: number) => {
+    const y = topAt(x, z);
+    if (y !== null) out.push(x, y, z);
+  };
+  for (let i = 0; i < SHELL_SCUTES.vertebral; i++) seat(0, back + L * (0.14 + (0.72 * i) / (SHELL_SCUTES.vertebral - 1)));
+  for (let j = 0; j < SHELL_SCUTES.costal; j++) {
+    const z = back + L * (0.23 + (0.54 * j) / (SHELL_SCUTES.costal - 1));
+    const w = reach(0, z, 1, 0, yLow);
+    for (const side of [1, -1]) seat(side * 0.52 * w, z);
+  }
+  // the marginals: round the rim, from over the neck, a little in from its edge and up off the skirt
+  const yRim = yCut + (max[1] - yCut) * 0.12;
+  for (let k = 0; k < SHELL_SCUTES.marginal; k++) {
+    const a = (2 * Math.PI * k) / SHELL_SCUTES.marginal;
+    const dx = Math.sin(a), dz = Math.cos(a);
+    const d = reach(0, zMid, dx, dz, yRim) * 0.95;
+    out.push(dx * d, yRim, zMid + dz * d);
+  }
+  return Float32Array.from(out);
 }

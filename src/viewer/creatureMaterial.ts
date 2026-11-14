@@ -107,6 +107,8 @@ const FINE_RELIEF = { value: 1 };
  *  makeCreatureMaterial). Its faces are exact planes now (facets.ts gemGeometry), each mirroring its own
  *  part of the studio's softboxes — crisp light and dark faces with glints. (Cut in place, their ragged
  *  borders took a satin coat of 0.35 at roughness 0.3 to hide them.) */
+/** How many scute centres a tortoise shell's material takes (smoothSkin shellScutes lays out 37). */
+export const MAX_SCUTES = 40;
 export const CUT_COAT = 0.8;
 export const CUT_COAT_ROUGH = 0.08;
 export const CUT_ROUGH = 0.15;
@@ -130,6 +132,7 @@ export function makeCreatureMaterial(
   head: HeadMask | null = null, // where bands and stripes stop: the head takes one tone
   cut = false, // a crystal skin already cut into flat faces (facets.ts): the shader cuts none of its own
   shag = false, // a flightless bird's plumage: loose hair-like plumes, no feather edges (see feathers)
+  scutes: Float32Array | null = null, // a tortoise shell's scute centres, body space (smoothSkin shellScutes)
 ): THREE.MeshPhysicalMaterial {
   // A moodier base than the raw palette: real integument is rarely a bright, saturated toy. We
   // desaturate and darken a touch so creatures read as living tissue, not painted plastic.
@@ -211,6 +214,10 @@ export function makeCreatureMaterial(
     shader.uniforms.uSeam = { value: seam };
     shader.uniforms.uCut = { value: cut ? 1 : 0 };
     shader.uniforms.uShag = { value: shag ? 1 : 0 };
+    // (a tortoise's scutes: up to MAX_SCUTES centres, the shell's seams the borders between them)
+    const sc = Array.from({ length: MAX_SCUTES }, (_, i) => (scutes && i * 3 + 2 < scutes.length ? new THREE.Vector3(scutes[i * 3], scutes[i * 3 + 1], scutes[i * 3 + 2]) : new THREE.Vector3()));
+    shader.uniforms.uScutes = { value: sc };
+    shader.uniforms.uScuteN = { value: scutes ? Math.min(MAX_SCUTES, Math.floor(scutes.length / 3)) : 0 };
     shader.uniforms.uMuscle = { value: preset.muscle };
     shader.uniforms.uFine = FINE_RELIEF; // (one object, shared: the graphics option switches every coat at once)
     // (unused slots keep r = 0, which clears nothing)
@@ -528,6 +535,7 @@ uniform int uDebug;
 uniform float uBareY; uniform float uBareBand; uniform vec3 uBareCol;
 uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6]; uniform vec4 uFace; uniform vec3 uFaceCol; uniform vec4 uHeadA; uniform vec3 uHeadB; uniform float uSeam; uniform float uCut; uniform float uMuscle; uniform float uShag;
 uniform float uFine;
+uniform vec3 uScutes[${MAX_SCUTES}]; uniform int uScuteN;
 // a flightless bird's plumes on its head: their length there (× the body's)
 const float SHAG_HEAD_DOWN = 0.22;
 
@@ -552,6 +560,18 @@ vec3 gNb = vec3(0.0, 1.0, 0.0);   // … and the skin's own normal there (body s
 // pixels, fading to 0 by the time it spans ~2. Faded detail is replaced by its MEAN, so tone stays
 // consistent at every zoom (the classic band-limited / "clamped" procedural texture).
 float aaW(float freq) { return 1.0 - smoothstep(0.12, 0.42, freq * gFw); }
+
+// A TORTOISE's shell: the distances from q (body space) to the nearest two scute centres (uScutes) — the
+// seams lie where they are equal. (Seamed by a random net, the shell was crazy paving.)
+vec2 scuteF(vec3 q) {
+  float f1 = 1e3; float f2 = 1e3;
+  for (int i = 0; i < ${MAX_SCUTES}; i++) {
+    if (i >= uScuteN) break;
+    float d = distance(q, uScutes[i]);
+    if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) { f2 = d; }
+  }
+  return vec2(f1, f2);
+}
 
 float hash13(vec3 p) {
   p = fract(p * 0.1031);
@@ -652,6 +672,8 @@ const float FUR_LOCKS = 10.0;      // a coat's locks across (per body unit), lai
 const float FUR_STRANDS = 26.0;    // …and the strands in them
 const float PLATE_CELL = 3.6;      // a plated hide's scutes across (per body unit)…
 const float PLATE_DOME = 0.022;    // …and how high each domes (body units)
+const float SCUTE_SEAM = 0.012;    // a tortoise shell's seam: its half-width in the scutes' edge distance (body units)…
+const float SCUTE_RINGS = 140.0;   // …and its growth rings' spatial frequency, in the same
 const float SLIME_CELL = 9.0;      // a slime hide's tubercles across (per body unit)…
 const float SLIME_LONG = 0.4;      // …fewer along the body: each two and a half times as long as wide
 const float SLIME_TUBERCLE = 0.012; // …and how high each stands (body units)
@@ -661,6 +683,14 @@ const float RETIC_RIM = 0.06;
 // Every edge is widened by the pattern's own pixel footprint \`c\` (cells per pixel) so markings stay
 // crisp up close and blur gracefully — rather than shimmer — when the creature is small on screen.
 float patternField(vec3 p0, int type, float scale) {
+  // a tortoise's shell: its dark seams between the scutes, and faint growth rings parallel to them
+  if (uScuteN > 0) {
+    vec2 F = scuteF(p0 - uOff);
+    float e = F.y - F.x;
+    float seam = 1.0 - smoothstep(SCUTE_SEAM, SCUTE_SEAM + 0.012 + 1.5 * gFw, e);
+    float ring = (0.5 + 0.5 * cos(e * SCUTE_RINGS)) * aaW(SCUTE_RINGS * 0.16) * smoothstep(SCUTE_SEAM * 2.0, 0.08, e);
+    return max(seam, ring * 0.22);
+  }
   if (type == 0) return 0.0;                                    // plain
   vec3 p = warp(p0, 0.5);                                       // a flowing coordinate
   if (type == 1) {                                              // stripes — wavy transverse (tiger/zebra)
@@ -797,6 +827,16 @@ float facets(vec3 q, out float id, out float wall) {
 // Each relief also fades to its mean as its cells shrink toward the pixel footprint (aaW), so the
 // bump is a crisp scale/plate/feather read up close and a clean surface at a distance.
 float surfaceHeight(vec3 p, int cover) {
+  // a tortoise's shell: each scute a low dome rising from its grooved seams, ridged with growth rings
+  if (uScuteN > 0) {
+    vec2 F = scuteF(p - uOff);
+    float e = F.y - F.x;
+    float groove = smoothstep(0.0, SCUTE_SEAM * 2.5 + 1.5 * gFw, e);
+    float dome = smoothstep(0.0, 0.3, e);
+    float ring = (0.5 + 0.5 * cos(e * SCUTE_RINGS)) * aaW(SCUTE_RINGS * 0.16);
+    gHb = groove * 0.008 + dome * 0.014 + ring * 0.0015;
+    return clamp(0.85 - groove * 0.45 - dome * 0.1, 0.0, 1.0);
+  }
   if (cover == 1) {                                             // scales — imbricated, laid back
     // A fish's scales, a snake's, a lizard's: small round-edged scallops shingled toward the tail, each
     // lying on the roots of the ones behind (see scallops). (A cell per scale with straight borders

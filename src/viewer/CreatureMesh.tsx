@@ -27,7 +27,7 @@ import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
 import { bareOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, ratLike, shaggyPlumage, skinPartWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
-import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
+import { buildSmoothGeometry, buildShellGeometry, shellScutes, type SkinQuality } from './smoothSkin';
 import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, type FinBuild } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
@@ -308,7 +308,8 @@ export function CreatureMesh({
       patternScale: 2.4,
       patternContrast: 0.55,
     };
-    return makeCreatureMaterial(shellPal, shellCov, seed ^ 0x5e11);
+    // (a tortoise's horn shell is seamed in its own rows of scutes — smoothSkin shellScutes — not a random net)
+    return makeCreatureMaterial(shellPal, shellCov, seed ^ 0x5e11, null, null, null, 0, null, false, false, crab ? null : shellScutes(phenotype));
   }, [hasShell, pal, cov, seed, phenotype]);
   useEffect(() => () => shellMat?.dispose(), [shellMat]);
 
