@@ -64,7 +64,7 @@ const IRIS_PALETTE: [number, number, number, number][] = [
   [1.4, 0.62, 0.85, 0.32], // deep blue
   [1.2, 0.98, 0.8, 0.32], // blood red
   [1, 0.78, 0.55, 0.34], // violet
-  [1, 0.0, 0.0, 0.12], // near-black
+  [1, 0.07, 0.3, 0.015], // near-black (lightness is linear: see NATURAL_IRIS)
 ];
 // An animal's eye (round or beady) is one of the natural colours: dark brown above all (most mammals'
 // and most birds'), amber, hazel, gold, a cat's green, a rare pale blue; never the accents above (a
@@ -78,7 +78,9 @@ const NATURAL_IRIS: [number, number, number, number][] = [
   [2, 0.13, 0.85, 0.4], // gold
   [1.5, 0.27, 0.55, 0.3], // green
   [1, 0.55, 0.6, 0.45], // pale blue
-  [1.5, 0.0, 0.0, 0.1], // near-black
+  // (the colour's lightness is LINEAR, as three.js's setHSL takes it: a grey of 0.1 was #595959 on
+  // screen, every dark-eyed dog, deer, bear and ostrich wearing a grey ball bearing)
+  [1.5, 0.07, 0.45, 0.035], // near-black: the darkest brown
 ];
 export function irisFor(seed: number, natural = false): number {
   const palette = natural ? NATURAL_IRIS : IRIS_PALETTE;
@@ -687,7 +689,14 @@ export function pileLength(p: Phenotype): number {
 const FUR_SHELLS = 12;
 
 const LITE_BALL = new THREE.SphereGeometry(1, 10, 8);
-const LITE_DARK = new THREE.MeshStandardMaterial({ color: 0x0b0a0c, roughness: 0.15 });
+/**
+ * How much of the studio's light an animal's eye mirrors. The studio's environment is a room of big
+ * bright panels — an overhead softbox ten wide — and a glossy dark-brown iris mirrored them three times
+ * brighter than its own colour: every dog's, deer's and ostrich's eye was a grey ball bearing, every
+ * bear's a glossy doll's bead. Dimmed, the iris shows through and the sharp catch-light is the glint.
+ */
+export const EYE_ENV = 0.3;
+const LITE_DARK = new THREE.MeshStandardMaterial({ color: 0x0b0a0c, roughness: 0.15, envMapIntensity: EYE_ENV });
 
 /** A two-mesh eye for mid-distance: a glossy dark ball and an iris cap. */
 function LiteEye({ f, iris }: { f: MeshFeature; iris: number }) {
@@ -696,7 +705,7 @@ function LiteEye({ f, iris }: { f: MeshFeature; iris: number }) {
     <group quaternion={f.quat}>
       <mesh geometry={LITE_BALL} material={LITE_DARK} scale={r * 0.9} />
       <mesh geometry={LITE_BALL} position={[0, 0, r * 0.7]} scale={[r * 0.6, r * 0.6, r * 0.2]}>
-        <meshStandardMaterial color={iris} roughness={0.2} />
+        <meshStandardMaterial color={iris} roughness={0.2} envMapIntensity={EYE_ENV} />
       </mesh>
     </group>
   );
@@ -1090,11 +1099,11 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
           {/* the eyeball — the iris's hue, deep (round) or a glossy black bead (beady), set deep */}
           <mesh position={[0, 0, -r * 0.04]}>
             <sphereGeometry args={[r * 0.9, 22, 18]} />
-            <meshStandardMaterial color={v === 'round' ? ballColor : 0x070709} roughness={0.12} metalness={0.0} />
+            <meshStandardMaterial color={v === 'round' ? ballColor : 0x070709} roughness={0.12} metalness={0.0} envMapIntensity={EYE_ENV} />
           </mesh>
           {/* iris + pupil: caps of the ball's own sphere (see capGeometry), a hair proud of it */}
           <mesh position={[0, 0, -r * 0.04]} scale={r * 0.9 * 1.012} geometry={capGeometry(frogEye ? 0.95 : v === 'round' ? 0.7 : 0.56, true)}>
-            <meshStandardMaterial color={frogEye ? frogIris : iris} vertexColors roughness={0.16} metalness={frogEye ? 0.25 : 0.1} polygonOffset polygonOffsetFactor={-1} />
+            <meshStandardMaterial color={frogEye ? frogIris : iris} vertexColors roughness={0.16} metalness={frogEye ? 0.25 : 0.1} envMapIntensity={EYE_ENV} polygonOffset polygonOffsetFactor={-1} />
           </mesh>
           <mesh
             position={[0, 0, -r * 0.04]}
@@ -1102,7 +1111,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
             scale={r * 0.9 * 1.024}
             geometry={frogEye ? capGeometry(0.42, false, 0.5) : capGeometry(v === 'round' ? 0.3 : 0.5, false)}
           >
-            <meshStandardMaterial color={0x030304} roughness={0.05} polygonOffset polygonOffsetFactor={-2} />
+            <meshStandardMaterial color={0x030304} roughness={0.05} envMapIntensity={EYE_ENV} polygonOffset polygonOffsetFactor={-2} />
           </mesh>
           {/* a small, sharp catchlight — a wet glint, not a cartoon sticker */}
           <mesh position={[r * 0.17, r * 0.2, r * 0.88]}>
