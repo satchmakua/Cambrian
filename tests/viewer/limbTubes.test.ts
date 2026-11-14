@@ -179,4 +179,44 @@ describe('thin limbs drawn exact', () => {
     }
     expect(checked).toBeGreaterThan(12);
   });
+
+  it('where the field hands a limb on, the tube takes the shade of the skin round the joint — no dark ring', () => {
+    // (probed from the joint's ball, in the crease with the field's tucked-in end, the tube wore a dark
+    // ring where it came out of the skin: the top of a sock a third of the way up a deer's leg)
+    let checked = 0;
+    for (const [kind, seed] of [['felid', 23], ['ungulate', 23], ['canid', 2], ['felid', 1]] as const) {
+      const { p, f, g, cell } = build(kind, seed, 'high');
+      const thin = new Set(thinLinks(p, f, cell));
+      const key = (x: number, y: number, z: number) => `${x.toFixed(6)},${y.toFixed(6)},${z.toFixed(6)}`;
+      const fieldEnds = new Set<string>();
+      for (let m = 0; m < f.nc; m++) {
+        if (thin.has(m)) continue;
+        fieldEnds.add(key(f.ax[m], f.ay[m], f.az[m]));
+        fieldEnds.add(key(f.bx[m], f.by[m], f.bz[m]));
+      }
+      const pos = g.getAttribute('position');
+      const ao = g.getAttribute('aAO');
+      const from = g.userData.tubeFrom.vertex as number;
+      for (const m of thin) {
+        if (!fieldEnds.has(key(f.ax[m], f.ay[m], f.az[m]))) continue;
+        const P = [f.ax[m], f.ay[m], f.az[m]];
+        const r = f.ra[m];
+        let tube = 0, nt = 0, skin = 0, ns = 0;
+        for (let v = 0; v < pos.count; v++) {
+          const d = Math.hypot(pos.getX(v) - P[0], pos.getY(v) - P[1], pos.getZ(v) - P[2]);
+          if (v >= from && d <= 1.2 * r) {
+            tube += ao.getX(v);
+            nt++;
+          } else if (v < from && d > 1.1 * r && d < 2.4 * r) {
+            skin += ao.getX(v);
+            ns++;
+          }
+        }
+        if (nt === 0 || ns === 0) continue;
+        expect(tube / nt, `${kind} #${seed} hand-over to link ${m}`).toBeGreaterThan(skin / ns - 0.1);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThanOrEqual(8);
+  });
 });

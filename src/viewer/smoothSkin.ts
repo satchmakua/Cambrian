@@ -143,7 +143,7 @@ export function buildSmoothGeometry(
       flesh[v] = w < 0 ? 0 : w > 1 ? 1 : w;
     }
   }
-  return toGeometry(poly, flesh, split ? limbTubes(whole, split, cell, poly.aoAt) : null);
+  return toGeometry(poly, flesh, split ? limbTubes(whole, split, cell, poly.aoAt, poly) : null);
 }
 
 // =============================================================================

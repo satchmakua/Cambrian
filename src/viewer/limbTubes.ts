@@ -111,6 +111,9 @@ export interface Tubes {
 /** radial segments for a tube of girth r on a grid of `cell` (fine enough that the outline is round) */
 const segsFor = (r: number, cell: number) => Math.max(6, Math.min(16, Math.ceil((2 * Math.PI * r) / (0.55 * cell))));
 
+/** how near a joint where the field hands a limb on (× its girth) a tube takes the limb's own shade */
+export const HANDOVER_SHADE = 1.6;
+
 /** a joint between two links of one chain bent less than this (radians) is swept through, not balled */
 const SWEEP_BEND = 0.45;
 
@@ -135,6 +138,7 @@ export function limbTubes(
   split: Pick<ThinSplit, 'tubes' | 'fieldEnds'>,
   cell: number,
   aoAt: (x: number, y: number, z: number, nx: number, ny: number, nz: number) => number,
+  skin?: { positions: Float32Array; ao: Float32Array },
 ): Tubes {
   const tubes = split.tubes;
   const pos: number[] = [];
@@ -304,6 +308,35 @@ export function limbTubes(
     piece(base, [...j.ins, ...j.outs], 0.03 * j.r, tris);
   }
 
+  // THE SHADE of a tube where the field hands it on. The joint's ball meets the field's limb, tucked in
+  // under it, in a crease no limb has: probed from the ball, the field's own end overhung it (and its
+  // vertices under the field's skin, probed from inside the limb, were black — hidden themselves, they
+  // shade the visible part of every triangle they corner), so the ball wore a dark ring where it came
+  // out of the skin: the top of a sock, a third of the way up a deer's leg, the skin just above it
+  // unshaded. Near such a joint a tube is never darker than the polygonized skin round the joint.
+  const handovers: { c: number[]; r: number; shade: number }[] = [];
+  for (const [k, j] of joints) {
+    if (!split.fieldEnds.has(k) || !skin) continue;
+    let sum = 0, n = 0;
+    const lo = j.r * 1.05, hi = j.r * 2.5;
+    for (let v = 0; v < skin.ao.length; v++) {
+      const dx = skin.positions[v * 3] - j.c[0], dy = skin.positions[v * 3 + 1] - j.c[1], dz = skin.positions[v * 3 + 2] - j.c[2];
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < lo * lo || d2 > hi * hi) continue;
+      sum += skin.ao[v];
+      n++;
+    }
+    if (n > 0) handovers.push({ c: j.c, r: j.r, shade: sum / n });
+  }
+  const tubeShade = (x: number, y: number, z: number, nx: number, ny: number, nz: number): number => {
+    const own = aoAt(x, y, z, nx, ny, nz);
+    for (const h of handovers) {
+      const vx = x - h.c[0], vy = y - h.c[1], vz = z - h.c[2];
+      if (vx * vx + vy * vy + vz * vz <= HANDOVER_SHADE * HANDOVER_SHADE * h.r * h.r) return Math.max(own, h.shade);
+    }
+    return own;
+  };
+
   // keep only the vertices a triangle still uses
   const nV = pos.length / 3;
   const remap = new Int32Array(nV).fill(-1);
@@ -319,7 +352,7 @@ export function limbTubes(
       positions[w * 3 + a] = pos[v * 3 + a];
       normals[w * 3 + a] = nrm[v * 3 + a];
     }
-    ao[w] = aoAt(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2], nrm[v * 3], nrm[v * 3 + 1], nrm[v * 3 + 2]);
+    ao[w] = tubeShade(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2], nrm[v * 3], nrm[v * 3 + 1], nrm[v * 3 + 2]);
   }
   return { positions, normals, ao, indices: Uint32Array.from(idx, (v) => remap[v]) };
 }

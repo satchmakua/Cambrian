@@ -113,6 +113,11 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
     its face to the ground, a trunk with a knob on its end).
   - *A letterbox, a frown* (ant, centipede) — the dark sheet across an insect's mouth, between its
     mandibles, is not drawn: its mouth lies behind them, and its face shows there.
+  - *A dark ring a third of the way up the leg* (deer, cat, dog) — where the skin hands a thin limb on
+    to its exact tube, the joint's ball meets the field's tucked-in end in a crease no limb has, and its
+    occlusion probe (and its vertices hidden under the field's skin, probed from inside the leg) shaded
+    it near black: a sock's top round every leg. Near such a joint a tube is never darker than the skin
+    round the joint.
 - **Tests:** `tests/engine/morphospace.test.ts › a deer is no dog`, `tests/engine/plans/horror.test.ts`,
   `wyvern.test.ts › no giraffe`, `fish.test.ts › tail stock`, `serpent.test.ts › a head`,
   `canid.test.ts › brush`, `tests/viewer/lids.test.ts`, `starfish.test.ts › one smooth curve`,
@@ -120,7 +125,8 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   `tests/viewer/mouths/beak.test.ts › a hawk's bill`, `lizard.test.ts › broader than its slim neck`,
   `tests/viewer/eyeSeat.test.ts › still sinks to its seat`, `tests/viewer/feet.test.ts › knows its
   legs`, `tests/viewer/ear.test.ts › a deep cup`, `eyeSeat.test.ts › a compound eye is a low dome`,
-  `tests/viewer/bodyField.test.ts › feelers`, `arthro-alien.test.ts › feelers rise`.
+  `tests/viewer/bodyField.test.ts › feelers`, `arthro-alien.test.ts › feelers rise`,
+  `tests/viewer/limbTubes.test.ts › no dark ring`.
 
 ## M95 — Thin limbs drawn exact, and a tenth look · 2026-11-13
 
