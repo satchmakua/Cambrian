@@ -635,7 +635,9 @@ export function grow(genome: Genome): Phenotype {
           app.kind === 'tentacle' && app.segments >= 3
             ? { ...app, curl: [app.curl[0] - ARM_LIFT * unitHash(dev.seed, 0x7e0 + k), app.curl[1] + ARM_SWAY * (unitHash(dev.seed, 0x7f0 + k) - 0.5)] as [number, number] }
             : app;
-        growLimb(own, base, up(az + (k * Math.PI * 2) / dev.radialCount), attachIdx);
+        // (an octopus's arm curls its tip to one side or the other: see ARM_TIP)
+        const tip = app.kind === 'tentacle' && app.web && app.segments >= 3 ? (unitHash(dev.seed, 0x7c0 + k) < 0.5 ? -ARM_TIP : ARM_TIP) : 0;
+        growLimb(own, base, up(az + (k * Math.PI * 2) / dev.radialCount), attachIdx, tip);
       }
       return;
     }
@@ -823,7 +825,7 @@ export function grow(genome: Genome): Phenotype {
     return rearedness(dev.body.curve[0]);
   }
 
-  function growLimb(app: AppendageGene, base: BodyNode, dir0: Vec3, parentIdx: number): void {
+  function growLimb(app: AppendageGene, base: BodyNode, dir0: Vec3, parentIdx: number, tipCurl = 0): void {
     let dir = dir0;
     let startPos: Vec3;
     let arch: Vec3[] | null = null; // an explicit leg polyline (segment directions): arthropod or sprawler
@@ -1100,7 +1102,9 @@ export function grow(genome: Genome): Phenotype {
         continue;
       }
 
-      quat = qMul(quat, qFromEuler(pitch, app.curl[1]));
+      // (an octopus's arm bends more at every joint toward its tip — see ARM_TIP; zero for every other limb)
+      const tc = tipCurl !== 0 && segments > 2 ? Math.min(1, (j / (segments - 2)) ** 2) : 0;
+      quat = qMul(quat, qFromEuler(pitch - ARM_TIP_LIFT * tc, app.curl[1] + tipCurl * tc));
       dir = qRotate([0, 0, 1], quat);
       pos = [pos[0] + dir[0] * app.length, pos[1] + dir[1] * app.length, pos[2] + dir[2] * app.length];
       // a real jointed leg: thigh forward → (knee folds the shin sharply back under the body) → (hock
@@ -1236,6 +1240,13 @@ const TENTACLE_ROOT = 1.2;
  *  up to this a link (rad; a negative pitch curls a sprawled arm up — none is bent down into the floor) */
 const ARM_SWAY = 0.24;
 const ARM_LIFT = 0.06;
+/** A WEBBED radial arm (an octopus's) curls at its tip: each joint bends aside by ARM_TIP × (its place
+ *  along the arm)², at most ARM_TIP, to a side hashed per arm, and lifts by ARM_TIP_LIFT × the same (rad).
+ *  (Bent alike at every joint, by 0.1 rad, its arms were eight straight spokes — a starfish, a splat; all to
+ *  one side, a pinwheel. Bent 1.3 and more at its last joints, the tips folded back on the arm in hooks and
+ *  loops across the next arm.) */
+const ARM_TIP = 1.1;
+const ARM_TIP_LIFT = 0.06;
 
 function normalizeLegs(g: Genome, coh: number): void {
   // every leg-bearing section: the trunk, or an arthropod's thorax ahead of its abdomen

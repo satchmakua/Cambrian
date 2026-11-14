@@ -33,7 +33,7 @@ function arms(p: Phenotype): number[][] {
 }
 
 describe('octopus', () => {
-  it('has two eyes, a pair either side of the front of its head, low on the mantle — not a ring of them', () => {
+  it('has two eyes, a pair either side of the front of its head, at the middle of its sides — not a ring of them', () => {
     for (const seed of SEEDS) {
       const p = octopus(seed);
       const B = mantle(p);
@@ -46,8 +46,10 @@ describe('octopus', () => {
       expect(a.pos[1], `#${seed} level`).toBeCloseTo(b.pos[1], 6);
       expect(Math.abs(a.pos[0]), `#${seed} apart`).toBeGreaterThan(0.3 * B.radius);
       expect(a.pos[2] - B.pos[2], `#${seed} toward the front`).toBeGreaterThan(0);
-      // low on the head, above the arms: below the mantle's middle
-      expect(a.pos[1] - B.pos[1], `#${seed} low`).toBeLessThan(0);
+      // at the middle of the head's sides, above the arms (below its middle, looking down, the bar of its
+      // pupil sank to the bottom of the disc from every camera above it: a mouth)
+      expect(a.pos[1] - B.pos[1], `#${seed} middle`).toBeGreaterThan(-0.05 * halfH);
+      expect(a.pos[1] - B.pos[1], `#${seed} middle`).toBeLessThan(0.35 * halfH);
       expect(a.pos[1] - B.pos[1], `#${seed} above the arms`).toBeGreaterThan(-0.5 * halfH);
       // gold with a bar of a pupil, not a glowing disc
       expect(eyeVariant(a.part?.style ?? 0), `#${seed}`).toBe('slit');
@@ -130,5 +132,36 @@ describe('octopus', () => {
     const p = grow(g);
     expect(p.nodes.filter((n) => n.part?.web).length).toBeGreaterThan(0);
     expect(webPanels(p, isHybridNode).length).toBe(0);
+  });
+
+  it('its arms are long and curl at their tips: no splat of straight cones', () => {
+    // (bent alike at every joint by a tenth of a radian, on links of 0.7–1.4 girths, eight straight stubby
+    // cones radiated from the mantle: a splat, a starburst from above)
+    for (const seed of [...SEEDS, 11, 12, 29]) {
+      const p = octopus(seed);
+      const B = mantle(p);
+      const H = 2 * B.radius * (B.scale?.[1] ?? 1);
+      const floor = B.pos[1] - H / 2;
+      let arc = 0;
+      const chains = arms(p);
+      for (const c of chains) {
+        const P = c.map((i) => p.nodes[i].pos);
+        for (let j = 1; j < P.length; j++) arc += Math.hypot(P[j][0] - P[j - 1][0], P[j][1] - P[j - 1][1], P[j][2] - P[j - 1][2]) / chains.length;
+        // its last links turn through 60° or more
+        const n = P.length;
+        const dir = (i: number) => {
+          const v = [0, 1, 2].map((k) => P[i + 1][k] - P[i][k]);
+          const l = Math.hypot(v[0], v[1], v[2]);
+          return v.map((x) => x / l);
+        };
+        const u = dir(n - 4), w = dir(n - 2);
+        expect(Math.acos(Math.min(1, u[0] * w[0] + u[1] * w[1] + u[2] * w[2])), `#${seed} tip curl`).toBeGreaterThan(Math.PI / 3);
+        // …and lies on the floor still: no arm dips well under the mantle's floor or lifts its tip high
+        for (const i of c) expect(p.nodes[i].pos[1] - p.nodes[i].radius - floor, `#${seed} floor`).toBeGreaterThan(-0.15);
+        expect(P[n - 1][1] - floor, `#${seed} tip`).toBeLessThan(0.45 * H);
+      }
+      // the arms run 1.35 times the mantle's height or more
+      expect(arc / H, `#${seed} reach`).toBeGreaterThan(1.35);
+    }
   });
 });

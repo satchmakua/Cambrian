@@ -3,10 +3,12 @@ import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype, randomGenome } from '../../src/engine/random';
 import { fieldAt, projectToSurface, qRotateV } from '../../src/viewer/bodyField';
 import { buildMeshData } from '../../src/viewer/meshData';
-import { BULGE_DEPTH, bulgingEye, COMPOUND_DEPTH, EYE_PROUD, eyeClearings, eyeSeat, FEELER_KNOB, FEELER_SPOT, feelerTip, isFaceEye, isSwimmer, MAX_EYE_CLEAR, SEAT_DEPTH, SEAT_MAX_TILT, type EyeFlat } from '../../src/viewer/eyeSeat';
+import { BULGE_DEPTH, bulgingEye, COMPOUND_DEPTH, EYE_PROUD, TURRET_DEPTH, eyeClearings, eyeSeat, FEELER_KNOB, FEELER_SPOT, feelerTip, isFaceEye, isSwimmer, MAX_EYE_CLEAR, SEAT_DEPTH, SEAT_MAX_TILT, type EyeFlat } from '../../src/viewer/eyeSeat';
 import { eyeVariant } from '../../src/viewer/partStyles';
 import { surfacePrims } from '../../src/viewer/mouthLine';
 import type { Phenotype } from '../../src/engine/grow';
+import * as THREE from 'three';
+import { octopusIrisOf } from '../../src/viewer/CreatureMesh';
 
 const MORPHS = ['felid', 'canid', 'primate', 'ungulate', 'rodent', 'ursid', 'mustelid', 'crocodilian', 'anuran', 'lizard', 'bird', 'fish'];
 
@@ -269,6 +271,31 @@ describe('eye seats', () => {
         }
         expect(out / FIB.length, `#${seed} the eye shows`).toBeGreaterThan(0.2);
       }
+    }
+  });
+
+  it("an octopus's eye stands raised in its skin, looking out and a little up, its iris gold", () => {
+    // (seated a third out like a mammal's, low on the mantle and looking down, it was a pale disc flush in the
+    // skin with its pupil's bar sunk to the bottom, curved like a smile, from every camera above it: a mouth)
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 29]) {
+      const p = grow(genomeOfMorphotype(seed, 'cephalopod'));
+      const prims = surfacePrims(p, 'hybrid');
+      const eyes = buildMeshData(p).features.filter((f) => f.type === 'eye');
+      expect(eyes.length, `#${seed}`).toBe(2);
+      for (const f of eyes) {
+        const r = Math.max(f.radius, 0.06);
+        const seat = eyeSeat(p, f.idx, f.quat, r);
+        const aim = qRotateV(seat.quat, [0, 0, 1]);
+        // a turret: the ball's centre a fifth of its radius under the skin
+        expect(Math.abs(depthAlong(prims, seat.centre!, aim, r) - TURRET_DEPTH), `#${seed} raised`).toBeLessThan(0.08);
+        // looking out a little up, so a camera above it sees its bar across the middle
+        expect(aim[1], `#${seed} aim`).toBeGreaterThan(0.08);
+      }
+      // gold to bronze, never a reptile's olive (lime on a pink mantle)
+      const hsl = { h: 0, s: 0, l: 0 };
+      new THREE.Color(octopusIrisOf(seed)).getHSL(hsl, THREE.SRGBColorSpace);
+      expect(hsl.h, `#${seed} iris`).toBeGreaterThan(0.06);
+      expect(hsl.h, `#${seed} iris`).toBeLessThan(0.15);
     }
   });
 });

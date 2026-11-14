@@ -898,6 +898,10 @@ const FISH_IRIS = [0xc9cdd2, 0xb9bfc4, 0xd2b062, 0xbf9a4a, 0xa9b49c];
 const SHARK_IRIS = [0x2c3336, 0x283330, 0x34383a];
 /** a frog's iris: gold, bronze, copper, an olive gold */
 const FROG_IRIS = [0xc9a23a, 0xb8862e, 0xb06a2a, 0xa6a04a];
+/** an octopus's iris: gold, amber, a pale straw, bronze — never a reptile's olive or stone (an olive iris
+ *  on a pink mantle was lime: one in four octopuses, seed 29's among them) */
+export const OCTOPUS_IRIS = [0xd0a83c, 0xc4882c, 0xd8c486, 0xb07432];
+export const octopusIrisOf = (seed: number): number => OCTOPUS_IRIS[Math.floor(unitHash(seed, 0x0c7) * OCTOPUS_IRIS.length)];
 /** the least sRGB distance an eye's iris keeps from its coat and its markings */
 export const IRIS_APART = 0.12;
 /** A slit eye's iris: a reptile's (or, in fur, a cat's) hashed from the seed — stepped on to the next of its
@@ -1038,6 +1042,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   // (a dark iris round a round pupil, in green lids, was a marble in an egg-cup: goggles)
   const frogEye = useMemo(() => (v === 'round' || v === 'beady') && onFace && !!phenotype && bulgingEye(phenotype, qRotateV(f.quat, [0, 0, 1])), [v, onFace, phenotype, f.quat]);
   const frogIris = useMemo(() => FROG_IRIS[Math.floor(unitHash(seed, 0xf20) * FROG_IRIS.length)], [seed]);
+  const octoIris = useMemo(() => octopusIrisOf(seed), [seed]);
   const fishIris = useMemo(() => (sharkEye ? SHARK_IRIS : FISH_IRIS)[Math.floor(unitHash(seed, 0xf15) * (sharkEye ? SHARK_IRIS : FISH_IRIS).length)], [seed, sharkEye]);
   // Every eye on the face is seated (eyeSeat) — an insect's compound eye and an alien's glowing one as low
   // domes in the head (COMPOUND_DEPTH): on its grown node, more than half the ball stood out of the head, a
@@ -1242,8 +1247,10 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
             )}
           </mesh>
           {radialEye && (
-            <mesh position={[0, 0, -r * 0.02]} scale={r * 0.9 * 1.008} geometry={capGeometry(0.86, true)}>
-              <meshStandardMaterial color={slitIris} vertexColors roughness={0.42} polygonOffset polygonOffsetFactor={-1} />
+            // (the iris 40° about the bar, the dark wet ball round it out to the lids: a dark ring, as an
+            // octopus's eye has; at 49° the iris filled the whole opening, a pale disc)
+            <mesh position={[0, 0, -r * 0.02]} scale={r * 0.9 * 1.008} geometry={capGeometry(0.7, true)}>
+              <meshStandardMaterial color={octoIris} vertexColors roughness={0.42} polygonOffset polygonOffsetFactor={-1} />
             </mesh>
           )}
           <mesh

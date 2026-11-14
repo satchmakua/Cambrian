@@ -336,7 +336,7 @@ const MORPHOTYPES: readonly Morpho[] = [
   // an octopus: a tall mantle over a crown of arms, thick where they leave it and drawn out to fine
   // tips; TWO eyes, low on the head just above the arms, with a bar of a pupil (one eye per arm — a
   // ring of eight glowing discs round the mantle — read as a googly-eyed egg on a spider's legs)
-  { id: 'cephalopod', cluster: 'uncanny', weight: 1.2, symmetry: 'radial', radialCount: [8, 8], girth: [0.5, 0.78], height: [1.3, 1.65], repeat: [1, 1], eyeEl: [-0.22, -0.1], eyeSize: 2.1, eyeStyle: [0.42, 0.58], mouthStyle: [0.26, 0.37], covering: ['slime'], pattern: ['spots', 'ocelli', 'gradient'], sheen: [0.7, 1.0], hue: [0.6, 0.95], sat: [0.4, 0.85] },
+  { id: 'cephalopod', cluster: 'uncanny', weight: 1.2, symmetry: 'radial', radialCount: [8, 8], girth: [0.5, 0.78], height: [1.3, 1.65], repeat: [1, 1], eyeEl: [0.1, 0.24], eyeSize: 2.1, eyeStyle: [0.42, 0.58], mouthStyle: [0.26, 0.37], covering: ['slime'], pattern: ['spots', 'ocelli', 'gradient'], sheen: [0.7, 1.0], hue: [0.6, 0.95], sat: [0.4, 0.85] },
   { id: 'horror', cluster: 'uncanny', weight: 1.0, symmetry: 'radial', radialCount: [5, 8], girth: [0.45, 0.75], repeat: [1, 1], height: [1.25, 1.6], eyeEl: [0.3, 0.55], eyeSize: 0.8, mouthSize: [1.3, 1.6], eyeStyle: [0.82, 1], mouthStyle: [0.63, 0.74], covering: ['skin', 'slime'], pattern: ['ocelli', 'mottle'], sheen: [0.4, 0.8], hue: [0.7, 1.0], sat: [0.3, 0.7], light: [0.24, 0.42] },
   // a slug: six links falling away from a round front to a pointed tail, its eyes on feelers as tall as it
   // is (on four or five links it was a pickle, round at both ends, its eyes on stubs)
@@ -603,10 +603,13 @@ function compileArthropod(rng: Rng, seed: number, m: Morpho, girth: number): Gen
 }
 
 /** how far round from the front an octopus's eyes sit, each side (rad): on the sides of its head,
- *  looking out and a little forward */
-const OCTOPUS_EYE_AZ = 0.85;
+ *  looking out and a little forward (at 0.85 the near eye faced the three-quarter camera square on,
+ *  alone in the middle of the egg where a face's mouth goes) */
+const OCTOPUS_EYE_AZ = 1.0;
 /** how far out along an octopus's arms their web reaches (a share of their length) */
-const OCTOPUS_WEB = 0.3;
+const OCTOPUS_WEB = 0.36;
+/** an octopus's arm reaches this many of its gene's links, however many it grows in (see arm) */
+const OCTOPUS_REACH = 5;
 
 function compileRadial(rng: Rng, seed: number, m: Morpho, girth: number): Genome {
   const n = randint(rng, ...(m.radialCount ?? ([4, 8] as const)));
@@ -1238,10 +1241,13 @@ function arm(rng: Rng, girth: number, attachT: number, m: Morpho, spiky = false)
     attachAzimuth: range(rng, 0, 0.4),
     // (an octopus sprawls its arms out along the ground rather than standing on them like stilts:
     // they leave the mantle angled down, level off along the floor and lift a little at the tips)
-    attachElevation: octo ? range(rng, -0.36, -0.24) : long ? range(rng, -0.6, -0.1) : range(rng, -0.3, 0.3),
+    // (on links twice as long they left it as steeply and dug 0.1–0.26 under the mantle's floor)
+    attachElevation: octo ? range(rng, -0.3, -0.2) : long ? range(rng, -0.6, -0.1) : range(rng, -0.3, 0.3),
     segments: spiky ? randint(rng, 1, 2) : long ? randint(rng, octo ? 5 : 3, octo ? 6 : 5) : randint(rng, 2, 4),
-    // (the same reach over its more links)
-    length: clamp(girth * range(rng, spiky ? 0.4 : long ? 0.9 : 0.6, spiky ? 0.8 : long ? 1.8 : 1.4) * (octo ? 0.78 : 1), A.length),
+    // (the same reach over its more links — and an octopus's a fifth of its reach, 5.5–7.5 girths: 1.4–1.9
+    // times the mantle's height. At 0.7–1.4 girths a link on four or five links its arms ran 0.8–1.6 times the
+    // mantle: at seed 29 eight stubby cones three root-widths long, a splat. One draw on every branch.)
+    length: clamp(girth * (spiky ? range(rng, 0.4, 0.8) * (octo ? 0.78 : 1) : octo ? range(rng, 1.1, 1.5) : range(rng, long ? 0.9 : 0.6, long ? 1.8 : 1.4)), A.length),
     thickness: clamp(girth * (octo ? range(rng, 0.42, 0.5) : range(rng, 0.12, 0.3)), A.thickness),
     taper: octo ? range(rng, 0.64, 0.7) : range(rng, 0.6, 0.88),
     // (curled up hard at every joint, the arms rose over the body like an umbrella blown inside out;
@@ -1250,7 +1256,11 @@ function arm(rng: Rng, girth: number, attachT: number, m: Morpho, spiky = false)
     curl: octo ? [range(rng, -0.14, -0.08) * 0.75, swirl(range(rng, -0.1, 0.1)) * 0.75] : [range(rng, -0.3, 0.4), range(rng, -0.1, 0.1)],
   });
   // an octopus's arms are joined by a web of skin near their roots (not its second ring of spines)
-  if (octo && !spiky) a.web = OCTOPUS_WEB;
+  // …and reach as far on four links as on five (a constant after the draws: no other gene moves)
+  if (octo && !spiky) {
+    a.web = OCTOPUS_WEB;
+    a.length = clamp(a.length * (OCTOPUS_REACH / (a.segments - 1)), A.length);
+  }
   return a;
 }
 
