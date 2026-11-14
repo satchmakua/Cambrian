@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { grow, type Phenotype } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { buildFieldPrims, CHAIN_CUTS, type FieldPrims, jawOf, fieldAt, bridgeOf, withoutCones, slugMantle, MANTLE } from '../../src/viewer/bodyField';
+import { buildFieldPrims, CHAIN_CUTS, type FieldPrims, jawOf, fieldAt, bridgeOf, withoutCones, slugMantle, MANTLE, apeSkull, apeForearms, qRotateV } from '../../src/viewer/bodyField';
 
 const body = (id: string, seed: number) => grow(genomeOfMorphotype(seed, id));
 
@@ -202,5 +202,94 @@ describe('body field chains', () => {
     expect(slugMantle(grow(genomeOfMorphotype(23, 'crab')))).toBeNull();
     expect(slugMantle(grow(genomeOfMorphotype(23, 'serpent')))).toBeNull();
     expect(MANTLE.blend).toBeLessThan(0.5); // (blended in with a crease round its edge, not smoothed away)
+  });
+
+  // an ape's head and arms on the hybrid skin (the blend that skin uses)
+  const apeField = (p: Phenotype) => {
+    const f = buildFieldPrims(p, 'hybrid');
+    f.k = 0.34 * f.meanR;
+    return f;
+  };
+  const apeHead = (p: Phenotype) => {
+    const spine = p.nodes.filter((n) => n.kind === 'spine');
+    const last = Math.max(...spine.map((n) => n.segment ?? 0));
+    return spine.filter((n) => n.segment === last);
+  };
+
+  it("an ape's skull juts below its eyes, peaks behind its crown, and its jaw stands clear of its throat", () => {
+    // (its cranium and muzzle balls were meshed as one round cone: an egg with a flat front, a bullet, on which
+    // the bare face was a black hood)
+    const progs: number[] = [];
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = body('primate', seed);
+      const f = apeField(p);
+      const [C] = apeHead(p);
+      const rc = C.radius;
+      const eyeY = p.nodes.find((n) => n.terminal === 'eye')!.pos[1];
+      const mouthY = p.nodes.find((n) => n.terminal === 'mouth')!.pos[1];
+      const front = (y: number) => {
+        for (let z = C.pos[2] + 3 * rc; z > C.pos[2] - 3 * rc; z -= 0.004) if (fieldAt(f, 0, y, z) < 0) return z;
+        return -Infinity;
+      };
+      // the crown peaks over the back of the skull (a sagittal crest), not over its middle
+      let top = -Infinity, topZ = 0;
+      for (let z = C.pos[2] - 1.5 * rc; z <= C.pos[2] + 1.2 * rc; z += 0.01)
+        for (let y = C.pos[1] + 2 * rc; y > C.pos[1]; y -= 0.004)
+          if (fieldAt(f, 0, y, z) < 0) {
+            if (y > top) { top = y; topZ = z; }
+            break;
+          }
+      expect((top - C.pos[1]) / rc, `#${seed} crest height`).toBeGreaterThan(1.12);
+      expect((topZ - C.pos[2]) / rc, `#${seed} crest behind`).toBeLessThan(-0.2);
+      // a jaw: a cranium's radius below its centre, the face still stands well out in front
+      expect((front(C.pos[1] - rc) - C.pos[2]) / rc, `#${seed} jaw`).toBeGreaterThan(1.22);
+      // the muzzle juts ahead of the face at the eyes
+      let muzzle = -Infinity;
+      for (let y = eyeY - 0.05; y > mouthY - 1.2 * rc; y -= 0.01) muzzle = Math.max(muzzle, front(y));
+      progs.push((muzzle - front(eyeY)) / rc);
+    }
+    expect(progs.reduce((a, b) => a + b, 0) / progs.length, 'mean prognathism').toBeGreaterThan(0.5);
+    expect(Math.min(...progs), 'least prognathism').toBeGreaterThan(0.44);
+  });
+
+  it("an ape's forearm swells below its elbow and narrows to its wrist", () => {
+    // (three links tapering by one ratio: a plain tube from the shoulder to a fist no wider than it)
+    for (let seed = 1; seed <= 8; seed++) {
+      const p = body('primate', seed);
+      const f = apeField(p);
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      const hi = p.nodes.findIndex((n) => n.terminal === 'hand' && n.pos[0] > 0);
+      const E = p.nodes[parent.get(hi)!].pos, H = p.nodes[hi].pos;
+      const girth = (t: number) => {
+        const at = [E[0] + (H[0] - E[0]) * t, E[1] + (H[1] - E[1]) * t, E[2] + (H[2] - E[2]) * t];
+        let w = 0;
+        for (let d = 0; d < 0.5; d += 0.002) if (fieldAt(f, at[0] + d, at[1], at[2]) < 0) w = d; else break;
+        return w;
+      };
+      expect(girth(0.33) / girth(0), `#${seed} forearm belly`).toBeGreaterThan(1.1);
+      expect(girth(0.85) / girth(0.33), `#${seed} wrist`).toBeLessThan(0.8);
+    }
+  });
+
+  it("an ape's new skull and forearms leave its eyes' seats where they were, and touch no other animal", () => {
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = body('primate', seed);
+      const f = apeField(p);
+      const bare = apeField(p);
+      bare.ne -= apeSkull(p).length + apeForearms(p).length; // (they are the field's last ellipsoids)
+      let flips = 0;
+      for (const e of p.nodes.filter((n) => n.terminal === 'eye')) {
+        const aim = qRotateV(e.quat, [0, 0, 1]);
+        for (let t = -1.5; t <= 3; t += 0.05) {
+          const x = e.pos[0] - aim[0] * t * e.radius, y = e.pos[1] - aim[1] * t * e.radius, z = e.pos[2] - aim[2] * t * e.radius;
+          if ((fieldAt(f, x, y, z) <= 0) !== (fieldAt(bare, x, y, z) <= 0)) flips++;
+        }
+      }
+      expect(flips, `#${seed} eye seat`).toBe(0);
+    }
+    for (const id of ['felid', 'ursid', 'canid', 'biped', 'mustelid']) {
+      const p = body(id, 7);
+      expect(apeSkull(p).length + apeForearms(p).length, id).toBe(0);
+    }
   });
 });

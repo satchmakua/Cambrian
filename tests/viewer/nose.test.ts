@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
 import * as THREE from 'three';
-import { buildJawed, NOSE_POINTED, pinkNoseChance, stopOf, whiskerPads, type JawedVariant } from '../../src/viewer/mouths/jawed';
+import { APE_NOSE, buildJawed, NOSE_POINTED, pinkNoseChance, stopOf, whiskerPads, type JawedVariant } from '../../src/viewer/mouths/jawed';
 import { mouthCarves, mouthSpec } from '../../src/viewer/mouthLine';
 import { mouthVariant } from '../../src/viewer/partStyles';
 
@@ -68,5 +68,39 @@ describe('noses', () => {
       expect(pads('primate', seed), `ape #${seed}`).toBe(false);
       expect(pads('ursid', seed), `bear #${seed}`).toBe(false);
     }
+  });
+
+  it("an ape's nose is a gorilla's: broad across its face and wider at its foot, where its nostrils flare", () => {
+    // (it wore a small dog's pad, wider across the top: on a bare black face, a grape)
+    const shape = (id: string, seed: number) => {
+      const p = grow(genomeOfMorphotype(seed, id));
+      const mi = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const b = buildJawed(p, mi, [], false, mouthVariant(p.nodes[mi].part!.style) as JawedVariant, 'hybrid')!;
+      const pos = b.nose!.getAttribute('position');
+      let y0 = Infinity, y1 = -Infinity, x0 = Infinity, x1 = -Infinity;
+      for (let i = 0; i < pos.count; i++) {
+        y0 = Math.min(y0, pos.getY(i)); y1 = Math.max(y1, pos.getY(i));
+        x0 = Math.min(x0, pos.getX(i)); x1 = Math.max(x1, pos.getX(i));
+      }
+      // (the nose's own frame: across, up; centred on the mouth's x)
+      const cx = (x0 + x1) / 2;
+      let foot = 0, top = 0;
+      for (let i = 0; i < pos.count; i++) {
+        const t = (pos.getY(i) - y0) / (y1 - y0), w = Math.abs(pos.getX(i) - cx);
+        if (t < 1 / 3) foot = Math.max(foot, w);
+        else if (t > 2 / 3) top = Math.max(top, w);
+      }
+      const eyes = p.nodes.filter((n) => n.terminal === 'eye');
+      const span = Math.abs(eyes[0].pos[0] - eyes[1].pos[0]);
+      return { across: (x1 - x0) / span, foot, top };
+    };
+    for (let seed = 1; seed <= 12; seed++) {
+      const ape = shape('primate', seed);
+      expect(ape.across, `ape #${seed} across`).toBeGreaterThan(0.6);
+      expect(ape.foot, `ape #${seed} foot`).toBeGreaterThan(ape.top);
+    }
+    const cat = shape('felid', 3);
+    expect(cat.top, 'a cat keeps its triangle').toBeGreaterThan(cat.foot);
+    expect(APE_NOSE).toBeGreaterThan(1);
   });
 });

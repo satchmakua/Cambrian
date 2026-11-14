@@ -369,17 +369,20 @@ export function buildJawed(
     // a short muzzle wears a small nose: a cat's is a little triangle, a dog's a broad pad (the same
     // pad on every muzzle gave a cat a dog's big black nose)
     // (…and a big pad only where the skull has a stop: see NOSE_POINTED)
-    const ns = Math.min(noseScaleOf(snoutReach(phenotype, idx)), NOSE_POINTED + (NOSE_LONG - NOSE_POINTED) * stopOf(phenotype, idx));
+    // (…and an ape's is a gorilla's — broad and flat, wider at its foot, where its nostrils flare: the small
+    // dog's pad it wore was, on a bare black face, a grape)
+    const ape = isApe(phenotype);
+    const ns = ape ? APE_NOSE : Math.min(noseScaleOf(snoutReach(phenotype, idx)), NOSE_POINTED + (NOSE_LONG - NOSE_POINTED) * stopOf(phenotype, idx));
     // wider across the top than at the bottom: a rounded triangle, the classic mammal rhinarium (the
     // smaller, the more a triangle)
-    const flare = 0.32 + 1.0 * Math.max(0, 1 - ns);
+    const flare = ape ? APE_NOSE_FLARE : 0.32 + 1.0 * Math.max(0, 1 - ns);
     const pos = g.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) {
       const y = pos.getY(i);
       pos.setX(i, pos.getX(i) * (1 + flare * y));
     }
     const frame = new THREE.Matrix4().makeBasis(X, Y, Z);
-    const at = new THREE.Vector3(line.nose.p[0] - o[0], line.nose.p[1] - o[1], line.nose.p[2] - o[2]).addScaledVector(Z, -r * 0.02);
+    const at = new THREE.Vector3(line.nose.p[0] - o[0], line.nose.p[1] - o[1], line.nose.p[2] - o[2]).addScaledVector(Z, -r * (ape ? 0.07 : 0.02)); // (a broad pad sunk further, its wings on the curve of the muzzle)
     const m = frame.clone().scale(new THREE.Vector3(r * 0.36 * ns, r * 0.22 * ns, r * 0.11 * ns));
     m.setPosition(at);
     g.applyMatrix4(m);
@@ -390,9 +393,9 @@ export function buildJawed(
     for (const side of [-1, 1]) {
       const h = new THREE.SphereGeometry(1, 10, 6);
       const local = new THREE.Matrix4()
-        .makeTranslation(side * r * 0.13 * ns, -r * 0.035 * ns, r * 0.085 * ns)
+        .makeTranslation(side * r * (ape ? 0.2 : 0.13) * ns, -r * (ape ? 0.07 : 0.035) * ns, r * 0.085 * ns)
         .multiply(new THREE.Matrix4().makeRotationZ(side * 0.45))
-        .multiply(new THREE.Matrix4().makeScale(r * 0.07 * ns, r * 0.036 * ns, r * 0.03 * ns));
+        .multiply(new THREE.Matrix4().makeScale(r * (ape ? 0.09 : 0.07) * ns, r * (ape ? 0.05 : 0.036) * ns, r * 0.03 * ns));
       h.applyMatrix4(frame.clone().setPosition(at).multiply(local));
       holes.push(h);
     }
@@ -494,6 +497,10 @@ const NOSE_LONG = 1.5;
  *  reaches. (By reach alone a weasel's long snout ended in a dog's rhinarium as wide as the muzzle, past
  *  the fur; a deer's in a glossy black rubber ball.) */
 export const NOSE_POINTED = 0.9;
+/** An ape's nose pad against the mouth's size (a cat's is 0.75, a dog's up to NOSE_LONG): a gorilla's is as wide
+ *  as two thirds of the span between its eyes. Its flare is negative: wider at the foot than across the top. */
+export const APE_NOSE = 1.45;
+export const APE_NOSE_FLARE = -0.3;
 /** Does this mouth wear a cat's whisker pads? A short muzzle on a skull with no stop, not an ape's. */
 export function whiskerPads(p: Phenotype, mouthIdx: number, muzzled: boolean): boolean {
   return muzzled && snoutReach(p, mouthIdx) < SNOUT_SHORT && stopOf(p, mouthIdx) < 0.5 && !isApe(p);

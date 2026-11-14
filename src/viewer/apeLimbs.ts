@@ -32,8 +32,9 @@ function merged(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
   return g;
 }
 
-/** how much broader than the wrist a fist is */
-export const FIST_SIZE = 1.3;
+/** how much broader than the wrist a fist is (a gorilla's knuckles span its forearm: at 1.3, no wider than
+ *  the forearm above it, the fist was a mitten on the end of a tube) */
+export const FIST_SIZE = 1.45;
 
 /**
  * A knuckle-walking fist. `r` is the wrist's radius, `drop` how far below the wrist node the floor

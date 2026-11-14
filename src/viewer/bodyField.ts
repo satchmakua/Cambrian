@@ -354,7 +354,10 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   const webs = edges ? webPanels(p, include) : [];
   // …and a slug's mantle over the front of its back (see slugMantle)
   const mantle = edges ? slugMantle(p) : null;
-  const ne = shaped.length + webs.length + (mantle ? 1 : 0);
+  // …and an ape's skull and forearms (see apeSkull, apeForearms) — on the hybrid skin only: the capsule kit
+  // draws none of them, and the mouth it traces must stay on the head it draws
+  const ape = edges && mode === 'hybrid' ? [...apeSkull(p), ...apeForearms(p)] : [];
+  const ne = shaped.length + webs.length + (mantle ? 1 : 0) + ape.length;
   // A swimmer's snout TIP — its chain's front end — keeps its ellipsoid only for the length it adds to the
   // cones' end cap: the two surfaces coincide round the tip, and smooth-unioned at the full k they swelled
   // it by k/4 (a shark's last link a third fatter than its own: a dolphin's bottle-nose). It blends as its
@@ -394,6 +397,13 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     eb[i] = MANTLE.blend;
     excess = Math.max(excess, mantle.over);
   }
+  ape.forEach((a, j) => {
+    const i = shaped.length + webs.length + (mantle ? 1 : 0) + j;
+    ec.set(a.c, i * 3);
+    eq.set(a.q, i * 4);
+    er.set(a.r, i * 3);
+    excess = Math.max(excess, a.over);
+  });
   const cx = new Float64Array(nc), cy = new Float64Array(nc), cz = new Float64Array(nc), hl = new Float64Array(nc);
   for (let i = 0; i < nc; i++) {
     cx[i] = (ax[i] + bx[i]) / 2;
@@ -713,6 +723,75 @@ export function slugMantle(p: Phenotype): { c: Vec3; q: [number, number, number,
   const hh = lerp(a.radius * (a.scale?.[1] ?? 1), b.radius * (b.scale?.[1] ?? 1));
   const r: Vec3 = [MANTLE.wide * hw, MANTLE.high * hh, (zb - za) / 2];
   return { c: [lerp(a.pos[0], b.pos[0]), lerp(a.pos[1], b.pos[1]) + MANTLE.lift * hh, zc], q: [0, 0, 0, 1], r, over: Math.max(r[0] - hw, MANTLE.lift * hh + r[1] - hh, 0) };
+}
+
+/** An APE: a furred body that walks on its arms — face.ts isApe's test (face.ts imports this module, so it is
+ *  repeated here, not imported). */
+function apeBody(p: Phenotype): boolean {
+  return p.genomeRef.covering.type === 'fur' && p.nodes.some((n) => n.part?.kind === 'arm');
+}
+
+/**
+ * An APE's SKULL. Its head grows as a cranium and a muzzle ball 0.6 its size, 0.8 of its radius ahead and
+ * some 27° down: their hull — one round cone — was an egg with a flat front sloping from the crown to the
+ * chin, a bullet, and the bare face painted on it was a black hood with a nose at its foot. Two ellipsoids in
+ * the cranium's own frame (× its radius) give it a gorilla's: a broad LOWER FACE, muzzle and jaw, jutting
+ * ahead of the eyes below them, its flat underside standing clear of the throat; and a sagittal CREST over
+ * the back of the crown, the head peaking behind and falling to the nape. Both keep clear of the eyes' seats,
+ * the brow ridge's band and the ears. None unless the head is a cranium with a smaller muzzle ahead of it.
+ */
+export const APE_SKULL = {
+  face: { at: [0, -0.62, 0.84], r: [0.8, 0.52, 0.74] },
+  crest: { at: [0, 0.6, -0.3], r: [0.5, 0.62, 0.78] },
+} as const;
+export function apeSkull(p: Phenotype): { c: Vec3; q: [number, number, number, number]; r: Vec3; over: number }[] {
+  if (p.genomeRef.symmetry !== 'bilateral' || !apeBody(p)) return [];
+  const mouth = p.nodes.findIndex((n) => n.terminal === 'mouth');
+  const holder = p.edges.find(([, b]) => b === mouth)?.[0];
+  const seg = holder === undefined ? undefined : p.nodes[holder].segment;
+  if (!seg) return []; // (a face on the trunk itself)
+  const head = p.nodes.filter((n) => n.kind === 'spine' && n.segment === seg);
+  if (head.length < 2 || head[1].radius >= head[0].radius) return [];
+  const C = head[0];
+  const r = C.radius;
+  const q: [number, number, number, number] = [C.quat[0], C.quat[1], C.quat[2], C.quat[3]];
+  return [APE_SKULL.face, APE_SKULL.crest].map((e) => {
+    const o = qRotateV(C.quat, [e.at[0] * r, e.at[1] * r, e.at[2] * r]);
+    const at: Vec3 = [C.pos[0] + o[0], C.pos[1] + o[1], C.pos[2] + o[2]];
+    // (what stands past the nodes' own bounds: the crest over the cranium's crown — the lower face lies within
+    // the mouth node's)
+    return { c: at, q, r: [e.r[0] * r, e.r[1] * r, e.r[2] * r] as Vec3, over: Math.max(0, e.at[1] + e.r[1] - 1) * r };
+  });
+}
+
+/**
+ * …and its FOREARMS. An arm of three links tapering by one ratio (shoulder, elbow, fist) was a plain tube
+ * from the shoulder to the hand: no elbow, no wrist. Each forearm swells below its elbow — APE_FOREARM.at of
+ * the way to the wrist, its girth `wide` (across) and `deep` (fore and aft) × the elbow's — and narrows to
+ * the wrist, `long` × the forearm's length from end to end.
+ */
+export const APE_FOREARM = { at: 0.4, wide: 1.22, deep: 1.12, long: 0.44 } as const;
+export function apeForearms(p: Phenotype): { c: Vec3; q: [number, number, number, number]; r: Vec3; over: number }[] {
+  if (p.genomeRef.symmetry !== 'bilateral' || !apeBody(p)) return [];
+  const out: { c: Vec3; q: [number, number, number, number]; r: Vec3; over: number }[] = [];
+  for (const [ei, hi] of p.edges) {
+    const E = p.nodes[ei], H = p.nodes[hi];
+    if (H.terminal !== 'hand' || E.kind === 'spine' || E.part?.kind !== 'arm') continue;
+    const d: Vec3 = [H.pos[0] - E.pos[0], H.pos[1] - E.pos[1], H.pos[2] - E.pos[2]];
+    const L = Math.hypot(d[0], d[1], d[2]);
+    if (L < 1e-6) continue;
+    const Z: Vec3 = [d[0] / L, d[1] / L, d[2] / L];
+    const X = norm3(cross3([0, 0, 1], Z), [1, 0, 0]); // across the arm, level
+    const Y = cross3(Z, X);
+    const t = APE_FOREARM.at;
+    out.push({
+      c: [E.pos[0] + d[0] * t, E.pos[1] + d[1] * t, E.pos[2] + d[2] * t],
+      q: basisToQuat(X, Y, Z),
+      r: [APE_FOREARM.wide * E.radius, APE_FOREARM.deep * E.radius, APE_FOREARM.long * L],
+      over: (APE_FOREARM.wide - 1) * E.radius,
+    });
+  }
+  return out;
 }
 
 export function webPanels(p: Phenotype, include: (n: BodyNode) => boolean): { c: Vec3; q: [number, number, number, number]; r: Vec3 }[] {
