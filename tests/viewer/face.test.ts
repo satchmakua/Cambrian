@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { faceMaskOf, headMaskOf, isApe } from '../../src/viewer/face';
+import { dappled, faceMaskOf, headMaskOf, isApe } from '../../src/viewer/face';
+import { coatDapple, coatMain } from '../../src/viewer/palette';
 
 describe('bare faces', () => {
   it("an ape's face is bare skin round its eyes and muzzle — the crown and the ears keep their fur", () => {
@@ -67,5 +68,25 @@ describe('a plain head under bands and stripes', () => {
       const p = grow(genomeOfMorphotype(seed, 'urchin'));
       if (p.genomeRef.covering.pattern === 'bands') expect(headMaskOf(p), `#${seed}`).toBeNull();
     }
+  });
+
+  it("a fawn's spots are dapples: small, paler than its coat, its face kept plain", () => {
+    // (in a dark umber, big, soft and half-strength all over, a deer's spots were mould: a dark cap on its
+    // muzzle, a heart on its brisket)
+    const lum = (c: { r: number; g: number; b: number }) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+    let spotted = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'ungulate'));
+      const c = p.genomeRef.covering;
+      if (c.pattern !== 'spots') continue;
+      spotted++;
+      expect(dappled(p), `#${seed}`).toBe(true);
+      expect(lum(coatDapple(p.genomeRef.palette)) / lum(coatMain(p.genomeRef.palette)), `#${seed} pale`).toBeGreaterThan(1.8);
+      expect(0.56 / (0.55 * c.patternScale), `#${seed} small`).toBeLessThan(0.12);
+      expect(headMaskOf(p), `#${seed} plain face`).not.toBeNull();
+    }
+    expect(spotted).toBeGreaterThan(3);
+    // (a cat's spots are a cheetah's, as they were)
+    for (let seed = 1; seed <= 12; seed++) expect(dappled(grow(genomeOfMorphotype(seed, 'felid')))).toBe(false);
   });
 });

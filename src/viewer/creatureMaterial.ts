@@ -16,7 +16,7 @@
  * shader compiles once.
  */
 import * as THREE from 'three';
-import { coatAccent, coatBelly, coatMain, coatPattern } from './palette';
+import { coatAccent, coatBelly, coatDapple, coatMain, coatPattern } from './palette';
 import type { FaceMask, HeadMask } from './face';
 import type { Palette, Covering, CoveringType, PatternType } from '../engine/genome';
 import { getQuality, useSettings } from '../ui/settings';
@@ -112,6 +112,9 @@ const FINE_RELIEF = { value: 1 };
  *  complement half-blended into a coat is grey: a frog's pink spots on green, a spider's teal on orange,
  *  were washed-out grey patches, mould. */
 export const MARK_SOLID = 0.9;
+/** …and a fawn's dapples (face.ts dappled) are laid solid, whatever the contrast gene: half-blended, a pale
+ *  spot on a brown coat is a smudge */
+export const DAPPLE_W = 0.92;
 export function markWeight(pal: { hueA: number; hueB: number }, contrast: number): number {
   const d = Math.abs(pal.hueA - pal.hueB) % 1;
   const gap = Math.min(d, 1 - d);
@@ -145,6 +148,7 @@ export function makeCreatureMaterial(
   cut = false, // a crystal skin already cut into flat faces (facets.ts): the shader cuts none of its own
   shag = false, // a flightless bird's plumage: loose hair-like plumes, no feather edges (see feathers)
   scutes: Float32Array | null = null, // a tortoise shell's scute centres, body space (smoothSkin shellScutes)
+  dapple = false, // a fawn's dapples (face.ts dappled): its spots small and pale, along its back
 ): THREE.MeshPhysicalMaterial {
   // A moodier base than the raw palette: real integument is rarely a bright, saturated toy. We
   // desaturate and darken a touch so creatures read as living tissue, not painted plastic.
@@ -154,7 +158,7 @@ export function makeCreatureMaterial(
   // ventral — the coat's own hue, lighter and a little greyer (a fixed grey lerped in linear space
   // outweighed a brown coat ~4:1 and gave every species the same greige belly)
   const belly = coatBelly(pal);
-  const pattern = coatPattern(pal);
+  const pattern = dapple ? coatDapple(pal) : coatPattern(pal);
   // a deeper accent toward umber — outlines rosettes/ocelli and adds depth inside markings
   const accent = coatAccent(pal);
   // a cool, dim skylight edge — a thin backlit rim of living skin, NOT a warm glossy halo
@@ -207,7 +211,8 @@ export function makeCreatureMaterial(
     shader.uniforms.uCover = { value: COVERING_INDEX[cov.type] };
     shader.uniforms.uPScale = { value: cov.patternScale };
     shader.uniforms.uContrast = { value: cov.patternContrast };
-    shader.uniforms.uMarkW = { value: markWeight(pal, cov.patternContrast) };
+    shader.uniforms.uMarkW = { value: dapple ? DAPPLE_W : markWeight(pal, cov.patternContrast) };
+    shader.uniforms.uDapple = { value: dapple ? 1 : 0 };
     shader.uniforms.uSheen = { value: cov.sheen };
     shader.uniforms.uBump = { value: preset.bump };
     shader.uniforms.uOff = { value: off };
@@ -333,15 +338,18 @@ export function makeCreatureMaterial(
           // (spots fade out down the legs, as a fawn's dapples or a cheetah's do — the blotches laid on
           // a slim shin stretched into streaks)
           if (uPType == 3) pat *= 1.0 - 0.75 * vLeg;
+          // (a fawn's dapples run along its back and over its upper flanks — none down its legs, under its
+          // belly, or within a spot's width of its midline, where a spot and its mirror ran into one)
+          if (uDapple > 0.5) pat *= (1.0 - vLeg) * smoothstep(DAPPLE_LOW, DAPPLE_LOW + 0.5, gNb.y) * smoothstep(DAPPLE_MID, DAPPLE_MID * 2.2, abs(vBodyPos.x));
           // (a band's edge across a face drew a bill or a mask on it: the head is one tone)
-          if (uPType == 2 && uHeadA.w > 0.0) {
+          if ((uPType == 2 || (uPType == 3 && uDapple > 0.5)) && uHeadA.w > 0.0) {
             vec3 hab = uHeadB - uHeadA.xyz;
             float ht = clamp(dot(vBodyPos - uHeadA.xyz, hab) / max(dot(hab, hab), 1e-6), 0.0, 1.0);
             pat *= smoothstep(uHeadA.w * 1.1, uHeadA.w * 1.5, length(vBodyPos - uHeadA.xyz - hab * ht));
           }
           skin = mix(skin, uPattern, clamp(pat * uMarkW, 0.0, 1.0)); // (see markWeight)
           // a deeper accent in the cores of strong markings (rosette rings, ocelli) → richness
-          skin = mix(skin, uPattern2, smoothstep(0.55, 0.95, pat) * uContrast * 0.4);
+          skin = mix(skin, uPattern2, smoothstep(0.55, 0.95, pat) * uContrast * 0.4 * (1.0 - uDapple));
           // low-frequency tonal break-up so the surface never reads as flat plastic
           skin *= 0.92 + 0.16 * fbmA(bp * 2.2, 2.2);
           // a crystal's faces each take the light their own way: lighter and darker cuts of one stone
@@ -552,6 +560,11 @@ uniform int uDebug;
 uniform float uBareY; uniform float uBareBand; uniform vec3 uBareCol;
 uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[8]; uniform vec4 uFace; uniform vec3 uFaceCol; uniform vec4 uHeadA; uniform vec3 uHeadB; uniform float uSeam; uniform float uCut; uniform float uMuscle; uniform float uShag;
 uniform float uFine;
+uniform float uDapple;
+// a fawn's dapples: from how far down the flank (the skin normal's y) they start, and how near the midline
+// (body units) they give out
+const float DAPPLE_LOW = -0.2;
+const float DAPPLE_MID = 0.045;
 uniform vec3 uScutes[${MAX_SCUTES}]; uniform int uScuteN;
 // a flightless bird's plumes on its head: their length there (× the body's)
 const float SHAG_HEAD_DOWN = 0.22;
@@ -736,8 +749,10 @@ float patternField(vec3 p0, int type, float scale) {
     // blotch kept a fawn's dapples rings still.)
     vec2 F = voronoi(p * scale * 0.55);
     float n = fbmA(p * scale * 1.6, scale * 1.6);
-    float v = F.x + (n - 0.5) * 0.16;
-    return mix(0.12, 1.0 - smoothstep(0.24 - c, 0.32 + c, v), 1.0 - smoothstep(0.25, 0.6, c));
+    // (a fawn's dapples are crisp little discs: a tighter edge, less wobble, and no wash where they fade out)
+    float dp = uDapple > 0.5 ? 1.0 : 0.0;
+    float v = F.x + (n - 0.5) * mix(0.16, 0.07, dp);
+    return mix(0.12 * (1.0 - dp), 1.0 - smoothstep(mix(0.24, 0.22, dp) - c, mix(0.32, 0.27, dp) + c, v), 1.0 - smoothstep(0.25, 0.6, c));
   }
   if (type == 4) {                                              // ocelli — concentric eye-spots (peacock)
     // An eye-spot is a figure ON the skin — a dark pupil, a pale gap, a ring — so it is measured in

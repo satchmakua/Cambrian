@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
 import * as THREE from 'three';
-import { APE_NOSE, buildJawed, NOSE_POINTED, pinkNoseChance, stopOf, whiskerPads, type JawedVariant } from '../../src/viewer/mouths/jawed';
+import { APE_NOSE, GRAZER_NOSE, buildJawed, NOSE_POINTED, pinkNoseChance, stopOf, whiskerPads, type JawedVariant } from '../../src/viewer/mouths/jawed';
 import { mouthCarves, mouthSpec } from '../../src/viewer/mouthLine';
 import { mouthVariant } from '../../src/viewer/partStyles';
 
@@ -102,5 +102,26 @@ describe('noses', () => {
     const cat = shape('felid', 3);
     expect(cat.top, 'a cat keeps its triangle').toBeGreaterThan(cat.foot);
     expect(APE_NOSE).toBeGreaterThan(1);
+  });
+
+  it("a deer's nose is a broad moist pad across its muzzle's front, its nostrils two big commas at its sides", () => {
+    // (held to a weasel's NOSE_POINTED, a deer's was a small round black button — a dog's — its nostrils
+    // specks a seventieth of a unit across, black on black)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'ungulate'));
+      const mi = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const spec = mouthSpec(p, mi)!;
+      const b = buildJawed(p, mi, [], false, mouthVariant(p.nodes[mi].part!.style) as JawedVariant, 'hybrid')!;
+      const size = (g: THREE.BufferGeometry) => {
+        g.computeBoundingBox();
+        return g.boundingBox!.getSize(new THREE.Vector3());
+      };
+      const pad = size(b.nose!);
+      const r = spec.r;
+      expect(Math.max(pad.x, pad.z) / r, `#${seed} broad`).toBeGreaterThanOrEqual(0.85);
+      expect(pad.y / r, `#${seed} tall`).toBeGreaterThanOrEqual(0.6);
+      expect(size(b.nostrils!).y / r, `#${seed} nostrils show`).toBeGreaterThanOrEqual(0.2);
+    }
+    expect(GRAZER_NOSE).toBeGreaterThan(1);
   });
 });

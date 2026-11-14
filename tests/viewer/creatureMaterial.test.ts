@@ -408,15 +408,18 @@ describe('creature material shader injection', () => {
       const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
       return t * t * (3 - 2 * t);
     };
-    expect(f).toContain('float v = F.x + (n - 0.5) * 0.16;');
-    expect(f).toContain('return mix(0.12, 1.0 - smoothstep(0.24 - c, 0.32 + c, v), 1.0 - smoothstep(0.25, 0.6, c));');
-    for (const c of [0, 0.015, 0.03]) {
-      const mark = (v: number) => 1 - smooth(0.24 - c, 0.32 + c, v);
-      // from the blotch's centre outward: solid, then falling once to the coat
-      const ms = Array.from({ length: 251 }, (_, i) => mark(i * 0.002));
-      expect(ms[0], `footprint ${c}: solid`).toBe(1);
-      expect(ms[ms.length - 1], `footprint ${c}: the coat`).toBe(0);
-      for (let i = 1; i < ms.length; i++) expect(ms[i], `footprint ${c}`).toBeLessThanOrEqual(ms[i - 1] + 1e-12);
+    // (a fawn's dapples — dp — are crisper: a tighter edge, less wobble, no wash where they fade)
+    expect(f).toContain('float v = F.x + (n - 0.5) * mix(0.16, 0.07, dp);');
+    expect(f).toContain('return mix(0.12 * (1.0 - dp), 1.0 - smoothstep(mix(0.24, 0.22, dp) - c, mix(0.32, 0.27, dp) + c, v), 1.0 - smoothstep(0.25, 0.6, c));');
+    for (const [lo, hi] of [[0.24, 0.32], [0.22, 0.27]]) {
+      for (const c of [0, 0.015, 0.03]) {
+        const mark = (v: number) => 1 - smooth(lo - c, hi + c, v);
+        // from the blotch's centre outward: solid, then falling once to the coat
+        const ms = Array.from({ length: 251 }, (_, i) => mark(i * 0.002));
+        expect(ms[0], `footprint ${c}: solid`).toBe(1);
+        expect(ms[ms.length - 1], `footprint ${c}: the coat`).toBe(0);
+        for (let i = 1; i < ms.length; i++) expect(ms[i], `footprint ${c}`).toBeLessThanOrEqual(ms[i - 1] + 1e-12);
+      }
     }
     expect(f).toContain('if (uPType == 3) pat *= 1.0 - 0.75 * vLeg;');
     // eye-spots: measured in the skin, from each cell's centre laid flat on it

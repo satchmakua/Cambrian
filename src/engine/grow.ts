@@ -94,6 +94,17 @@ const REARED_HIP_BACK = 0.34;
 
 /** How far on toward the trunk's end a hooved leg roots (×the trunk's radius there): see hoofSet. */
 const HOOF_SET = 0.55;
+/** A GRAZER (a body on hooves: a deer, an antelope, a goat) carries its neck as one straight column from
+ *  the top of its shoulders, lifted at its root by this many links' worth of the neck's bend, and grown
+ *  straight from there (bent a little at every link, a neck of four or five rose from level out of the
+ *  chest to plumb at the throat — a llama's J — and the head sat level on top of it)… */
+const NECK_CARRY = 2.5;
+/** …and hangs its head from the poll, the face down-and-forward (rad; held level on that neck, a deer
+ *  looked over a wall like a llama, the round end of its muzzle facing the camera) */
+const HEAD_BOW = 0.5;
+/** …and a hooved foreleg's cannon drops plumb from its knee: the wrist's forward fold (−0.32) is a paw's
+ *  pastern, and on a leg whose third link is the cannon it slanted the whole lower leg 25° forward */
+const HOOF_KNEE = 0.12;
 
 /** Minimum grown radius for an eye bulb (bu) — the face must always read (M19/M24). */
 const EYE_R_MIN = 0.06;
@@ -277,6 +288,8 @@ export function grow(genome: Genome): Phenotype {
   const shelled = dev.symmetry === 'bilateral' && genome.covering.type !== 'chitin' && dev.body.appendages.some((a) => a.terminal === 'carapace');
   /** a body that walks on its arms as well as its legs (an ape): its trunk carries a pair of hand-tipped arms */
   const armWalker = dev.symmetry === 'bilateral' && dev.body.appendages.some((a) => a.kind === 'arm' && a.terminal === 'hand' && a.pair);
+  /** a body that stands on hooves (a deer): its neck is a straight column and its head bows (NECK_CARRY) */
+  const grazer = dev.symmetry === 'bilateral' && dev.body.appendages.some((a) => a.kind === 'leg' && a.terminal === 'hoof');
 
   growSegment(dev.body, [0, 0, 0], [0, 0, 0, 1], 0, -1, null);
 
@@ -337,6 +350,12 @@ export function grow(genome: Genome): Phenotype {
       const rise = NECK_ROOT * P.radius * (P.scale?.[1] ?? 1) * clamp(-seg.curve[0] / 0.3, [0, 1]);
       pos = [pos[0] + up[0] * rise, pos[1] + up[1] * rise, pos[2] + up[2] * rise];
     }
+    // (a grazer's neck: lifted once at its root, then straight — see NECK_CARRY)
+    let linkPitch = seg.curve[0];
+    if (grazer && depth > 0 && seg.child && parentIdx >= 0 && seg.curve[0] < 0 && seg.appendages.length === 0) {
+      quat = qMul(quat, qFromEuler(seg.curve[0] * NECK_CARRY, 0));
+      linkPitch = 0;
+    }
     // An ARCHED back: a trunk whose links bend DOWN toward the head (a weasel's, a ferret's) starts
     // tilted up off its hips by half its whole bend, so the hump stands mid-back with hips and
     // shoulders level under it. (Begun level, all the bend ran one way — the rump was the highest
@@ -352,7 +371,7 @@ export function grow(genome: Genome): Phenotype {
     // can be taken back directly (most of it — a trace of the neck's rise keeps the brow alert).
     if (depth > 0 && !seg.child && dev.symmetry === 'bilateral') {
       const f = qRotate([0, 0, 1], quat);
-      quat = qMul(quat, qFromAxisAngle([1, 0, 0], -0.9 * Math.atan2(-f[1], f[2])));
+      quat = qMul(quat, qFromAxisAngle([1, 0, 0], -0.9 * Math.atan2(-f[1], f[2]) + (grazer ? HEAD_BOW : 0)));
     }
 
     // the fusiform swell is a TORSO's: a head (the chain's last segment) or a bare connector (a neck
@@ -459,7 +478,7 @@ export function grow(genome: Genome): Phenotype {
       // lateral (yaw) bend is dropped so the spine stays on the X=0 plane — a winding S-curve would
       // make the static body asymmetric (the slither/undulation animation supplies the wind instead).
       const yaw = dev.symmetry === 'bilateral' ? 0 : seg.curve[1];
-      quat = qMul(quat, qFromEuler(seg.curve[0], yaw));
+      quat = qMul(quat, qFromEuler(linkPitch, yaw));
       const fwd = qRotate([0, 0, 1], quat);
       // (rings stand a gap apart — a gap of the two rings' mean radius, or toward the rump, where each
       // ring is a size up on the last, the bigger one's rim closed over it. The slim joint sits where
@@ -622,6 +641,9 @@ export function grow(genome: Genome): Phenotype {
     }
     // bilateral / none: grow one limb…
     let d = aim(az);
+    // (a part's aim is the body's, not its section's: a grazer's mouth is aimed down by as much as its head is
+    // bowed — see HEAD_BOW — or it sat on the very point of the muzzle, its nose up on the bridge)
+    if (grazer && app.terminal === 'mouth') d = [d[0], d[1] * Math.cos(HEAD_BOW) - d[2] * Math.sin(HEAD_BOW), d[1] * Math.sin(HEAD_BOW) + d[2] * Math.cos(HEAD_BOW)];
     // a non-paired part on a bilateral body must stay on the midline plane (X=0): aim it in the
     // plane and drop the roll + lateral curl that would let a multi-segment part (a tail) wander off.
     if (dev.symmetry === 'bilateral' && !app.pair) {
@@ -1090,7 +1112,7 @@ export function grow(genome: Genome): Phenotype {
         // which is why creatures read as stubby however long their legs got.
         if (fore) {
           if (j === 0) pitch = -(0.3 + 0.5 * Math.abs(app.curl[0])); // elbow — the forearm comes back to vertical
-          else if (j === 1) pitch = -0.32; // wrist — the pastern angles forward to the paw
+          else if (j === 1) pitch = app.terminal === 'hoof' && app.segments >= 4 ? HOOF_KNEE : -0.32; // wrist — the pastern angles forward to the paw (a hooved leg's knee: its cannon drops plumb)
         } else if (j === 0) pitch = Math.abs(app.curl[0]) * 2.15 + 0.2; // knee — the shin folds back
         else if (j === 1) pitch = -(Math.abs(app.curl[0]) * 2.0 + 0.2); // hock — swing the foot forward
       }

@@ -3,7 +3,7 @@ import { grow, type Phenotype } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
 import { buildSmoothGeometry, type SkinQuality } from '../../src/viewer/smoothSkin';
 import { buildFieldPrims, roundConeDist, type FieldPrims } from '../../src/viewer/bodyField';
-import { TUBE_THIN, PODO_WAIST, PODO_EASE, TIP_POINT, bareTips, podomeres } from '../../src/viewer/limbTubes';
+import { TUBE_THIN, PODO_WAIST, PODO_EASE, TIP_POINT, HOOF_KNOB, bareTips, podomeres, splitThin } from '../../src/viewer/limbTubes';
 
 type Geo = ReturnType<typeof buildSmoothGeometry>;
 
@@ -385,5 +385,31 @@ describe('thin limbs drawn exact', () => {
       }
     }
     expect(checked).toBeGreaterThan(10);
+  });
+
+  it("a hooved leg's knee and hock are knobs: wider than the links they join, never swept through", () => {
+    // (a ball of the joint's own girth, swept through or not, ran a deer's leg from its forearm to its hoof as
+    // one smooth tapering stilt: no knee, no hock)
+    expect(HOOF_KNOB).toBeGreaterThan(1.2);
+    let drawn = 0;
+    for (let seed = 1; seed <= 6; seed++) {
+      // (at the near skin's own grid cell: its cannons are drawn exact)
+      const { p, f, cell } = build('ungulate', seed, 'high');
+      const split = splitThin(p, f, cell);
+      if (!split) continue;
+      drawn++;
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      // every hoof's parent leg node is a knob
+      const hooves = p.nodes.map((n, i) => ({ n, i })).filter(({ n }) => n.terminal === 'hoof');
+      expect(hooves.length, `#${seed}`).toBe(4);
+      expect(split!.knobs!.size, `#${seed} knees and hocks`).toBe(4);
+      for (const { i } of hooves) expect(p.nodes[parent.get(i)!].part?.kind, `#${seed}`).toBe('leg');
+    }
+    expect(drawn).toBeGreaterThan(3);
+    // (no other leg has any)
+    for (const id of ['canid', 'felid', 'ursid']) {
+      const { p, f, cell } = build(id, 3, 'high');
+      expect(splitThin(p, f, cell)?.knobs?.size ?? 0, id).toBe(0);
+    }
   });
 });

@@ -16,6 +16,10 @@ import { roundConeDist, setCone, withoutCones, type FieldPrims } from './bodyFie
 
 /** a limb link at most this many grid cells thick is drawn exact */
 export const TUBE_THIN = 1.6;
+/** A HOOVED leg's knee (its carpus) and its hock (tarsus) — the joint above its hoof — is a knob: the ball
+ *  there this much wider than the links it joins. (A ball of the joint's own girth, swept through or not,
+ *  a deer's leg ran from its forearm to its hoof as one smooth tapering stilt: no knee, no hock.) */
+export const HOOF_KNOB = 1.35;
 /** a field cone that tapers this steeply into a tube's joint (girth per length) or more is tucked in by
  *  slimming its end (to TUCK_SLIM of the joint's girth); a gentler one by stopping it short */
 const TUCK_STEEP = 0.3;
@@ -89,6 +93,8 @@ export interface ThinSplit {
   podo: Uint8Array | null;
   /** per cone of the full field: 1 — it ends a bare tail or tentacle (drawn on to a point), or null */
   tips: Uint8Array | null;
+  /** the joints (keyOf) drawn as knobs: a hooved leg's knee and hock (see HOOF_KNOB) */
+  knobs?: Set<string>;
 }
 
 /** Which of the field's limb links are too thin for the grid (`cell`) — or are a jointed shell's leg
@@ -159,7 +165,14 @@ export function splitThin(p: Phenotype, full: FieldPrims, cell: number): ThinSpl
     const at = (t: number) => [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t];
     setCone(field, i, at(tA), at(1 - tB), rA, rB);
   }
-  return { field, handoff, tubes, fieldEnds: new Set(fieldAt.keys()), podo, tips };
+  // a hooved leg's knee and hock: the leg node its hoof hangs from
+  const knobs = new Set<string>();
+  const parentOf = new Map(p.edges.map(([a, b]) => [b, a]));
+  p.nodes.forEach((n, i) => {
+    const k = n.terminal === 'hoof' ? parentOf.get(i) : undefined;
+    if (k !== undefined && p.nodes[k].part?.kind === 'leg') knobs.add(keyOf(p.nodes[k].pos[0], p.nodes[k].pos[1], p.nodes[k].pos[2]));
+  });
+  return { field, handoff, tubes, fieldEnds: new Set(fieldAt.keys()), podo, tips, knobs };
 }
 
 export interface Tubes {
@@ -202,7 +215,7 @@ interface Joint {
  */
 export function limbTubes(
   full: FieldPrims,
-  split: Pick<ThinSplit, 'tubes' | 'fieldEnds'> & { podo?: Uint8Array | null; tips?: Uint8Array | null },
+  split: Pick<ThinSplit, 'tubes' | 'fieldEnds'> & { podo?: Uint8Array | null; tips?: Uint8Array | null; knobs?: Set<string> },
   cell: number,
   aoAt: (x: number, y: number, z: number, nx: number, ny: number, nz: number) => number,
   skin?: { positions: Float32Array; ao: Float32Array },
@@ -241,6 +254,11 @@ export function limbTubes(
     endOf.set(m, jb);
   }
   for (const [k, j] of joints) {
+    // (a hooved leg's knee or hock: a ball, never swept through, wider than its links — see HOOF_KNOB)
+    if (split.knobs?.has(k)) {
+      j.r *= HOOF_KNOB;
+      continue;
+    }
     if (split.fieldEnds.has(k)) continue;
     if (split.tips && j.ins.length === 1 && j.outs.length === 0 && split.tips[j.ins[0]]) {
       j.tip = true;

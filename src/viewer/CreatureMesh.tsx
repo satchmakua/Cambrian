@@ -33,7 +33,7 @@ import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
 import { BROW_TILT, bulgingEye, eyeClearings, eyeSeat, eyeTilt, FEELER_KNOB, FEELER_SPOT, feelerTip, isOcellus, isSwimmer } from './eyeSeat';
 import { coatBelly, coatDark, coatFin, coatMain, coatPattern, srgbHSL } from './palette';
-import { browRidgeGeometry, faceMaskOf, headMaskOf, isApe } from './face';
+import { browRidgeGeometry, dappled, faceMaskOf, headMaskOf, isApe } from './face';
 import { apeFootGeometry, fistGeometry } from './apeLimbs';
 import { clawGeometry, wristQuat } from './claw';
 import { hornGeometry, HORN_LEN, type HornReach } from './horn';
@@ -231,7 +231,9 @@ export function CreatureMesh({
   const headMask = useMemo(() => headMaskOf(phenotype), [phenotype]);
   // (a flightless bird — an ostrich, an emu, not a theropod — wears shaggy plumes: see shaggyPlumage)
   const shaggy = useMemo(() => shaggyPlumage(phenotype), [phenotype]);
-  const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed, bareOf(phenotype)?.bare ?? null, null, face, 0, headMask, false, shaggy), [pal, cov, seed, phenotype, face, headMask, shaggy]);
+  // (a fawn's dapples: see dappled)
+  const dapple = useMemo(() => dappled(phenotype), [phenotype]);
+  const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed, bareOf(phenotype)?.bare ?? null, null, face, 0, headMask, false, shaggy, null, dapple), [pal, cov, seed, phenotype, face, headMask, shaggy, dapple]);
   useEffect(() => () => bodyMat.dispose(), [bodyMat]);
   // a crystal's smooth skin is cut into faces (buildSkin), and its material cuts none of its own
   const cutMat = useMemo(() => (cov.type === 'crystal' ? makeCreatureMaterial(pal, cov, seed, bareOf(phenotype)?.bare ?? null, null, face, 0, headMask, true) : null), [pal, cov, seed, phenotype, face, headMask]);
@@ -244,8 +246,8 @@ export function CreatureMesh({
     const len = pileLength(phenotype) * (shaggy ? PLUME_LEN : 1);
     const bare = bareOf(phenotype)?.bare ?? null;
     const eyes = eyeClearings(phenotype, data.features);
-    return Array.from({ length: FUR_SHELLS }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / FUR_SHELLS, len, density: 3.2 / len, eyes }, face, 0, headMask, false, shaggy));
-  }, [fur, cov, skinMode, phenotype, pal, seed, data, face, headMask, shaggy]);
+    return Array.from({ length: FUR_SHELLS }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / FUR_SHELLS, len, density: 3.2 / len, eyes }, face, 0, headMask, false, shaggy, null, dapple));
+  }, [fur, cov, skinMode, phenotype, pal, seed, data, face, headMask, shaggy, dapple]);
   useEffect(() => () => furMats.forEach((m) => m.dispose()), [furMats]);
 
   // physics playback (post-roadmap): when a recorded gait is present, capsules re-pose from it

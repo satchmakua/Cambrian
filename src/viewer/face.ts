@@ -67,11 +67,26 @@ export interface HeadMask {
   r: number; // the head's girth: plain within 1.1r of the a–b line (the skull's skin and the eyes on it), the marking back by 1.5r
 }
 
+/** A body that stands on hooves: a deer's, an antelope's, a goat's. */
+export function isGrazer(p: Phenotype): boolean {
+  return p.nodes.some((n) => n.terminal === 'hoof');
+}
+
+/** Whether a coat's spots are a fawn's DAPPLES: small, pale, laid along its back and upper flanks — none on
+ *  its head, legs or belly, nor across its spine's midline. (In a dark umber, big, soft and half-strength
+ *  all over, a deer's spots were mould — one on its muzzle a dark cap, one on its brisket, mirrored across
+ *  the midline, a heart.) */
+export function dappled(p: Phenotype): boolean {
+  const c = p.genomeRef.covering;
+  return c.type === 'fur' && c.pattern === 'spots' && isGrazer(p);
+}
+
 export function headMaskOf(p: Phenotype): HeadMask | null {
   // (bands only: a tiger's or a tabby's stripes run on over its face, and kept off it the cat wore a
   // plain pale hood that stopped dead at the neck. And plumage: a bird's head is smooth-feathered,
-  // its feathers' edges kept to its back and wings — see the covering shader)
-  if (p.genomeRef.covering.pattern !== 'bands' && p.genomeRef.covering.type !== 'feathers') return null;
+  // its feathers' edges kept to its back and wings — see the covering shader. And a fawn's dapples:
+  // its face is plain)
+  if (p.genomeRef.covering.pattern !== 'bands' && p.genomeRef.covering.type !== 'feathers' && !dappled(p)) return null;
   const mouth = p.nodes.findIndex((n) => n.terminal === 'mouth');
   const holder = mouth < 0 ? undefined : p.edges.find(([, b]) => b === mouth);
   const seg = holder ? p.nodes[holder[0]] : undefined;
