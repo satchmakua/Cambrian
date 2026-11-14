@@ -650,6 +650,8 @@ vec4 cellNear(vec3 p, out float f2) {
 const float RETIC_CELL = 0.38;
 const float FUR_LOCKS = 10.0;      // a coat's locks across (per body unit), laid along its lay…
 const float FUR_STRANDS = 26.0;    // …and the strands in them
+const float PLATE_CELL = 3.6;      // a plated hide's scutes across (per body unit)…
+const float PLATE_DOME = 0.022;    // …and how high each domes (body units)
 const float SLIME_CELL = 9.0;      // a slime hide's tubercles across (per body unit)…
 const float SLIME_LONG = 0.4;      // …fewer along the body: each two and a half times as long as wide
 const float SLIME_TUBERCLE = 0.012; // …and how high each stands (body units)
@@ -878,11 +880,15 @@ float surfaceHeight(vec3 p, int cover) {
     gHb = dome * SLIME_TUBERCLE + ripple * 0.01;
     return clamp(0.62 - dome * 0.3 + ripple * 0.1, 0.0, 1.0);
   }
-  if (cover == 6) {                                             // plates — big deep scutes
-    vec2 F = voronoi(p * 2.2);
-    float h = mix(0.75, smoothstep(0.0, 0.13 + gFw * 2.2, F.y - F.x), aaW(2.2));
-    gHb = h * 0.03;
-    return h;
+  if (cover == 6) {                                             // plates — domed scutes (osteoderms, ossicles)
+    // A dragon's armour, a sea star's ossicles: each plate a low dome rising from a narrow groove to its
+    // middle, the grooves a shade darker. (Flat-topped cells half a body unit across between dark seams
+    // were a quilt, a turtle's shell, cracked clay.)
+    vec2 F = voronoi(p * PLATE_CELL);
+    float w = aaW(PLATE_CELL);
+    float dome = mix(0.6, smoothstep(0.0, 0.42 + gFw * PLATE_CELL, F.y - F.x), w);
+    gHb = dome * PLATE_DOME;
+    return clamp(0.72 - dome * 0.42, 0.0, 1.0);
   }
   if (cover == 7 && uCut > 0.5) {                               // crystal, its skin already cut
     // the geometry's own flat faces carry the cut; cut again here, at other places, the two sets of

@@ -473,6 +473,22 @@ describe('creature material shader injection', () => {
     expect(Number(w[2]) + Number(w[3])).toBeGreaterThan(0.7);
   });
 
+  it("a plated hide is domed scutes a few to a body unit, not a quilt of flat cells between dark seams", () => {
+    // (flat-topped cells half a body unit across between dark seams: a dragon in a quilt, a turtle's shell; a
+    // sea star of cracked clay)
+    const f = compileShaderStrings('plates').fragmentShader;
+    const i = f.indexOf('if (cover == 6) {');
+    expect(i).toBeGreaterThan(0);
+    const branch = f.slice(i, f.indexOf('if (cover == 7', i));
+    expect(branch).toContain('voronoi(p * PLATE_CELL)');
+    const num = (name: string) => Number(new RegExp(`const float ${name} = ([0-9.]+);`).exec(f)![1]);
+    expect(num('PLATE_CELL')).toBeGreaterThan(3);
+    // each a dome to its middle, not a plateau with a seam round it
+    expect(branch).toMatch(/smoothstep\(0\.0, 0\.4\d? \+ gFw \* PLATE_CELL, F\.y - F\.x\)/);
+    // its grooves only a shade darker: the grime's height runs 0.3–0.72, not 0–1
+    expect(branch).toContain('return clamp(0.72 - dome * 0.42, 0.0, 1.0);');
+  });
+
   it('a slime hide wears long tubercles between soft grooves, under its wet ripple — not a smooth glossy pickle', () => {
     // (a faint ripple alone was a pickle in a smear of highlight; flat-topped cells between dark seams were
     // crazy paving)
