@@ -19,6 +19,8 @@
  */
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
+import { projectToSurface } from './bodyField';
+import { surfacePrims, type SkinSurface } from './mouthLine';
 
 export type WingKind = 'feathered' | 'membrane';
 
@@ -852,6 +854,18 @@ export interface FinPart {
  * node of its tail, a sail stands a girth over the back. The body's own bounds stop short of them, so
  * a view framed on those cut the tail fin off at the edge of the plate.
  */
+/**
+ * Where a fin is seated off its node: a bony fish's pectoral stands on the skin (its node sits on its own
+ * link's ellipsoid, inside the blended flank — three paddles in four were half and more under the skin;
+ * rooted on the back of the head, under the gill cover, some wholly); any other fin stands where it is.
+ */
+export function finSeat(p: Phenotype, idx: number, kind: FinKind, cut: FinCut, surface: SkinSurface = 'hybrid'): THREE.Vector3 | null {
+  if (cut !== 'fish' || kind !== 'pectoral') return null;
+  const o = p.nodes[idx].pos;
+  const s = projectToSurface(surfacePrims(p, surface), [], [o[0], o[1], o[2]]).p;
+  return new THREE.Vector3(s[0] - o[0], s[1] - o[1], s[2] - o[2]);
+}
+
 export function finBounds(p: Phenotype, fins: readonly FinPart[]): { min: [number, number, number]; max: [number, number, number] } | null {
   const min: [number, number, number] = [Infinity, Infinity, Infinity];
   const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
@@ -859,6 +873,8 @@ export function finBounds(p: Phenotype, fins: readonly FinPart[]): { min: [numbe
     const aim = v3(0, 0, 1).applyQuaternion(new THREE.Quaternion(f.quat[0], f.quat[1], f.quat[2], f.quat[3]));
     const kind = finKindOf(aim, f.kind);
     const fin = buildFin(kind, aim, finGirth(p, f.idx, kind, f.radius), finScaleOf(f.style), finCutOf(f.style));
+    const seat = finSeat(p, f.idx, kind, finCutOf(f.style));
+    if (seat) fin.membrane.translate(seat.x, seat.y, seat.z);
     const pos = fin.membrane.getAttribute('position') as THREE.BufferAttribute;
     const o = p.nodes[f.idx].pos;
     for (let i = 0; i < pos.count; i++) {

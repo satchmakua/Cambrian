@@ -28,7 +28,7 @@ import { makeCreatureMaterial } from './creatureMaterial';
 import { bareOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, ratLike, shaggyPlumage, skinPartWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, longWingFold, trunkGirth, wingCarriage, LONG_WING, type FinBuild } from './wings';
+import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, LONG_WING, type FinBuild } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
 import { BROW_TILT, bulgingEye, eyeClearings, eyeSeat, eyeTilt, isSwimmer } from './eyeSeat';
@@ -1647,7 +1647,17 @@ export function finOf(f: MeshFeature, phenotype: Phenotype, surface: SkinSurface
   // Run straight out from its root point, a fish's sail hung in the air over the back's fall to the
   // tail — a third of a body unit of daylight under its rear end, 0.7 at the worst.
   const root = cut !== 'plain' && (kind === 'dorsal' || kind === 'anal') ? finRoot(phenotype, f.idx, kind, aim, g, surface) : undefined;
-  return buildFin(kind, aim, g, finScaleOf(f.style), cut, root);
+  const build = buildFin(kind, aim, g, finScaleOf(f.style), cut, root);
+  // …and a bony fish's pectoral stands on the skin (finSeat)
+  const d = finSeat(phenotype, f.idx, kind, cut, surface);
+  if (d) {
+    build.membrane.translate(d.x, d.y, d.z);
+    for (const r of build.rays) {
+      r.a.add(d);
+      r.b.add(d);
+    }
+  }
+  return build;
 }
 
 /**

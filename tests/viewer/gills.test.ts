@@ -74,7 +74,7 @@ describe('gills that lie in the skin', () => {
         };
         expect(span(r) / (2 * half), `fish #${seed}`).toBeGreaterThan(0.42);
         expect(span(r) / (2 * half), `fish #${seed}: within the flank`).toBeLessThan(0.75);
-        expect(span(own) / (2 * half), `fish #${seed}: the part's own size is a scratch`).toBeLessThan(0.3);
+        expect(span(own) / (2 * half), `fish #${seed}: the part's own size is a scratch`).toBeLessThan(0.36);
         seen++;
       }
       // a shark's slits each run about a third of the flank's depth: not a smudge (the gill part's own

@@ -87,7 +87,11 @@ describe('body plans', () => {
   });
 
   it('a fish and a shark wear different fins, and each a full set', () => {
-    const fins = (id: string, seed: number) => genomeOfMorphotype(seed, id).body.appendages.filter((a) => a.kind === 'fin');
+    // (a bony fish's pectorals hang on the back of its skull: see gillAt)
+    const fins = (id: string, seed: number) => {
+      const g = genomeOfMorphotype(seed, id);
+      return [...g.body.appendages, ...(g.body.child?.appendages ?? [])].filter((a) => a.kind === 'fin');
+    };
     const tailOf = (id: string, seed: number) => genomeOfMorphotype(seed, id).body.appendages.find((a) => a.kind === 'tail')!;
     let pelvics = 0;
     let second = 0;

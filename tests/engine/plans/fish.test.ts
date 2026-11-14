@@ -4,6 +4,7 @@ import { grow, type BodyNode, type Phenotype } from '../../../src/engine/grow';
 import { genomeOfMorphotype } from '../../../src/engine/random';
 import { buildMeshData, type MeshFeature } from '../../../src/viewer/meshData';
 import { finCutOf, finKindOf, type FinKind } from '../../../src/viewer/wings';
+import { gillMarks, gillRadiusOf } from '../../../src/viewer/gills';
 
 const SEEDS = Array.from({ length: 12 }, (_, i) => i + 1);
 const ry = (n: BodyNode) => n.radius * (n.scale?.[1] ?? 1);
@@ -154,5 +155,52 @@ describe('fish and shark', () => {
     expect(seconds).toBeGreaterThan(6);
     // …and a bony fish wears a fish's fins: the sail, the round paddles, the deep fork
     for (const seed of SEEDS) for (const x of parts('fish', seed).fins) expect(finCutOf(x.f.style), `fish #${seed}`).toBe('fish');
+  });
+
+  it("its gill cover is the back of its head, a quarter of the way down it — not half way down the body", () => {
+    // (a trunk part drawn on the trunk's deepest link, half way down the body: the 'head' was two-thirds
+    // of the fish, with the pectorals beside it)
+    let checked = 0;
+    for (const seed of SEEDS) {
+      const p = grow(genomeOfMorphotype(seed, 'fish'));
+      const spine = p.nodes.filter((n) => n.kind === 'spine');
+      const head = spine.filter((n) => n.segment === 1);
+      const snout = Math.max(...head.map((n) => n.pos[2] + n.radius * (n.scale?.[2] ?? 1)));
+      const tailEnd = Math.min(...p.nodes.filter((n) => n.part?.kind === 'tail').map((n) => n.pos[2]));
+      const SL = snout - tailEnd;
+      const gill = p.nodes.findIndex((n) => n.part?.kind === 'gill');
+      if (gill < 0) continue; // (one in ten has none)
+      checked++;
+      const r = gillRadiusOf(p, gill, 'cover', Math.max(p.nodes[gill].radius, 0.06));
+      const [line] = gillMarks(p, gill, 'hybrid', 'cover', r).lines;
+      const rim = Math.min(...line.map((q) => q.z + p.nodes[gill].pos[2]));
+      const at = (snout - rim) / SL;
+      expect(at, `#${seed} rim`).toBeGreaterThan(0.18);
+      expect(at, `#${seed} rim`).toBeLessThan(0.36);
+    }
+    expect(checked).toBeGreaterThanOrEqual(8);
+  });
+
+  it('it narrows through its last quarter into a slim stalk before the tail fin — not a loaf with a fan on its butt', () => {
+    for (const seed of SEEDS) {
+      const p = grow(genomeOfMorphotype(seed, 'fish'));
+      const body = p.nodes.filter((n) => n.kind === 'spine' || n.part?.kind === 'tail');
+      const depth = (z: number) =>
+        Math.max(0, ...body.map((n) => {
+          const rz = n.radius * (n.scale?.[2] ?? 1);
+          const u = (z - n.pos[2]) / rz;
+          return Math.abs(u) < 1 ? 2 * ry(n) * Math.sqrt(1 - u * u) : 0;
+        }));
+      const head = p.nodes.filter((n) => n.kind === 'spine' && n.segment === 1);
+      const snout = Math.max(...head.map((n) => n.pos[2] + n.radius * (n.scale?.[2] ?? 1)));
+      const fr = Math.min(...p.nodes.filter((n) => n.part?.kind === 'tail').map((n) => n.pos[2]));
+      const SL = snout - fr;
+      let peak = 0;
+      for (let i = 0; i <= 100; i++) peak = Math.max(peak, depth(fr + (i / 100) * SL));
+      let rear = 0;
+      for (let i = 0; i <= 25; i++) rear += depth(fr + (i / 100) * SL);
+      expect(rear / 26 / peak, `#${seed} rear quarter`).toBeLessThan(0.46);
+      expect(depth(fr + 0.05 * SL) / peak, `#${seed} stalk`).toBeLessThan(0.23);
+    }
   });
 });
