@@ -643,6 +643,11 @@ vec4 cellNear(vec3 p, out float f2) {
   return vec4(-best, sqrt(f1));
 }
 
+// a reticulate net's cells (× the pattern's scale: under 0.5, bigger patches) and its rims' half-width
+// (in the cells' edge distance)
+const float RETIC_CELL = 0.38;
+const float RETIC_RIM = 0.06;
+
 // --- color pattern field p(x) in [0,1] (MORPHOLOGY §7.1) — domain-warped for organic flow --------
 // Every edge is widened by the pattern's own pixel footprint \`c\` (cells per pixel) so markings stay
 // crisp up close and blur gracefully — rather than shimmer — when the creature is small on screen.
@@ -699,10 +704,13 @@ float patternField(vec3 p0, int type, float scale) {
     }
     return mix(0.12, mark, 1.0 - smoothstep(0.25, 0.6, c));
   }
-  if (type == 5) {                                              // reticulate — crisp net (giraffe/croc)
-    c = gFw * scale * 0.5;
-    vec2 F = voronoi(p * scale * 0.5);
-    return mix(0.15, 1.0 - smoothstep(0.0, 0.05 + 1.5 * c, F.y - F.x), 1.0 - smoothstep(0.25, 0.6, c));
+  if (type == 5) {                                              // reticulate — a bold net (a python's, a giraffe's)
+    // a net of broad dark rims round big pale patches, its rims' edges a little ragged. (Hairline cracks
+    // round small cells were crackle glaze, cracked mud, a leaf's veins — never a python's net.)
+    c = gFw * scale * RETIC_CELL;
+    vec2 F = voronoi(p * scale * RETIC_CELL);
+    float e = F.y - F.x + (fbmA(p * scale * 1.3, scale * 1.3) - 0.5) * 0.06;
+    return mix(0.15, 1.0 - smoothstep(RETIC_RIM, RETIC_RIM + 0.07 + 1.5 * c, e), 1.0 - smoothstep(0.25, 0.6, c));
   }
   if (type == 6) {                                              // mottle — flowing camo
     return smoothstep(0.34, 0.66, fbmA(p * scale * 0.5, scale * 0.5));

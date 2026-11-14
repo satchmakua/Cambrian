@@ -510,4 +510,14 @@ describe('creature material shader injection', () => {
     const f = compileShaderStrings('crystal').fragmentShader;
     expect(f).toContain('planar * step(0.99, vCut));');
   });
+
+  it("a reticulate net is broad rims round big patches — not hairline cracks, crackle glaze", () => {
+    // (hairline cracks round small cells were crackle glaze, cracked mud, a leaf's veins: never a python)
+    const f = compileShaderStrings('scales').fragmentShader;
+    const rim = Number(/const float RETIC_RIM = ([0-9.]+);/.exec(f)?.[1]);
+    const cell = Number(/const float RETIC_CELL = ([0-9.]+);/.exec(f)?.[1]);
+    expect(rim).toBeGreaterThanOrEqual(0.05);
+    expect(cell).toBeLessThan(0.45);
+    expect(f).not.toContain('smoothstep(0.0, 0.05 + 1.5 * c, F.y - F.x)');
+  });
 });
