@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
 import * as THREE from 'three';
-import { APE_NOSE, GRAZER_NOSE, buildJawed, NOSE_POINTED, pinkNoseChance, stopOf, whiskerPads, type JawedVariant } from '../../src/viewer/mouths/jawed';
+import { APE_NOSE, GRAZER_NOSE, buildJawed, pinkNose, NOSE_POINTED, pinkNoseChance, stopOf, whiskerPads, type JawedVariant } from '../../src/viewer/mouths/jawed';
 import { mouthCarves, mouthSpec } from '../../src/viewer/mouthLine';
 import { mouthVariant } from '../../src/viewer/partStyles';
 
@@ -18,6 +18,31 @@ describe('noses', () => {
       expect(mouse, `mouse #${seed}`).toBeLessThanOrEqual(0.7);
       expect(pinkNoseChance(grow(genomeOfMorphotype(seed, 'felid'))), `cat #${seed}`).toBeLessThan(0.2);
     }
+  });
+
+  it("a bear's nose is a dark pad as broad as a dog's, never a cat's pink button: its skull has a stop", () => {
+    // (its muzzle as short as a cat's, it wore the cat's pink button three times in five, sized as a cat's: a pig's
+    // snout, a hamster's)
+    const padOf = (id: string, seed: number) => {
+      const p = grow(genomeOfMorphotype(seed, id));
+      const mi = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const b = buildJawed(p, mi, mouthCarves(p), true, mouthVariant(p.nodes[mi].part!.style) as JawedVariant, 'hybrid')!;
+      const depth = Math.max(...p.nodes.filter((n) => n.kind === 'spine').map((n) => n.segment ?? 0));
+      const skull = p.nodes.filter((n) => n.kind === 'spine' && n.segment === depth);
+      b.nose!.computeBoundingBox();
+      return { pink: pinkNose(p, mi), across: b.nose!.boundingBox!.getSize(new THREE.Vector3()).x / (2 * skull[skull.length - 1].radius) };
+    };
+    let bears = 0, dogs = 0, cats = 0;
+    const seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 29];
+    for (const seed of seeds) {
+      const bear = padOf('ursid', seed);
+      expect(bear.pink, `bear #${seed}`).toBe(false);
+      bears += bear.across;
+      dogs += padOf('canid', seed).across;
+      if (padOf('felid', seed).pink) cats++;
+    }
+    expect(bears / dogs, 'as broad on its muzzle as a dog\'s').toBeGreaterThan(0.85);
+    expect(cats, 'a cat keeps its rose').toBeGreaterThan(seeds.length / 2);
   });
 
   it("a weasel's nose is dark more often than not, small as it is: a mouse's pink", () => {

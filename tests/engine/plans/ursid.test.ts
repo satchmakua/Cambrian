@@ -71,8 +71,11 @@ describe('ursid', () => {
       // the head carried at the withers, on a neck nearly the skull's girth
       expect((top(brain) - top(chest)) / chest.radius, `#${seed} head`).toBeLessThan(0.2);
       expect(Math.min(...neck.map((n) => n.radius)) / brain.radius, `#${seed} neck`).toBeGreaterThan(0.82);
-      // a short snout on a broad head: the nose under a skull's radius past the braincase
-      expect((nose.pos[2] + nose.radius - (brain.pos[2] + brain.radius)) / brain.radius, `#${seed} snout`).toBeLessThan(0.9);
+      // a short snout on a broad head: the nose about a skull's radius past the braincase — short of a dog's (1.2–1.45),
+      // but no bulb on a ball (0.74–0.8 was a teddy's)
+      const snout = (nose.pos[2] + nose.radius - (brain.pos[2] + brain.radius)) / brain.radius;
+      expect(snout, `#${seed} snout`).toBeLessThan(1.05);
+      expect(snout, `#${seed} snout`).toBeGreaterThan(0.85);
       // and small eyes
       for (const e of p.nodes.filter((n) => n.terminal === 'eye')) expect(e.radius / brain.radius, `#${seed} eye`).toBeLessThan(0.21);
     }

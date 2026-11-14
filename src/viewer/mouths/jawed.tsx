@@ -374,7 +374,9 @@ export function buildJawed(
     const ape = isApe(phenotype);
     // (…and a grazer's is a broad moist pad across the front of its muzzle, its nostrils at its sides: see GRAZER_NOSE)
     const grazer = !ape && isGrazer(phenotype);
-    const ns = ape ? APE_NOSE : grazer ? GRAZER_NOSE : Math.min(noseScaleOf(snoutReach(phenotype, idx)), NOSE_POINTED + (NOSE_LONG - NOSE_POINTED) * stopOf(phenotype, idx));
+    // (…and a skull with a stop never smaller than NOSE_STOPPED, however short its muzzle: a bear's)
+    const stop = stopOf(phenotype, idx);
+    const ns = ape ? APE_NOSE : grazer ? GRAZER_NOSE : Math.min(Math.max(noseScaleOf(snoutReach(phenotype, idx)), NOSE_STOPPED * stop), NOSE_POINTED + (NOSE_LONG - NOSE_POINTED) * stop);
     // wider across the top than at the bottom: a rounded triangle, the classic mammal rhinarium (the
     // smaller, the more a triangle)
     const flare = ape ? APE_NOSE_FLARE : grazer ? GRAZER_NOSE_FLARE : 0.32 + 1.0 * Math.max(0, 1 - ns);
@@ -499,6 +501,10 @@ const NOSE_LONG = 1.5;
  *  reaches. (By reach alone a weasel's long snout ended in a dog's rhinarium as wide as the muzzle, past
  *  the fur; a deer's in a glossy black rubber ball.) */
 export const NOSE_POINTED = 0.9;
+/** …and a skull WITH a stop wears at least this, however short its muzzle: a bear's runs shorter than a dog's
+ *  (sized by its reach, 1.8 of its braincase's radii, its pad was a cat's: a button on a teddy's snout). Every
+ *  dog's reach already gives it more. */
+export const NOSE_STOPPED = 1.3;
 /** An ape's nose pad against the mouth's size (a cat's is 0.75, a dog's up to NOSE_LONG): a gorilla's is as wide
  *  as two thirds of the span between its eyes. Its flare is negative: wider at the foot than across the top. */
 export const APE_NOSE = 1.45;
@@ -536,6 +542,14 @@ export function noseScaleOf(reach: number): number {
  */
 /** …and a short muzzle's (a cat's) rose more often than not, whatever its size */
 const SHORT_PINK = 0.65;
+
+/** Is this mouth's nose pink? A small animal's often (pinkNoseChance); a CAT's — a short muzzle on a skull with no
+ *  stop — more often than not (SHORT_PINK). Never a bear's: its muzzle is as short as a cat's, but its skull has a
+ *  stop. (Keyed on the reach alone, three bears in five wore a cat's pink button: a pig's snout, a hamster's.) */
+export function pinkNose(p: Phenotype, mouthIdx: number): boolean {
+  const cat = snoutReach(p, mouthIdx) < SNOUT_SHORT && stopOf(p, mouthIdx) < 0.5;
+  return hash01(p.genomeRef.seed, 0x4e05) < Math.max(pinkNoseChance(p), cat ? SHORT_PINK : 0);
+}
 
 export function pinkNoseChance(p: Phenotype): number {
   let top = -Infinity;
@@ -588,10 +602,10 @@ export function JawedMouth({
     () =>
       ape
         ? new THREE.Color(ape.color).multiplyScalar(0.7).getHex()
-        : hash01(phenotype.genomeRef.seed, 0x4e05) < Math.max(pinkNoseChance(phenotype), snoutReach(phenotype, f.idx) < SNOUT_SHORT ? SHORT_PINK : 0)
+        : pinkNose(phenotype, f.idx)
           ? new THREE.Color().setHSL(0.98, 0.32, 0.42).getHex()
           : 0x1c1416,
-    [phenotype, ape],
+    [phenotype, ape, f.idx],
   );
 
   const fang = useMemo(() => ((JAWED_PARAMS[variant] as JawedParams).blunt ? bluntGeometry() : fangGeometry()), [variant]);

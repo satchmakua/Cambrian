@@ -83,6 +83,16 @@ describe('ears', () => {
     }
   });
 
+  it("a bear's round ears are always low furred flaps, never a mouse's tall pink cups", () => {
+    // (one bear in fifty — seed 29's among them — drew its ears over LOW_EAR of its skull: a rodent's cups)
+    for (let seed = 1; seed <= 300; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'ursid'));
+      p.nodes.forEach((n, i) => {
+        if (n.terminal === 'ear') expect(lowEar(p, i), `bear #${seed}`).toBe(true);
+      });
+    }
+  });
+
   it('an ear is a deep cup: seen edge-on it keeps a good part of its width, never a thin horn', () => {
     // (a shallow dish a fifth to a third as deep as it was wide: the far ear of a three-quarter view
     // was a dark spike, like a horn)
