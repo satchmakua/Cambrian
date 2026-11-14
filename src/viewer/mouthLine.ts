@@ -410,6 +410,21 @@ export const FUNNEL_BAND = 0.2;
 const RIM_MIN_SPREAD = 0.08;
 const RIM_MAX_SPREAD = 1.25;
 export const TRUNK_MOUTH_SPAN = 1.5;
+/** An UNDERSLUNG mouth (see isUnderslung) wraps at least this far round its head (rad), and its corners
+ *  stand this far up its jaw (× the mouth's size, at the corners)… */
+export const CRESCENT_ARC = 1.75;
+export const CRESCENT_RISE = 0.06;
+/** …a mouth aimed further below its head's level than this (aim · head up): grow floors every other mouth
+ *  at elevation 0.95 (−0.58) */
+const UNDERSLUNG_AIM = -0.62;
+
+/** Is this mouth UNDERSLUNG — set back under a snout that runs on ahead of it, and aimed at the floor (a
+ *  shark's)? */
+export function isUnderslung(p: Phenotype, s: MouthSpec): boolean {
+  if (p.genomeRef.symmetry === 'radial' || s.muzzled || !JAWED.has(s.variant) || s.anchor.kind !== 'spine') return false;
+  const ahead = p.edges.some(([a, b]) => p.nodes[a] === s.anchor && p.nodes[b].kind === 'spine' && p.nodes[b].segment === s.anchor.segment);
+  return ahead && dot3(s.aim, norm3(qRotateV(s.anchor.quat, [0, 1, 0]))) < UNDERSLUNG_AIM;
+}
 
 export function buildMouthLine(
   p: Phenotype,
@@ -420,6 +435,10 @@ export function buildMouthLine(
 ): MouthLine {
   let s = spec;
   const f = surfacePrims(p, surface);
+  // a shark's mouth under its snout is a CRESCENT: wide, its corners swept back under the eye onto the jaw
+  // (traced like any other, it was a short chord across the flat of its chin: from the side, no mouth)
+  const under = isUnderslung(p, s);
+  if (under) s = { ...s, arc: Math.max(s.arc, CRESCENT_ARC) };
   // ray origin: inside the anchor node, pulled a touch back from the mouth so rays always exit
   // through the face (a mouth seated proud of a snout tip still traces onto the snout).
   const origin: Vec3 = [
@@ -469,7 +488,7 @@ export function buildMouthLine(
   const snout = (s.anchor.scale?.[2] ?? 1) > LONG_SNOUT;
   // (nor a radial body: it has no head, and its mouth is where it is — under the disc, say)
   const headed = p.genomeRef.symmetry !== 'radial';
-  for (let k = 0; k < 5 && headed && !s.muzzled && !snout && offFace(); k++) {
+  for (let k = 0; k < 5 && headed && !s.muzzled && !snout && !under && offFace(); k++) {
     gapeHalf *= 0.72;
     droop *= 0.6;
     setDown -= 0.06;
@@ -503,9 +522,12 @@ export function buildMouthLine(
     const headUp = norm3(qRotateV(s.anchor.quat, [0, 1, 0]));
     const h = (q: Vec3) => dot3(q, headUp);
     const drop = (t: number) => SEAM_DROP * s.r * Math.abs(t);
-    upper = levelCurve(f, [], s, origin, samples, upperPitch, headUp, (t, mh) => mh - drop(t));
+    // (an underslung crescent's corners stand a little up its jaw: levelled at its middle's height — the flat
+    // of the chin — it lay under the head)
+    const rise = (t: number) => (under ? CRESCENT_RISE * s.r * t * t : 0);
+    upper = levelCurve(f, [], s, origin, samples, upperPitch, headUp, (t, mh) => mh - drop(t) + rise(t));
     const uMid = h(upper[mid].p);
-    lower = levelCurve(f, carves, s, origin, samples, lowerPitch, headUp, (t, mh) => uMid - drop(t) - (uMid - mh) * Math.cos((t * Math.PI) / 2));
+    lower = levelCurve(f, carves, s, origin, samples, lowerPitch, headUp, (t, mh) => uMid - drop(t) + rise(t) - (uMid - mh) * Math.cos((t * Math.PI) / 2));
   }
 
   // weld the corners exactly (shared start/end), then fix `away` signs: the top lip's `away`

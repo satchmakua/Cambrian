@@ -836,7 +836,21 @@ export function finGirth(p: Phenotype, idx: number, kind: FinKind, radius: numbe
   let c = parent[idx];
   while (c >= 0 && p.nodes[c].kind !== 'spine') c = parent[c];
   const girth = c >= 0 ? p.nodes[c].radius : Math.max(radius, 0.2) * 2;
-  return kind === 'caudal' ? Math.max(girth, trunkGirth(p) * 0.8) : girth;
+  if (kind === 'caudal') return Math.max(girth, trunkGirth(p) * 0.8);
+  // …and a lesser fin of its kind — a shark's second dorsal, its gene half the first's — at its own share
+  // of the biggest: sized by its trunk link alone, it stood 0.6–0.8 as tall as the first
+  return girth * Math.min(1, radius / leadFin(p, kind, radius));
+}
+
+/** the biggest fin of this kind on the body, by its node's radius (its gene's size) */
+function leadFin(p: Phenotype, kind: FinKind, radius: number): number {
+  let lead = radius;
+  for (const n of p.nodes) {
+    if (n.terminal !== 'fin' || n.part?.kind !== 'fin') continue;
+    const aim = v3(0, 0, 1).applyQuaternion(new THREE.Quaternion(n.quat[0], n.quat[1], n.quat[2], n.quat[3]));
+    if (finKindOf(aim, n.part.kind) === kind) lead = Math.max(lead, n.radius);
+  }
+  return lead;
 }
 
 /** a fin as the mesh data lists it (see meshData's MeshFeature) */

@@ -55,6 +55,9 @@ export interface FieldPrims {
   ec: Float64Array;
   eq: Float64Array;
   er: Float64Array;
+  /** each ellipsoid's blend into the union, × k: 1, or its chain's own (CHAIN_BLEND) for a swimmer's snout
+   *  tip (absent: all 1) */
+  eb?: Float64Array;
   ne: number;
   /** CHAINS: each cone's chain id (the trunk, the neck, the head, each limb, the tail), and the cone
    *  order fieldAt walks (chain by chain). Cones of one chain meet at shared nodes of equal radius and
@@ -348,6 +351,18 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   // …and the webs between a ring of webbed arms (an octopus's), each panel an ellipsoid too
   const webs = edges ? webPanels(p, include) : [];
   const ne = shaped.length + webs.length;
+  // A swimmer's snout TIP — its chain's front end — keeps its ellipsoid only for the length it adds to the
+  // cones' end cap: the two surfaces coincide round the tip, and smooth-unioned at the full k they swelled
+  // it by k/4 (a shark's last link a third fatter than its own: a dolphin's bottle-nose). It blends as its
+  // own chain does.
+  const eb = new Float64Array(ne).fill(1);
+  const swimmer = p.nodes.some((n) => n.part?.kind === 'fin') && !p.nodes.some((n) => n.part?.kind === 'leg');
+  if (swimmer) {
+    shaped.forEach((n, i) => {
+      const j = p.nodes.indexOf(n);
+      if (up[j] >= 0 && down[j] === -1) eb[i] = CHAIN_BLEND;
+    });
+  }
   const ec = new Float64Array(ne * 3);
   const eq = new Float64Array(ne * 4);
   const er = new Float64Array(ne * 3);
@@ -406,7 +421,7 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   return {
     ax: f64(ax), ay: f64(ay), az: f64(az), bx: f64(bx), by: f64(by), bz: f64(bz), pr, ra: f64(ra), rb: f64(rb), cx, cy, cz, hl,
     an, aq, sx0: f64(sx0), sy0: f64(sy0), sx1: f64(sx1), sy1: f64(sy1), nc, ia: Int32Array.from(ia), ib: Int32Array.from(ib),
-    ch, ord, ec, eq, er, ne, k: 0, excess,
+    ch, ord, ec, eq, er, eb, ne, k: 0, excess,
     meanR: girth / Math.max(edges ? edges.length : included.size, 1),
   };
 }
@@ -428,7 +443,7 @@ export function withoutCones(f: FieldPrims, keep: (m: number) => boolean): Field
     sx0: pick(f.sx0), sy0: pick(f.sy0), sx1: pick(f.sx1), sy1: pick(f.sy1),
     nc, ia: Int32Array.from(idx, (m) => f.ia[m]), ib: Int32Array.from(idx, (m) => f.ib[m]),
     ch, ord: Int32Array.from({ length: nc }, (_, i) => i).sort((a, b) => ch[a] - ch[b] || a - b),
-    ec: f.ec, eq: f.eq, er: f.er, ne: f.ne, k: f.k, excess: f.excess, meanR: f.meanR,
+    ec: f.ec, eq: f.eq, er: f.er, eb: f.eb, ne: f.ne, k: f.k, excess: f.excess, meanR: f.meanR,
   };
 }
 
@@ -775,7 +790,7 @@ export function fieldAt(f: FieldPrims, x: number, y: number, z: number): number 
     const qx = SCRATCH[0] / rx, qy = SCRATCH[1] / ry, qz = SCRATCH[2] / rz;
     const minR = Math.min(rx, ry, rz);
     const val = (Math.sqrt(qx * qx + qy * qy + qz * qz) - 1) * minR;
-    d = d === Infinity ? val : smin(val, d, f.k);
+    d = d === Infinity ? val : smin(val, d, f.k * (f.eb?.[m] ?? 1));
   }
   return d;
 }

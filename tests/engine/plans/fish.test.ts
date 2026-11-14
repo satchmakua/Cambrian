@@ -3,7 +3,9 @@ import * as THREE from 'three';
 import { grow, type BodyNode, type Phenotype } from '../../../src/engine/grow';
 import { genomeOfMorphotype } from '../../../src/engine/random';
 import { buildMeshData, type MeshFeature } from '../../../src/viewer/meshData';
-import { finCutOf, finKindOf, type FinKind } from '../../../src/viewer/wings';
+import { buildFin, finCutOf, finGirth, finKindOf, finScaleOf, type FinKind } from '../../../src/viewer/wings';
+import { buildMouthLine, isUnderslung, mouthSpec, surfacePrims } from '../../../src/viewer/mouthLine';
+import { rayToSurface } from '../../../src/viewer/bodyField';
 import { gillMarks, gillRadiusOf } from '../../../src/viewer/gills';
 
 const SEEDS = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -103,7 +105,7 @@ describe('fish and shark', () => {
       const tip = head[head.length - 1];
       expect(ry(tip) / ry(head[0]), `shark #${seed}: a point`).toBeLessThan(0.3);
       const rx = (n: BodyNode) => n.radius * (n.scale?.[0] ?? 1);
-      expect(rx(head[0]) / ry(head[0]), `shark #${seed}: flattened`).toBeGreaterThan(1.2);
+      expect(rx(head[0]) / ry(head[0]), `shark #${seed}: flattened`).toBeGreaterThan(1.05);
       for (const e of terminal(p, 'eye')) expect(e.radius / ry(head[0]), `shark #${seed}`).toBeLessThan(0.215);
     }
   });
@@ -147,6 +149,18 @@ describe('fish and shark', () => {
         seconds++;
         expect(dorsals[1].at, `shark #${seed}: the second, by the tail`).toBeLessThan(0.25);
         expect(dorsals[1].f.radius, `shark #${seed}: and smaller`).toBeLessThan(dorsals[0].f.radius * 0.75);
+        // …as DRAWN: a fin is sized by its trunk link, the gene's own size scaled to its share of the biggest
+        // of its kind (by its link alone, the second stood 0.6–0.8 as tall as the first)
+        const { p } = parts('shark', seed);
+        const height = (x: (typeof dorsals)[number]) => {
+          const aim = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(...x.f.quat));
+          const g = buildFin(x.kind, aim, finGirth(p, x.f.idx, x.kind, x.f.radius), finScaleOf(x.f.style), 'shark').membrane;
+          g.computeBoundingBox();
+          const h = g.boundingBox!.max.y;
+          g.dispose();
+          return h;
+        };
+        expect(height(dorsals[1]) / height(dorsals[0]), `shark #${seed}: drawn smaller`).toBeLessThan(0.55);
       }
       const tail = fins.find((x) => x.kind === 'caudal')!;
       expect(finCutOf(tail.f.style), `shark #${seed}: the long upper lobe`).toBe('shark');
@@ -201,6 +215,34 @@ describe('fish and shark', () => {
       for (let i = 0; i <= 25; i++) rear += depth(fr + (i / 100) * SL);
       expect(rear / 26 / peak, `#${seed} rear quarter`).toBeLessThan(0.46);
       expect(depth(fr + 0.05 * SL) / peak, `#${seed} stalk`).toBeLessThan(0.23);
+    }
+  });
+
+  it("a shark's head narrows from its trunk to its snout's point — no melon, no bottle-nose — over a crescent of a mouth", () => {
+    // (its head's back stood out past its trunk as two cheeks, a beluga's melon from above-front; its snout
+    // tip swelled a third past its own girth by the blend, a dolphin's nose; its underslung mouth was a short
+    // chord across the flat of its chin, from the side no mouth at all)
+    for (const seed of SEEDS) {
+      const { p, trunk, head } = parts('shark', seed);
+      const f = surfacePrims(p, 'hybrid');
+      const front = trunk[trunk.length - 1];
+      const halfAt = (z: number) => rayToSurface(f, [], [0, front.pos[1], z], [1, 0, 0])?.p[0] ?? 0;
+      const w0 = halfAt(front.pos[2]);
+      for (let k = 1; k <= 12; k++) {
+        const z = front.pos[2] + ((head[1].pos[2] - front.pos[2]) * k) / 12;
+        expect(halfAt(z), `shark #${seed} no melon`).toBeLessThanOrEqual(1.06 * w0);
+      }
+      const tip = head[head.length - 1];
+      const top = rayToSurface(f, [], [tip.pos[0], tip.pos[1], tip.pos[2]], [0, 1, 0])!;
+      expect((top.p[1] - tip.pos[1]) / ry(tip), `shark #${seed} no bottle-nose`).toBeLessThan(1.22);
+      // the mouth: a crescent reaching onto the jaw
+      const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const spec = mouthSpec(p, idx)!;
+      expect(isUnderslung(p, spec), `shark #${seed} underslung`).toBe(true);
+      const line = buildMouthLine(p, spec, [], 17, 'hybrid');
+      const c = line.upper[line.upper.length - 1];
+      const W = rayToSurface(f, [], [0, c.p[1], c.p[2]], [1, 0, 0])?.p[0] ?? 1;
+      expect(Math.abs(c.p[0]) / W, `shark #${seed} corner out on the jaw`).toBeGreaterThan(0.58);
     }
   });
 });

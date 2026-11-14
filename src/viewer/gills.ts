@@ -32,9 +32,10 @@ const PROUD = 0.35;
 
 /** a gill cover's radius, at the least, ×the half-depth of the body link it lies on */
 export const COVER_OF_DEPTH = 0.4;
-/** …and a shark's slits: each runs about a third of the flank's depth. (The size of the gill part,
- *  five creases a twelfth of it long, they were a smudge in front of the fin: no shark at all.) */
-export const SLITS_OF_DEPTH = 0.6;
+/** …and a shark's slits: each runs about half the flank's depth. (The size of the gill part, five creases
+ *  a twelfth of it long, they were a smudge in front of the fin: no shark at all; at a third of it, five
+ *  tiny scratches.) */
+export const SLITS_OF_DEPTH = 0.95;
 
 /**
  * How big a flush gill is drawn. Bars are the size of the gill part itself. A gill COVER is the plate

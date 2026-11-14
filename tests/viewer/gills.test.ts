@@ -87,8 +87,8 @@ describe('gills that lie in the skin', () => {
         const r = gillRadiusOf(sh, f.idx, 'slits', Math.max(f.radius, 0.06));
         const lines = gillMarks(sh, f.idx, 'hybrid', 'slits', r).lines;
         const tall = Math.max(...lines.map((l) => Math.max(...l.map((q) => q.y)) - Math.min(...l.map((q) => q.y))));
-        expect(tall / (2 * half), `shark #${seed}`).toBeGreaterThan(0.2);
-        expect(tall / (2 * half), `shark #${seed}`).toBeLessThan(0.45);
+        expect(tall / (2 * half), `shark #${seed}`).toBeGreaterThan(0.38);
+        expect(tall / (2 * half), `shark #${seed}`).toBeLessThan(0.6);
       }
     }
     expect(seen).toBeGreaterThan(12);
