@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M97: a twelfth look, and legs with joints; M96: an eleventh look, and a deer named a deer; M95: thin limbs drawn exact, and a tenth look; M94: an eighth look, harder; M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M98: a thirteenth look — spiders' eyes, snakes' heads, hides that read; M97: a twelfth look, and legs with joints; M96: an eleventh look, and a deer named a deer; M95: thin limbs drawn exact, and a tenth look; M94: an eighth look, harder; M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -55,6 +55,85 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M98 — A thirteenth look: spiders' eyes, snakes' heads, hides that read · 2026-11-14
+
+- **What the twelfth look left**, finished first:
+  - *Goggle eyes past the outline* (bird, hawk, mouse, ape, crystal) — a seated face eye stood as a dome
+    0.3 of its radius out of its skin (a glowing one 0.5), and the far eye's dome showed whole on the
+    outline of a round head. `eyeSeat` now presses a bilateral face eye along the skin's normal, about the
+    skin's mean height round its rim, until it stands at most `EYE_PROUD` 0.12r out; its opening keeps its
+    size, its lids and brow are pressed with it. A bird's far eye past the outline: 194 → 82 px.
+  - *A stuffed sock with a fringe of fuzz* (bear, cat, dog, ape, weasel) — the fur's locks and strands
+    were squeezed along the body's length alone, so the grain ran across a flank's lay, and faint. They
+    follow the coat's own lay now and carry most of the relief.
+  - *A cat's coat* — a spotted cat wore twenty big blobs (a hyena) and a striped one a few broad hoops: its
+    markings now draw 8.5–11 cells a body unit (the gene's bound rises to 12); and on the reddest, palest
+    hues of its range a plain cat was salmon pink, a sphynx: its hue starts at 0.065, its lightness tops at
+    0.6.
+  - *A quilt of flat cells* (dragon, sea star) — the plates covering's cells are low domes 3.6 to a body
+    unit rising from narrow grooves: osteoderms and ossicles, not paving.
+  - *A tortoise's crazy paving* — `smoothSkin shellScutes` lays out the shell's own scutes on its surface
+    (five vertebrals, four costals a side, twenty-four marginals and a nuchal); the material draws their
+    seams, growth rings and domes from their centres (`uScutes`, up to 40).
+  - *Whisker pads on an ape and a bear* — a cat's two round pads are drawn only on a short muzzle with no
+    stop that is not an ape's.
+  - *A glossy pickle* (slug, octopus, some horrors) — the slime covering wears papillae under its wet
+    ripple: smooth thresholded noise laid long along the body, dull and darker between. (Voronoi domes,
+    the first try, creased against each other and caught the light facet by facet: the thirteenth look's
+    "hammered foil".)
+- **A thirteenth look** (same brief, seed 29; its renders were made early in this round, after the
+  slime's first tubercles and before the rest, and framed wider than the twelfth look's, the side panel
+  in view) scored **3.32**: ten plans at 4, twenty-one at 3, none at 2 and no defect at severity 4. Its
+  worst: the spider's eyes as two burn holes, the snake's head a hose end with a speck for an eye, the
+  ape's face a black mask, the wyvern's wings fin-sized frills, the deer a llama, the bear a pig, things
+  dangling between a wyvern's and a dragon's legs, the crystal's balloon head and the octopus's slit eye.
+  Diagnosed in parallel as before (†).
+- From its list:
+  - *An aubergine with antennae* (slug) — `bodyField slugMantle` adds the saddle every slug wears behind
+    its head: an ellipsoid over 0.4–0.84 of its length, standing proud of the back, its rim overhanging
+    the flanks as a lip.
+  - *A disc floating past the tail* (chimera) — a tail claw was drawn as a leg's: a cone stood point-down
+    on the tip's node, its base over the skin. It is a sting run on along the tail's last link (`scutes.ts
+    TAIL_STING`), its base sunk in the tip.
+  - *A two-tone bauble* (urchin) — banded in a second, clashing hue; it is mottled or plain in its own,
+    and a plan that asks for sober markings keeps them on its rare vivid morph too (crocodile, hawk,
+    theropod, dragon, sea star).
+  - *A zip of white beads* (lizard, theropod, dragon, crocodile) — every shut reptile seam carried one
+    row of pegs, multiplied by its length. `shutTeeth` decides by the animal: a lizard's and a snake's
+    teeth lie behind its lip scales; a crocodile's grin is uneven, a band of bigger teeth 0.4 back; a
+    theropod shows ten blades, each its own length; a dragon or a wyvern six fangs at the front.
+  - *Mould, dirt, disease* (frog, insect, spider, mouse, deer, ostrich) — a marking was mixed in at its
+    contrast gene, about half, and a half-blended complementary hue is grey: a marking of another hue is
+    now laid nearly solid (`markWeight`, `MARK_SOLID` 0.9), one of the coat's own hue keeps its gene. A
+    chitin coat's marking hue was any hue every time (teal on an orange spider); like a scaled coat's it
+    is free a fifth of the time, otherwise the coat's own, a flash or umber.
+  - *Scales on the snout only* (lizard, crocodile, theropod, fish) — the scales' only cue was their
+    relief, which fades with the pixel's footprint: shown on a snout facing the camera, gone on the flank,
+    a hard border between. Each scale now wears its own shade (±9%), which holds out twice as far.
+  - *A hose end with a speck for an eye* (snake) † — on a flattened section the field under-reads across
+    its wide axis, so an eye on the side of a flat skull sank by its width-to-height: a snake's a whole
+    radius, only a slit's tip showing (and every lizard's, dragon's, cat's, hawk's eye a third too deep).
+    Eyes are seated by the skin along their aim now (a ray in from outside, bisected). Its head is a spade
+    1.6–2.3 times its neck's width (`headSize` from 0.95; a slitherer's trunk draws in by `NECK_PINCH` over
+    its last three links); its eye is open and round under a clear scale, its iris apart from its net; its
+    shut seam is sunk a fifth of its tube, not half (it lay wholly under the skin).
+  - *Burn holes for eyes* (spider) † — its six or eight eyes were seated as face eyes, two to three a side
+    merged into one pressed blob with chitin lids. They are a cluster of small glossy lenses on the front
+    of the carapace (`OCELLI`, the front pair the biggest), seated proud and never pressed (`OCELLUS_DEPTH`);
+    its chelicerae are short swollen bases angled forward, not tusks hanging plumb; its legs taper from a
+    stout femur to a fine tarsus and sweep toward their own end of the body; its coat is a darker brown,
+    marked in its own hue or umber.
+- **Tests:** `eyeSeat.test.ts › no seated face eye stands more than EYE_PROUD out`, `› a snake's eye shows`,
+  `creatureMaterial.test.ts › a coat's grain runs along its lay`, `› a plated hide is domed scutes`, `› a
+  slime hide wears soft papillae`, `› a marking of another hue is laid solid`, `› every scale wears its own
+  shade`, `felid.test.ts › fine, dense markings`, `› never a pale salmon pink`, `shell.test.ts` (the scutes),
+  `nose.test.ts › whisker pads`, `bodyField.test.ts › a slug wears a mantle`, `wings.test.ts › a sting`,
+  `urchin.test.ts › one colour`, `random.test.ts › an insect's, a spider's or a crab's markings`,
+  `jawed.test.ts › only the reptiles that show their teeth`, `› a shut reptile's seam shows`,
+  `serpent.test.ts › a spade … on a neck`, `iris.test.ts › apart from the hide`, `› open round under a clear
+  scale`, `arachnid.test.ts › a cluster of distinct glossy lenses`, `› its legs taper`, `› a brown coat`,
+  `mandibles.test.ts › a spider's chelicerae`.
 
 ## M97 — A twelfth look, and legs with joints · 2026-11-14
 
