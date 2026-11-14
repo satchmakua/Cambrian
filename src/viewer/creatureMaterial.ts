@@ -381,6 +381,10 @@ export function makeCreatureMaterial(
           skin *= mix(0.78, 1.0, smoothstep(-0.24, 0.2, gM));
           // grime in the recesses (scale seams, plate grooves, fur partings)
           skin *= 1.0 - 0.22 * smoothstep(0.35, 0.85, gH);
+          // each scale its own shade, a little lighter or darker than the next: the scaled hide still reads
+          // where its relief has faded below a pixel (all one tone, a lizard's body was smooth glossy vinyl
+          // behind a scaled snout)
+          if (uCover == 1) skin *= 1.0 + (gCell - 0.5) * SCALE_TONE * aaW(17.0 * 0.5);
           // baked crease occlusion (limb roots, under the jaw, between toes) — a soft multiply
           skin *= mix(0.42, 1.0, vAO);
           // carved mouth interior (mouth overhaul): covering/pattern give way to dark wet gum-flesh,
@@ -564,6 +568,7 @@ float gFine = 0.0; // 1 where those are measured (else the bump takes the deriva
 float gFacet = 0.5; // a crystal's facet under this pixel: its own shade, 0..1 (see surfaceHeight)
 float gSeam = 0.0;  // … and how near this pixel is to that facet's cut edge, 0..1
 vec3 gLay = vec3(0.0, 0.0, -1.0); // which way a feather lies on the skin here (body space, unit; see scallops)
+float gCell = 0.5; // the scallop that shows here (0..1, one value per scale or feather; see scallops)
 vec3 gNb = vec3(0.0, 1.0, 0.0);   // … and the skin's own normal there (body space, unit)
 
 // ANTI-ALIASING. A procedural texture aliases into "TV static" once its detail is finer than a pixel:
@@ -681,6 +686,7 @@ vec4 cellNear(vec3 p, out float f2) {
 // a reticulate net's cells (× the pattern's scale: under 0.5, bigger patches) and its rims' half-width
 // (in the cells' edge distance)
 const float RETIC_CELL = 0.38;
+const float SCALE_TONE = 0.18;     // how far one scale's shade strays from the next (±half this)
 const float FUR_LOCKS = 10.0;      // a coat's locks across (per body unit), laid along its lay…
 const float FUR_STRANDS = 26.0;    // …and the strands in them
 const float PLATE_CELL = 3.6;      // a plated hide's scutes across (per body unit)…
@@ -789,6 +795,7 @@ float scallops(vec3 q, vec3 lay, vec3 nrm, float fw, out float shaft) {
   float top = 0.0;
   float ta = 0.0;
   vec3 td = vec3(0.0);
+  vec3 tc = vec3(0.0);
   for (int k = -1; k <= 1; k++)
   for (int j = -1; j <= 1; j++)
   for (int i = -1; i <= 1; i++) {
@@ -799,8 +806,10 @@ float scallops(vec3 q, vec3 lay, vec3 nrm, float fw, out float shaft) {
     // across² + (along / 1.15)²: a scallop is a little longer than it is wide
     float ell = sqrt(max(dot(d, d) - along * along * 0.2439, 0.0));
     float h = (0.5 + 0.51 * along) * (1.0 - smoothstep(0.85 - soft, 0.85, ell));
-    if (h > top) { top = h; ta = along; td = d; }
+    if (h > top) { top = h; ta = along; td = d; tc = ip + g; }
   }
+  // (which scallop shows: each its own shade — see gCell)
+  gCell = hash13(tc + 71.0);
   // the top scallop's midline, measured in the skin: a feather's shaft
   vec3 side = td - lay * ta;
   side -= nrm * dot(side, nrm);

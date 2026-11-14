@@ -489,6 +489,20 @@ describe('creature material shader injection', () => {
     expect(branch).toContain('return clamp(0.72 - dome * 0.42, 0.0, 1.0);');
   });
 
+  it('every scale wears its own shade, so a scaled hide reads where its relief has faded below a pixel', () => {
+    // (all one tone, a lizard's body was smooth glossy vinyl behind a scaled snout: the relief survives only
+    // where the scales are several pixels across)
+    const f = compileShaderStrings('scales').fragmentShader;
+    // the scallop that shows names its cell…
+    const sc = f.indexOf('float scallops(');
+    expect(f.indexOf('gCell = hash13(tc + 71.0);', sc)).toBeGreaterThan(sc);
+    // …and a scaled coat takes a shade from it, faded only where the scales are sub-pixel
+    expect(f).toContain('if (uCover == 1) skin *= 1.0 + (gCell - 0.5) * SCALE_TONE * aaW(17.0 * 0.5);');
+    const tone = Number(/const float SCALE_TONE = ([0-9.]+);/.exec(f)![1]);
+    expect(tone).toBeGreaterThan(0.08);
+    expect(tone).toBeLessThan(0.3);
+  });
+
   it("a marking of another hue is laid solid; one of the coat's own hue keeps its contrast gene", () => {
     // (a complement half-blended into a coat is grey: a frog's pink spots on green, a spider's teal on
     // orange, were washed-out grey patches — mould)
