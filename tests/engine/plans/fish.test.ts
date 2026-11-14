@@ -34,6 +34,18 @@ function parts(id: 'fish' | 'shark', seed: number) {
 const terminal = (p: Phenotype, t: string) => p.nodes.filter((n) => n.terminal === t);
 
 describe('fish and shark', () => {
+  it("a shark's body narrows smoothly into its tail stock — no blunt butt with the fin pinned on by a rod", () => {
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'shark'));
+      const parent = new Map<number, number>();
+      for (const [a, b] of p.edges) parent.set(b, a);
+      const rootIdx = p.nodes.findIndex((n, i) => n.part?.kind === 'tail' && p.nodes[parent.get(i)!]?.kind === 'spine');
+      expect(rootIdx, `#${seed}`).toBeGreaterThanOrEqual(0);
+      const rump = p.nodes[parent.get(rootIdx)!];
+      // the tail leaves the rump at most of its girth (it was under half)
+      expect(p.nodes[rootIdx].radius / rump.radius, `#${seed}`).toBeGreaterThan(0.65);
+    }
+  });
   it("the head runs on from the body: no pinch behind it, and a level snout that narrows to the mouth", () => {
     // (a shark's head began at half the depth of its shoulders — a neck, then a melon that drooped
     // into a beak: a dolphin's; a fish's snout hung, with the mouth under it: a seal's)
