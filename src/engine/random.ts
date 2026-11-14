@@ -322,7 +322,9 @@ const MORPHOTYPES: readonly Morpho[] = [
   { id: 'slime', cluster: 'uncanny', weight: 0.7, girth: [0.42, 0.6], repeat: [6, 6], height: [0.5, 0.62], elong: [1.15, 1.3], rear: [-0.012, 0.004], taper: [1.17, 1.21], legPairs: [0], stalkEyes: 1, stalkLen: [0.62, 0.74], stalkSegs: 3, eyeEl: [0.6, 0.75], eyeAz: [1.22, 1.38], mouthStyle: [0.01, 0.05], mouthSize: [0.45, 0.55], tail: 0.0, head: 0.0, eyeStyle: [0.05, 0.25], covering: ['slime'], pattern: ['gradient', 'mottle'], sheen: [0.8, 1.0], hue: [0.25, 0.7], sat: [0.5, 0.9], light: [0.45, 0.7] },
   // (a single-node body shows its depth only as the z-stretch past the stride clamp's 1.4: elong 1.4 is
   // as deep as it is wide — at 1 an urchin's test was a fifth narrower front to back than across)
-  { id: 'urchin', cluster: 'uncanny', weight: 0.6, symmetry: 'radial', radialCount: [8, 12], girth: [0.45, 0.7], repeat: [1, 1], height: [0.6, 0.7], elong: [1.38, 1.42], eyeSize: 0.45, eyeEl: [-1.3, -1.15], eyeStyle: [0.22, 0.36], mouthStyle: [0.07, 0.12], covering: ['chitin'], pattern: ['mottle', 'bands'], hue: [0.6, 0.95], sat: [0.4, 0.8] },
+  // (one colour, mottled in its own hue: banded across it in a second, clashing one, a small round test was a
+  // Christmas bauble, a billiard ball, steel-blue on one side and orange on the other)
+  { id: 'urchin', cluster: 'uncanny', weight: 0.6, symmetry: 'radial', radialCount: [8, 12], girth: [0.45, 0.7], repeat: [1, 1], height: [0.6, 0.7], elong: [1.38, 1.42], eyeSize: 0.45, eyeEl: [-1.3, -1.15], eyeStyle: [0.22, 0.36], mouthStyle: [0.07, 0.12], covering: ['chitin'], pattern: ['mottle', 'plain'], soberMarks: true, hue: [0.6, 0.95], sat: [0.4, 0.8] },
   // a sea star: a flat disc and five plump arms tapering to round tips; no face on top — its small
   // eyes look down from the rim of the disc and its mouth is underneath (on four arms it was a throwing
   // star; a crown of eyes on the disc, with a maw and a feeding tube among them, a face pasted on it)
@@ -785,8 +787,9 @@ function scaffold(rng: Rng, seed: number, symmetry: Symmetry, radialCount: numbe
   const sat = morph ? (pick < 0.5 ? 0.12 : 0.14) : satDraw;
   const light = morph ? (pick < 0.5 ? 0.2 : 0.8) : lightDraw;
   // (a plan that asks for sober markings gets them, uncanny or not: a sea star's navy polka dots on
-  // orange were paint drops, a dragon's purple bands on green bandages)
-  const hueB = markingHue(hueA, rng(), m.soberMarks ? 'fur' : cov.type, (exotic && !morph) || (m.cluster === 'uncanny' && !m.soberMarks));
+  // orange were paint drops, a dragon's purple bands on green bandages — and its rare vivid morph keeps
+  // them too: an urchin of electric blue mottled in red was a toy)
+  const hueB = markingHue(hueA, rng(), m.soberMarks ? 'fur' : cov.type, !m.soberMarks && ((exotic && !morph) || m.cluster === 'uncanny'));
   return { version: GENOME_VERSION, seed, symmetry, radialCount, coherence, covering: cov, palette: { hueA, hueB, sat, light }, body };
 }
 

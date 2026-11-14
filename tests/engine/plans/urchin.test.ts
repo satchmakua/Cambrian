@@ -131,4 +131,21 @@ describe('urchin', () => {
     const star = grow(g);
     expect(quillNodes(star).size).toBe(0);
   });
+
+  it("wears one colour, mottled in its own hue — never banded across in a second, clashing one", () => {
+    // (banded across in a complementary hue, a small round test was a Christmas bauble, a billiard ball:
+    // steel-blue on one side, orange on the other)
+    const gap = (a: number, b: number) => Math.min(Math.abs(a - b), 1 - Math.abs(a - b));
+    let kin = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const g = genomeOfMorphotype(seed, 'urchin');
+      expect(['mottle', 'plain'], `#${seed}`).toContain(g.covering.pattern);
+      // (a rare vivid morph keeps a hue of its own; the rest mark in their own hue, or umber)
+      if (g.palette.hueA < 0.6 || g.palette.hueA > 0.95) continue;
+      const umber = g.palette.hueB >= 0.05 && g.palette.hueB <= 0.11;
+      expect(gap(g.palette.hueA, g.palette.hueB) <= 0.07 || umber, `#${seed} markings in its own hue`).toBe(true);
+      kin++;
+    }
+    expect(kin).toBeGreaterThan(25);
+  });
 });
