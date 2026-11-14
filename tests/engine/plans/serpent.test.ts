@@ -38,7 +38,8 @@ describe('serpent', () => {
     for (const seed of SEEDS) {
       const { trunk, head } = snake(seed);
       expect(rx(head[0]) / ry(head[0]), `#${seed} flat`).toBeGreaterThan(1.35);
-      expect(rx(head[0]) / rx(trunk[trunk.length - 1]), `#${seed} a head, wider than the neck`).toBeGreaterThan(0.88);
+      // (barely wider than its neck, the front of a snake was the blunt end of a worm)
+      expect(rx(head[0]) / rx(trunk[trunk.length - 1]), `#${seed} a head, wider than the neck`).toBeGreaterThan(1.12);
     }
   });
 
