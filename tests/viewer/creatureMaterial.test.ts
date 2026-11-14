@@ -459,6 +459,20 @@ describe('creature material shader injection', () => {
     expect(f).toContain('float shade = mix(0.62, 1.12, uShellH) * (0.93 + 0.14 * hash13(cid + 9.0));');
   });
 
+  it("a coat's grain runs along its lay — back along the body, down a flank — and reads on the body, not only at its outline", () => {
+    // (squeezed along the body's length alone, and faint, the grain ran across a flank's lay: a coat seen
+    // whole was a smooth stuffed sock with a fringe of fuzz round its outline)
+    const f = compileShaderStrings('fur').fragmentShader;
+    const i = f.indexOf('if (cover == 2) {');
+    expect(i).toBeGreaterThan(0);
+    const branch = f.slice(i, f.indexOf('if (cover == 3) {', i));
+    expect(branch).toContain('fbmA(q - gLay * dot(q, gLay) * 0.75, FUR_LOCKS)');
+    expect(branch).toContain('fbmA(s - gLay * dot(s, gLay) * 0.9, FUR_STRANDS)');
+    // the locks and strands carry most of the coat's grain, not the broad clumps
+    const w = /return clumps \* ([0-9.]+) \+ locks \* ([0-9.]+) \+ streak \* ([0-9.]+);/.exec(branch)!;
+    expect(Number(w[2]) + Number(w[3])).toBeGreaterThan(0.7);
+  });
+
   it('a slime hide wears long tubercles between soft grooves, under its wet ripple — not a smooth glossy pickle', () => {
     // (a faint ripple alone was a pickle in a smear of highlight; flat-topped cells between dark seams were
     // crazy paving)

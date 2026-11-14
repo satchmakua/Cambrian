@@ -648,6 +648,8 @@ vec4 cellNear(vec3 p, out float f2) {
 // a reticulate net's cells (× the pattern's scale: under 0.5, bigger patches) and its rims' half-width
 // (in the cells' edge distance)
 const float RETIC_CELL = 0.38;
+const float FUR_LOCKS = 10.0;      // a coat's locks across (per body unit), laid along its lay…
+const float FUR_STRANDS = 26.0;    // …and the strands in them
 const float SLIME_CELL = 9.0;      // a slime hide's tubercles across (per body unit)…
 const float SLIME_LONG = 0.4;      // …fewer along the body: each two and a half times as long as wide
 const float SLIME_TUBERCLE = 0.012; // …and how high each stands (body units)
@@ -802,14 +804,19 @@ float surfaceHeight(vec3 p, int cover) {
     gHb = lay * 0.006;
     return clamp(0.8 - lay * 0.55, 0.0, 1.0);
   }
-  if (cover == 2) {                                             // fur — clumped pile, locks, streaks
+  if (cover == 2) {                                             // fur — clumped pile, locks laid along its lay
+    // Locks of hair laid along the coat's lay (gLay: back along the body, down a flank and a chest), and
+    // the strands within them: the grain that still reads once the strands are smaller than a pixel (the
+    // shells fade out there and the coat carries the look). (Squeezed along the body's length alone, and
+    // faint, the grain ran across a flank's lay: a coat seen whole was a smooth stuffed sock with a
+    // fringe of fuzz round its outline.)
     float clumps = fbmA(vec3(p.x * 5.0, p.y * 5.0, p.z * 2.4), 5.0);
-    // locks of hair laid back along the body: the grain that still reads once the strands are
-    // smaller than a pixel (the shells fade out there and the coat carries the look)
-    float locks = fbmA(vec3(p.x * 10.0, p.y * 10.0, p.z * 2.2), 10.0);
-    float streak = fbmA(vec3(p.x * 22.0, p.y * 22.0, p.z * 5.0), 22.0);
-    gHb = clumps * 0.018 + locks * 0.007 + streak * 0.004;
-    return clumps * 0.4 + locks * 0.32 + streak * 0.28;
+    vec3 q = p * FUR_LOCKS;
+    float locks = fbmA(q - gLay * dot(q, gLay) * 0.75, FUR_LOCKS);
+    vec3 s = p * FUR_STRANDS;
+    float streak = fbmA(s - gLay * dot(s, gLay) * 0.9, FUR_STRANDS);
+    gHb = clumps * 0.016 + locks * 0.011 + streak * 0.006;
+    return clumps * 0.22 + locks * 0.38 + streak * 0.4;
   }
   if (cover == 3) {                                             // feathers — imbricated, laid back
     // Contour feathers: overlapping scallops laid along the body (see scallops), each a little under
