@@ -128,4 +128,28 @@ describe('eye seats', () => {
     }
     expect(n).toBeGreaterThanOrEqual(20);
   });
+
+  it("an alien's glowing eye is a low dome set in its head too — not a goggle over the outline", () => {
+    // (unseated, a crystal beast's glowing eye stood on its grown node, its centre a fifth of a radius out
+    // of the skin: more than half the ball stood proud, and the far one crossed the head's outline)
+    let n = 0;
+    for (const id of ['crystalline', 'horror']) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const prims = surfacePrims(p, 'hybrid');
+        for (const f of buildMeshData(p).features) {
+          if (f.type !== 'eye' || eyeVariant(f.style) !== 'glowing') continue;
+          const e = p.edges.find(([, b]) => b === f.idx);
+          if (!e || p.nodes[e[0]].kind !== 'spine') continue; // (on the face, not up a stalk)
+          const r = Math.max(f.radius, 0.06);
+          const c = eyeSeat(p, f.idx, f.quat, r).centre!;
+          const d = fieldAt(prims, c[0], c[1], c[2]) / r;
+          expect(d, `${id} #${seed}`).toBeLessThan(-0.3);
+          expect(d, `${id} #${seed}`).toBeGreaterThan(-0.6);
+          n++;
+        }
+      }
+    }
+    expect(n).toBeGreaterThanOrEqual(20);
+  });
 });

@@ -38,7 +38,7 @@ import { apeFootGeometry, fistGeometry } from './apeLimbs';
 import { clawGeometry, wristQuat } from './claw';
 import { hornGeometry } from './horn';
 import { shardGeometry } from './shards';
-import { facetKeep, facetSizeOf, facetSkin } from './facets';
+import { gemGeometry } from './facets';
 import { quillGeometry } from './quills';
 import { whiskerFan } from './whiskers';
 import { frillGeometry, frillPlan } from './frill';
@@ -131,8 +131,8 @@ export const skinKey = (full: boolean, quality: SkinQuality, carved = true) => `
 
 function buildSkin(phenotype: Phenotype, full: boolean, carves: readonly Carve[], quality: SkinQuality): THREE.BufferGeometry {
   const g = buildSmoothGeometry(phenotype, full, carves, quality);
-  // a crystal hide is cut into flat faces, outline and all (facets.ts)
-  if (phenotype.genomeRef.covering.type === 'crystal') facetSkin(g, facetSizeOf(phenotype), phenotype.genomeRef.seed, facetKeep(phenotype, g));
+  // a crystal trunk is one cut stone over its (uncut) skin, drawn beside it (facets.ts gemGeometry)
+  if (phenotype.genomeRef.covering.type === 'crystal') g.userData.gem = gemGeometry(phenotype, g);
   // smooth mesh is untransformed, so its local position *is* the body-space coord (M17)
   g.setAttribute('aBodyPos', (g.getAttribute('position') as THREE.BufferAttribute).clone());
   bakeLegs(g, phenotype);
@@ -519,6 +519,16 @@ export function CreatureMesh({
     return { bone: par >= 0 ? rig.bones[par] : rig.root, at };
   }, [rig, shellGeo, phenotype]);
 
+  // a crystal's cut stone rides the trunk's middle bone, as a turtle's shell rides its own (rigid: the
+  // trunk bends little, and the stone stands a tenth of a unit and more off the skin it covers)
+  const gemGeo = showSmooth ? ((smoothGeo?.userData.gem ?? null) as THREE.BufferGeometry | null) : null;
+  const gemMount = useMemo(() => {
+    if (!rig || !gemGeo) return null;
+    const trunk = phenotype.nodes.map((n, i) => (n.kind === 'spine' && (n.segment ?? 0) === 0 ? i : -1)).filter((i) => i >= 0);
+    const mid = trunk[Math.floor(trunk.length / 2)];
+    return { bone: rig.bones[mid] ?? rig.root, at: phenotype.nodes[mid].pos };
+  }, [rig, gemGeo, phenotype]);
+
   // an urchin's quills, one smooth cone each, root to point — all of them one mesh, kept at every
   // distance (they are its outline: without them it was a bare ball), riding the trunk
   // (dark at the root, paling toward the point — toward the coat's own light — each its own shade)
@@ -569,7 +579,7 @@ export function CreatureMesh({
         footColor={footColor}
         finColor={finColor}
         irisColor={irisColor}
-        skin={bodyMat}
+        skin={skinMat}
         phenotype={phenotype}
         carves={showSmooth ? carves : NO_CARVES}
         recessed={showSmooth && carves.length > 0}
@@ -602,6 +612,11 @@ export function CreatureMesh({
             <mesh geometry={shellGeo} material={shellMat} position={[-shellMount.at[0], -shellMount.at[1], -shellMount.at[2]]} castShadow />,
             shellMount.bone,
           )}
+        {gemGeo && gemMount &&
+          createPortal(
+            <mesh geometry={gemGeo} material={skinMat} position={[-gemMount.at[0], -gemMount.at[1], -gemMount.at[2]]} castShadow receiveShadow />,
+            gemMount.bone,
+          )}
         {featureNodes}
         {scuteNodes}
         {quillNode}
@@ -615,6 +630,7 @@ export function CreatureMesh({
         // M15: a single welded organic surface replaces the capsule kit
         <>
           <mesh geometry={smoothGeo} material={skinMat} castShadow receiveShadow />
+          {gemGeo && <mesh geometry={gemGeo} material={skinMat} castShadow receiveShadow />}
           {furMats.map((m, i) => (
             <mesh key={`fur${i}`} geometry={smoothGeo} material={m} receiveShadow />
           ))}
@@ -986,9 +1002,10 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   const frogEye = useMemo(() => (v === 'round' || v === 'beady') && onFace && !!phenotype && bulgingEye(phenotype, qRotateV(f.quat, [0, 0, 1])), [v, onFace, phenotype, f.quat]);
   const frogIris = useMemo(() => FROG_IRIS[Math.floor(unitHash(seed, 0xf20) * FROG_IRIS.length)], [seed]);
   const fishIris = useMemo(() => (sharkEye ? SHARK_IRIS : FISH_IRIS)[Math.floor(unitHash(seed, 0xf15) * (sharkEye ? SHARK_IRIS : FISH_IRIS).length)], [seed, sharkEye]);
-  // (an insect's compound eye is seated too: a low dome in the side of its head — see COMPOUND_DEPTH)
-  const seated = vertebrate || v === 'compound';
-  const seat = useMemo(() => (seated && onFace && phenotype ? eyeSeat(phenotype, f.idx, f.quat, r) : { quat: f.quat, sink: 0, centre: null }), [seated, onFace, phenotype, f.idx, f.quat, r]);
+  // Every eye on the face is seated (eyeSeat) — an insect's compound eye and an alien's glowing one as low
+  // domes in the head (COMPOUND_DEPTH): on its grown node, more than half the ball stood out of the head, a
+  // marble bolted on, a goggle over the outline.
+  const seat = useMemo(() => (onFace && phenotype ? eyeSeat(phenotype, f.idx, f.quat, r) : { quat: f.quat, sink: 0, centre: null }), [onFace, phenotype, f.idx, f.quat, r]);
   const sink = seat.sink;
   // the ball takes the iris's own hue, deep — a brown ball behind a green or blue iris read as a bruise
   const ballColor = useMemo(() => new THREE.Color(iris).multiplyScalar(0.16).lerp(new THREE.Color(0x1c120e), 0.5).getHex(), [iris]);
@@ -1015,7 +1032,12 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   // a glowing eye sits in a rim of the hide; an insect's compound eye needs none
   const rim = useMemo(() => (v === 'glowing' && skin && origin ? rimGeometry(r, seat.quat, origin) : null), [v, skin, origin, r, seat.quat]);
   useEffect(() => () => rim?.dispose(), [rim]);
-  const glow = useMemo(() => GLOW[Math.floor(unitHash(seed, 0x61c) * GLOW.length)], [seed]);
+  // (a crystal's eyes are its own stone, deeper, lit from within: a cartoon violet iris in a blue stone was
+  // a toy's, and paled toward white it was a pair of googly eyes)
+  const glow = useMemo(
+    () => (phenotype?.genomeRef.covering.type === 'crystal' ? coatMain(phenotype.genomeRef.palette).multiplyScalar(0.7).getHex() : GLOW[Math.floor(unitHash(seed, 0x61c) * GLOW.length)]),
+    [seed, phenotype],
+  );
   // an ape's brow ridge over the eye (face.ts) — skin, in the body frame (it does not turn with the ball)
   const brow = useMemo(() => {
     if (!lidded || !skin || !origin || !phenotype) return null;
@@ -1535,11 +1557,14 @@ function Shards({ f, palette, seed }: { f: MeshFeature; palette: Phenotype['geno
   const r = Math.max(f.radius, 0.06);
   const geo = useMemo(() => shardGeometry(r, (seed ^ Math.imul(f.idx + 1, 0x9e3779b1)) >>> 0), [r, seed, f.idx]);
   useEffect(() => () => geo.dispose(), [geo]);
-  const tint = useMemo(() => coatMain(palette).lerp(new THREE.Color(0xffffff), 0.3), [palette]);
+  // the body's own stone, brighter only where a face catches the light (paled toward white and lit from
+  // within by the same pale tint, every prism was one flat chalky value: glued on, another material)
+  const tint = useMemo(() => coatMain(palette).lerp(new THREE.Color(0xffffff), 0.12), [palette]);
+  const core = useMemo(() => coatMain(palette), [palette]);
   return (
     <group quaternion={f.quat}>
       <mesh geometry={geo} castShadow>
-        <meshPhysicalMaterial color={tint} roughness={0.08} metalness={0} clearcoat={1} clearcoatRoughness={0.04} emissive={tint} emissiveIntensity={0.42} transparent opacity={0.9} flatShading />
+        <meshPhysicalMaterial color={tint} roughness={0.05} metalness={0} clearcoat={1} clearcoatRoughness={0.03} emissive={core} emissiveIntensity={0.12} envMapIntensity={1.4} transparent opacity={0.8} flatShading />
       </mesh>
     </group>
   );

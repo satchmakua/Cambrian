@@ -66,7 +66,9 @@ export function eyeSeat(p: Phenotype, idx: number, quat0: readonly number[], r: 
       aim = qRotateV(quat, [0, 0, 1]);
     }
   }
-  const depth = eyeVariant(p.nodes[idx].part?.style ?? 0.5) === 'compound' ? COMPOUND_DEPTH : bulgingEye(p, aim) ? BULGE_DEPTH : SEAT_DEPTH;
+  // (a compound eye, and an alien's glowing one, sit as low domes in the head)
+  const ev = eyeVariant(p.nodes[idx].part?.style ?? 0.5);
+  const depth = ev === 'compound' || ev === 'glowing' ? COMPOUND_DEPTH : bulgingEye(p, aim) ? BULGE_DEPTH : SEAT_DEPTH;
   let s = r * 0.36;
   for (let i = 0; i < 8; i++) {
     const d = fieldAt(prims, c[0] - aim[0] * s, c[1] - aim[1] * s, c[2] - aim[2] * s);

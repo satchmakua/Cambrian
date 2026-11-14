@@ -103,9 +103,13 @@ export interface FurShell {
  *  taken from the GPU's per-block derivative. Shared by every creature material: see `setFineRelief`. */
 const FINE_RELIEF = { value: 1 };
 
-/** a cut crystal skin's clear coat, and how rough it is (see makeCreatureMaterial) */
-export const CUT_COAT = 0.35;
-export const CUT_COAT_ROUGH = 0.3;
+/** a cut crystal's clear coat, how rough it is, and the least roughness of its stone (see
+ *  makeCreatureMaterial). Its faces are exact planes now (facets.ts gemGeometry), each mirroring its own
+ *  part of the studio's softboxes — crisp light and dark faces with glints. (Cut in place, their ragged
+ *  borders took a satin coat of 0.35 at roughness 0.3 to hide them.) */
+export const CUT_COAT = 0.8;
+export const CUT_COAT_ROUGH = 0.08;
+export const CUT_ROUGH = 0.15;
 
 /** The graphics option behind the per-pixel relief (RenderQuality.fineRelief). */
 export function setFineRelief(on: boolean): void {
@@ -167,14 +171,13 @@ export function makeCreatureMaterial(
     iridescenceIOR: 1.35,
     iridescenceThicknessRange: [180, 520],
   });
-  // A skin already cut into faces (facets.ts) takes a satin polish, not a mirror: each of its faces
-  // mirrored the sky or the dark ground its own way, white or deep blue, and the faces' borders — which
-  // follow the mesh, ragged — drew a torn-paper patchwork over the stone.
+  // A cut stone (facets.ts) takes a glassy coat over its stone, capped where an uncut crystal's sparkle
+  // would outshine it (see CUT_COAT).
   if (cut) {
     mat.clearcoat = Math.min(mat.clearcoat, CUT_COAT);
     mat.clearcoatRoughness = Math.max(mat.clearcoatRoughness, CUT_COAT_ROUGH);
     mat.iridescence = Math.min(mat.iridescence, 0.25);
-    mat.roughness = Math.max(mat.roughness, 0.3);
+    mat.roughness = Math.max(mat.roughness, CUT_ROUGH);
   }
 
   mat.onBeforeCompile = (shader) => {
@@ -868,7 +871,10 @@ float surfaceHeight(vec3 p, int cover) {
     if (dot(fn, vBNrm) < 0.0) fn = -fn;
     float bend = length(fwidth(fn));
     float planar = 1.0 - smoothstep(0.0, 0.03, bend);
-    gFacet = mix(0.5, hash13(floor(fn * 5.0 + 0.5) + 3.0), planar);
+    // (a face's own shade only where the skin IS a face — the cut stone, vCut: on the GPU fn is one
+    // triangle's normal, so fwidth(fn) is 0 inside every triangle and every triangle of the uncut legs and
+    // face took a shade of its own, a mosaic of flakes; |x|, so the stone's left and right faces match)
+    gFacet = mix(0.5, hash13(floor(vec3(abs(fn.x), fn.yz) * 5.0 + 0.5) + 3.0), planar * step(0.99, vCut));
     gSeam = smoothstep(0.05, 0.16, bend);
     gHb = 0.0;
     return 0.3;

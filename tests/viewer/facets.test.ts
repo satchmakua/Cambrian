@@ -1,141 +1,109 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { grow } from '../../src/engine/grow';
+import { grow, type Phenotype } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
 import { buildSmoothGeometry } from '../../src/viewer/smoothSkin';
-import { facetKeep, facetSizeOf, facetSkin } from '../../src/viewer/facets';
+import { gemGeometry, GEM_CUTS } from '../../src/viewer/facets';
+import { legWeights } from '../../src/viewer/feet';
 
-/** triangles whose face turns against the mean of their corners' normals */
-function folded(g: THREE.BufferGeometry): number {
-  const pos = g.getAttribute('position');
-  const nrm = g.getAttribute('normal');
-  const ix = g.getIndex()!;
-  let k = 0;
-  for (let t = 0; t < ix.count; t += 3) {
-    const [a, b, c] = [ix.getX(t), ix.getX(t + 1), ix.getX(t + 2)];
-    const u = [pos.getX(b) - pos.getX(a), pos.getY(b) - pos.getY(a), pos.getZ(b) - pos.getZ(a)];
-    const v = [pos.getX(c) - pos.getX(a), pos.getY(c) - pos.getY(a), pos.getZ(c) - pos.getZ(a)];
-    const f = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-    const m = [0, 1, 2].map((q) => nrm.getComponent(a, q) + nrm.getComponent(b, q) + nrm.getComponent(c, q));
-    if (f[0] * m[0] + f[1] * m[1] + f[2] * m[2] < 0) k++;
-  }
-  return k;
+const SEEDS = [1, 3, 5, 8, 13, 23];
+
+interface Plane {
+  n: THREE.Vector3;
+  d: number;
 }
 
-describe('a crystal hide cut into faces', () => {
-  it('lays the skin onto flat faces, outline and all: one connected mesh, every vertex moved a little, none turned over', () => {
-    // (faceted only in its shading, the crystalline beast's outline was every other creature's soft
-    // round body — a pig in a glass texture; laid flat across a crease, the skin folded over itself)
-    for (const seed of [1, 3, 5, 8]) {
-      const p = grow(genomeOfMorphotype(seed, 'crystalline'));
-      const g = buildSmoothGeometry(p, true, [], 'low');
-      const before = Float32Array.from(g.getAttribute('position').array as Float32Array);
-      const index = Array.from(g.getIndex()!.array);
-      const foldedBefore = folded(g);
-      const size = facetSizeOf(p);
-      facetSkin(g, size, p.genomeRef.seed);
-      const pos = g.getAttribute('position');
-      // nothing split, nothing re-joined
-      expect(pos.count, `#${seed}`).toBe(before.length / 3);
-      expect(Array.from(g.getIndex()!.array), `#${seed}`).toEqual(index);
-      // within a third of a face of where it was
-      for (let i = 0; i < pos.count; i++) {
-        const d = Math.hypot(pos.getX(i) - before[i * 3], pos.getY(i) - before[i * 3 + 1], pos.getZ(i) - before[i * 3 + 2]);
-        expect(d, `#${seed}`).toBeLessThanOrEqual(0.3 * size + 1e-6);
+function stone(seed: number, q: 'high' | 'low' | 'far' = 'low'): { p: Phenotype; skin: THREE.BufferGeometry; gem: THREE.BufferGeometry } {
+  const p = grow(genomeOfMorphotype(seed, 'crystalline'));
+  const skin = buildSmoothGeometry(p, true, [], q);
+  const gem = gemGeometry(p, skin);
+  expect(gem, `crystalline #${seed} ${q}`).not.toBeNull();
+  return { p, skin, gem: gem! };
+}
+
+/** how far a point lies outside the stone (its worst plane: ≤ 0 inside) */
+const outside = (planes: Plane[], x: number, y: number, z: number) => Math.max(...planes.map((pl) => pl.n.x * x + pl.n.y * y + pl.n.z * z - pl.d));
+
+describe('a crystal trunk is one cut stone', () => {
+  it('is cut in a few dozen exact planes: every triangle on its face, facing out, the faces meeting in real edges', () => {
+    // (the smooth skin cut in place ran every edge between two faces through the mesh: a seventh of the
+    // hide was chips tilted every way between the faces, and lit triangle by triangle, torn paper)
+    for (const seed of SEEDS) {
+      const { gem } = stone(seed);
+      const planes = gem.userData.planes as Plane[];
+      expect(planes.length, `#${seed} faces`).toBeGreaterThanOrEqual(24);
+      expect(planes.length, `#${seed} faces`).toBeLessThanOrEqual(GEM_CUTS);
+      const pos = gem.getAttribute('position');
+      const nrm = gem.getAttribute('normal');
+      for (let t = 0; t < pos.count; t += 3) {
+        const a = new THREE.Vector3().fromBufferAttribute(pos, t);
+        const b = new THREE.Vector3().fromBufferAttribute(pos, t + 1);
+        const c = new THREE.Vector3().fromBufferAttribute(pos, t + 2);
+        const n = new THREE.Vector3().fromBufferAttribute(nrm, t);
+        const f = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a));
+        if (f.length() < 1e-9) continue;
+        // facing out along its face's own normal, and flat on its plane
+        expect(f.normalize().dot(n), `#${seed} triangle ${t / 3}`).toBeGreaterThan(0.999);
+        for (const q of [b, c]) expect(Math.abs(n.dot(q) - n.dot(a)), `#${seed} flat`).toBeLessThan(1e-4);
       }
-      // gathered onto faces: a few hundred planes for thousands of vertices
-      const nrm = g.getAttribute('normal');
-      const planes = new Set<string>();
-      for (let i = 0; i < nrm.count; i++) planes.add(`${nrm.getX(i).toFixed(5)},${nrm.getY(i).toFixed(5)},${nrm.getZ(i).toFixed(5)}`);
-      expect(planes.size / pos.count, `#${seed}`).toBeLessThan(0.2);
-      // and none turned over that wasn't already: lit against its corners' normals…
-      expect(folded(g), `#${seed}`).toBeLessThanOrEqual(foldedBefore + 2);
-      // …or facing into the body — a black speck in the hide (tested only against the corners'
-      // new normals, a bevel between two faces passed while it faced the wrong way)
-      const ix = g.getIndex()!;
-      let turned = 0;
-      for (let t = 0; t < ix.count; t += 3) {
-        const [a, b, c] = [ix.getX(t), ix.getX(t + 1), ix.getX(t + 2)];
-        const f = (P: ArrayLike<number>) => {
-          const u = [P[b * 3] - P[a * 3], P[b * 3 + 1] - P[a * 3 + 1], P[b * 3 + 2] - P[a * 3 + 2]];
-          const v = [P[c * 3] - P[a * 3], P[c * 3 + 1] - P[a * 3 + 1], P[c * 3 + 2] - P[a * 3 + 2]];
-          return [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-        };
-        const f0 = f(before), f1 = f(pos.array);
-        if (f0[0] * f1[0] + f0[1] * f1[1] + f0[2] * f1[2] < 0) turned++;
+      // the faces turn well between neighbours: a stone's edges, not a polished pebble
+      const turns: number[] = [];
+      for (let i = 0; i < planes.length; i++) {
+        let best = -1;
+        for (let j = 0; j < planes.length; j++) if (j !== i) best = Math.max(best, planes[i].n.dot(planes[j].n));
+        turns.push(Math.acos(Math.min(1, best)));
       }
-      expect(turned, `#${seed} turned over`).toBe(0);
+      turns.sort((x, y) => x - y);
+      expect(turns[turns.length >> 1], `#${seed} median turn to the nearest face`).toBeGreaterThan(0.18);
     }
   });
 
-  it('leaves the legs and the face uncut: what sits on the skin there was seated on the smooth surface', () => {
-    // (a face wider than a shin cut a notch into the leg's outline; round the mouth the cut sank the
-    // skin under the dark lip seam, which then stood out of the hide in black flecks)
-    for (const seed of [8, 13]) {
-      const p = grow(genomeOfMorphotype(seed, 'crystalline'));
-      const g = buildSmoothGeometry(p, true, [], 'low');
-      const before = Float32Array.from(g.getAttribute('position').array as Float32Array);
-      const keep = facetKeep(p, g);
-      facetSkin(g, facetSizeOf(p), p.genomeRef.seed, keep);
-      const pos = g.getAttribute('position');
-      let moved = 0;
-      for (let i = 0; i < pos.count; i++) {
-        const d = Math.hypot(pos.getX(i) - before[i * 3], pos.getY(i) - before[i * 3 + 1], pos.getZ(i) - before[i * 3 + 2]);
-        if (keep[i]) expect(d, `#${seed} kept`).toBe(0);
-        else if (d > 1e-6) moved++;
-      }
-      // the body is still cut
-      expect(moved / pos.count, `#${seed}`).toBeGreaterThan(0.3);
-      // the skin near the eyes and the mouth is kept, and at the feet
-      const near = (q: readonly number[], r: number) => {
-        for (let i = 0; i < pos.count; i++) if (Math.hypot(before[i * 3] - q[0], before[i * 3 + 1] - q[1], before[i * 3 + 2] - q[2]) < r && !keep[i]) return false;
-        return true;
-      };
-      for (const n of p.nodes.filter((n) => n.terminal === 'eye' || n.terminal === 'mouth')) expect(near(n.pos, n.radius * 1.2), `#${seed} ${n.terminal}`).toBe(true);
-      for (const n of p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg')) expect(near(n.pos, n.radius * 1.5), `#${seed} foot`).toBe(true);
-    }
-  });
-
-  it('is the same cut every time', () => {
-    const p = grow(genomeOfMorphotype(3, 'crystalline'));
-    const a = buildSmoothGeometry(p, true, [], 'far');
-    const b = buildSmoothGeometry(p, true, [], 'far');
-    facetSkin(a, facetSizeOf(p), p.genomeRef.seed);
-    facetSkin(b, facetSizeOf(p), p.genomeRef.seed);
-    expect(Array.from(a.getAttribute('position').array)).toEqual(Array.from(b.getAttribute('position').array));
-    expect(Array.from(a.getAttribute('normal').array)).toEqual(Array.from(b.getAttribute('normal').array));
-  });
-});
-
-describe('cut stone: faces that meet', () => {
-  it("lays each vertex on the first nearby face's plane along its normal, so faces meet instead of stepping", () => {
-    // (laid each onto its own cell's plane, two faces' planes did not meet at their border: every border
-    // a ragged step, the edges across it stretched — torn paper, not cut stone)
-    for (const seed of [23, 1, 2, 3]) {
-      const p = grow(genomeOfMorphotype(seed, 'crystalline'));
-      const g = buildSmoothGeometry(p, true, [], 'high');
-      const before = Float32Array.from(g.getAttribute('position').array as Float32Array);
-      const size = facetSizeOf(p);
-      facetSkin(g, size, p.genomeRef.seed, facetKeep(p, g));
-      const after = g.getAttribute('position').array as Float32Array;
-      const ix = g.getIndex()!.array;
-      const d: number[] = [];
-      for (let t = 0; t < ix.length; t += 3) {
-        for (const [a, b] of [[ix[t], ix[t + 1]], [ix[t + 1], ix[t + 2]], [ix[t + 2], ix[t]]]) {
-          const l0 = Math.hypot(before[a * 3] - before[b * 3], before[a * 3 + 1] - before[b * 3 + 1], before[a * 3 + 2] - before[b * 3 + 2]);
-          const l1 = Math.hypot(after[a * 3] - after[b * 3], after[a * 3 + 1] - after[b * 3 + 1], after[a * 3 + 2] - after[b * 3 + 2]);
-          d.push(Math.abs(l1 - l0) / size);
+  it('encloses the trunk, is cut in mirrored pairs, and lets the eyes, head and legs out', () => {
+    for (const seed of SEEDS) {
+      for (const q of ['high', 'low', 'far'] as const) {
+        const { p, skin, gem } = stone(seed, q);
+        const planes = gem.userData.planes as Plane[];
+        // every trunk-owned skin vertex off the legs lies inside
+        const pos = skin.getAttribute('position').array as Float32Array;
+        const nV = (skin.userData.tubeFrom?.vertex as number | undefined) ?? pos.length / 3;
+        const legs = legWeights(p, pos, nV);
+        for (let v = 0; v < nV; v++) {
+          if (legs[v] >= 0.2) continue;
+          let best = Infinity, bi = -1;
+          for (let i = 0; i < p.nodes.length; i++) {
+            const n = p.nodes[i];
+            const d = Math.hypot(pos[v * 3] - n.pos[0], pos[v * 3 + 1] - n.pos[1], pos[v * 3 + 2] - n.pos[2]) - n.radius;
+            if (d < best) {
+              best = d;
+              bi = i;
+            }
+          }
+          if (p.nodes[bi].kind !== 'spine' || (p.nodes[bi].segment ?? 0) !== 0) continue;
+          expect(outside(planes, pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]), `#${seed} ${q} trunk skin inside`).toBeLessThanOrEqual(1e-4);
+        }
+        // the eyes stay outside it (a stone over the face would swallow them)
+        for (const e of p.nodes.filter((n) => n.terminal === 'eye')) {
+          expect(outside(planes, e.pos[0], e.pos[1], e.pos[2]), `#${seed} ${q} eye out`).toBeGreaterThan(e.radius);
+        }
+        // the back's shards stand rooted in it
+        for (const n of p.nodes.filter((nd) => nd.part?.kind === 'spine' && nd.kind !== 'spine')) {
+          const parent = p.edges.find(([, b]) => b === p.nodes.indexOf(n))?.[0];
+          if (parent === undefined || p.nodes[parent].kind !== 'spine') continue;
+          expect(outside(planes, n.pos[0], n.pos[1], n.pos[2]), `#${seed} ${q} shard root inside`).toBeLessThan(0);
+        }
+        // as symmetric as the beast: every plane has its mirror across the midline
+        for (const pl of planes) {
+          const m = planes.some((o) => Math.abs(o.n.x + pl.n.x) < 1e-6 && Math.abs(o.n.y - pl.n.y) < 1e-6 && Math.abs(o.n.z - pl.n.z) < 1e-6 && Math.abs(o.d - pl.d) < 0.03);
+          expect(m, `#${seed} ${q} mirrored`).toBe(true);
         }
       }
-      d.sort((x, y) => x - y);
-      // (stepped, the 99th percentile edge stretched by 0.075–0.09 of a face)
-      expect(d[Math.floor(d.length * 0.99)], `#${seed}`).toBeLessThan(0.065);
-      // the faces it cut are marked for the shader to light by their own plane; the legs it left are not
-      const cut = g.getAttribute('aCut');
-      let on = 0;
-      for (let v = 0; v < cut.count; v++) on += cut.getX(v);
-      expect(on / cut.count, `#${seed}`).toBeGreaterThan(0.3);
-      expect(on / cut.count, `#${seed}`).toBeLessThan(0.98);
     }
+  });
+
+  it('is the same stone every time, and a body too long or bent to be one stone (a snake) gets none', () => {
+    const a = stone(5).gem, b = stone(5).gem;
+    expect(Array.from(a.getAttribute('position').array)).toEqual(Array.from(b.getAttribute('position').array));
+    const snake = grow(genomeOfMorphotype(3, 'serpent'));
+    expect(gemGeometry(snake, buildSmoothGeometry(snake, true, [], 'far'))).toBeNull();
   });
 });

@@ -495,16 +495,19 @@ describe('creature material shader injection', () => {
     expect(f.indexOf('gNb.x *= sx;', i)).toBeGreaterThan(i);
   });
 
-  it('a cut crystal takes a satin polish, not a mirror', () => {
-    // (each face mirrored the sky or the dark ground its own way, white or deep blue: a torn-paper
-    // patchwork over the stone, along the faces' ragged borders)
+  it('a cut stone takes a glassy coat — its faces are exact planes, each mirroring its own part of the sky', () => {
+    // (cut in place, the faces' borders were ragged, and a satin coat of 0.35 at roughness 0.3 hid them: a
+    // stone with no glints, flaky paper)
     const g = defaultGenome();
     const cut = makeCreatureMaterial(g.palette, { ...g.covering, type: 'crystal', sheen: 1 }, g.seed, null, null, null, 0, null, true) as THREE.MeshPhysicalMaterial;
-    const whole = makeCreatureMaterial(g.palette, { ...g.covering, type: 'crystal', sheen: 1 }, g.seed) as THREE.MeshPhysicalMaterial;
+    expect(CUT_COAT).toBeGreaterThanOrEqual(0.7);
+    expect(CUT_COAT_ROUGH).toBeLessThanOrEqual(0.12);
     expect(cut.clearcoat).toBeLessThanOrEqual(CUT_COAT);
     expect(cut.clearcoatRoughness).toBeGreaterThanOrEqual(CUT_COAT_ROUGH);
-    expect(whole.clearcoat).toBeGreaterThan(cut.clearcoat);
     cut.dispose();
-    whole.dispose();
+    // a face's own shade only where the skin IS a face (the stone): on the GPU each triangle's normal is
+    // flat, so the uncut legs and face took a shade per triangle — a mosaic of flakes
+    const f = compileShaderStrings('crystal').fragmentShader;
+    expect(f).toContain('planar * step(0.99, vCut));');
   });
 });

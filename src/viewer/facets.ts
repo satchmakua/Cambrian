@@ -1,229 +1,150 @@
 /**
- * Cut stone: a crystal body's skin as flat faces.
+ * Cut stone: a crystal beast's trunk as one cut gem.
  *
- * The crystalline beast's hide was faceted only in its shading (the covering shader's per-pixel
- * cuts): its outline stayed the soft round body every other creature has, a pig in a glass texture.
- * A cut stone's outline is a polygon. Its skin is partitioned into Voronoi cells over body space (a
- * jittered grid, hashed from the seed), and every cell's vertices are laid onto that cell's own
- * plane — through their mean position, square to their mean normal — taking the plane's normal as
- * theirs. Each cell becomes one flat face; the triangles spanning two cells are the bevels between
- * faces. The surface stays one connected mesh (vertices are moved, never split), within a few
- * hundredths of a body unit of where it was. Pure.
+ * The crystalline beast's hide was faceted only in its shading at first: its outline stayed the soft
+ * round body every other creature has, a pig in a glass texture. Then its smooth skin was cut in place —
+ * partitioned into Voronoi cells, every vertex laid onto its cell's plane — and every edge between two
+ * faces ran through the mesh, a band of chips tilted every way: a loaf of torn paper (six rounds of tuning
+ * never got the chips under a few percent of the hide). Now the trunk wears a separate stone over its
+ * uncut skin: the meet of a few dozen planes, each face exactly one plane, each edge exactly two (see
+ * gemGeometry). Pure.
  */
 import * as THREE from 'three';
+import { ConvexHull } from 'three/examples/jsm/math/ConvexHull.js';
 import type { Phenotype } from '../engine/grow';
 import { unitHash } from '../engine/rng';
 import { legWeights } from './feet';
 
-/** a face's size, × the trunk's girth (its largest spine radius): about nine faces round a trunk */
-export const FACET_SPAN = 0.75;
-/** how far a vertex's own normal may turn from its face's and still be laid onto it (cosine), and how
- *  far off the face's plane it may lie (× the face's size) */
-const FACET_AGREE = 0.7;
-const FACET_REACH = 0.3;
-/** …and the least a triangle may keep facing the way it did (the cosine of the most it may turn) */
-const FACET_TURN = 0.2;
-
-/** The size of the faces a crystal creature is cut into. */
-export function facetSizeOf(p: Phenotype): number {
-  let r = 0;
-  for (const n of p.nodes) if (n.kind === 'spine' && (n.segment ?? 0) === 0) r = Math.max(r, n.radius);
-  return Math.max(0.08, r * FACET_SPAN);
-}
-
-/** how far round an eye or a mouth the skin is left uncut (× its radius): what sits on the skin there
- *  — the lids, the socket, the lips — was seated on the uncut surface */
-const FACE_CLEAR = 1.6;
+/** how many faces a crystal trunk is cut with (mirrored pairs), how much the cuts favour its flanks over
+ *  its ends, how far a face stands off the skin it touches */
+export const GEM_CUTS = 36;
+const GEM_LONG = 1.8;
+const GEM_PAD = 0.015;
+/** a trunk longer than GEM_SPAN of its girths, or bent off its chord by more than GEM_BEND of its radius
+ *  (a snake's), is no single stone: it gets none */
+const GEM_SPAN = 3;
+const GEM_BEND = 0.6;
 
 /**
- * The vertices a cut leaves as they were: the legs (a face is wider than a shin: its plane cut a notch
- * into the leg's outline, the background showing through it), and round the eyes and the mouth (the
- * dark lip seam and the sockets were seated on the uncut skin; where the cut sank it, they stood out
- * of it in black flecks).
+ * A crystal beast's trunk as ONE CUT STONE. (Cutting its smooth skin in place — every vertex laid on the
+ * innermost nearby face's plane, see facetSkin — ran each edge between two faces through the mesh: the
+ * triangles across it were chips tilted every way, a seventh of the hide, and wherever a plane fell out
+ * of a vertex's neighbourhood the faces stepped instead of meeting. Lit triangle by triangle, it was a
+ * loaf of torn paper.) The stone is the meet of GEM_CUTS planes, each touching the trunk's own skin from
+ * its side, in mirrored pairs: every face exactly one plane, every edge exactly the meet of two, the
+ * faces turning 40° or so between them. Built as the polar dual of the convex hull of the planes' poles.
+ * It encloses the trunk's skin; the neck, head and legs come out of it, and the back's shards stand
+ * rooted in it. Pure; null for a trunk no stone fits.
  */
-export function facetKeep(p: Phenotype, geo: THREE.BufferGeometry): Uint8Array {
-  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
-  const keep = new Uint8Array(pos.count);
-  const legs = legWeights(p, pos.array, pos.count);
-  const face = p.nodes.filter((n) => n.terminal === 'eye' || n.terminal === 'mouth');
-  for (let v = 0; v < pos.count; v++) {
-    if (legs[v] > 0.2) {
-      keep[v] = 1;
-      continue;
-    }
-    const x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
-    for (const n of face) {
-      if (Math.hypot(x - n.pos[0], y - n.pos[1], z - n.pos[2]) < n.radius * FACE_CLEAR + 0.04) {
-        keep[v] = 1;
-        break;
+export function gemGeometry(p: Phenotype, skin: THREE.BufferGeometry): THREE.BufferGeometry | null {
+  const trunkIdx = p.nodes.map((n, i) => (n.kind === 'spine' && (n.segment ?? 0) === 0 ? i : -1)).filter((i) => i >= 0);
+  if (trunkIdx.length === 0) return null;
+  const tn = trunkIdx.map((i) => p.nodes[i]);
+  const rMax = Math.max(...tn.map((n) => n.radius));
+  const a = tn[0].pos, b = tn[tn.length - 1].pos;
+  const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const L = Math.hypot(ab[0], ab[1], ab[2]);
+  if (L > GEM_SPAN * 2 * rMax) return null;
+  for (const n of tn) {
+    const ap = [n.pos[0] - a[0], n.pos[1] - a[1], n.pos[2] - a[2]];
+    const t = L > 1e-9 ? (ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / (L * L) : 0;
+    if (Math.hypot(ap[0] - ab[0] * t, ap[1] - ab[1] * t, ap[2] - ab[2] * t) > GEM_BEND * rMax) return null;
+  }
+  // the trunk's own skin: the vertices whose nearest node surface is a trunk node's, off the legs
+  const pos = skin.getAttribute('position').array as Float32Array;
+  const nV = (skin.userData.tubeFrom?.vertex as number | undefined) ?? pos.length / 3;
+  const legs = legWeights(p, pos, nV);
+  const trunk = new Set(trunkIdx);
+  const pts: number[] = [];
+  for (let v = 0; v < nV; v++) {
+    if (legs[v] >= 0.2) continue;
+    let best = Infinity, bi = -1;
+    for (let i = 0; i < p.nodes.length; i++) {
+      const n = p.nodes[i];
+      const d = Math.hypot(pos[v * 3] - n.pos[0], pos[v * 3 + 1] - n.pos[1], pos[v * 3 + 2] - n.pos[2]) - n.radius;
+      if (d < best) {
+        best = d;
+        bi = i;
       }
     }
+    if (trunk.has(bi)) pts.push(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]);
   }
-  return keep;
-}
-
-/** Cut a skin (indexed, with normals) into flat faces of about `size` across, in place; vertices
- *  marked in `keep` stay as they were. */
-export function facetSkin(geo: THREE.BufferGeometry, size: number, seed: number, keep?: Uint8Array): void {
-  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
-  const nrm = geo.getAttribute('normal') as THREE.BufferAttribute;
-  const n = pos.count;
-  if (n === 0) return;
-  const p0 = Float32Array.from(pos.array as Float32Array);
-  const n0 = Float32Array.from(nrm.array as Float32Array);
-  // each grid cell's jittered site, hashed once (a key packs the cell's three indices)
-  const key = (cx: number, cy: number, cz: number) => ((cx + 1024) * 2048 + (cy + 1024)) * 2048 + (cz + 1024);
-  const sites = new Map<number, [number, number, number]>();
-  const siteOf = (cx: number, cy: number, cz: number): [number, number, number] => {
-    const k = key(cx, cy, cz);
-    let s = sites.get(k);
-    if (!s) {
-      s = [cx + 0.15 + 0.7 * unitHash(seed, cx, cy, cz, 1), cy + 0.15 + 0.7 * unitHash(seed, cx, cy, cz, 2), cz + 0.15 + 0.7 * unitHash(seed, cx, cy, cz, 3)];
-      sites.set(k, s);
-    }
-    return s;
-  };
-  // which cell each vertex lies in: the nearest site of the 27 round its grid cell
-  const cellOf = new Float64Array(n);
-  for (let v = 0; v < n; v++) {
-    const x = p0[v * 3] / size, y = p0[v * 3 + 1] / size, z = p0[v * 3 + 2] / size;
-    const bx = Math.floor(x), by = Math.floor(y), bz = Math.floor(z);
-    let best = Infinity;
-    let id = 0;
-    for (let k = -1; k <= 1; k++)
-      for (let j = -1; j <= 1; j++)
-        for (let i = -1; i <= 1; i++) {
-          const s = siteOf(bx + i, by + j, bz + k);
-          const d = (x - s[0]) ** 2 + (y - s[1]) ** 2 + (z - s[2]) ** 2;
-          if (d < best) {
-            best = d;
-            id = key(bx + i, by + j, bz + k);
-          }
-        }
-    cellOf[v] = id;
+  const count = pts.length / 3;
+  if (count < 8) return null;
+  const c = new THREE.Vector3();
+  for (let i = 0; i < count; i++) c.add(new THREE.Vector3(pts[i * 3], pts[i * 3 + 1], pts[i * 3 + 2]));
+  c.divideScalar(count);
+  c.x = 0; // (on the midline: the stone is cut in mirrored pairs)
+  // the cutting directions: a seeded half Fibonacci sphere (x ≥ 0) and its mirror across the midline
+  const seed = p.genomeRef.seed;
+  const half = GEM_CUTS / 2;
+  const ds: THREE.Vector3[] = [];
+  const ga = Math.PI * (3 - Math.sqrt(5));
+  const turn = unitHash(seed, 0x9e7) * Math.PI * 2;
+  for (let i = 0; i < half; i++) {
+    const z = 1 - (2 * (i + 0.5)) / half; // along the body
+    const r = Math.sqrt(Math.max(0, 1 - z * z));
+    const az = turn + i * ga + (unitHash(seed, i, 0x9e8) - 0.5) * 0.8;
+    // (half the sphere, x = |cos|: its mirror makes the other half)
+    const d = new THREE.Vector3(Math.abs(Math.cos(az)) * r, Math.sin(az) * r, z / GEM_LONG).normalize();
+    ds.push(d, new THREE.Vector3(-d.x, d.y, d.z));
   }
-  // each cell's plane: through its vertices' mean, square to their mean normal
-  const cells = new Map<number, { c: [number, number, number]; m: [number, number, number]; k: number }>();
-  for (let v = 0; v < n; v++) {
-    let cell = cells.get(cellOf[v]);
-    if (!cell) cells.set(cellOf[v], (cell = { c: [0, 0, 0], m: [0, 0, 0], k: 0 }));
-    for (let a = 0; a < 3; a++) {
-      cell.c[a] += p0[v * 3 + a];
-      cell.m[a] += n0[v * 3 + a];
-    }
-    cell.k++;
+  const h = ds.map((d) => {
+    let m = -Infinity;
+    for (let i = 0; i < count; i++) m = Math.max(m, d.x * (pts[i * 3] - c.x) + d.y * (pts[i * 3 + 1] - c.y) + d.z * (pts[i * 3 + 2] - c.z));
+    return m + GEM_PAD;
+  });
+  // (each mirrored pair stands off at the farther of its two: the skin's mesh is a hair off mirror-true,
+  // and a face cut on one side only left the stone lopsided)
+  for (let i = 0; i < h.length; i += 2) h[i] = h[i + 1] = Math.max(h[i], h[i + 1]);
+  if (h.some((x) => !(x > 1e-4))) return null; // (the centre must lie inside the stone)
+  const poles = ds.map((d, i) => d.clone().divideScalar(h[i]));
+  const hull = new ConvexHull().setFromPoints(poles);
+  const which = new Map<THREE.Vector3, number>();
+  poles.forEach((q, i) => which.set(q, i));
+  // a face of the poles' hull (n·q = k) is a corner of the stone (c + n/k), shared by the faces whose
+  // poles it holds
+  const around = new Map<number, THREE.Vector3[]>();
+  for (const f of hull.faces) {
+    const corner = f.normal.clone().divideScalar(f.constant).add(c);
+    let e = f.edge;
+    do {
+      const i = which.get(e.head().point)!;
+      if (!around.has(i)) around.set(i, []);
+      around.get(i)!.push(corner);
+      e = e.next;
+    } while (e !== f.edge);
   }
-  for (const cell of cells.values()) {
-    for (let a = 0; a < 3; a++) cell.c[a] /= cell.k;
-    const l = Math.hypot(cell.m[0], cell.m[1], cell.m[2]);
-    // (a cell whose normals cancel out — a sliver round a thin limb — keeps its vertices where they are)
-    if (l < 0.35 * cell.k) cell.k = 0;
-    else for (let a = 0; a < 3; a++) cell.m[a] /= l;
-  }
-  const arr = pos.array as Float32Array;
-  const nar = nrm.array as Float32Array;
-  // each vertex's neighbourhood (two rings round it): the cells whose planes it may come to lie on
-  const index0 = geo.getIndex();
-  const near: Set<number>[] = Array.from({ length: n }, () => new Set<number>());
-  const ring1: Set<number>[] = Array.from({ length: n }, () => new Set<number>());
-  if (index0) {
-    const ix = index0.array;
-    for (let t = 0; t < ix.length; t += 3) {
-      const a = ix[t], b = ix[t + 1], c = ix[t + 2];
-      ring1[a].add(b).add(c);
-      ring1[b].add(a).add(c);
-      ring1[c].add(a).add(b);
-    }
-    for (let v = 0; v < n; v++) {
-      for (const w of ring1[v]) {
-        near[v].add(cellOf[w]);
-        for (const u of ring1[w]) near[v].add(cellOf[u]);
+  const P: number[] = [];
+  const N: number[] = [];
+  const tmp = new THREE.Vector3();
+  for (const [i, cs] of around) {
+    const n = ds[i];
+    const poly: THREE.Vector3[] = [];
+    for (const q of cs) if (!poly.some((u) => u.distanceToSquared(q) < 1e-10)) poly.push(q);
+    if (poly.length < 3) continue;
+    const m = poly.reduce((acc, q) => acc.add(q), new THREE.Vector3()).divideScalar(poly.length);
+    const u = tmp.subVectors(poly[0], m).normalize().clone();
+    const w = new THREE.Vector3().crossVectors(n, u);
+    const ang = (q: THREE.Vector3) => Math.atan2(w.dot(tmp.subVectors(q, m)), u.dot(tmp.subVectors(q, m)));
+    poly.sort((x, y) => ang(x) - ang(y)); // (counter-clockwise seen from outside: front faces)
+    for (let k = 1; k + 1 < poly.length; k++)
+      for (const q of [poly[0], poly[k], poly[k + 1]]) {
+        P.push(q.x, q.y, q.z);
+        N.push(n.x, n.y, n.z);
       }
-    }
   }
-  // the mouth's carved cavity, and its rim, stay as they were: laid onto the face's planes, the wet
-  // flesh inside came up through the hide in orange flecks, and the dark of the cavity in black ones
-  const flesh = geo.getAttribute('aFlesh') as THREE.BufferAttribute | undefined;
-  // which vertices the cut laid onto a face (the shader lights those triangles by their own plane)
-  const cut = new Float32Array(n);
-  for (let v = 0; v < n; v++) {
-    const own = cells.get(cellOf[v])!;
-    if (own.k === 0) continue;
-    if ((flesh && flesh.getX(v) > 0) || keep?.[v]) continue;
-    const vx = n0[v * 3], vy = n0[v * 3 + 1], vz = n0[v * 3 + 2];
-    // A CUT STONE IS THE MEET OF ITS FACES' PLANES: along its normal, a vertex lies on the first of the
-    // nearby faces' planes it meets (the nearest inward), so two faces meet in a straight crease where
-    // their planes cross. (Laid each onto its own cell's plane, the planes did not meet at the cells'
-    // border: every border was a ragged step between two faces — torn paper, frost, not cut stone.)
-    let best = Infinity;
-    let bm: [number, number, number] | null = null;
-    const cands = near[v].size ? near[v] : new Set([cellOf[v]]);
-    for (const id of cands) {
-      const cell = cells.get(id);
-      if (!cell || cell.k === 0) continue;
-      const [nx, ny, nz] = cell.m;
-      // (a plane turned well away from the vertex's own normal, or far off it, isn't its: where a cell
-      // spans a crease — a leg into the body — laying it flat folded the skin over itself, a black tear)
-      const along = vx * nx + vy * ny + vz * nz;
-      if (along < FACET_AGREE) continue;
-      const t = ((cell.c[0] - p0[v * 3]) * nx + (cell.c[1] - p0[v * 3 + 1]) * ny + (cell.c[2] - p0[v * 3 + 2]) * nz) / along;
-      if (Math.abs(t) > FACET_REACH * size) continue;
-      if (t < best) {
-        best = t;
-        bm = cell.m;
-      }
-    }
-    if (!bm) continue;
-    arr[v * 3] = p0[v * 3] + vx * best;
-    arr[v * 3 + 1] = p0[v * 3 + 1] + vy * best;
-    arr[v * 3 + 2] = p0[v * 3 + 2] + vz * best;
-    nar[v * 3] = bm[0];
-    nar[v * 3 + 1] = bm[1];
-    nar[v * 3 + 2] = bm[2];
-    cut[v] = 1;
-  }
-  // …and a triangle the cut turned over — its face swung more than FACET_TURN from where it faced
-  // before — is put back as it was, until none is. (Tested only against its corners' new normals, a
-  // bevel between two faces passed while it faced into the body: a black speck in the hide.)
-  const index = geo.getIndex();
-  if (index) {
-    const ix = index.array;
-    const face = (P: Float32Array, a: number, b: number, c: number, out: number[]): void => {
-      const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
-      const vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
-      out[0] = uy * vz - uz * vy;
-      out[1] = uz * vx - ux * vz;
-      out[2] = ux * vy - uy * vx;
-    };
-    const f0 = [0, 0, 0], f1 = [0, 0, 0];
-    for (let pass = 0; pass < 8; pass++) {
-      let undone = 0;
-      for (let t = 0; t < ix.length; t += 3) {
-        const a = ix[t] * 3, b = ix[t + 1] * 3, c = ix[t + 2] * 3;
-        face(p0, a, b, c, f0);
-        face(arr, a, b, c, f1);
-        const l0 = Math.hypot(f0[0], f0[1], f0[2]), l1 = Math.hypot(f1[0], f1[1], f1[2]);
-        if (l0 < 1e-12) continue;
-        const kept = l1 > 1e-12 && f0[0] * f1[0] + f0[1] * f1[1] + f0[2] * f1[2] >= FACET_TURN * l0 * l1;
-        // …nor may it come to face against its corners' normals, when it didn't before (it would be lit
-        // as if it faced the other way)
-        const lit = (N: Float32Array, f: number[]) =>
-          f[0] * (N[a] + N[b] + N[c]) + f[1] * (N[a + 1] + N[b + 1] + N[c + 1]) + f[2] * (N[a + 2] + N[b + 2] + N[c + 2]) >= 0;
-        if (kept && (lit(nar, f1) || !lit(n0, f0))) continue;
-        for (const o of [a, b, c]) {
-          for (let q = 0; q < 3; q++) {
-            arr[o + q] = p0[o + q];
-            nar[o + q] = n0[o + q];
-          }
-          cut[o / 3] = 0;
-        }
-        undone++;
-      }
-      if (undone === 0) break;
-    }
-  }
-  geo.setAttribute('aCut', new THREE.BufferAttribute(cut, 1));
-  pos.needsUpdate = true;
-  nrm.needsUpdate = true;
-  geo.computeBoundingSphere();
+  const g = new THREE.BufferGeometry();
+  const at = new THREE.Float32BufferAttribute(P, 3);
+  g.setAttribute('position', at);
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+  // what the creature material reads: rest-pose body place, no mouth flesh, open to the sky — and cut
+  // (lit face by face: see the material's flat branch)
+  g.setAttribute('aBodyPos', at.clone());
+  g.setAttribute('aFlesh', new THREE.Float32BufferAttribute(new Float32Array(at.count), 1));
+  g.setAttribute('aAO', new THREE.Float32BufferAttribute(new Float32Array(at.count).fill(1), 1));
+  g.setAttribute('aCut', new THREE.Float32BufferAttribute(new Float32Array(at.count).fill(1), 1));
+  g.userData.planes = [...around.keys()].map((i) => ({ n: ds[i].clone(), d: ds[i].dot(c) + h[i] }));
+  g.computeBoundingSphere();
+  return g;
 }

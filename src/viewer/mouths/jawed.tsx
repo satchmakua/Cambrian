@@ -155,9 +155,11 @@ export function sealedMouth(_phenotype: Phenotype, muzzled: boolean): boolean {
 }
 
 /** Is a shut seam drawn across the face? Not on a slug's (a slime body's): its mouth lies under its
- *  head, and a crease across the front of its dome was a line painted on a pickle. */
+ *  head, and a crease across the front of its dome was a line painted on a pickle. Nor on a crystal
+ *  beast's: a cut stone has no lips, and the crease across its glass head was a cartoon's smile. */
 export function seamShown(p: Phenotype, sealed: boolean): boolean {
-  return !(sealed && p.genomeRef.covering.type === 'slime');
+  const t = p.genomeRef.covering.type;
+  return !(sealed && (t === 'slime' || t === 'crystal'));
 }
 
 /** a smooth bump of width ~0.16 centered at u = c — one emphasized canine position */

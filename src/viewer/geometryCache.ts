@@ -77,6 +77,8 @@ function scheduleSweep(p: Phenotype, key: string, e: Entry, graceMs = GRACE_MS):
     e.timer = null;
     if (e.refs > 0) return;
     e.geo.dispose();
+    // (a crystal skin carries its cut stone: see facets.ts gemGeometry)
+    (e.geo.userData.gem as { dispose(): void } | null | undefined)?.dispose();
     CACHE.get(p)?.delete(key);
   }, graceMs);
 }
