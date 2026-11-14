@@ -851,7 +851,18 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   `crab.test.ts`, `arachnid.test.ts`, `horror.test.ts`, `tests/viewer/mouths/ring.test.ts › rim`,
   `tests/viewer/smoothSkin.test.ts › the maggot`.
 
+- [x] **M96 — An eleventh look (3.32), and a deer named a deer.** Identification by hide and telltale
+  parts (98% of founders, from 90%); horror feelers round the crown; a wyvern no giraffe; a shark's tail
+  stock; a snake's head; a dog's brush; a frog's round lids; a sea star's smooth arms; level whiskers;
+  an ostrich's shaggy plumes. **Tests:** `morphospace.test.ts › a deer is no dog`, `horror.test.ts`,
+  `wyvern.test.ts`, `fish.test.ts`, `serpent.test.ts`, `canid.test.ts`, `lids.test.ts`,
+  `starfish.test.ts`, `whiskers.test.ts`, `creatureMaterial.test.ts › shaggy`.
+
 ### Next up (unchecked — pick from here)
+
+- [ ] **What the eleventh look left.** A raptor's straight blade of a beak; a lizard's round newt head;
+  a crab's arching legs and balloon claws; the arthro-alien's string of beads; a cut stone still papery;
+  slipper paws and spike ears on the furred plans; hard sock seams on legs; goggle eyes; painted mouths.
 
 - [ ] **What the tenth look left.** The frog's balloon head with its clamshell seam and wedge-cut
   eyelids; the ostrich's scaly plumage; the serpent's blunt tail with an upturned nub; the starfish's

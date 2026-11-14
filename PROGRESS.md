@@ -56,6 +56,39 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 
 ---
 
+## M96 — An eleventh look, and a deer named a deer · 2026-11-14
+
+- **An eleventh look** (same brief and seed, renders of 1c5ae53, after M95) scored **3.32**, up from 3.26
+  in both looks before it: ten plans at 4, twenty-one at 3, none below. Its summary is the work list.
+- **A deer is named a deer.** The Specimen panel, the main menu and saved games name a creature by the
+  morphospace's nearest plan, and its descriptor blurs what tells close plans apart — a deer founder was
+  named a dog or a bear 38 times in 40, a turtle 31, a tailless ostrich an ape (the image reviews never
+  saw it: their crops leave the panel out). Which plan a body is now also weighs its identity: its hide
+  (counted where its plan's founders never wear it), the parts plans are known by — hooves, paws,
+  pincers, a shell, horns, a fin, two legs — where a plan always or never grows them, how far its tail
+  reaches, and a tail's mere presence at less than a whole unit. Founders are named as their own plan
+  98% of the time (from 90%); how near a body is to a plan, and the descriptor the sim uses, are as were.
+- From the list, and the tenth look's leftovers:
+  - *Horror: crown tentacles in a knot* [3] — my M95 feelers rooted inside the crown mouth's lip and
+    swirled into each other; they now root just outside it and splay straight out, each clear of the next.
+  - *Wyvern: a giraffe* [3] — tan netted in dark cells, two short upright horns, an upright neck. Wyverns
+    and dragons draw banded or mottled hides, their horns sweep back along the skull, the wyvern's neck
+    is carried forward.
+  - *Shark: a fin on a rod behind a blunt butt* [3] — its tail now leaves the rump at its own girth.
+  - *Snake: no head, pinhead eyes* [3] — a spade of a head well wider than the neck; eyes a third larger.
+  - *Dog: an udder between the forelegs* [3] — its own brush, hung near plumb and seen from the front;
+    carried a little further back, only its tip shows.
+  - *Frog: Pac-Man eyelids* — a bulging eye opens round in a rim of lid.
+  - *Sea star: strings of sausages* — a radial body's arms are smoothed along a spline like a tail's.
+  - *Whiskers hanging to the floor* (cat, dog, mouse, weasel) — six per pad, set out level from the
+    body's own frame, fanned fore and aft in rows, each tapering and drooping a little at its tip.
+  - *Ostrich: fish-scale plumage* — a feathered body with no wing wears shaggy plumes: hair-like strands
+    along the lay in locks, and in close-up the pile's shells break its outline.
+- **Tests:** `tests/engine/morphospace.test.ts › a deer is no dog`, `tests/engine/plans/horror.test.ts`,
+  `wyvern.test.ts › no giraffe`, `fish.test.ts › tail stock`, `serpent.test.ts › a head`,
+  `canid.test.ts › brush`, `tests/viewer/lids.test.ts`, `starfish.test.ts › one smooth curve`,
+  `tests/viewer/whiskers.test.ts`, `tests/viewer/creatureMaterial.test.ts › shaggy plumage`.
+
 ## M95 — Thin limbs drawn exact, and a tenth look · 2026-11-13
 
 - **Thin limbs drawn exact** (`src/viewer/limbTubes.ts`). A limb link not much thicker than the skin's
