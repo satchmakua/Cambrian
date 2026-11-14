@@ -153,6 +153,12 @@ export function sealedMouth(_phenotype: Phenotype, muzzled: boolean): boolean {
   return !muzzled;
 }
 
+/** Is a shut seam drawn across the face? Not on a slug's (a slime body's): its mouth lies under its
+ *  head, and a crease across the front of its dome was a line painted on a pickle. */
+export function seamShown(p: Phenotype, sealed: boolean): boolean {
+  return !(sealed && p.genomeRef.covering.type === 'slime');
+}
+
 /** a smooth bump of width ~0.16 centered at u = c — one emphasized canine position */
 function spike(u: number, c: number): number {
   const d = (u - c) / 0.16;
@@ -562,7 +568,7 @@ export function JawedMouth({
           in the hide's own material it fought the skin for the same pixels, a dashed line along the mouth
           — a zipper. A seam's skull is its upper jaw.) */}
       {!sealed && <mesh geometry={built.muzzle} material={coatMat} castShadow />}
-      <mesh geometry={built.upperLip} material={mats.lip} castShadow />
+      {seamShown(phenotype, sealed) && <mesh geometry={built.upperLip} material={mats.lip} castShadow />}
       {/* (a mammal's mouth wears no fold: with only its canines/incisors there are no tooth roots to
           hide, and draped under the lip line in the coat it hung below the chin as a pale band; nor
           does a toothless seam — a frog's, a fish's — where it jutted ahead of the snout as a hook) */}

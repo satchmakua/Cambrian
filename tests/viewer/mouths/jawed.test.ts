@@ -3,7 +3,7 @@ import { grow, type Phenotype } from '../../../src/engine/grow';
 import { defaultGenome } from '../../../src/engine/genome';
 import { randomGenome, genomeOfMorphotype } from '../../../src/engine/random';
 import { buildFieldPrims, fieldAt } from '../../../src/viewer/bodyField';
-import { buildJawed, jawDrawn, teethDrawn, JAW_SHOWN, TEETH_SHOWN, JAWED_PARAMS, type JawedVariant } from '../../../src/viewer/mouths/jawed';
+import { buildJawed, jawDrawn, seamShown, teethDrawn, JAW_SHOWN, TEETH_SHOWN, JAWED_PARAMS, type JawedVariant } from '../../../src/viewer/mouths/jawed';
 import { mouthCarves, mouthSpec, surfacePrims } from '../../../src/viewer/mouthLine';
 
 const VARIANTS: JawedVariant[] = ['herbivore', 'maw', 'fanged', 'underbite'];
@@ -187,5 +187,23 @@ describe('jawed mouth build (mouth overhaul)', () => {
         for (const t of sealed.upperTeeth) expect(t.len).toBeLessThan(grin * sealed.r);
       }
     }
+  });
+
+  it("a slug's shut mouth draws no seam across the front of its head; a lizard's and a frog's do", () => {
+    // (a crease across the front of its dome was a line painted on a pickle)
+    for (let seed = 1; seed <= 6; seed++) {
+      for (const [id, shown] of [['slime', false], ['lizard', true], ['anuran', true]] as const) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
+        const spec = mouthSpec(p, idx);
+        if (!spec || !['herbivore', 'maw', 'fanged', 'underbite'].includes(spec.variant)) continue;
+        const b = buildJawed(p, idx, [], false, spec.variant as JawedVariant)!;
+        expect(b.sealed, `${id} #${seed}`).toBe(true);
+        expect(seamShown(p, b.sealed), `${id} #${seed}`).toBe(shown);
+      }
+    }
+    // a furred muzzle's lip line stays
+    const cat = grow(genomeOfMorphotype(2, 'felid'));
+    expect(seamShown(cat, false)).toBe(true);
   });
 });
