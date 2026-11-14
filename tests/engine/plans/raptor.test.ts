@@ -51,6 +51,20 @@ describe('the raptor plan', () => {
     }
   });
 
+  it('carries a head well under its chest on a neck narrower still — not a gourd on a pear', () => {
+    // (its neck was thicker than its head, 0.7–0.8 of the chest's girth under a head of 0.64–0.74: the
+    // head flowed into the body unbroken, a gourd on a pear — from the front a bowling pin, a parrot)
+    for (const seed of SEEDS) {
+      const g = genomeOfMorphotype(seed, 'raptor');
+      const neck = g.body.child!;
+      let head = neck;
+      while (head.child) head = head.child;
+      expect(head, `#${seed} has a neck`).not.toBe(neck);
+      expect(neck.size[0], `#${seed} neck under the head`).toBeLessThan(0.95 * head.size[0]);
+      expect(head.size[0], `#${seed} head under the chest`).toBeLessThan(0.75 * g.body.size[0]);
+    }
+  });
+
   it('only a hawk and the dragons scowl: every other face keeps its level, browless eyes', () => {
     for (const id of MORPHOTYPE_IDS) {
       if (id === 'raptor' || id === 'dragon' || id === 'wyvern') continue;
