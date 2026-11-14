@@ -22,6 +22,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { coatMain } from '../palette';
 import { faceMaskOf, isApe } from '../face';
 import { isTheropod, tailRootRatio } from '../feet';
+import { armoured } from '../scutes';
 import { headStop, type Phenotype } from '../../engine/grow';
 import type { SegmentGene, Vec3 } from '../../engine/genome';
 import type { Carve } from '../bodyField';
@@ -241,21 +242,19 @@ export function buildJawed(
   // a long-headed reptile's seam runs back along its jaw to the hinge under its eye (a fish's and a
   // slug's mouths are their own: see runSeamBack)
   const line = sealed && !isSwimmer(phenotype) && phenotype.genomeRef.covering.type !== 'slime' ? runSeamBack(phenotype, spec, traced, surface) : traced;
-  // …and a row of teeth along it keeps its spacing: as many more as the seam is longer
+  // A shut reptile's teeth hang OUTSIDE its closed jaw — raked in toward the throat like an open mouth's,
+  // every crown ran down from the seam into the shut lower jaw, under the skin, and the animal had no
+  // teeth at all — and only the reptiles that show them show them (see shutTeeth): a crocodile's grin, its
+  // rows running back along the jaw, as many more as the seam is longer, some teeth bigger than the rest; a
+  // theropod's blades; a dragon's fangs. A lizard's and a snake's lie behind their lip scales. (A uniform
+  // row of small pegs the seam's length, on every one of them, was a zip.)
   if (line !== traced) {
+    const show = shutTeeth(phenotype);
     const more = seamLength(line.upper) / Math.max(seamLength(traced.upper), 1e-6);
-    const grow = (t: ToothProfile | null) => (t ? { ...t, count: Math.min(RUN_TEETH_MAX, Math.round(t.count * more)) } : null);
-    params.upper = grow(params.upper);
-    params.lower = grow(params.lower);
-  }
-  // A shut reptile's teeth hang OUTSIDE its closed jaw — a crocodile's grin, a dragon's: raked in toward
-  // the throat like an open mouth's, every crown ran down from the seam into the shut lower jaw, under
-  // the skin, and the animal had no teeth at all. (A snake shows none: its mouth shuts over them.)
-  if (line !== traced) {
-    const legged = phenotype.nodes.some((n) => n.part?.kind === 'leg');
-    const out = (t: ToothProfile | null) => (t && legged ? { ...t, curl: -TEETH_OUT } : null);
-    params.upper = out(params.upper);
-    params.lower = out(params.lower);
+    const grin = (t: ToothProfile | null): ToothProfile | null =>
+      t ? { ...t, curl: -TEETH_OUT, count: Math.min(RUN_TEETH_MAX, Math.round(t.count * more)), jitterLen: Math.max(t.jitterLen, GRIN_JITTER), len: (u: number) => t.len(u) * (1 + GRIN_BULGE * Math.exp(-(((u - 0.4) / 0.13) ** 2))) } : null;
+    params.upper = show === 'grin' ? grin(params.upper) : show === 'fangs' ? DRAGON_FANGS : show === 'blades' ? THEROPOD_TEETH : null;
+    params.lower = show === 'grin' ? grin(params.lower) : null;
   }
   const o = spec.node.pos; // node-relative frame origin
 
@@ -442,10 +441,27 @@ const RUN_TEETH_MAX = 22;
 export const TEETH_OUT = 0.32;
 /** how deep a reptile's seam along its jaw lies in the skin (× its own thickness): a groove, not a wire */
 export const SEAM_SINK = 0.55;
-/** A THEROPOD's upper teeth: a dozen even blades along its jaw, most of each crown showing below the shut
- *  lip. (A crocodile's small pegs, sunk 0.42 of their length, stood a fiftieth of a unit off a theropod's
- *  skin — no teeth in its face — and an underbite's upper row was none.) */
-export const THEROPOD_TEETH: ToothProfile = { count: 12, len: (u: number) => 0.46 + 0.04 * u, width: 0.22, curl: -TEETH_OUT, jitterLen: 0.14, jitterRock: 0.08, sink: 0.28, margin: 0.14, salt: 2 };
+/** A THEROPOD's upper teeth: ten blades along its jaw, most of each crown showing below the shut lip, the
+ *  biggest a third of the way back, each its own length. (A crocodile's small pegs, sunk 0.42 of their
+ *  length, stood a fiftieth of a unit off a theropod's skin — no teeth in its face — and an underbite's upper
+ *  row was none; a dozen even blades, multiplied by the seam's length, were a row of stitching.) */
+export const THEROPOD_TEETH: ToothProfile = { count: 10, len: (u: number) => 0.34 + 0.26 * Math.sin(Math.PI * Math.min(1, (u + 0.1) / 0.95)), width: 0.24, curl: -TEETH_OUT, jitterLen: 0.15, jitterRock: 0.1, sink: 0.28, margin: 0.14, salt: 2 };
+/** A DRAGON's (a wyvern's) shut jaw shows a few long fangs at its front, the longest foremost. */
+export const DRAGON_FANGS: ToothProfile = { count: 6, len: (u: number) => 0.78 - 0.32 * u, width: 0.26, curl: -TEETH_OUT, jitterLen: 0.18, jitterRock: 0.1, sink: 0.3, margin: 0.42, salt: 3 };
+/** A crocodile's grin: its teeth each their own length (± this share), and a band of bigger ones a little
+ *  way back along the jaw (GRIN_BULGE more, at 0.4 of the way to the corner) */
+export const GRIN_JITTER = 0.32;
+export const GRIN_BULGE = 0.55;
+/** Which teeth a shut reptile's jaw shows (its seam run back along the jaw): a crocodile's grin (a
+ *  sculling-tailed, armoured body — scutes.ts armoured), a theropod's blades, a winged reptile's fangs; a
+ *  lizard's and a snake's none. */
+export function shutTeeth(p: Phenotype): 'grin' | 'blades' | 'fangs' | 'none' {
+  if (!p.nodes.some((n) => n.part?.kind === 'leg')) return 'none';
+  if (isTheropod(p)) return 'blades';
+  if (armoured(p)) return 'grin';
+  if (p.nodes.some((n) => n.part?.kind === 'wing')) return 'fangs';
+  return 'none';
+}
 
 /**
  * How far a muzzle runs out ahead of its braincase: the mouth's distance from its head section's first

@@ -3,7 +3,7 @@ import { grow, type Phenotype } from '../../../src/engine/grow';
 import { defaultGenome } from '../../../src/engine/genome';
 import { randomGenome, genomeOfMorphotype } from '../../../src/engine/random';
 import { buildFieldPrims, fieldAt, qRotateV, rayToSurface } from '../../../src/viewer/bodyField';
-import { buildJawed, jawDrawn, seamShown, teethDrawn, JAW_SHOWN, TEETH_SHOWN, JAWED_PARAMS, type JawedVariant } from '../../../src/viewer/mouths/jawed';
+import { buildJawed, jawDrawn, seamShown, teethDrawn, JAW_SHOWN, TEETH_SHOWN, JAWED_PARAMS, type JawedVariant, shutTeeth, DRAGON_FANGS, GRIN_BULGE, GRIN_JITTER } from '../../../src/viewer/mouths/jawed';
 import { mouthCarves, mouthSpec, surfacePrims } from '../../../src/viewer/mouthLine';
 
 const VARIANTS: JawedVariant[] = ['herbivore', 'maw', 'fanged', 'underbite'];
@@ -286,7 +286,12 @@ describe('jawed mouth build (mouth overhaul)', () => {
       const spec = mouthSpec(p, idx);
       if (!spec || !['herbivore', 'maw', 'fanged', 'underbite'].includes(spec.variant)) continue;
       const b = buildJawed(p, idx, [], false, spec.variant as JawedVariant, 'hybrid')!;
-      expect(b.upperTeeth.length, `biped #${seed}`).toBeGreaterThanOrEqual(12);
+      expect(b.upperTeeth.length, `biped #${seed}`).toBeGreaterThanOrEqual(8);
+      // …each its own length, the biggest a third of the way back: a dozen even blades multiplied by the
+      // seam's length were a row of stitching
+      expect(b.upperTeeth.length, `biped #${seed} not a zip`).toBeLessThanOrEqual(12);
+      const lens = b.upperTeeth.map((t) => t.len);
+      expect(Math.max(...lens) / Math.min(...lens), `biped #${seed} uneven`).toBeGreaterThan(1.3);
       const f = surfacePrims(p, 'hybrid');
       const o = spec.node.pos;
       let shown = 0;
@@ -305,5 +310,28 @@ describe('jawed mouth build (mouth overhaul)', () => {
       }
       expect(shown / b.upperTeeth.length, `biped #${seed} crown showing`).toBeGreaterThan(0.045);
     }
+  });
+
+  it("only the reptiles that show their teeth shut show them: a crocodile's grin, a theropod's blades, a dragon's fangs", () => {
+    // (a uniform row of small pegs the length of every reptile's seam — a lizard's too — was a zip)
+    const expected = { lizard: 'none', serpent: 'none', crocodilian: 'grin', biped: 'blades', dragon: 'fangs', wyvern: 'fangs' } as const;
+    for (const [id, kind] of Object.entries(expected)) {
+      for (let seed = 1; seed <= 6; seed++) expect(shutTeeth(grow(genomeOfMorphotype(seed, id))), `${id} #${seed}`).toBe(kind);
+    }
+    for (let seed = 1; seed <= 6; seed++) {
+      // a lizard's shut jaw shows none, whatever its mouth's band
+      const p = grow(genomeOfMorphotype(seed, 'lizard'));
+      const idx = mouthIdx(p);
+      const b = buildJawed(p, idx, [], false, 'fanged', 'hybrid')!;
+      expect(b.upperTeeth.length + b.lowerTeeth.length, `lizard #${seed}`).toBe(0);
+      // a dragon's few fangs stand at the front of its jaw, the longest foremost
+      const d = grow(genomeOfMorphotype(seed, 'dragon'));
+      const db = buildJawed(d, mouthIdx(d), [], false, 'fanged', 'hybrid')!;
+      expect(db.upperTeeth.length, `dragon #${seed}`).toBe(DRAGON_FANGS.count);
+      expect(db.lowerTeeth.length, `dragon #${seed}`).toBe(0);
+    }
+    // a crocodile's grin is uneven: a band of bigger teeth a little way back
+    expect(GRIN_BULGE).toBeGreaterThan(0.3);
+    expect(GRIN_JITTER).toBeGreaterThan(0.2);
   });
 });
