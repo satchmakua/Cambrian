@@ -207,6 +207,33 @@ export function foldedSpan(p: Phenotype, tipRadius: number): number {
   return Math.max(openS * MEMBRANE_FOLD, legRoots === 2 ? ARM_FOLD * trunkLen : 0);
 }
 
+/** a folded membrane wing's lowest point and its furthest reach back from the shoulder, × its span (the
+ *  fold buildFoldedMembraneWing lays down: its last finger's tip, its first's) */
+export const FOLD_DROP = 0.284;
+export const FOLD_BACK = 0.481;
+/** how far down its legs a four-legged body's folded skin may hang, × the belly's height off the ground */
+export const FOLD_HANG = 0.2;
+
+/**
+ * The span a membrane wing is FOLDED at on a body standing on four legs (a dragon's, a chimera's): `S`, but
+ * no more than lets the folded skin end a fifth of the way down the legs and the finger tips over the rump.
+ * (Folded at 1.35 times a big dragon's open span, its fingers ran 3-3.6 bu back from a wrist level with
+ * the crown of its head: the skin hung over the haunch to the floor like a cape, the tips past the rump
+ * over the tail, and from the front the two folds were sails from the floor to above the head.) Only the
+ * resting fold is laid to the body: the open wing keeps its span.
+ */
+export function restingFold(p: Phenotype, S: number, shoulder: readonly number[]): number {
+  const trunk = p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0);
+  const feet = p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg');
+  if (!trunk.length || feet.length < 4) return S; // (a wyvern's wings are its arms: see foldedSpan)
+  const belly = Math.min(...trunk.map((n) => n.pos[1] - n.radius * (n.scale?.[1] ?? 1)));
+  const ground = Math.min(...feet.map((n) => n.pos[1] - n.radius));
+  const rump = Math.min(...trunk.map((n) => n.pos[2] - n.radius));
+  const low = belly - FOLD_HANG * Math.max(0, belly - ground);
+  const fit = Math.min((shoulder[1] - low) / FOLD_DROP, (shoulder[2] - rump) / FOLD_BACK);
+  return Math.min(S, Math.max(0.5 * S, fit));
+}
+
 export function buildFoldedMembraneWing(side: number, S: number): WingBuild {
   const s = side >= 0 ? 1 : -1;
   const out = v3(s, 0, 0); // the side: the folded wing's skin faces out from the flank

@@ -168,8 +168,10 @@ describe('a dragon’s head (and a wyvern’s)', () => {
           for (const a of s.appendages) {
             if (a.kind !== 'horn') continue;
             horns++;
-            // aimed well back (elevation past −1.1 rad): along the skull, not up off it
-            expect(a.attachElevation, `${id} #${seed}`).toBeLessThan(-1.1);
+            // aimed well back (elevation past −1.1 rad): along the skull, not up off it — a dragon's from
+            // the back corners of its skull, swept back at least 50° (aimed as far back as a wyvern's, both
+            // rooted on the midline, their sheaths merged into a fork)
+            expect(a.attachElevation, `${id} #${seed}`).toBeLessThan(id === 'dragon' ? -0.85 : -1.1);
           }
         }
         // a wyvern's neck leaves its shoulders pitched up no more than a fifth of a radian a link

@@ -28,7 +28,7 @@ import { makeCreatureMaterial } from './creatureMaterial';
 import { bareOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, ratLike, shaggyPlumage, skinPartWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, shellScutes, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, foldedSpan, type FinBuild, type TailRump } from './wings';
+import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, foldedSpan, restingFold, type FinBuild, type TailRump } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
 import { BROW_TILT, bulgingEye, eyeClearings, eyeSeat, eyeTilt, FEELER_KNOB, FEELER_SPOT, feelerTip, isOcellus, isSwimmer } from './eyeSeat';
@@ -789,7 +789,7 @@ function Feature({
       }
       if (f.kind === 'horn') return <Horn f={f} color={footColor} seed={phenotype.genomeRef.seed} phenotype={phenotype} />;
       // a back spine stands out along its aim, a tail's claw runs on from its tip as a sting (scutes.ts)
-      if (f.kind === 'spine') return <DorsalSpike f={f} color={footColor} />;
+      if (f.kind === 'spine') return <DorsalSpike f={f} color={footColor} horn />;
       if (f.kind === 'tail') return <DorsalSpike f={f} color={footColor} shape={TAIL_STING} />;
       const reach = phenotype.nodes[f.idx].pos[1] - phenotype.bounds.min[1];
       if (f.kind === 'leg' && arthropodLegs(phenotype)) return <LegTip f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} reach={reach} />;
@@ -1550,11 +1550,13 @@ function ToedFoot({ f, plan, skin, phenotype }: { f: MeshFeature; plan: FootPlan
 }
 
 // A claw: a darker, pointed talon.
-function DorsalSpike({ f, color, shape }: { f: MeshFeature; color: number; shape?: readonly [number, number, number] }) {
+function DorsalSpike({ f, color, shape, horn = false }: { f: MeshFeature; color: number; shape?: readonly [number, number, number]; horn?: boolean }) {
   const r = Math.max(f.radius, 0.06);
   const geo = useMemo(() => dorsalSpikeGeometry(r, f.quat, shape), [r, f.quat, shape]);
   useEffect(() => () => geo.dispose(), [geo]);
-  const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.7).getHex(), [color]);
+  // a BACK spine is horn, as the horns are: the coat's dark drawn toward pale keratin (see Horn). (At the
+  // coat's dark x0.7 it was near black: from above, each a round dark hole in the back, a bullet hole.)
+  const dark = useMemo(() => (horn ? new THREE.Color(color).lerp(new THREE.Color(0xcfc3a0), 0.5) : new THREE.Color(color).multiplyScalar(0.7)).getHex(), [color, horn]);
   return (
     <mesh geometry={geo} castShadow>
       <meshStandardMaterial color={dark} roughness={0.55} metalness={0.05} />
@@ -1866,7 +1868,8 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
       ? buildSpreadFeatheredWing(side, openS, plumage, accent, 0.62 + 0.2 * (g.seed % 7) / 7)
       : feathered
         ? buildFeatheredWing(side, foldS, plumage, accent, long?.axis)
-        : buildFoldedMembraneWing(side, foldedSpan(phenotype, f.radius));
+        : // (at rest the fold is laid to the body it hangs on: see restingFold)
+          buildFoldedMembraneWing(side, restingFold(phenotype, foldedSpan(phenotype, f.radius), wingShoulder(phenotype, side) ?? shoulder));
     // the flight posture: the same plumage opened out — a wing reaches further spread than folded
     const spread = feathered ? buildSpreadFeatheredWing(side, raised ? openS * 1.1 : foldS * 1.35, plumage, accent).surface : null;
     const open = feathered ? null : buildMembraneWing(side, foldedSpan(phenotype, f.radius) / MEMBRANE_FOLD, 0.55 + 0.3 * (g.seed % 7) / 7);

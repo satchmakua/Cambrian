@@ -3,7 +3,8 @@ import { mouthVariant } from '../../../src/viewer/partStyles';
 import * as THREE from 'three';
 import { grow, legBearer, type Phenotype } from '../../../src/engine/grow';
 import { genomeOfMorphotype } from '../../../src/engine/random';
-import { buildFeatheredWing, buildSpreadFeatheredWing, wingCarriage } from '../../../src/viewer/wings';
+import { buildFeatheredWing, buildFoldedMembraneWing, buildSpreadFeatheredWing, FOLD_BACK, FOLD_DROP, foldedSpan, restingFold, wingCarriage, wingShoulder } from '../../../src/viewer/wings';
+import { HORN_ROOT } from '../../../src/viewer/horn';
 
 const SEEDS = Array.from({ length: 24 }, (_, i) => i + 1);
 
@@ -204,6 +205,75 @@ describe('chimera', () => {
       const tail = p.nodes.filter((n) => n.part?.kind === 'tail');
       expect(tail.length, `#${seed}`).toBeGreaterThan(0);
       expect(Math.min(...tail.map((n) => n.pos[1] - n.radius)), `#${seed}`).toBeGreaterThanOrEqual(belly - 0.05);
+    }
+  });
+
+  it("no dragon's tail hangs under its belly: carried out level, it lifts a little toward its tip", () => {
+    // (drooping and curling down by as much as up, half the dragons' tails ended under the belly line: from
+    // the front the tip was a pale ball hung under the chest, and a club's mace showed between the forelegs)
+    for (let seed = 1; seed <= 41; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'dragon'));
+      const belly = Math.min(...trunkOf(p).map((n) => n.pos[1] - ry(n)));
+      const tail = p.nodes.filter((n) => n.part?.kind === 'tail');
+      expect(Math.min(...tail.map((n) => n.pos[1] - n.radius)), `#${seed}`).toBeGreaterThanOrEqual(belly - 0.1);
+    }
+  });
+
+  it("a four-legged body's folded wing is laid to it: no cape to the floor, no fingers past the rump", () => {
+    // (folded at 1.35 times a big dragon's open span, the skin hung over the haunch to the floor and the
+    // finger tips ran past the rump over the tail)
+    const probe = buildFoldedMembraneWing(1, 1).surface;
+    probe.computeBoundingBox();
+    expect(-probe.boundingBox!.min.y).toBeCloseTo(FOLD_DROP, 3);
+    expect(-probe.boundingBox!.min.z).toBeCloseTo(FOLD_BACK, 3);
+    for (const id of ['dragon', 'chimera']) {
+      for (let seed = 1; seed <= 40; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        if (p.genomeRef.covering.type === 'feathers') continue;
+        const tip = p.nodes.find((n) => n.kind === 'terminal' && n.part?.kind === 'wing' && n.pos[0] > 0);
+        if (!tip) continue;
+        const shoulder = wingShoulder(p, 1)!;
+        const full = foldedSpan(p, tip.radius);
+        const S = restingFold(p, full, shoulder);
+        const w = buildFoldedMembraneWing(1, S).surface;
+        w.computeBoundingBox();
+        const b = w.boundingBox!;
+        const trunk = trunkOf(p);
+        const belly = Math.min(...trunk.map((n) => n.pos[1] - ry(n)));
+        const ground = Math.min(...p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg').map((n) => n.pos[1] - n.radius));
+        const rump = Math.min(...trunk.map((n) => n.pos[2] - n.radius));
+        expect(shoulder[1] + b.min.y, `${id} #${seed} hangs`).toBeGreaterThanOrEqual(belly - 0.25 * (belly - ground));
+        expect(shoulder[2] + b.min.z, `${id} #${seed} reaches back`).toBeGreaterThanOrEqual(rump - 0.05);
+        expect(S, `${id} #${seed} still a sail`).toBeGreaterThanOrEqual(0.5 * full);
+      }
+    }
+    // (a wyvern's wings are its arms: its fold is as foldedSpan makes it)
+    const wy = grow(genomeOfMorphotype(5, 'wyvern'));
+    const wt = wy.nodes.find((n) => n.kind === 'terminal' && n.part?.kind === 'wing' && n.pos[0] > 0)!;
+    expect(restingFold(wy, foldedSpan(wy, wt.radius), wingShoulder(wy, 1)!)).toBe(foldedSpan(wy, wt.radius));
+  });
+
+  it("a dragon's back spines stand on three links of its back, its horns root apart, its feet keep their girth", () => {
+    // (at 0.2/0.45/0.7 two spines always fell on one link of a 3-4 link trunk: two dots; aimed nearly straight
+    // back, both horns rooted on the midline, their sheaths merged: a fork; its shanks thinned to tiny claws)
+    for (let seed = 1; seed <= 40; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'dragon'));
+      const trunk = trunkOf(p);
+      const len = Math.max(...trunk.map((n) => n.pos[2])) - Math.min(...trunk.map((n) => n.pos[2]));
+      const spines = p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'spine').map((n) => n.pos[2]).sort((a, b) => a - b);
+      for (let i = 1; i < spines.length; i++) expect(spines[i] - spines[i - 1], `#${seed} spines apart`).toBeGreaterThanOrEqual(0.25 * len);
+      const parent = parentsOf(p);
+      p.nodes.forEach((n, i) => {
+        if (n.kind !== 'terminal' || n.part?.kind !== 'horn' || n.pos[0] < 0) return;
+        let root = i;
+        while (parent.has(root) && p.nodes[parent.get(root)!].part?.kind === 'horn') root = parent.get(root)!;
+        const R = p.nodes[root];
+        const r = Math.max(R.radius, n.radius, 0.06);
+        expect(2 * R.pos[0] - 2 * HORN_ROOT * r, `#${seed} horn roots apart`).toBeGreaterThan(0);
+      });
+      const feet = p.nodes.filter((n) => n.kind === 'terminal' && n.part?.kind === 'leg');
+      const chest = Math.max(...trunk.map((n) => n.radius));
+      expect(Math.min(...feet.map((n) => n.radius)) / chest, `#${seed} feet`).toBeGreaterThanOrEqual(0.17);
     }
   });
 

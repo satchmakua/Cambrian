@@ -366,7 +366,9 @@ export function scuteGeometries(p: Phenotype, scutes: readonly Scute[]): { node:
  * never turned to its aim, its flat base standing over the skin — each was a dark disc on a lump: a
  * bolt-head beside the wing root, two square pads from above.)
  */
-export const DORSAL_SPIKE: readonly [number, number, number] = [3.4, 0.7, 0.3];
+// (raked back 0.6 and 4.0 long it is a thorn from above, 3.1 r along the back by 1.7 r across, still standing
+// 2.7 r: at 0.3 and 3.4 its footprint was round, 1.7 r by 1.6 r — a dot)
+export const DORSAL_SPIKE: readonly [number, number, number] = [4.0, 0.7, 0.6];
 /** …and a tail's claw (a manticore's): a STING run on from the tail's tip along its last link, unraked —
  *  [length, sink, rake] as DORSAL_SPIKE. (Drawn as a leg's claw it was a dark disc floating over the end of
  *  the tail.) */

@@ -381,6 +381,9 @@ describe('a winged quadruped (a dragon, a chimera)', () => {
     expect(Math.max(...base) / r).toBeLessThan(0.5);
     // …and its point leans back along the body (−Z)
     expect(far[0].z).toBeLessThan(-0.3 * r);
+    // …well back: from above a thorn raked along the back, not a round dot (raked 0.3, its point stood
+    // within a radius of its root)
+    expect(-far[0].z / r, 'raked back').toBeGreaterThan(1.5);
     g.dispose();
   });
 });
