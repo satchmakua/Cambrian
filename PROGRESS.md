@@ -118,6 +118,9 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
     occlusion probe (and its vertices hidden under the field's skin, probed from inside the leg) shaded
     it near black: a sock's top round every leg. Near such a joint a tube is never darker than the skin
     round the joint.
+  - *A weasel's ball of fur* — a coat's pile was scaled by the creature's length alone, so a long slim
+    weasel wore the shaggiest of any, a sixth of its girth deep (a cat's is a tenth, a bear's less): seen
+    from the front, a ball of fur. The pile is now at most a tenth of the trunk's girth.
 - **Tests:** `tests/engine/morphospace.test.ts › a deer is no dog`, `tests/engine/plans/horror.test.ts`,
   `wyvern.test.ts › no giraffe`, `fish.test.ts › tail stock`, `serpent.test.ts › a head`,
   `canid.test.ts › brush`, `tests/viewer/lids.test.ts`, `starfish.test.ts › one smooth curve`,
@@ -126,7 +129,7 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   `tests/viewer/eyeSeat.test.ts › still sinks to its seat`, `tests/viewer/feet.test.ts › knows its
   legs`, `tests/viewer/ear.test.ts › a deep cup`, `eyeSeat.test.ts › a compound eye is a low dome`,
   `tests/viewer/bodyField.test.ts › feelers`, `arthro-alien.test.ts › feelers rise`,
-  `tests/viewer/limbTubes.test.ts › no dark ring`.
+  `tests/viewer/limbTubes.test.ts › no dark ring`, `tests/viewer/pile.test.ts`.
 
 ## M95 — Thin limbs drawn exact, and a tenth look · 2026-11-13
 

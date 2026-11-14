@@ -238,9 +238,7 @@ export function CreatureMesh({
   // shaggy plumes, longer and coarser (drawn on the skin alone, its plumage was a smooth suede)
   const furMats = useMemo(() => {
     if (!fur || (cov.type !== 'fur' && !shaggy) || skinMode === 'capsules') return [];
-    const { min, max } = phenotype.bounds;
-    const size = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
-    const len = Math.min(0.08, Math.max(0.022, size * 0.0095)) * (shaggy ? PLUME_LEN : 1);
+    const len = pileLength(phenotype) * (shaggy ? PLUME_LEN : 1);
     const bare = bareOf(phenotype)?.bare ?? null;
     const eyes = eyeClearings(phenotype, data.features);
     return Array.from({ length: FUR_SHELLS }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / FUR_SHELLS, len, density: 3.2 / len, eyes }, face, 0, headMask));
@@ -672,6 +670,19 @@ function keepAt(detail: Detail, f: MeshFeature, crystal = false): boolean {
 
 /** a shaggy bird's plumes against a pelt's pile (× its length) */
 const PLUME_LEN = 2.2;
+/** a coat's pile, ×the creature's length — and at most ×its trunk's girth: a long slim body (a weasel's)
+ *  wears a short dense pile (scaled by length alone, its coat was the shaggiest of any, a sixth of its
+ *  girth deep: seen from the front, a ball of fur twice the width of its head) */
+const PILE_PER_SIZE = 0.0095;
+const PILE_PER_GIRTH = 0.1;
+export function pileLength(p: Phenotype): number {
+  const { min, max } = p.bounds;
+  const size = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
+  let girth = 0;
+  for (const n of p.nodes) if (n.kind === 'spine' && (n.segment ?? 0) === 0) girth = Math.max(girth, n.radius * Math.min(n.scale?.[0] ?? 1, n.scale?.[1] ?? 1));
+  const len = girth > 0 ? Math.min(size * PILE_PER_SIZE, girth * PILE_PER_GIRTH) : size * PILE_PER_SIZE;
+  return Math.min(0.08, Math.max(0.022, len));
+}
 /** layers of shell fur in the close-up views */
 const FUR_SHELLS = 12;
 
