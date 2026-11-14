@@ -28,7 +28,7 @@ import { makeCreatureMaterial } from './creatureMaterial';
 import { bareOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, ratLike, shaggyPlumage, skinPartWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, shellScutes, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, type FinBuild } from './wings';
+import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, type FinBuild, type TailRump } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
 import { BROW_TILT, bulgingEye, eyeClearings, eyeSeat, eyeTilt, FEELER_KNOB, FEELER_SPOT, feelerTip, isOcellus, isSwimmer } from './eyeSeat';
@@ -2032,8 +2032,17 @@ function TailFan({ phenotype }: { phenotype: Phenotype }) {
     const pal = g.palette;
     const plumage = coatMain(pal);
     const accent = coatPattern(pal);
+    // its coverts come out of the rump: the trunk node nearest the tail's root, from the fan's root
+    const fan = phenotype.nodes.find((n) => n.kind === 'terminal' && n.part?.kind === 'tail');
+    let rump: TailRump | undefined;
+    if (fan && trunk.length) {
+      const gap = (n: (typeof trunk)[number]) => Math.hypot(n.pos[0] - fan.pos[0], n.pos[1] - fan.pos[1], n.pos[2] - fan.pos[2]) - n.radius;
+      const near = trunk.reduce((a, b) => (gap(a) <= gap(b) ? a : b));
+      rump = { at: new THREE.Vector3(near.pos[0] - fan.pos[0], near.pos[1] - fan.pos[1], near.pos[2] - fan.pos[2]), r: near.radius * Math.min(near.scale?.[0] ?? 1, near.scale?.[1] ?? 1) };
+    }
     // (a little longer than it was: at a little over half the trunk, behind a hawk's wing tips it was a stub)
-    return buildTailFan(Math.max(len * 0.68, girth * 1.8), plumage, accent, 0.2 + (g.seed % 5) * 0.06);
+    // a banded coat's tail is barred across
+    return buildTailFan(Math.max(len * 0.68, girth * 1.8), plumage, accent, 0.2 + (g.seed % 5) * 0.06, g.covering.pattern === 'bands', rump);
   }, [phenotype, g]);
   useEffect(() => () => geo.dispose(), [geo]);
   return (

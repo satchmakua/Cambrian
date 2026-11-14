@@ -275,18 +275,23 @@ export function buildFoldedMembraneWing(side: number, S: number): WingBuild {
 
 // --- feathers ------------------------------------------------------------------------------------
 
-/** One feather: a slightly cupped lens in its own frame (+X along the shaft, +Y across the vane). */
+/**
+ * One feather: a slightly cupped lens in its own frame (+X along the shaft, +Y across the vane). Its
+ * colour may change along it (`color` of t, 0 at the quill → 1 at the tip: a barred tail's bands),
+ * over `seg` rows.
+ */
 function featherInto(
   pos: number[], col: number[], idx: number[],
   origin: THREE.Vector3, along: THREE.Vector3, across: THREE.Vector3, normal: THREE.Vector3,
-  length: number, width: number, color: THREE.Color, lift: number,
+  length: number, width: number, color: THREE.Color | ((t: number) => THREE.Color), lift: number, seg = 7,
 ): void {
   const base = pos.length / 3;
-  const SEG = 7;
+  const SEG = seg;
   for (let i = 0; i <= SEG; i++) {
     const t = i / SEG;
     // a feather is widest a third of the way along, rounded at the tip, narrow at the quill
     const w = width * Math.sin(Math.PI * Math.min(1, t * 0.85 + 0.08)) * (t < 0.12 ? t / 0.12 : 1);
+    const c = typeof color === 'function' ? color(t) : color;
     for (const k of [-1, 0, 1]) {
       const p = origin.clone()
         .add(along.clone().multiplyScalar(t * length))
@@ -296,7 +301,7 @@ function featherInto(
       pos.push(p.x, p.y, p.z);
       // the rachis (shaft) runs a touch lighter
       const shade = k === 0 ? 1.12 : 1.0;
-      col.push(color.r * shade, color.g * shade, color.b * shade);
+      col.push(c.r * shade, c.g * shade, c.b * shade);
     }
   }
   for (let i = 0; i < SEG; i++) {
@@ -558,22 +563,58 @@ export function wingCarriage(feathered: boolean, legPairs: number): WingCarriage
 }
 
 /**
- * A bird's tail: a fan of long rectrices spread in a near-horizontal plane, pointing back from the
- * tail tip (in the body frame, origin at the tail node). Replaces the fish caudal fin a feathered
- * creature's tail used to end in.
+ * A bird's tail at rest: its long rectrices CLOSED, stacked all but wholly over each other, pointing
+ * back from the tail tip (in the body frame, origin at the tail node), shingled at the root by the
+ * coverts that run it on from the rump. Replaces the fish caudal fin a feathered creature's tail used
+ * to end in.
+ *
+ * (Spread ±31°, as a bird spreads its tail only to land or display, it was a comb of separate blades
+ * from above, alternately light and dark; and with nothing over its root it jutted from under the rump
+ * as a thin flat plank — the thirteenth look's hawk.)
  */
-/** how far a tail fan's outer feathers lift to either side (rad): a shallow trough */
-const TAIL_TROUGH = 0.45;
+/** how far a resting tail's feathers fan either side of its middle (rad): closed, a long blade with a
+ *  rounded end */
+export const TAIL_SPREAD = 0.13;
+/** how far a tail's outer feathers lift to either side (rad): a shallow trough */
+const TAIL_TROUGH = 0.3;
+/** how far the upper tail coverts reach down the tail (of its length); the under ones reach 0.9 of it */
+export const COVERT_REACH = 0.32;
 
-export function buildTailFan(S: number, base: THREE.Color, accent: THREE.Color, droop = 0.25): THREE.BufferGeometry {
+/** where a tail fan's root sits on its body: the rump node's centre (relative to the tail node) and girth */
+export interface TailRump {
+  at: THREE.Vector3;
+  r: number;
+}
+
+/**
+ * The colour of a tail feather along its length (t: 0 at the quill, 1 at the tip). A BARRED tail (a
+ * banded bird's: a hawk's, a kestrel's) wears four narrow dark bars, a broad dark band before its tip
+ * and a pale tip; any other darkens toward its end, its tip fringed pale.
+ */
+export function tailBandAt(t: number, tail: THREE.Color, bar: THREE.Color, pale: THREE.Color, barred: boolean): THREE.Color {
+  if (t > 0.94) return tail.clone().lerp(pale, barred ? 1 : 0.35);
+  if (barred) {
+    if (t > 0.8) return bar;
+    if (t > 0.28 && (t - 0.28) % 0.13 < 0.05) return bar;
+    return tail;
+  }
+  return tail.clone().lerp(bar, 0.45 * sstep(0.45, 0.9, t));
+}
+
+export function buildTailFan(S: number, base: THREE.Color, accent: THREE.Color, droop = 0.25, barred = false, rump?: TailRump): THREE.BufferGeometry {
   const pos: number[] = [];
   const col: number[] = [];
   const idx: number[] = [];
   const N = 9;
   const normal = v3(0, 1, -droop).normalize();
+  // the rectrices a shade darker than the coat, their bars in the markings' colour, darker still
+  const tail = base.clone().lerp(accent, 0.15).multiplyScalar(0.8);
+  const bar = accent.clone().lerp(base, 0.2).multiplyScalar(0.42);
+  const pale = base.clone().lerp(new THREE.Color(0.95, 0.92, 0.84), 0.6);
+  const colourAt = (t: number) => tailBandAt(t, tail, bar, pale, barred);
   for (let i = 0; i < N; i++) {
     const t = i / (N - 1);
-    const ang = (t - 0.5) * 1.1; // ±31° fan
+    const ang = (t - 0.5) * 2 * TAIL_SPREAD;
     // …in a shallow trough, the outer feathers lifted to either side as a resting tail's layers lie:
     // laid flat, from the side or any low angle the tail was its own edge, a twig in the rump
     const rise = TAIL_TROUGH * Math.abs(t - 0.5) * 2;
@@ -581,13 +622,65 @@ export function buildTailFan(S: number, base: THREE.Color, accent: THREE.Color, 
     const tilt = v3(-Math.sign(t - 0.5) * Math.sin(rise), Math.cos(rise), -droop).normalize();
     const across = new THREE.Vector3().crossVectors(tilt, along).normalize();
     const fnormal = new THREE.Vector3().crossVectors(along, across).normalize();
-    // outer feathers shorter (a rounded fan), the central pair longest, banded tips
-    const len = S * (0.75 + 0.25 * Math.cos((t - 0.5) * Math.PI));
-    const c = (i % 2 === 0 ? base.clone().multiplyScalar(0.62) : base.clone().lerp(accent, 0.35).multiplyScalar(0.7));
+    // outer feathers a little shorter (a rounded end), the central pair longest
+    const len = S * (0.86 + 0.14 * Math.cos((t - 0.5) * Math.PI));
     // stack from the outside in so the central feathers lie on top
     const lift = 0.006 * S * (N / 2 - Math.abs(i - (N - 1) / 2));
-    featherInto(pos, col, idx, v3(0, 0, 0), along, across, fnormal.dot(normal) < 0 ? fnormal.negate() : fnormal, len, S * 0.2, c, lift);
+    featherInto(pos, col, idx, v3(0, 0, 0), along, across, fnormal.dot(normal) < 0 ? fnormal.negate() : fnormal, len, S * 0.22, colourAt, lift, 30);
   }
+  // the coverts: a hood of short feathers over the tail's root and one under it, each coming out of the
+  // coat near where a line from its end on the tail meets the rump's round (above it, or below), so the
+  // back's outline runs on down the coverts to the tail and the belly's under it — in the coat's own
+  // colour, shingled in rows
+  const d = v3(0, -droop, -1).normalize();
+  const up = v3(0, 1, 0).addScaledVector(d, -d.y).normalize();
+  const rumpAt = rump ? rump.at : d.clone().multiplyScalar(-0.55 * S);
+  const rumpR = rump ? rump.r : 0.3 * S;
+  const hood = (s: number, reach: number, w1: number, colour: THREE.Color, rest: number) => {
+    // (its end rests ON the tail: on the stacked rectrices' top, or just under their lowest)
+    const E = d.clone().multiplyScalar(reach * S).addScaledVector(up, rest * S);
+    const rel = E.clone().sub(rumpAt);
+    const dist = Math.max(rel.length(), rumpR * 1.05);
+    const beta = Math.atan2(rel.y, -rel.z);
+    // (tangent to the round, but no further round it than over the rump's top or its vent)
+    const ang = beta + s * Math.min(Math.acos(rumpR / dist), s > 0 ? 1.4 : 0.55);
+    const R = rumpAt.clone().add(v3(0, Math.sin(ang), -Math.cos(ang)).multiplyScalar(rumpR * 0.7));
+    const dir = E.clone().sub(R).normalize();
+    const n = v3(0, 1, 0).addScaledVector(dir, -dir.y).normalize();
+    const NA = 16, NB = 12;
+    const base0 = pos.length / 3;
+    const c = new THREE.Color();
+    for (let i = 0; i <= NA; i++) {
+      for (let j = 0; j <= NB; j++) {
+        const a = i / NA, b = j / NB, bb = 2 * b - 1;
+        // the trailing edge cut into the coverts' rounded tips
+        const aa = a * (1 - 0.1 * scallop(b, 2.5));
+        const w0 = rumpR * (s > 0 ? 0.62 : 0.5);
+        const w = w0 + (w1 * S - w0) * aa;
+        // domed across: a roof over the tail's root (a floor under it), its sides turned to the side
+        const crown = rumpR * 0.2 * (1 - aa) * (1 - bb * bb);
+        const p = R.clone().lerp(E, aa).add(v3(bb * w, 0, 0)).addScaledVector(n, s * crown);
+        pos.push(p.x, p.y, p.z);
+        // the coat's colour running into the tail's, a soft shadow under each row's tips
+        c.copy(colour).lerp(tail, 0.45 * aa * aa);
+        let shade = 1;
+        for (const [row, k] of [[0.42, 3.5], [0.68, 3]] as const) {
+          const edge = row + 0.05 * (1 - scallop(b + 0.5 / k, k));
+          shade *= 1 - 0.3 * Math.exp(-(((a - edge - 0.025) / 0.03) ** 2));
+        }
+        c.multiplyScalar(shade);
+        col.push(c.r, c.g, c.b);
+      }
+    }
+    for (let i = 0; i < NA; i++) {
+      for (let j = 0; j < NB; j++) {
+        const q = base0 + i * (NB + 1) + j;
+        idx.push(q, q + NB + 1, q + 1, q + 1, q + NB + 1, q + NB + 2);
+      }
+    }
+  };
+  hood(1, COVERT_REACH, 0.16, base.clone().multiplyScalar(0.96), 0.04);
+  hood(-1, COVERT_REACH * 0.9, 0.13, base.clone().lerp(pale, 0.15), -0.005);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));

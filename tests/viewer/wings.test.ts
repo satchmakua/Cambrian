@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { buildFin, buildMembraneWing, buildFoldedMembraneWing, buildFeatheredWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, MEMBRANE_FOLD, wingOpenSpan, wingShoulder } from '../../src/viewer/wings';
+import { buildFin, buildMembraneWing, buildFoldedMembraneWing, buildFeatheredWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, MEMBRANE_FOLD, tailBandAt, TAIL_SPREAD, wingOpenSpan, wingShoulder } from '../../src/viewer/wings';
 import { dorsalSpikeGeometry, DORSAL_SPIKE, TAIL_STING } from '../../src/viewer/scutes';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
@@ -134,25 +134,85 @@ describe('wings (shoulder-built, body frame)', () => {
     expect(box.max.y).toBeGreaterThan(-box.min.y * 1.5);
   });
 
-  it('a tail fan points back from the tail tip', () => {
-    const g = buildTailFan(1, new THREE.Color(0.5, 0.4, 0.3), new THREE.Color(0.2, 0.2, 0.6));
+  // a rump node a little ahead of the tail's tip, as a hawk's is
+  const RUMP = { at: new THREE.Vector3(0, -0.04, 0.45), r: 0.3 };
+
+  it('a tail fan points back from the tail tip, reaching forward only into the rump its coverts come out of', () => {
+    const g = buildTailFan(1, new THREE.Color(0.5, 0.4, 0.3), new THREE.Color(0.2, 0.2, 0.6), 0.25, false, RUMP);
     const b = bbox(g);
     expect(b.min.z).toBeLessThan(-0.7);
-    expect(b.max.z).toBeLessThan(0.1);
+    expect(b.max.z).toBeLessThan(RUMP.at.z);
+  });
+
+  it('a resting tail is closed: a long blade with a rounded end, not a comb of separate blades', () => {
+    // (spread ±31°, as a bird spreads it only to land or display, a hawk's tail was a comb from above)
+    expect(TAIL_SPREAD).toBeLessThan(0.2);
+    const g = buildTailFan(1, new THREE.Color(0.5, 0.4, 0.3), new THREE.Color(0.2, 0.2, 0.6), 0.25, false, RUMP);
+    const pos = g.getAttribute('position');
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < pos.count; i++) {
+      if (pos.getZ(i) > -0.8) continue; // the tips
+      lo = Math.min(lo, pos.getX(i));
+      hi = Math.max(hi, pos.getX(i));
+    }
+    expect(hi - lo).toBeGreaterThan(0.15);
+    expect(hi - lo).toBeLessThan(0.4);
+  });
+
+  it("a tail's root is covered: coverts come out of the rump above and below it and lie on it", () => {
+    // (with nothing over its root, it jutted from under the rump as a thin flat plank)
+    const g = buildTailFan(1, new THREE.Color(0.5, 0.4, 0.3), new THREE.Color(0.2, 0.2, 0.6), 0.25, false, RUMP);
+    const pos = g.getAttribute('position');
+    const p = new THREE.Vector3();
+    let above = 0, below = 0, hi = -Infinity, lo = Infinity;
+    for (let i = 0; i < pos.count; i++) {
+      p.fromBufferAttribute(pos, i);
+      // (out of the coat over the tail's line, and under it)
+      if (p.distanceTo(RUMP.at) < RUMP.r) {
+        if (p.y > RUMP.at.y) above++;
+        else below++;
+      }
+      // just behind the tail's root, where a bare fan is one thin blade
+      if (p.z < 0 && p.z > -0.15 && Math.abs(p.x) < 0.05) {
+        hi = Math.max(hi, p.y);
+        lo = Math.min(lo, p.y);
+      }
+    }
+    expect(above, 'the upper coverts rooted in the coat').toBeGreaterThan(3);
+    expect(below, 'the under coverts rooted in the coat').toBeGreaterThan(3);
+    expect(hi - lo, 'a wedge from the rump, not a blade').toBeGreaterThan(0.15);
+  });
+
+  it('a banded coat bars its tail across: dark bars, a broad band before the tip, a pale tip', () => {
+    const tail = new THREE.Color(0.5, 0.4, 0.3), bar = new THREE.Color(0.1, 0.08, 0.06), pale = new THREE.Color(0.9, 0.85, 0.8);
+    const lum = (c: THREE.Color) => 0.3 * c.r + 0.59 * c.g + 0.11 * c.b;
+    let bars = 0, dark = false;
+    for (let t = 0; t <= 0.8; t += 0.005) {
+      const d = lum(tailBandAt(t, tail, bar, pale, true)) < lum(tail) * 0.6;
+      if (d && !dark) bars++;
+      dark = d;
+    }
+    expect(bars).toBeGreaterThanOrEqual(4);
+    expect(lum(tailBandAt(0.87, tail, bar, pale, true))).toBeLessThan(lum(tail) * 0.6);
+    expect(lum(tailBandAt(0.97, tail, bar, pale, true))).toBeGreaterThan(lum(tail));
+    // any other coat: no bars, only a darker end and a paler fringe
+    for (let t = 0; t < 0.94; t += 0.01) expect(lum(tailBandAt(t, tail, bar, pale, false))).toBeGreaterThan(lum(tail) * 0.6);
+    expect(lum(tailBandAt(0.97, tail, bar, pale, false))).toBeGreaterThan(lum(tailBandAt(0.9, tail, bar, pale, false)));
   });
 
   it('a tail fan lies in a shallow trough, so from the side it is a tail and not its own edge', () => {
     // (laid flat, from the side or any low angle a hawk's tail was a twig stuck in its rump)
-    const g = buildTailFan(1, new THREE.Color(0.5, 0.4, 0.3), new THREE.Color(0.2, 0.2, 0.6), 0);
-    const b = bbox(g);
-    expect(b.max.y - b.min.y).toBeGreaterThan(0.12);
-    // the outer feathers stand above the middle ones, and both sides alike
+    const g = buildTailFan(1, new THREE.Color(0.5, 0.4, 0.3), new THREE.Color(0.2, 0.2, 0.6), 0, false, RUMP);
+    // the outer feathers stand above the middle ones past the coverts, and both sides alike
     const pos = g.getAttribute('position');
-    let hiL = -Infinity, hiR = -Infinity;
+    let hiL = -Infinity, hiR = -Infinity, mid = -Infinity;
     for (let i = 0; i < pos.count; i++) {
-      if (pos.getX(i) < -0.15) hiL = Math.max(hiL, pos.getY(i));
-      if (pos.getX(i) > 0.15) hiR = Math.max(hiR, pos.getY(i));
+      if (pos.getZ(i) > -0.75) continue;
+      if (pos.getX(i) < -0.07) hiL = Math.max(hiL, pos.getY(i));
+      else if (pos.getX(i) > 0.07) hiR = Math.max(hiR, pos.getY(i));
+      else mid = Math.max(mid, pos.getY(i));
     }
+    expect(Math.min(hiL, hiR)).toBeGreaterThan(mid);
     expect(Math.abs(hiL - hiR)).toBeLessThan(0.02);
   });
 
