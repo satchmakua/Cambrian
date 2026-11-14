@@ -39,7 +39,7 @@ import { clawGeometry, wristQuat } from './claw';
 import { hornGeometry, HORN_LEN, type HornReach } from './horn';
 import type { Vec3 } from '../engine/genome';
 import { shardGeometry } from './shards';
-import { gemGeometry } from './facets';
+import { crystalStones, cullCovered, type Plane } from './facets';
 import { quillGeometry } from './quills';
 import { whiskerFan } from './whiskers';
 import { frillGeometry, frillPlan } from './frill';
@@ -132,8 +132,14 @@ export const skinKey = (full: boolean, quality: SkinQuality, carved = true) => `
 
 function buildSkin(phenotype: Phenotype, full: boolean, carves: readonly Carve[], quality: SkinQuality): THREE.BufferGeometry {
   const g = buildSmoothGeometry(phenotype, full, carves, quality);
-  // a crystal trunk is one cut stone over its (uncut) skin, drawn beside it (facets.ts gemGeometry)
-  if (phenotype.genomeRef.covering.type === 'crystal') g.userData.gem = gemGeometry(phenotype, g);
+  // a crystal beast is cut stones — its trunk, its head (cut at its mouth), every link of its legs — drawn
+  // beside its skin (facets.ts crystalStones), and the skin they enclose is never drawn: unseen, and inside the
+  // head's stone it would fill the mouth's cut
+  if (phenotype.genomeRef.covering.type === 'crystal') {
+    const stones = crystalStones(phenotype, g);
+    g.userData.gem = stones;
+    if (stones) cullCovered(g, stones.userData.solids as Plane[][]);
+  }
   // smooth mesh is untransformed, so its local position *is* the body-space coord (M17)
   g.setAttribute('aBodyPos', (g.getAttribute('position') as THREE.BufferAttribute).clone());
   bakeLegs(g, phenotype);
@@ -505,6 +511,16 @@ export function CreatureMesh({
       sh.bind(rig.skeleton, new THREE.Matrix4());
       sm.add(sh);
     }
+    // a crystal's stones ride the same skeleton, each rigidly on its own bone (facets.ts crystalStones: the
+    // trunk's on its middle bone, the head's on the bone its eyes hang from, a leg link's on its upper joint's)
+    const stones = smoothGeo.userData.gem as THREE.BufferGeometry | null | undefined;
+    if (stones) {
+      const st = new THREE.SkinnedMesh(stones, skinMat);
+      st.castShadow = true;
+      st.receiveShadow = true;
+      st.bind(rig.skeleton, new THREE.Matrix4());
+      sm.add(st);
+    }
     return sm;
   }, [rigged, rig, smoothGeo, skinMat, phenotype, furMats]);
   useEffect(
@@ -523,15 +539,8 @@ export function CreatureMesh({
     return { bone: par >= 0 ? rig.bones[par] : rig.root, at };
   }, [rig, shellGeo, phenotype]);
 
-  // a crystal's cut stone rides the trunk's middle bone, as a turtle's shell rides its own (rigid: the
-  // trunk bends little, and the stone stands a tenth of a unit and more off the skin it covers)
+  // a crystal's cut stones (rigged, they ride the skeleton with the skin: see `skinned`)
   const gemGeo = showSmooth ? ((smoothGeo?.userData.gem ?? null) as THREE.BufferGeometry | null) : null;
-  const gemMount = useMemo(() => {
-    if (!rig || !gemGeo) return null;
-    const trunk = phenotype.nodes.map((n, i) => (n.kind === 'spine' && (n.segment ?? 0) === 0 ? i : -1)).filter((i) => i >= 0);
-    const mid = trunk[Math.floor(trunk.length / 2)];
-    return { bone: rig.bones[mid] ?? rig.root, at: phenotype.nodes[mid].pos };
-  }, [rig, gemGeo, phenotype]);
 
   // an urchin's quills, one smooth cone each, root to point — all of them one mesh, kept at every
   // distance (they are its outline: without them it was a bare ball), riding the trunk
@@ -615,11 +624,6 @@ export function CreatureMesh({
           createPortal(
             <mesh geometry={shellGeo} material={shellMat} position={[-shellMount.at[0], -shellMount.at[1], -shellMount.at[2]]} castShadow />,
             shellMount.bone,
-          )}
-        {gemGeo && gemMount &&
-          createPortal(
-            <mesh geometry={gemGeo} material={skinMat} position={[-gemMount.at[0], -gemMount.at[1], -gemMount.at[2]]} castShadow receiveShadow />,
-            gemMount.bone,
           )}
         {featureNodes}
         {scuteNodes}
@@ -1008,6 +1012,8 @@ function rimGeometry(r: number, quat: readonly number[], origin: readonly number
 const COMPOUND = [0x3a2614, 0x4a1a12, 0x1e3420, 0x23252e];
 /** a glowing eye's light: a sickly teal, a bile green, an amber, a violet */
 const GLOW = [0x3fd8a8, 0x9fd84a, 0xe0a030, 0xb070e8];
+/** a crystal beast's eye: its stone's own hue, deep and saturated (sRGB HSL), and how brightly it glows */
+const GEM_EYE = { sat: 0.95, light: 0.42, glow: 1.1 } as const;
 /** an eye that stands no further out than it should is not pressed */
 const IDENTITY = new THREE.Matrix4();
 
@@ -1089,13 +1095,18 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
     return browGeometry(r, sink, seat.quat, origin, press);
   }, [lidded, onFace, skin, origin, phenotype, f.quat, r, sink, seat.quat, press]);
   useEffect(() => () => browGeo?.dispose(), [browGeo]);
-  // a glowing eye sits in a rim of the hide; an insect's compound eye needs none
-  const rim = useMemo(() => (v === 'glowing' && skin && origin ? rimGeometry(r, seat.quat, origin) : null), [v, skin, origin, r, seat.quat]);
+  // A crystal beast's eye is a cut gem set in a face of its own of the head's stone (facets.ts crystalStones):
+  // a low faceted dome, a deep glowing shade of its stone. (Drawn as an alien's glowing eye — a dark wet ball
+  // whose rim showed round the iris as a black ring, an iris in the stone's own pale tone, a slit, a ring of
+  // hide round it, all pressed flat into the head — it was a washer lying on a ball.)
+  const gemEye = v === 'glowing' && phenotype?.genomeRef.covering.type === 'crystal';
+  // a glowing eye sits in a rim of the hide; an insect's compound eye needs none, nor a crystal's gem
+  const rim = useMemo(() => (v === 'glowing' && !gemEye && skin && origin ? rimGeometry(r, seat.quat, origin) : null), [v, gemEye, skin, origin, r, seat.quat]);
   useEffect(() => () => rim?.dispose(), [rim]);
   // (a crystal's eyes are its own stone, deeper, lit from within: a cartoon violet iris in a blue stone was
   // a toy's, and paled toward white it was a pair of googly eyes)
   const glow = useMemo(
-    () => (phenotype?.genomeRef.covering.type === 'crystal' ? coatMain(phenotype.genomeRef.palette).multiplyScalar(0.7).getHex() : GLOW[Math.floor(unitHash(seed, 0x61c) * GLOW.length)]),
+    () => (phenotype?.genomeRef.covering.type === 'crystal' ? srgbHSL(phenotype.genomeRef.palette.hueA, GEM_EYE.sat, GEM_EYE.light).getHex() : GLOW[Math.floor(unitHash(seed, 0x61c) * GLOW.length)]),
     [seed, phenotype],
   );
   // an ape's brow ridge over the eye (face.ts) — skin, in the body frame (it does not turn with the ball)
@@ -1167,7 +1178,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
       {/* (a lidded eye needs no ring: its coat-covered lids set it into the face) */}
       {/* (only a glowing eye wears a rim, and in the hide's own covering: see rimGeometry; an insect's
           compound eye is a bare dome on the head — ringed in dark, it was a pair of goggles) */}
-      {v === 'glowing' && (rim && skin ? (
+      {v === 'glowing' && !gemEye && (rim && skin ? (
         <mesh geometry={rim} material={skin} />
       ) : (
         <mesh position={[0, 0, -r * 0.12]}>
@@ -1272,6 +1283,12 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
         <mesh>
           <icosahedronGeometry args={[r * 0.98, 3]} />
           <meshStandardMaterial color={COMPOUND[Math.floor(unitHash(seed, 0xc0e) * COMPOUND.length)]} roughness={0.3} metalness={0.45} flatShading />
+        </mesh>
+      ) : gemEye ? (
+        // a crystal's: a cut gem, a few broad facets catching the light, glowing from within
+        <mesh position={[0, 0, r * 0.02]}>
+          <icosahedronGeometry args={[r * 0.9, 0]} />
+          <meshPhysicalMaterial color={glow} emissive={glow} emissiveIntensity={GEM_EYE.glow} roughness={0.08} clearcoat={1} clearcoatRoughness={0.04} flatShading />
         </mesh>
       ) : (
         // glowing — an alien eye: a dark wet ball, a lit iris (darkening to its rim, fibred like any

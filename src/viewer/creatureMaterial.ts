@@ -531,7 +531,9 @@ export function makeCreatureMaterial(
           // a crystal holds light: a glow of its own colour from within, brightest at its edges
           // (a cut skin's faces glow alike, and its edges brightest: lit from within face by face at its
           // own random strength, the stone was a patchwork of pale and dark)
-          if (uCover == 7) totalEmissiveRadiance += uMain * ((0.1 + 0.3 * pow(1.0 - ndv, 2.0)) * (uCut > 0.5 ? 0.85 + 0.3 * gFacet : 0.55 + 0.9 * gFacet) + (uCut > 0.5 ? 0.12 : 0.1) * gSeam) * noMouth;
+          // (…and dims in a cut in shadow — the mouth's, its faces' aAO: lit from within at full strength the
+          // cut glowed as bright as the faces round it and closed up)
+          if (uCover == 7) totalEmissiveRadiance += uMain * ((0.1 + 0.3 * pow(1.0 - ndv, 2.0)) * (uCut > 0.5 ? 0.85 + 0.3 * gFacet : 0.55 + 0.9 * gFacet) + (uCut > 0.5 ? 0.12 : 0.1) * gSeam) * noMouth * mix(0.3, 1.0, vAO);
         }`,
       );
   };

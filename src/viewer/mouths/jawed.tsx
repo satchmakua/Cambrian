@@ -675,6 +675,9 @@ export function JawedMouth({
   });
 
   if (!built) return null;
+  // (a crystal beast's mouth is the cut in its head's stone (facets.ts crystalStones): opened to eat, a jaw
+  // of skin and a throat would swing out from under the stone)
+  if (sealed && phenotype.genomeRef.covering.type === 'crystal') return null;
   const coatMat = skin ?? mats.jaw;
   return (
     <group>
