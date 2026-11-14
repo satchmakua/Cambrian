@@ -31,7 +31,7 @@ import { buildSmoothGeometry, buildShellGeometry, type SkinQuality } from './smo
 import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, LONG_WING, type FinBuild } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
-import { BROW_TILT, bulgingEye, eyeClearings, eyeSeat, eyeTilt, isSwimmer } from './eyeSeat';
+import { BROW_TILT, bulgingEye, eyeClearings, eyeSeat, eyeTilt, FEELER_KNOB, FEELER_SPOT, feelerTip, isSwimmer } from './eyeSeat';
 import { coatBelly, coatDark, coatFin, coatMain, coatPattern, srgbHSL } from './palette';
 import { browRidgeGeometry, faceMaskOf, headMaskOf, isApe } from './face';
 import { apeFootGeometry, fistGeometry } from './apeLimbs';
@@ -1052,6 +1052,10 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
     return g ? bakeSkin(g, origin) : null;
   }, [lidded, skin, origin, phenotype, f.idx]);
   useEffect(() => () => brow?.dispose(), [brow]);
+  // A slug's eye is a dark spot in the knob its feeler swells to, in its own skin, lidless (see
+  // feelerTip). (A lidded vertebrate eyeball on the end of each stalk, in green lids, was a pair of visors.)
+  const knob = useMemo(() => (skin && origin && phenotype && feelerTip(phenotype, f.idx) ? bakeSkin(new THREE.SphereGeometry(r * FEELER_KNOB, 18, 14), origin) : null), [skin, origin, phenotype, f.idx, r]);
+  useEffect(() => () => knob?.dispose(), [knob]);
   const lids = useContext(LidContext);
   const upper = useRef<THREE.Mesh>(null);
   const lower = useRef<THREE.Mesh>(null);
@@ -1064,6 +1068,17 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
     upper.current.rotation.x = open.upper + close * (LID_SHUT.upper - open.upper);
     lower.current.rotation.x = open.lower + close * (LID_SHUT.lower - open.lower);
   });
+  if (knob && skin) {
+    return (
+      <group quaternion={f.quat as [number, number, number, number]}>
+        <mesh geometry={knob} material={skin} castShadow />
+        <mesh position={[0, 0, r * FEELER_SPOT[0]]}>
+          <sphereGeometry args={[r * FEELER_SPOT[1], 12, 10]} />
+          <meshStandardMaterial color={0x050506} roughness={0.08} envMapIntensity={EYE_ENV} />
+        </mesh>
+      </group>
+    );
+  }
   return (
     <>
     {brow && skin && <mesh geometry={brow} material={skin} castShadow />}

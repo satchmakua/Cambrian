@@ -116,6 +116,18 @@ export function isFaceEye(p: Phenotype, f: MeshFeature): boolean {
   return !!e && p.nodes[e[0]].kind === 'spine';
 }
 
+/** A slug's eye (an eye up a stalk on a slime body) is the tip of a FEELER: the stalk swells to a knob
+ *  in its own skin, FEELER_KNOB × the eye's radius, and the eye is a dark spot in its point —
+ *  FEELER_SPOT: how far out along the stalk, and its radius, both × the eye's radius. No lids, no
+ *  eyeball. (A lidded vertebrate eyeball on each stalk, set in green lids, was a pair of visors.) */
+export const FEELER_KNOB = 0.8;
+export const FEELER_SPOT: readonly [number, number] = [0.62, 0.3];
+export function feelerTip(p: Phenotype, idx: number): boolean {
+  if (p.genomeRef.covering.type !== 'slime' || p.nodes[idx]?.terminal !== 'eye') return false;
+  const e = p.edges.find(([, b]) => b === idx);
+  return !!e && p.nodes[e[0]].kind === 'limb' && p.nodes[e[0]].part?.kind === 'eyestalk';
+}
+
 /** The fur shells' bare rings: each eye's seated centre + radius (xyz r, flat; at most MAX_EYE_CLEAR). */
 export const MAX_EYE_CLEAR = 6;
 export function eyeClearings(p: Phenotype, features: readonly MeshFeature[]): number[] {

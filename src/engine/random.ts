@@ -97,6 +97,7 @@ interface Morpho {
   wingStyle?: Rg;
   wingSegs?: number; // the wing arm's link count (else 1–2): a long wing's upper arm, forearm and hand
   stalkLen?: Rg; // × an eye stalk's usual length (a slug's are short feelers, not a pair of antlers)
+  stalkSegs?: number; // an eye stalk's link count (a constant: no draw) — a slug's feeler bends once on its way up
   headLong?: Rg; // a plain head's length ×its girth (else the cranial archetype's)
   headTaper?: Rg; // a plain head's link-to-link taper (else the archetype's, less its snout's): near 0.85
   headCurve?: Rg; // a plain head's pitch per link (else the archetype's, lifted by its snout): positive noses down, near 0 a fish's level snout
@@ -314,7 +315,9 @@ const MORPHOTYPES: readonly Morpho[] = [
   // ring of eight glowing discs round the mantle — read as a googly-eyed egg on a spider's legs)
   { id: 'cephalopod', cluster: 'uncanny', weight: 1.2, symmetry: 'radial', radialCount: [8, 8], girth: [0.5, 0.78], height: [1.3, 1.65], repeat: [1, 1], eyeEl: [-0.22, -0.1], eyeSize: 2.1, eyeStyle: [0.42, 0.58], mouthStyle: [0.26, 0.37], covering: ['slime'], pattern: ['spots', 'ocelli', 'gradient'], sheen: [0.7, 1.0], hue: [0.6, 0.95], sat: [0.4, 0.85] },
   { id: 'horror', cluster: 'uncanny', weight: 1.0, symmetry: 'radial', radialCount: [5, 8], girth: [0.45, 0.75], repeat: [1, 1], height: [1.25, 1.6], eyeEl: [0.3, 0.55], eyeSize: 0.8, mouthSize: [1.3, 1.6], eyeStyle: [0.82, 1], mouthStyle: [0.63, 0.74], covering: ['skin', 'slime'], pattern: ['ocelli', 'mottle'], sheen: [0.4, 0.8], hue: [0.7, 1.0], sat: [0.3, 0.7], light: [0.24, 0.42] },
-  { id: 'slime', cluster: 'uncanny', weight: 0.7, girth: [0.42, 0.6], repeat: [4, 5], height: [0.5, 0.62], elong: [0.95, 1.1], rear: [-0.012, 0.004], taper: [1.1, 1.14], legPairs: [0], stalkEyes: 1, stalkLen: [0.4, 0.5], eyeEl: [0.6, 0.75], eyeAz: [1.22, 1.38], mouthStyle: [0.01, 0.05], mouthSize: [0.45, 0.55], tail: 0.0, head: 0.0, eyeStyle: [0.05, 0.25], covering: ['slime'], pattern: ['gradient', 'mottle'], sheen: [0.8, 1.0], hue: [0.25, 0.7], sat: [0.5, 0.9], light: [0.45, 0.7] },
+  // a slug: six links falling away from a round front to a pointed tail, its eyes on feelers as tall as it
+  // is (on four or five links it was a pickle, round at both ends, its eyes on stubs)
+  { id: 'slime', cluster: 'uncanny', weight: 0.7, girth: [0.42, 0.6], repeat: [6, 6], height: [0.5, 0.62], elong: [1.15, 1.3], rear: [-0.012, 0.004], taper: [1.17, 1.21], legPairs: [0], stalkEyes: 1, stalkLen: [0.62, 0.74], stalkSegs: 3, eyeEl: [0.6, 0.75], eyeAz: [1.22, 1.38], mouthStyle: [0.01, 0.05], mouthSize: [0.45, 0.55], tail: 0.0, head: 0.0, eyeStyle: [0.05, 0.25], covering: ['slime'], pattern: ['gradient', 'mottle'], sheen: [0.8, 1.0], hue: [0.25, 0.7], sat: [0.5, 0.9], light: [0.45, 0.7] },
   // (a single-node body shows its depth only as the z-stretch past the stride clamp's 1.4: elong 1.4 is
   // as deep as it is wide — at 1 an urchin's test was a fifth narrower front to back than across)
   { id: 'urchin', cluster: 'uncanny', weight: 0.6, symmetry: 'radial', radialCount: [8, 12], girth: [0.45, 0.7], repeat: [1, 1], height: [0.6, 0.7], elong: [1.38, 1.42], eyeSize: 0.45, eyeEl: [-1.3, -1.15], eyeStyle: [0.22, 0.36], mouthStyle: [0.07, 0.12], covering: ['chitin'], pattern: ['mottle', 'bands'], hue: [0.6, 0.95], sat: [0.4, 0.8] },
@@ -755,6 +758,7 @@ function faceOnBody(rng: Rng, apps: AppendageGene[], girth: number, m: Morpho, e
   const stalk = chance(rng, m.stalkEyes ?? 0);
   const e = eyes(rng, range(rng, 0.85, 0.98), false, girth, { style: [eyeStyle, eyeStyle], az: m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.2, 0.5), stalk, el: m.eyeEl });
   if (stalk && m.stalkLen) e.length = clamp(e.length * rg(rng, m.stalkLen), A.length); // (no draw unless set)
+  if (stalk && m.stalkSegs) e.segments = m.stalkSegs; // (the drawn count set aside: on two links a slug's feelers were stubs)
   apps.push(e);
   const mo = mouth(rng, girth, m.mouthStyle); // every face has a mouth
   if (m.mouthSize) mo.thickness = clamp(mo.thickness * rg(rng, m.mouthSize), A.thickness); // (no draw unless set)

@@ -3,7 +3,7 @@ import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype, randomGenome } from '../../src/engine/random';
 import { fieldAt, projectToSurface, qRotateV } from '../../src/viewer/bodyField';
 import { buildMeshData } from '../../src/viewer/meshData';
-import { BULGE_DEPTH, bulgingEye, COMPOUND_DEPTH, eyeClearings, eyeSeat, isFaceEye, isSwimmer, MAX_EYE_CLEAR, SEAT_DEPTH, SEAT_MAX_TILT } from '../../src/viewer/eyeSeat';
+import { BULGE_DEPTH, bulgingEye, COMPOUND_DEPTH, eyeClearings, eyeSeat, FEELER_KNOB, FEELER_SPOT, feelerTip, isFaceEye, isSwimmer, MAX_EYE_CLEAR, SEAT_DEPTH, SEAT_MAX_TILT } from '../../src/viewer/eyeSeat';
 import { eyeVariant } from '../../src/viewer/partStyles';
 import { surfacePrims } from '../../src/viewer/mouthLine';
 import type { Phenotype } from '../../src/engine/grow';
@@ -151,5 +151,32 @@ describe('eye seats', () => {
       }
     }
     expect(n).toBeGreaterThanOrEqual(20);
+  });
+
+  it("a slug's eyes are the tips of its feelers: a knob in its own skin, the eye a small dark spot in its point", () => {
+    // (a lidded vertebrate eyeball on each stalk, set in green lids, was a pair of visors)
+    for (let seed = 1; seed <= 8; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'slime'));
+      const eyes = p.nodes.map((n, i) => [n, i] as const).filter(([n]) => n.terminal === 'eye');
+      expect(eyes.length, `#${seed}`).toBe(2);
+      for (const [, i] of eyes) expect(feelerTip(p, i), `#${seed}`).toBe(true);
+    }
+    // the knob swells past the feeler it ends; the spot is small and stands at its point
+    const p = grow(genomeOfMorphotype(23, 'slime'));
+    const i = p.nodes.findIndex((n) => n.terminal === 'eye');
+    const stalk = p.nodes[p.edges.find(([, b]) => b === i)![0]];
+    const r = Math.max(p.nodes[i].radius, 0.06);
+    expect(FEELER_KNOB * r).toBeGreaterThan(1.2 * stalk.radius);
+    expect(FEELER_KNOB * r).toBeLessThan(2 * stalk.radius);
+    expect(FEELER_SPOT[1]).toBeLessThan(0.5 * FEELER_KNOB);
+    expect(FEELER_SPOT[0] + FEELER_SPOT[1]).toBeGreaterThan(FEELER_KNOB); // (it shows, proud of the knob)
+    expect(FEELER_SPOT[0] - FEELER_SPOT[1]).toBeLessThan(FEELER_KNOB); // (…and is set in it)
+    // a crab's eyes on stalks, an octopus's in its mantle, a frog's in its head are eyes of their own
+    for (const id of ['crab', 'cephalopod', 'anuran']) {
+      const q = grow(genomeOfMorphotype(23, id));
+      q.nodes.forEach((n, j) => {
+        if (n.terminal === 'eye') expect(feelerTip(q, j), id).toBe(false);
+      });
+    }
   });
 });

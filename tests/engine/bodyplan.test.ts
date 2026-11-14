@@ -436,16 +436,27 @@ describe('body plans', () => {
     }
   });
 
-  it('a slug is long and low with short slender eye stalks at its head end', () => {
+  it('a slug is long and low, tapering to its tail, with slender feelers at its head end', () => {
     // (a two-link bean; stalks as long as the body and as thick as the eyes on them, or none at all)
+    // (…then a pickle, round at both ends, its eyes on stubs no taller than themselves)
     for (let seed = 1; seed <= 12; seed++) {
       const p = grow(genomeOfMorphotype(seed, 'slime'));
       const t = trunkOf(p).sort((a, b) => a.pos[2] - b.pos[2]);
       const ry = (n: (typeof t)[number]) => n.radius * (n.scale?.[1] ?? 1);
       const length = t[t.length - 1].pos[2] + t[t.length - 1].radius - (t[0].pos[2] - t[0].radius);
-      expect(length / (2 * Math.max(...t.map(ry))), `#${seed} long and low`).toBeGreaterThan(3);
-      // tapering to the tail
-      expect(t[0].radius / Math.max(...t.map((n) => n.radius)), `#${seed} tail`).toBeLessThan(0.75);
+      const depth = 2 * Math.max(...t.map(ry));
+      expect(length / depth, `#${seed} long and low`).toBeGreaterThan(4.2);
+      // tapering to the tail: its last link under half the body's girth
+      expect(t[0].radius / Math.max(...t.map((n) => n.radius)), `#${seed} tail`).toBeLessThan(0.52);
+      // its eyes held up on its feelers well clear of its back, the feelers half to once its depth
+      const eye = p.nodes.find((n) => n.terminal === 'eye')!;
+      const back = Math.max(...t.map((n) => n.pos[1] + ry(n)));
+      expect((eye.pos[1] - back) / eye.radius, `#${seed} eye clear of the back`).toBeGreaterThan(2.5);
+      const feeler = p.nodes.filter((n) => n.part?.kind === 'eyestalk' && n.kind === 'limb' && n.pos[0] * eye.pos[0] > 0);
+      const foot = feeler.reduce((a, b) => (b.pos[1] < a.pos[1] ? b : a));
+      const reach = Math.hypot(eye.pos[0] - foot.pos[0], eye.pos[1] - foot.pos[1], eye.pos[2] - foot.pos[2]) / depth;
+      expect(reach, `#${seed} feeler`).toBeGreaterThan(0.5);
+      expect(reach, `#${seed} feeler`).toBeLessThan(1.1);
       const eyes = p.nodes.filter((n) => n.terminal === 'eye');
       expect(eyes.length, `#${seed} eyes`).toBe(2);
       const stalk = p.nodes.filter((n) => n.part?.kind === 'eyestalk' && n.kind === 'limb');
