@@ -241,7 +241,7 @@ export function CreatureMesh({
     const len = pileLength(phenotype) * (shaggy ? PLUME_LEN : 1);
     const bare = bareOf(phenotype)?.bare ?? null;
     const eyes = eyeClearings(phenotype, data.features);
-    return Array.from({ length: FUR_SHELLS }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / FUR_SHELLS, len, density: 3.2 / len, eyes }, face, 0, headMask));
+    return Array.from({ length: FUR_SHELLS }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / FUR_SHELLS, len, density: 3.2 / len, eyes }, face, 0, headMask, false, shaggy));
   }, [fur, cov, skinMode, phenotype, pal, seed, data, face, headMask, shaggy]);
   useEffect(() => () => furMats.forEach((m) => m.dispose()), [furMats]);
 

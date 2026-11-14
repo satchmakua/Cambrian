@@ -388,6 +388,17 @@ export function makeCreatureMaterial(
               if (e.w > 0.0) eyeClear = max(eyeClear, 1.0 - smoothstep(e.w * 1.05, e.w * 1.9, length(vBodyPos - e.xyz)));
             }
             sLen *= 1.0 - 0.92 * eyeClear;
+            // a flightless bird's head and the top of its neck wear short down, not its body's plumes:
+            // plumed to the bill, an ostrich's small head was a ball of fluff — a kiwi's
+            // (…in the coat's own tone: only their shaded roots left, short down was a peppering of dark
+            // specks down the neck)
+            float down = 0.0;
+            if (uShag > 0.5 && uHeadA.w > 0.0) {
+              vec3 hab = uHeadB - uHeadA.xyz;
+              float ht = clamp(dot(vBodyPos - uHeadA.xyz, hab) / max(dot(hab, hab), 1e-6), 0.0, 1.0);
+              down = 1.0 - smoothstep(uHeadA.w * 1.3, uHeadA.w * 3.2, length(vBodyPos - uHeadA.xyz - hab * ht));
+              sLen *= mix(1.0, SHAG_HEAD_DOWN, down);
+            }
             float u = uShellH / sLen;
             float dc = length(fract(q) - 0.5 - jit * 0.5);
             float far = smoothstep(0.28, 1.15, gFw * uShellDen);
@@ -405,7 +416,7 @@ export function makeCreatureMaterial(
             // the survivors take the coat's own tone: left with their root shadow, the last sparse
             // strands of a bear seen whole were a scatter of dark specks, pepper on a smooth hide.
             float shade = mix(0.62, 1.12, uShellH) * (0.93 + 0.14 * hash13(cid + 9.0));
-            diffuseColor.rgb *= mix(shade, 1.0, smoothstep(0.0, 0.55, tone));
+            diffuseColor.rgb *= mix(shade, 1.0, max(smoothstep(0.0, 0.55, tone), down));
           }
           if (uDebug == 1) diffuseColor.rgb = vec3(pat);
           if (uDebug == 2) diffuseColor.rgb = vec3(gH);
@@ -512,6 +523,8 @@ uniform int uDebug;
 uniform float uBareY; uniform float uBareBand; uniform vec3 uBareCol;
 uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6]; uniform vec4 uFace; uniform vec3 uFaceCol; uniform vec4 uHeadA; uniform vec3 uHeadB; uniform float uSeam; uniform float uCut; uniform float uMuscle; uniform float uShag;
 uniform float uFine;
+// a flightless bird's plumes on its head: their length there (× the body's)
+const float SHAG_HEAD_DOWN = 0.22;
 
 // Per-fragment globals, primed at the top of the colour stage and reused by the roughness + normal
 // stages (so the expensive relief is evaluated once per pixel, not three times).

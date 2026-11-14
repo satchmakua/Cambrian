@@ -857,13 +857,13 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   an ostrich's shaggy plumes; a hawk's dark hooked bill; a lizard's wedge of a head; eyes seated on flat
   skulls; paws no wider than the wrist, legs one tone down to them; cupped ears with a pale inside;
   an insect's eyes seated as domes, its feelers fine, no letterbox mouth; no dark ring where a leg's
-  skin hands on to its exact tube; a weasel's short pile.
+  skin hands on to its exact tube; a weasel's short pile; an ostrich's broad bill and downy head.
   **Tests:** `morphospace.test.ts › a deer is no dog`, `horror.test.ts`, `wyvern.test.ts`,
   `fish.test.ts`, `serpent.test.ts`, `canid.test.ts`, `lids.test.ts`, `starfish.test.ts`,
   `whiskers.test.ts`, `creatureMaterial.test.ts › shaggy`, `beak.test.ts`, `lizard.test.ts`,
   `eyeSeat.test.ts`, `feet.test.ts › knows its legs`, `ear.test.ts › a deep cup`,
   `bodyField.test.ts › feelers`, `arthro-alien.test.ts › feelers rise`, `limbTubes.test.ts › no dark ring`,
-  `pile.test.ts`.
+  `pile.test.ts`, `beak.test.ts › an ostrich's bill`, `creatureMaterial.test.ts › short down`.
 
 ### Next up (unchecked — pick from here)
 

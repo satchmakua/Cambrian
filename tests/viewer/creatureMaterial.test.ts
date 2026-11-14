@@ -60,6 +60,36 @@ describe('shaggy plumage', () => {
     flier.dispose();
     expect(s2.uniforms.uShag.value).toBe(0);
   });
+
+  it("a flightless bird's head and the top of its neck wear short down in the coat's tone, not plumes", () => {
+    // (plumed to the bill, an ostrich's small head was a ball of fluff — a kiwi's; and its short down,
+    // only its shaded roots left, peppered the neck with dark specks)
+    const g = defaultGenome();
+    const head = { a: [0, 0, 1] as [number, number, number], b: [0, 0, 1.4] as [number, number, number], r: 0.2 };
+    const shell = { h: 0.5, len: 0.1, density: 30, eyes: [] };
+    const mat = makeCreatureMaterial(g.palette, { ...g.covering, type: 'feathers' }, g.seed, null, shell, null, 0, head, false, true);
+    const shader = {
+      uniforms: {} as Record<string, { value: unknown }>,
+      vertexShader: THREE.ShaderLib.physical.vertexShader,
+      fragmentShader: THREE.ShaderLib.physical.fragmentShader,
+    };
+    (mat.onBeforeCompile as (s: typeof shader) => void)(shader);
+    mat.dispose();
+    const f = shader.fragmentShader;
+    expect(shader.uniforms.uShag.value).toBe(1);
+    expect((shader.uniforms.uHeadA.value as THREE.Vector4).w).toBeCloseTo(0.2, 9);
+    // the strands shorten near the head's axis (the head is the shaggy gate's own), before the pile is cut
+    const iDown = f.indexOf('sLen *= mix(1.0, SHAG_HEAD_DOWN, down);');
+    const iGate = f.indexOf('if (uShag > 0.5 && uHeadA.w > 0.0)');
+    const iCut = f.indexOf('float u = uShellH / sLen;');
+    expect(iGate).toBeGreaterThan(0);
+    expect(iDown).toBeGreaterThan(iGate);
+    expect(iCut).toBeGreaterThan(iDown);
+    expect(f).toMatch(/const float SHAG_HEAD_DOWN = 0\.(1|2|3)\d*;/);
+    // …and the down keeps the coat's tone
+    expect(f).toContain('diffuseColor.rgb *= mix(shade, 1.0, max(smoothstep(0.0, 0.55, tone), down));');
+    expect(braceBalance(f)).toBe(0);
+  });
 });
 
 describe('creature material shader injection', () => {
@@ -416,7 +446,7 @@ describe('creature material shader injection', () => {
     // (the last sparse strands kept the shadow of a dense pile's roots: a bear seen whole wore pepper)
     const f = compileShaderStrings().fragmentShader;
     const iFar = f.indexOf('float far = smoothstep(0.28, 1.15, gFw * uShellDen);');
-    const iShade = f.indexOf('diffuseColor.rgb *= mix(shade, 1.0, smoothstep(0.0, 0.55, tone));');
+    const iShade = f.indexOf('diffuseColor.rgb *= mix(shade, 1.0, max(smoothstep(0.0, 0.55, tone), down));');
     expect(iFar).toBeGreaterThan(0);
     expect(iShade).toBeGreaterThan(iFar);
     // …the tone the fade takes is the fade's own, read before the outline keeps its strands: with their

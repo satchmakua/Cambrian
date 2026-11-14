@@ -218,6 +218,32 @@ describe('beak mouth (mouth overhaul)', () => {
     expect(bb.upper.boundingBox!.max.x - bb.upper.boundingBox!.min.x).toBeLessThan(bb.upper.boundingBox!.max.y - bb.upper.boundingBox!.min.y);
   });
 
+  it("an ostrich's bill is broad and flat, round at its tip — not a songbird's slim blade, a thorn on its head", () => {
+    // (the same tall narrow blade a songbird wears, on a flightless bird's small round head)
+    const shape = (id: string, seed: number) => {
+      const p = grow(genomeOfMorphotype(seed, id));
+      const b = buildBeak(p, p.nodes.findIndex((n) => n.terminal === 'mouth'), [], false, 'hybrid')!;
+      const pos = b.upper.getAttribute('position');
+      const root = b.upperPath[0];
+      let w0 = Infinity, w1 = -Infinity, d0 = Infinity, d1 = -Infinity;
+      for (let i = 0; i < pos.count; i++) {
+        const v: Vec3 = [pos.getX(i) - root[0], pos.getY(i) - root[1], pos.getZ(i) - root[2]];
+        const along = dot3(v, b.dir);
+        if (along < 0.35 * b.upperLen || along > 0.6 * b.upperLen) continue;
+        const side = dot3(v, b.spec.right), up = dot3(v, b.up);
+        w0 = Math.min(w0, side);
+        w1 = Math.max(w1, side);
+        d0 = Math.min(d0, up);
+        d1 = Math.max(d1, up);
+      }
+      return (w1 - w0) / (d1 - d0);
+    };
+    for (let seed = 1; seed <= 8; seed++) {
+      expect(shape('ratite', seed), `ratite #${seed} broad`).toBeGreaterThan(1.6);
+      expect(shape('bird', seed), `bird #${seed} a blade`).toBeLessThan(1);
+    }
+  });
+
   it('a bird of prey wears a hawk’s bill and a songbird a slim one, whatever the seed', () => {
     // (the hook was half a coin toss: the two plans drew from the same bills and looked alike)
     for (let seed = 1; seed <= 12; seed++) {

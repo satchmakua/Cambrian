@@ -96,15 +96,18 @@ export function buildBeak(
   // hawk's bill was still a pale candy-corn wedge under its eyes.)
   // …and a stout bill is two-toned: yellow at its root (where a hawk's cere is), darkening to the tip
   const hooked = !shelled && sPos < HOOKED_BILL;
+  // a flightless bird's (an ostrich's, an emu's) is broad and flat, wider than it is deep, its tip
+  // rounded: a grazer's bill. (A songbird's slim blade on its small round head was a thorn.)
+  const broad = !shelled && !hooked && phenotype.genomeRef.covering.type === 'feathers' && !phenotype.nodes.some((n) => n.part?.kind === 'wing');
   // A hawk's hook drops by more than half the bill's depth, and most of it near the tip: the tip turns
   // down past the lower mandible. (At 0.6 of the radius, against a bill that tapers from 0.72 of it,
   // the upper mandible's underside ran near level to the point: a straight grey cone, a finch's.)
-  const hook = r * (shelled ? 0.24 : hooked ? 0.95 - 0.6 * sPos : 0.6 - 0.35 * sPos);
+  const hook = r * (shelled ? 0.24 : hooked ? 0.95 - 0.6 * sPos : broad ? BROAD_BILL.hook : 0.6 - 0.35 * sPos);
   const hookCurve = shelled ? 2.7 : hooked ? 2.6 : 1.6 + 1.1 * sPos;
   const slim = 1 - 0.22 * sPos + 0.06 * (hash01(seed, idx + 47) - 0.5);
   // a bill is broad at the root — it spans the front of the face — and tapers to the tip (thin
   // cones from a narrow root hung below the face like a walrus's tusks)
-  const upperR0 = r * (shelled ? 0.62 : 0.72 * slim);
+  const upperR0 = r * (shelled ? 0.62 : broad ? BROAD_BILL.root : 0.72 * slim);
 
   // The bill's axis: mostly the HEAD's forward, tipped a little toward the mouth's downward aim. Run
   // along the mouth aim itself (pitched ~40° down to seat the maw on the face front) the mandibles
@@ -149,18 +152,20 @@ export function buildBeak(
   // along `up` reads flat duck-bill/cartoon; a tall narrow blade reads raptor.
   // A TURTLE's is the other way about: a wide low sheath across the front of its jaws. (Stood on edge
   // like a bird's, and too short to read as a bill, it was a black slot down the middle of the face.)
-  const flatN = shelled ? bup : spec.right;
+  const flatN = shelled || broad ? bup : spec.right;
+  // (a broad bill keeps its width to near its tip and rounds off there, a spoon's end)
+  const spoon = (u: number) => (1 - 0.3 * u) * (u < 0.72 ? 1 : Math.sqrt(Math.max(0, 1 - ((u - 0.72) / 0.28) ** 2)));
   const upper = sweepTube(
     upperPath.map((p) => ({ p, n: flatN })),
     // (a hooked bill stays deep most of its length and tapers late, into the hook: a cone's even taper
     // left no depth for the hook to turn down from)
     // (a hooked bill is compressed but solid — over half as wide as it is deep: at a third, from the front
     // it was a needle, from the side a blade)
-    { radius: (u) => Math.max(r * 0.03, upperR0 * (hooked ? 1 - Math.pow(u, 1.5) : Math.pow(1 - u, 0.95))), flatten: shelled ? 0.42 : hooked ? HOOKED_WIDTH : 0.3 + 0.2 * sPos, radialSegments: 10 },
+    { radius: (u) => Math.max(r * 0.03, upperR0 * (hooked ? 1 - Math.pow(u, 1.5) : broad ? spoon(u) : Math.pow(1 - u, 0.95))), flatten: shelled ? 0.42 : hooked ? HOOKED_WIDTH : broad ? BROAD_BILL.depth : 0.3 + 0.2 * sPos, radialSegments: 10 },
   );
   const lower = sweepTube(
     lowerPath.map((p) => ({ p, n: flatN })),
-    { radius: (u) => Math.max(r * 0.025, upperR0 * 0.72 * Math.pow(1 - u, 1.05)), flatten: shelled ? 0.42 : hooked ? HOOKED_WIDTH * 0.9 : 0.3, radialSegments: 10 },
+    { radius: (u) => Math.max(r * 0.025, upperR0 * (broad ? 0.86 * spoon(u) : 0.72 * Math.pow(1 - u, 1.05))), flatten: shelled ? 0.42 : hooked ? HOOKED_WIDTH * 0.9 : broad ? BROAD_BILL.depth * 0.8 : 0.3, radialSegments: 10 },
   );
   // the buried root stays buried: where a ring's spine point is still inside the head, any of its
   // vertices that poke out are drawn back under the skin. (A tall blade-bill rooted up the face stood
@@ -316,6 +321,9 @@ const BILL_GREY = new THREE.Color(0x4c535e);
 const BILL_TIP = new THREE.Color(0x1d1f23);
 /** a hooked bill's width against its depth */
 const HOOKED_WIDTH = 0.55;
+/** a flightless bird's broad flat bill: its root's half-width (× the mouth's radius), its depth (× its
+ *  width) and how far its tip droops */
+export const BROAD_BILL = { root: 0.6, depth: 0.42, hook: 0.25 };
 
 function smooth(a: number, b: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));

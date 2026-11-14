@@ -121,6 +121,9 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   - *A weasel's ball of fur* — a coat's pile was scaled by the creature's length alone, so a long slim
     weasel wore the shaggiest of any, a sixth of its girth deep (a cat's is a tenth, a bear's less): seen
     from the front, a ball of fur. The pile is now at most a tenth of the trunk's girth.
+  - *Ostrich: a thorn of a beak on a ball of fluff* [3] — a flightless bird wore a songbird's slim blade
+    of a bill, and its plumes ran on to the bill. Its bill is broad and flat, over half again as wide as
+    it is deep, its tip rounded; its head and the top of its neck wear short down in the coat's tone.
 - **Tests:** `tests/engine/morphospace.test.ts › a deer is no dog`, `tests/engine/plans/horror.test.ts`,
   `wyvern.test.ts › no giraffe`, `fish.test.ts › tail stock`, `serpent.test.ts › a head`,
   `canid.test.ts › brush`, `tests/viewer/lids.test.ts`, `starfish.test.ts › one smooth curve`,
@@ -129,7 +132,8 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   `tests/viewer/eyeSeat.test.ts › still sinks to its seat`, `tests/viewer/feet.test.ts › knows its
   legs`, `tests/viewer/ear.test.ts › a deep cup`, `eyeSeat.test.ts › a compound eye is a low dome`,
   `tests/viewer/bodyField.test.ts › feelers`, `arthro-alien.test.ts › feelers rise`,
-  `tests/viewer/limbTubes.test.ts › no dark ring`, `tests/viewer/pile.test.ts`.
+  `tests/viewer/limbTubes.test.ts › no dark ring`, `tests/viewer/pile.test.ts`, `beak.test.ts › an
+  ostrich's bill`, `creatureMaterial.test.ts › short down`.
 
 ## M95 — Thin limbs drawn exact, and a tenth look · 2026-11-13
 
