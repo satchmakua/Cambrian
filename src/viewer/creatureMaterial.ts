@@ -234,7 +234,7 @@ export function makeCreatureMaterial(
     shader.uniforms.uMuscle = { value: preset.muscle };
     shader.uniforms.uFine = FINE_RELIEF; // (one object, shared: the graphics option switches every coat at once)
     // (unused slots keep r = 0, which clears nothing)
-    shader.uniforms.uEyes = { value: Array.from({ length: 6 }, (_, i) => new THREE.Vector4(...(shell?.eyes?.slice(i * 4, i * 4 + 4) ?? []).concat([0, 0, 0, 0]).slice(0, 4))) };
+    shader.uniforms.uEyes = { value: Array.from({ length: 8 }, (_, i) => new THREE.Vector4(...(shell?.eyes?.slice(i * 4, i * 4 + 4) ?? []).concat([0, 0, 0, 0]).slice(0, 4))) };
 
     // Pattern + relief sample `aBodyPos` — a per-vertex *body-space* coordinate (the vertex's
     // rest-pose position, baked into the geometry by CreatureMesh). Because it's fixed to the mesh,
@@ -411,7 +411,7 @@ export function makeCreatureMaterial(
             // round an eye the pile shortens to a fine fringe and then stops: strands rooted in the
             // face otherwise stand out over the sunken eyeball and comb straight across the iris
             float eyeClear = 0.0;
-            for (int i = 0; i < 6; i++) {
+            for (int i = 0; i < 8; i++) {
               vec4 e = uEyes[i];
               if (e.w > 0.0) eyeClear = max(eyeClear, 1.0 - smoothstep(e.w * 1.05, e.w * 1.9, length(vBodyPos - e.xyz)));
             }
@@ -550,7 +550,7 @@ uniform float uPScale; uniform float uContrast; uniform float uMarkW; uniform fl
 uniform vec3 uOff;
 uniform int uDebug;
 uniform float uBareY; uniform float uBareBand; uniform vec3 uBareCol;
-uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6]; uniform vec4 uFace; uniform vec3 uFaceCol; uniform vec4 uHeadA; uniform vec3 uHeadB; uniform float uSeam; uniform float uCut; uniform float uMuscle; uniform float uShag;
+uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[8]; uniform vec4 uFace; uniform vec3 uFaceCol; uniform vec4 uHeadA; uniform vec3 uHeadB; uniform float uSeam; uniform float uCut; uniform float uMuscle; uniform float uShag;
 uniform float uFine;
 uniform vec3 uScutes[${MAX_SCUTES}]; uniform int uScuteN;
 // a flightless bird's plumes on its head: their length there (× the body's)

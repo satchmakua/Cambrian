@@ -97,6 +97,23 @@ const HOOF_SET = 0.55;
 
 /** Minimum grown radius for an eye bulb (bu) — the face must always read (M19/M24). */
 const EYE_R_MIN = 0.06;
+/** A SPIDER's eyes — a face on its CEPHALOTHORAX, a body section that carries legs too (see ensureFace). Each
+ *  pair's place on the front of the carapace, [x, y] on the unit sphere seen down +Z (x out to the side, y up),
+ *  and its radius ×the head's girth: the anterior median pair big and forward either side of the midline (at
+ *  least EYE_R_MIN), the anterior laterals out and up from them, the posterior medians and laterals a row above
+ *  — beads, all clear of the first pair of legs, which root on the carapace's front corners. (Every pair at one
+ *  height, a twelfth of a radian round from the last and each as big as a mammal's eye, each side's three or
+ *  four eyes ran together into one black blot.) */
+export const OCELLI: readonly (readonly [number, number, number])[] = [
+  [0.27, 0.32, 0.24], // anterior median: the big front pair, a clypeus' height over the chelicerae
+  [0.53, 0.53, 0.14], // anterior lateral: out and up from them, clear of the first legs' roots
+  [0.2, 0.7, 0.14], // posterior median: a row above
+  [0.44, 0.81, 0.14], // posterior lateral: up on the brow
+];
+/** Seen from above, each link of a spider's leg past the femur sweeps on round toward its own end of the
+ *  body by this much (rad): the front pairs' feet reach forward, the hind pairs' back. (Run straight out
+ *  in one vertical plane, evenly fanned, its eight legs from above were the spokes of a compass rose.) */
+const SPIDER_SWEEP = 0.16;
 /** A plain tail whose style gene is at or over this is a SCULLING tail (a crocodile's): deep, and
  *  flattened side to side toward its tip — the blade it swims with. Every other tail is round.
  *  (The bands of a plain tail's style gene: under BRUSH_STYLE a tapering rod, from there up to here a
@@ -249,6 +266,7 @@ export function grow(genome: Genome): Phenotype {
   let legPairsHere = 0; // leg pairs on the segment currently growing (hexapods+ get arthropod legs)
   let legGenesHere: AppendageGene[] = []; // …and their genes (a jumper's hind legs outreach its fore)
   let tagmaHere = false; // …and whether that segment is an arthropod's thorax (see isTagma)
+  let ocelliHere = false; // …and whether its eyes are a spider's: a section past the trunk that carries legs (OCELLI)
   let sprawlHere = false; // …and whether its legs sprawl (decided once for them all — see below)
   let ringedHere = false; // …and whether it is a myriapod's trunk of rings (see isRinged)
   let ringFloorHere = 0; // …and the ground its legs then reach down to
@@ -476,6 +494,7 @@ export function grow(genome: Genome): Phenotype {
     legGenesHere = seg.appendages.filter((a) => a.kind === 'leg');
     legPairsHere = legGenesHere.length;
     tagmaHere = isTagma(seg, depth);
+    ocelliHere = depth > 0 && legPairsHere > 0;
     // A body sprawls or it stands: decided once, from its legs' mean splay. Judged leg by leg, a turtle
     // whose genes sat either side of the line stood on its hind legs like posts and sprawled the fore.
     sprawlHere = legPairsHere > 0 && legGenesHere.reduce((t, a) => t + clamp((4.712 - a.attachAzimuth) * 0.62, [0.12, 1.05]), 0) / legPairsHere > 0.5;
@@ -562,7 +581,9 @@ export function grow(genome: Genome): Phenotype {
 
   function growAppendage(app: AppendageGene, attachIdx: number, virtualBase?: BodyNode): void {
     const base = virtualBase ?? nodes[attachIdx];
-    const az = app.attachAzimuth + (rng() - 0.5) * 0.12; // seed perturbs the aim a touch
+    const jitter = (rng() - 0.5) * 0.12;
+    // seed perturbs the aim a touch — but not a spider's eyes, a cluster laid out eye by eye (OCELLI)
+    const az = app.attachAzimuth + (ocelliHere && app.terminal === 'eye' ? 0 : jitter);
     const ce = Math.cos(app.attachElevation);
     const se = Math.sin(app.attachElevation);
     // spherical aim (MORPHOLOGY §3.1): az sweeps the cross-section, elevation tilts
@@ -860,8 +881,10 @@ export function grow(genome: Genome): Phenotype {
         // (a spider's shin and foot reach OUT as they come down, the leg one arc from the knee to a foot
         // planted far out: dropped near plumb from a high knee, seen down its own plane the near leg was
         // one straight pole through the head)
+        const sweep = spider ? Math.sign(u) * SPIDER_SWEEP : 0;
+        const [h1, h2] = [fan + sweep, fan + 2 * sweep].map((a) => [sideX * Math.cos(a), Math.sin(a)]);
         const [k0, mid, end]: Vec3[] = spider
-          ? [[hx, 0.8, hz], [hx * 0.75, -0.7, hz * 0.75], [hx * 0.6, -1, hz * 0.6]]
+          ? [[hx, 0.8, hz], [h1[0] * 0.75, -0.7, h1[1] * 0.75], [h2[0] * 0.6, -1, h2[1] * 0.6]]
           : decapod
             ? [[hx, 0.62, hz], [hx, -0.5, hz], [hx * 0.55, -1, hz * 0.55]]
             : [[hx, 0.4, hz], [hx * 0.45, -1, hz * 0.45], [hx * 0.6, -0.45, hz * 0.6]];
@@ -1027,7 +1050,8 @@ export function grow(genome: Genome): Phenotype {
       if (!last && app.kind === 'arm' && app.terminal === 'pincer') r *= CHELIPED_SLIM;
       // the eye is the emotional anchor — floor the grown bulb so even a tapered/stalked eye on a
       // small head always reads (M19/M24), regardless of how the gene tapered down its tip.
-      if (last && app.terminal === 'eye') r = Math.max(r, EYE_R_MIN);
+      // (a spider's small eyes are beads: see OCELLI)
+      if (last && app.terminal === 'eye') r = Math.max(r, ocelliHere ? R_MIN : EYE_R_MIN);
       if (arch) quat = qFromTo([0, 0, 1], arch[Math.min(j, arch.length - 1)]);
       const idx = addNode(pos, quat, r, last ? 'terminal' : 'limb', last ? app.terminal : undefined);
       // (a webbed ring's arms carry their web's reach, for the skin to stretch it between them)
@@ -1261,18 +1285,27 @@ function ensureBilateralFace(g: Genome): void {
   const stop = headStop(head, depth);
   const links = Math.max(0, head.repeat - 1);
   const frontR = girth * Math.pow(head.taper, links) * muzzleShare(links, links, stop);
-  ensureFace(head.appendages, girth, frontR, head.repeat > 1 && !!g.body.child);
+  // (a head that carries legs is a spider's cephalothorax: its eyes are a cluster, see OCELLI)
+  ensureFace(head.appendages, girth, frontR, head.repeat > 1 && !!g.body.child, depth > 0 && head.appendages.some((a) => a.kind === 'leg'));
 }
 
 /** Guarantee a prominent eye-set + a mouth (M24/M19): synthesize them if mutation deleted them,
  *  and floor the sizes so they always read. The mouth is kept on the face front. */
 // a paired eye's azimuth stays at least this far (rad) off the vertical midline
 const EYE_AZ_MAX = 1.1;
-function ensureFace(apps: AppendageGene[], girth: number, frontR = girth, linkedHead = false): void {
+function ensureFace(apps: AppendageGene[], girth: number, frontR = girth, linkedHead = false, cephalothorax = false): void {
   const eyes = apps.filter((p) => p.terminal === 'eye');
   if (eyes.length === 0) apps.push(faceEye(girth));
   else
-    for (const e of eyes) {
+    for (const [k, e] of eyes.entries()) {
+      // a spider's eyes: each pair in its own place in the cluster on the front of its carapace (OCELLI)
+      if (cephalothorax && e.pair && k < OCELLI.length) {
+        const [x, y, s] = OCELLI[k];
+        e.attachAzimuth = Math.atan2(y, x);
+        e.attachElevation = Math.acos(Math.min(1, Math.hypot(x, y)));
+        e.thickness = k === 0 ? clamp(Math.max(EYE_R_MIN, girth * s), AP.thickness) : Math.max(R_MIN, girth * s);
+        continue;
+      }
       // Prominent but PROPORTIONATE. The floor is measured against the head segment's girth, while
       // the head *node* tapers smaller than that — so a bare `girth * 0.45` floor grew eyes nearly
       // as wide as the skull, two balls that owned the whole face and occluded the mouth behind

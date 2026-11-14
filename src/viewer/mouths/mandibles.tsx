@@ -191,13 +191,15 @@ export function buildChelicerae(phenotype: Phenotype, idx: number, carves: reado
   const { aim, up } = spec;
   const add = (a: Vec3, b: Vec3, k: number): Vec3 => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
   const build = (side: -1 | 1) => {
-    // rooted a third of the way out from the front centre, just under the skin so it grows out of it
-    const s = upper[Math.round(last / 2 + side * last * 0.16)];
-    const root = add(s.p, s.n, -0.12 * r);
+    // rooted either side of the front centre, side by side, a little below the lip line and deep under the
+    // skin so it swells out of it (clear of the front eyes over it)
+    // (a third of the way out, hanging plumb as long thin pegs, they were a vampire's tusks)
+    const s = upper[Math.round(last / 2 + side * last * 0.1)];
+    const root = add(add(s.p, s.n, -0.15 * r), up, -0.12 * r);
     const L: Vec3 = [-side * spec.right[0], -side * spec.right[1], -side * spec.right[2]]; // inward
-    // the base: stout, hanging down and a little forward, its front swelling
-    const dir = norm3([aim[0] * 0.5 - up[0] * 0.86, aim[1] * 0.5 - up[1] * 0.86, aim[2] * 0.5 - up[2] * 0.86]);
-    const len = r * 0.85;
+    // the base: short and swollen, angled down and forward, its front bulging
+    const dir = norm3([aim[0] * 0.8 - up[0] * 0.6, aim[1] * 0.8 - up[1] * 0.6, aim[2] * 0.8 - up[2] * 0.6]);
+    const len = r * 0.62;
     const base: Vec3[] = [];
     for (let k = 0; k < 6; k++) {
       const u = k / 5;
@@ -216,7 +218,7 @@ export function buildChelicerae(phenotype: Phenotype, idx: number, carves: reado
     return {
       base,
       fang,
-      baseGeo: sweepTube(pts(base), { radius: (u) => r * (0.25 - 0.07 * u), radialSegments: 12 }),
+      baseGeo: sweepTube(pts(base), { radius: (u) => r * (0.3 + 0.06 * Math.sin(Math.PI * u) - 0.14 * u), radialSegments: 12 }),
       fangGeo: sweepTube(pts(fang), { radius: (u) => r * (0.1 - 0.092 * u), radialSegments: 8 }),
     };
   };
@@ -229,7 +231,7 @@ function CheliceraeMouth({ f, phenotype, carves, dark, surface }: { f: MeshFeatu
   const built = useMemo(() => buildChelicerae(phenotype, f.idx, carves, surface), [phenotype, f.idx, carves, surface]);
   const mats = useMemo(
     () => ({
-      base: new THREE.MeshStandardMaterial({ color: new THREE.Color(dark).lerp(new THREE.Color(0x241d18), 0.3), roughness: 0.5, metalness: 0.05 }),
+      base: new THREE.MeshStandardMaterial({ color: new THREE.Color(dark).lerp(new THREE.Color(0x241d18), 0.3), roughness: 0.32, metalness: 0.05 }),
       fang: new THREE.MeshStandardMaterial({ color: 0x120c0a, roughness: 0.22, metalness: 0.15 }),
     }),
     [dark],

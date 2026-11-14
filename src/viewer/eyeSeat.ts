@@ -25,6 +25,18 @@ export const BULGE_DEPTH = 0.06;
 /** …and an insect's compound eye: a low dome on the side of its head, most of the ball under the
  *  cuticle. (Stood on its node unseated, riding proud of the head, it was a black marble bolted on.) */
 export const COMPOUND_DEPTH = 0.4;
+/** …and a spider's simple eye: a glossy lens, half its ball out of the carapace, unpressed (see isOcellus) */
+export const OCELLUS_DEPTH = 0.4;
+
+/** A SPIDER's eye: one on a face that is its CEPHALOTHORAX — a body section past the trunk carrying legs too
+ *  (as its chelicerae are: mouths/mandibles isChelicerate). A simple eye, a lens: a glossy black dome out of
+ *  the carapace, no lids, no iris, at its own size (grow's OCELLI: the small ones are beads). */
+export function isOcellus(p: Phenotype, idx: number): boolean {
+  const e = p.edges.find(([, b]) => b === idx);
+  const base = e ? p.nodes[e[0]] : undefined;
+  if (!base || base.kind !== 'spine' || !base.segment) return false;
+  return p.edges.some(([a, b]) => p.nodes[b].part?.kind === 'leg' && p.nodes[a].kind === 'spine' && p.nodes[a].segment === base.segment);
+}
 
 /** A frog's or a toad's eye: bare skin, a walker (not a fish), looking up out of the top of the head.
  *  A crocodile's too (an armoured body — see scutes): its eyes ride raised on the skull's upper
@@ -108,8 +120,9 @@ export function eyeSeat(p: Phenotype, idx: number, quat0: readonly number[], r: 
   }
   // (a compound eye, and an alien's glowing one, sit as low domes in the head)
   const ev = eyeVariant(p.nodes[idx].part?.style ?? 0.5);
-  const bulge = ev !== 'compound' && ev !== 'glowing' && bulgingEye(p, aim);
-  const depth = ev === 'compound' || ev === 'glowing' ? COMPOUND_DEPTH : bulge ? BULGE_DEPTH : SEAT_DEPTH;
+  const ocellus = isOcellus(p, idx);
+  const bulge = !ocellus && ev !== 'compound' && ev !== 'glowing' && bulgingEye(p, aim);
+  const depth = ocellus ? OCELLUS_DEPTH : ev === 'compound' || ev === 'glowing' ? COMPOUND_DEPTH : bulge ? BULGE_DEPTH : SEAT_DEPTH;
   // Seated by the SKIN along its aim, not by the field's value: on a flattened section the field is no distance
   // (ellipticConeDist scales it by the section's smaller axis, so across the wide one it under-reads), and marched
   // to a field of −depth·r an eye on the side of a flat skull sank depth × its width-to-height: a snake's (1.85 : 1)
@@ -147,7 +160,8 @@ export function eyeSeat(p: Phenotype, idx: number, quat0: readonly number[], r: 
   const centre: [number, number, number] = [c[0] - aim[0] * s, c[1] - aim[1] * s, c[2] - aim[2] * s];
   // (a frog's and a crocodile's eyes bulge, an insect's facets are a dome by design, a fish's lie flush, a radial
   // body's eyes — an octopus's, a horror's band — are its own; the rest are pressed into the skin)
-  const pressed = p.genomeRef.symmetry === 'bilateral' && !bulge && ev !== 'compound' && (ev === 'glowing' || !isSwimmer(p));
+  // (…and a spider's are lenses, domes by design: pressed to a twelfth of their radius they were black stains)
+  const pressed = p.genomeRef.symmetry === 'bilateral' && !bulge && !ocellus && ev !== 'compound' && (ev === 'glowing' || !isSwimmer(p));
   const seat: EyeSeat = { quat, sink: s, centre, flat: pressed ? eyeFlat(prims, centre, aim, r, ev === 'slit' ? -0.02 : ev === 'glowing' ? 0.02 : -0.04) : null };
   per.set(idx, seat);
   return seat;
@@ -201,12 +215,12 @@ export function feelerTip(p: Phenotype, idx: number): boolean {
 }
 
 /** The fur shells' bare rings: each eye's seated centre + radius (xyz r, flat; at most MAX_EYE_CLEAR). */
-export const MAX_EYE_CLEAR = 6;
+export const MAX_EYE_CLEAR = 8; // (a spider's eight)
 export function eyeClearings(p: Phenotype, features: readonly MeshFeature[]): number[] {
   const out: number[] = [];
   for (const f of features) {
     if (f.type !== 'eye' || out.length >= MAX_EYE_CLEAR * 4) continue;
-    const r = Math.max(f.radius, 0.06);
+    const r = isOcellus(p, f.idx) ? f.radius : Math.max(f.radius, 0.06);
     const c = isFaceEye(p, f) ? eyeSeat(p, f.idx, f.quat, r).centre : null;
     const at = c ?? p.nodes[f.idx].pos;
     out.push(at[0], at[1], at[2], r);

@@ -31,7 +31,7 @@ import { buildSmoothGeometry, buildShellGeometry, shellScutes, type SkinQuality 
 import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, type FinBuild } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
-import { BROW_TILT, bulgingEye, eyeClearings, eyeSeat, eyeTilt, FEELER_KNOB, FEELER_SPOT, feelerTip, isSwimmer } from './eyeSeat';
+import { BROW_TILT, bulgingEye, eyeClearings, eyeSeat, eyeTilt, FEELER_KNOB, FEELER_SPOT, feelerTip, isOcellus, isSwimmer } from './eyeSeat';
 import { coatBelly, coatDark, coatFin, coatMain, coatPattern, srgbHSL } from './palette';
 import { browRidgeGeometry, faceMaskOf, headMaskOf, isApe } from './face';
 import { apeFootGeometry, fistGeometry } from './apeLimbs';
@@ -1006,7 +1006,6 @@ const GLOW = [0x3fd8a8, 0x9fd84a, 0xe0a030, 0xb070e8];
 const IDENTITY = new THREE.Matrix4();
 
 function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; socket: number; iris: number; lid: number; seed: number; skin?: THREE.Material; phenotype?: Phenotype }) {
-  const r = Math.max(f.radius, 0.06);
   const v = eyeVariant(f.style);
   // A vertebrate eye on the face (not up a stalk) sits IN the skull: the grown eye node rides proud of
   // the surface (so it always clears it), which drew the whole eyeball bulging out like a marble.
@@ -1016,6 +1015,11 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
     const e = phenotype.edges.find(([, b]) => b === f.idx);
     return !!e && phenotype.nodes[e[0]].kind === 'spine';
   }, [phenotype, f.idx]);
+  // A SPIDER's eye (isOcellus) is a simple eye, a lens: a glossy black dome out of its carapace, lidless, no
+  // iris, at its own size — the small ones are beads, under the floor a face eye keeps. (Drawn as a mammal's
+  // lidded eye, three or four a side a hair apart, each side's ran together into one blot cut by its lids.)
+  const ocellus = useMemo(() => onFace && !!phenotype && isOcellus(phenotype, f.idx), [onFace, phenotype, f.idx]);
+  const r = ocellus ? f.radius : Math.max(f.radius, 0.06);
   // a dark bony orbit tone
   const socketDark = useMemo(() => new THREE.Color(socket).multiplyScalar(0.5).getHex(), [socket]);
   // vertebrate eyes have lids that blink — and shut in sleep; an insect's facets and a glowing alien
@@ -1024,7 +1028,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   // …except a fish's: no lids at all — a flat, lidless, metallic-ringed eye lying flush with the head
   // (lidded and staring forward over a grin, every fish read as a Muppet)
   const fishEye = useMemo(() => vertebrate && onFace && !!phenotype && isSwimmer(phenotype), [vertebrate, onFace, phenotype]);
-  const lidded = vertebrate && !fishEye;
+  const lidded = vertebrate && !fishEye && !ocellus;
   const slitIris = useMemo(() => slitIrisOf(seed, phenotype), [seed, phenotype]);
   const sharkEye = fishEye && phenotype?.genomeRef.covering.type === 'skin';
   const radialEye = phenotype?.genomeRef.symmetry === 'radial';
@@ -1164,7 +1168,19 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
           <meshStandardMaterial color={socketDark} roughness={0.85} metalness={0.0} />
         </mesh>
       ))}
-      {fishEye ? (
+      {ocellus ? (
+        // a spider's eye: a glossy black lens, half of it out of the carapace (OCELLUS_DEPTH), one glint
+        <>
+          <mesh>
+            <sphereGeometry args={[r * 0.92, 20, 16]} />
+            <meshStandardMaterial color={0x040405} roughness={0.07} envMapIntensity={EYE_ENV} />
+          </mesh>
+          <mesh position={[r * 0.2, r * 0.32, r * 0.83]}>
+            <sphereGeometry args={[r * 0.07, 8, 8]} />
+            <meshBasicMaterial color={0xdce4f0} />
+          </mesh>
+        </>
+      ) : fishEye ? (
         // a fish's eye: a flattened dark ball flush in the head, a broad metallic iris ring (silver,
         // brass or gold) round a big round pupil — no lids, no white
         <group scale={[1, 1, 0.72]}>

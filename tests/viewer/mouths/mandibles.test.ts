@@ -5,6 +5,8 @@ import { defaultGenome } from '../../../src/engine/genome';
 import { randomGenome, genomeOfMorphotype } from '../../../src/engine/random';
 import { buildFieldPrims, fieldAt } from '../../../src/viewer/bodyField';
 import { buildMandibles, buildChelicerae, isChelicerate, type MandiblesBuild } from '../../../src/viewer/mouths/mandibles';
+import { mouthSpec } from '../../../src/viewer/mouthLine';
+const mouthSpecR = (p: Phenotype, mi: number) => mouthSpec(p, mi)!.r;
 
 // Blade hinges are corner samples of the mouth line — the same on-surface tolerance as mouthLine
 // plus a hair for the Newton fallback on soft saddles.
@@ -234,6 +236,24 @@ describe('mandibles mouth (mouth overhaul)', () => {
         expect(pt[0] + o[0]).toBeCloseTo(-(rr[i][0] + o[0]), 6);
         expect(pt[1]).toBeCloseTo(rr[i][1], 6);
       });
+    }
+  });
+
+  it("a spider's chelicerae are short swollen bases side by side, angled forward: not two tusks hanging plumb", () => {
+    // (rooted a third of the way out, hanging near plumb as long thin pegs, they were a vampire's tusks)
+    for (let seed = 1; seed <= 6; seed++) {
+      const spider = grow(genomeOfMorphotype(seed, 'arachnid'));
+      const mi = spider.nodes.findIndex((n) => n.terminal === 'mouth');
+      const b = buildChelicerae(spider, mi, [])!;
+      const r = mouthSpecR(spider, mi);
+      const [l, rr] = b.basePaths;
+      expect(Math.hypot(l[0][0] - rr[0][0], l[0][1] - rr[0][1], l[0][2] - rr[0][2]) / r, `#${seed} side by side`).toBeLessThanOrEqual(0.7);
+      for (const path of b.basePaths) {
+        const a = path[0], z = path[path.length - 1];
+        const d = [z[0] - a[0], z[1] - a[1], z[2] - a[2]];
+        expect(Math.hypot(d[0], d[1], d[2]) / r, `#${seed} short`).toBeLessThanOrEqual(0.7);
+        expect((Math.atan2(d[2], -d[1]) * 180) / Math.PI, `#${seed} leans forward`).toBeGreaterThanOrEqual(15);
+      }
     }
   });
 });
