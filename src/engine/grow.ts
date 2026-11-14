@@ -37,8 +37,11 @@ const RING_RIM: readonly [number, number] = [0.97, 0.88];
 /** …the gap from one ring's fore rim to the next ring's hind rim ×a ring's radius, at a body's
  *  shortest and longest (set as close as any trunk's links, the rings ran together into one tube)… */
 const RING_GAP: readonly [number, number] = [1.15, 1.35];
-/** …the joint between two rings: its radius ×the smaller ring's… */
+/** …the joint between two rings: its radius ×the smaller ring's, and how much wider than that it is
+ *  across (a groove over the back and under the belly, a notch at the sides: pinched as deep from side to
+ *  side, seen from above every ring was a round bead on a string)… */
 const RING_JOINT = 0.56;
+const RING_JOINT_WIDE = 1.6;
 /** …how far its legs hold the belly off the ground (×the rings' mean radius)… */
 const RING_CLEARANCE = 0.7;
 /** …and how long a point each leg ends in, past its last node (×the same): the legs' own skin stops
@@ -385,10 +388,10 @@ export function grow(genome: Genome): Phenotype {
     const muzzle = muzzleShare(1, seg.repeat - 1, stop); // the muzzle's girth at the stop (it sets how low it hangs)
     // (a ring's slim nodes — its two rims, the joint ahead of it — share the links' cross-section;
     // parts seat on the rings' centres alone)
-    const ringNode = (at: Vec3, q: Quat, r: number): void => {
+    const ringNode = (at: Vec3, q: Quat, r: number, wide = 1): void => {
       const j = addNode(at, q, r, 'spine');
       nodes[j].segment = depth;
-      if (segScale) nodes[j].scale = segScale;
+      if (segScale || wide !== 1) nodes[j].scale = [(segScale?.[0] ?? 1) * wide, segScale?.[1] ?? 1, segScale?.[2] ?? 1];
       if (prev >= 0) edges.push([prev, j]);
       prev = j;
     };
@@ -438,7 +441,7 @@ export function grow(genome: Genome): Phenotype {
         const fore = radius * RING_RIM[1];
         const hind = next * RING_RIM[0];
         const at = clamp((step * step + fore * fore - hind * hind) / (2 * step), [0.25 * step, 0.75 * step]);
-        ringNode(along(pos, fwd, at), quat, RING_JOINT * Math.min(radius, next));
+        ringNode(along(pos, fwd, at), quat, RING_JOINT * Math.min(radius, next), RING_JOINT_WIDE);
       }
       pos = [pos[0] + fwd[0] * step, pos[1] + fwd[1] * step, pos[2] + fwd[2] * step];
       if (stop > 0 && i === 0) {

@@ -92,6 +92,32 @@ describe('arthro-alien: a segmented, many-legged arthropod', () => {
     }
   });
 
+  it('seen from above the rings are plates, notched at the sides — not round beads on a string', () => {
+    // (the joint between two rings was pinched as deep from side to side as over the back: its width a
+    // little over half the rings', every ring a bead seen from above)
+    for (const seed of SEEDS) {
+      const p = alien(seed);
+      const rings = ringsOf(p);
+      const prims = buildFieldPrims(p, 'hybrid');
+      const sideAt = (z: number, y: number) => {
+        const hit = rayToSurface(prims, [], [0, y, z], [1, 0, 0]);
+        return hit ? hit.p[0] : 0;
+      };
+      for (let i = 0; i + 1 < rings.length; i++) {
+        const a = rings[i];
+        const b = rings[i + 1];
+        let notch = Infinity;
+        for (let s = 1; s < 16; s++) {
+          const u = s / 16;
+          notch = Math.min(notch, sideAt(a.pos[2] + (b.pos[2] - a.pos[2]) * u, a.pos[1] + (b.pos[1] - a.pos[1]) * u));
+        }
+        // (the rings' own breadth — their skin there swells over their legs' roots)
+        const breadth = Math.min(widthOf(a), widthOf(b));
+        expect(notch / breadth, `#${seed} ring ${i}`).toBeGreaterThan(0.78);
+      }
+    }
+  });
+
   it('the rings are broad and flat, near equal down the body, drawing in to the rump', () => {
     // (a bottle: a narrow front widening to a fat rear, as deep as it was wide)
     for (const seed of SEEDS) {
