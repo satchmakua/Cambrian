@@ -244,6 +244,35 @@ describe('beak mouth (mouth overhaul)', () => {
     }
   });
 
+  it("an ostrich's bill is as long as its head is wide, and shut: one flat bill, not two puffy pills", () => {
+    // (a songbird's length, half of it in the face: two small cream lobes, the lower pitched open under the
+    // upper and as deep as it — a pair of lips on a round head)
+    for (let seed = 1; seed <= 8; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'ratite'));
+      const mi = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const b = buildBeak(p, mi, [], false, 'hybrid')!;
+      const spine = p.nodes.filter((n) => n.kind === 'spine');
+      const last = Math.max(...spine.map((n) => n.segment ?? 0));
+      const skull = spine.find((n) => n.segment === last)!;
+      // the bill from where it leaves the skin to its tip
+      const f = buildFieldPrims(p, 'hybrid');
+      f.k = 0.34 * f.meanR;
+      const o = p.nodes[mi].pos;
+      const path = b.upperPath;
+      let out = path.length - 1;
+      for (let i = 0; i < path.length; i++) if (fieldAt(f, path[i][0] + o[0], path[i][1] + o[1], path[i][2] + o[2]) > 0) { out = i; break; }
+      const visible = dot3(sub3(path[path.length - 1], path[out]), b.dir);
+      expect(visible / (2 * skull.radius), `#${seed} long`).toBeGreaterThan(0.6);
+      // shut: down its length, the lower mandible lies under the upper with no daylight between them
+      for (let i = 1; i < b.lowerPath.length - 1; i++) {
+        const u = i / (b.lowerPath.length - 1);
+        const j = Math.round(u * (b.lowerLen / b.upperLen) * (path.length - 1));
+        const gap = dot3(sub3(path[j], b.lowerPath[i]), b.up);
+        expect(gap, `#${seed} gape at ${u.toFixed(2)}`).toBeLessThan(0.5 * b.r);
+      }
+    }
+  });
+
   it('a bird of prey wears a hawk’s bill and a songbird a slim one, whatever the seed', () => {
     // (the hook was half a coin toss: the two plans drew from the same bills and looked alike)
     for (let seed = 1; seed <= 12; seed++) {

@@ -19,6 +19,7 @@ export interface SweepPoint {
 export interface SweepOpts {
   radius: (u: number) => number; // world radius at u ∈ [0..1] along the polyline
   flatten?: number; // 1 = round; < 1 squashes the cross-section along each sample's n
+  flattenAt?: (u: number) => number; // …or a squash that changes along the tube (overrides `flatten`)
   radialSegments?: number;
   caps?: boolean; // close the ends with triangle fans
   closed?: boolean; // treat the points as a loop (rings) — wraps rings, ignores caps
@@ -53,10 +54,11 @@ export function sweepTube(pts: readonly SweepPoint[], opts: SweepOpts): THREE.Bu
   for (let i = 0; i < m; i++) {
     const u = closed ? i / m : m > 1 ? i / (m - 1) : 0;
     const r = Math.max(opts.radius(u), 1e-4);
+    const fl = opts.flattenAt ? opts.flattenAt(u) : flatten;
     const c = pts[i].p;
     for (let j = 0; j < radial; j++) {
       const a = (j / radial) * Math.PI * 2;
-      const cn = Math.cos(a) * r * flatten;
+      const cn = Math.cos(a) * r * fl;
       const cb = Math.sin(a) * r;
       positions.push(
         c[0] + N[i][0] * cn + B[i][0] * cb,
