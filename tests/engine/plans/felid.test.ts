@@ -43,4 +43,17 @@ describe('felid', () => {
     // end of a hippo's snout)
     expect(noseScaleOf(2.4)).toBe(1.5);
   });
+
+  it("wears fine, dense markings: a cheetah's spots, a tiger's stripes — not a dalmatian's blobs", () => {
+    // (at 1.4–6.8 cells a unit, a spotted cat wore about twenty big sparse blobs: a dalmatian, a hyena;
+    // a striped one a few broad hoops)
+    let marked = 0;
+    for (let seed = 1; seed <= 24; seed++) {
+      const c = genomeOfMorphotype(seed, 'felid').covering;
+      if (c.pattern !== 'spots' && c.pattern !== 'stripes') continue;
+      marked++;
+      expect(c.patternScale, `#${seed} ${c.pattern}`).toBeGreaterThanOrEqual(8.5);
+    }
+    expect(marked).toBeGreaterThan(8);
+  });
 });
