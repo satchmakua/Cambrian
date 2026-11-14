@@ -23,15 +23,27 @@ const norm = (v: Vec3): Vec3 => {
   return [v[0] / l, v[1] / l, v[2] / l];
 };
 
+/** Where a horn is drawn from, and how long: by default from its node, HORN_LEN of its girth; a horn
+ *  grown as links from the skull is drawn whole from its root (see Horn in CreatureMesh). */
+export interface HornReach {
+  /** its root, relative to the node the geometry is placed at */
+  origin?: Vec3;
+  /** its heading at the root (else the node's aim) */
+  aim?: Vec3;
+  /** its length (else HORN_LEN × r) */
+  len?: number;
+}
+
 /** The horn's centreline (node-relative, body frame), root first. `sweep` ∈ [0, 1] picks its curve. */
-export function hornPath(r: number, quat: readonly number[], sweep: number): Vec3[] {
+export function hornPath(r: number, quat: readonly number[], sweep: number, reach: HornReach = {}): Vec3[] {
   const q = new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3]);
-  const aim = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+  const aim = reach.aim ? new THREE.Vector3(...reach.aim).normalize() : new THREE.Vector3(0, 0, 1).applyQuaternion(q);
   // it sweeps back toward the tail (−Z), and up if it already points back
   let back = new THREE.Vector3(0, 0, -1).addScaledVector(aim, aim.z);
   if (back.lengthSq() < 1e-4) back = new THREE.Vector3(0, 1, 0).addScaledVector(aim, -aim.y);
   back.normalize();
-  const L = HORN_LEN * r;
+  const L = reach.len ?? HORN_LEN * r;
+  const o = reach.origin ?? [0, 0, 0];
   const bend = HORN_SWEEP[0] + (HORN_SWEEP[1] - HORN_SWEEP[0]) * sweep;
   const pts: Vec3[] = [];
   for (let k = 0; k <= SAMPLES; k++) {
@@ -40,14 +52,14 @@ export function hornPath(r: number, quat: readonly number[], sweep: number): Vec
     // its length along the curve stays near L)
     const out = L * u * (1 - 0.25 * bend * u);
     const off = L * bend * u * u;
-    pts.push([aim.x * out + back.x * off, aim.y * out + back.y * off, aim.z * out + back.z * off]);
+    pts.push([o[0] + aim.x * out + back.x * off, o[1] + aim.y * out + back.y * off, o[2] + aim.z * out + back.z * off]);
   }
   return pts;
 }
 
 /** The horn's geometry (node-relative, body frame) with a vertex colour shade (root dark → point pale). */
-export function hornGeometry(r: number, quat: readonly number[], sweep: number, ringed: boolean): THREE.BufferGeometry {
-  const path = hornPath(r, quat, sweep);
+export function hornGeometry(r: number, quat: readonly number[], sweep: number, ringed: boolean, reach: HornReach = {}): THREE.BufferGeometry {
+  const path = hornPath(r, quat, sweep, reach);
   // its flatten axis (round: none) — any direction square to the path
   const pts: SweepPoint[] = path.map((p, i) => {
     const a = path[Math.max(0, i - 1)], b = path[Math.min(path.length - 1, i + 1)];

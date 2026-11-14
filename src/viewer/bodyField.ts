@@ -97,7 +97,9 @@ export function isBodyNode(n: BodyNode): boolean {
 // raised a lump under the feature (a fish's fins and gills studded its flanks with bumps)
 // (an ear's stub is as thick as the ear is wide: meshed into the skin it stood on the skull as a ball
 // half the skull's own size, one under each ear — a cranium in two lobes with a cleft down the middle)
-const FEATURE_ONLY_KINDS = new Set(['wing', 'fin', 'gill', 'frill', 'crest', 'whisker', 'ear']);
+// (…and a horn: its links meshed as skin stood a fat stub under the keratin sheath drawn from its last
+// node — a pencil, a fat cone with a needle on its point; the sheath is drawn whole from the skull)
+const FEATURE_ONLY_KINDS = new Set(['wing', 'fin', 'gill', 'frill', 'crest', 'whisker', 'ear', 'horn']);
 export function isHybridNode(n: BodyNode): boolean {
   // the carapace stub is drawn as a conforming shell of its own (smoothSkin.buildShellGeometry)
   // wings are drawn whole from the shoulder (wings.ts); fins from their root (buildFin)

@@ -36,7 +36,8 @@ import { coatBelly, coatDark, coatFin, coatMain, coatPattern, srgbHSL } from './
 import { browRidgeGeometry, faceMaskOf, headMaskOf, isApe } from './face';
 import { apeFootGeometry, fistGeometry } from './apeLimbs';
 import { clawGeometry, wristQuat } from './claw';
-import { hornGeometry } from './horn';
+import { hornGeometry, HORN_LEN, type HornReach } from './horn';
+import type { Vec3 } from '../engine/genome';
 import { shardGeometry } from './shards';
 import { gemGeometry } from './facets';
 import { quillGeometry } from './quills';
@@ -777,9 +778,15 @@ function Feature({
     case 'claw': {
       // a crystal body's horns and back spines are clusters of shards (shards.ts)
       if ((f.kind === 'horn' || f.kind === 'spine') && phenotype.genomeRef.covering.type === 'crystal') {
-        return <Shards f={f} palette={phenotype.genomeRef.palette} seed={phenotype.genomeRef.seed} />;
+        // (a horn's links are not skin: its cluster stands on the skull at the horn's root)
+        const at = f.kind === 'horn' ? hornReachOf(phenotype, f).reach.origin : undefined;
+        return (
+          <group position={at ?? [0, 0, 0]}>
+            <Shards f={f} palette={phenotype.genomeRef.palette} seed={phenotype.genomeRef.seed} />
+          </group>
+        );
       }
-      if (f.kind === 'horn') return <Horn f={f} color={footColor} seed={phenotype.genomeRef.seed} />;
+      if (f.kind === 'horn') return <Horn f={f} color={footColor} seed={phenotype.genomeRef.seed} phenotype={phenotype} />;
       const reach = phenotype.nodes[f.idx].pos[1] - phenotype.bounds.min[1];
       if (f.kind === 'leg' && arthropodLegs(phenotype)) return <LegTip f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} reach={reach} />;
       const plan = f.kind === 'leg' ? footPlanOf(phenotype) : null;
@@ -1538,17 +1545,40 @@ function LegTip({ f, color, skin, origin, reach }: { f: MeshFeature; color: numb
 }
 
 // A horn: a keratin sheath sweeping back from its root, ringed toward its base (horn.ts).
-function Horn({ f, color, seed }: { f: MeshFeature; color: number; seed: number }) {
-  const r = Math.max(f.radius, 0.06);
+function Horn({ f, color, seed, phenotype }: { f: MeshFeature; color: number; seed: number; phenotype: Phenotype }) {
   const keratin = useMemo(() => new THREE.Color(color).lerp(new THREE.Color(0xcfc3a0), 0.4).getHex(), [color]);
-  // (each creature's horns their own curve; a mammal's ringed, a reptile's smooth)
-  const geo = useMemo(() => hornGeometry(r, f.quat, unitHash(seed, 0x40e), true), [r, f.quat, seed]);
+  // (each creature's horns their own curve; a mammal's ringed, a reptile's smooth) — drawn whole from its
+  // root on the skull (see hornReachOf)
+  const { r, reach } = useMemo(() => hornReachOf(phenotype, f), [phenotype, f]);
+  const geo = useMemo(() => hornGeometry(r, f.quat, unitHash(seed, 0x40e), true, reach), [r, f.quat, seed, reach]);
   useEffect(() => () => geo.dispose(), [geo]);
   return (
     <mesh geometry={geo} castShadow>
       <meshStandardMaterial color={keratin} vertexColors roughness={0.5} metalness={0.05} />
     </mesh>
   );
+}
+
+/**
+ * A horn grown as links from the skull, drawn whole: one keratin sheath from its root (the first horn
+ * node, at the skull) along the links' heading, as long as the links and the sheath its tip would have
+ * grown, its girth at the root the root link's. (Its links meshed as skin and a sheath drawn on from the
+ * last node, every horn was a pencil: a fat stub with a thin pale needle on its point.)
+ */
+export function hornReachOf(p: Phenotype, f: MeshFeature): { r: number; reach: HornReach } {
+  const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+  let root = f.idx;
+  while (parent.has(root) && p.nodes[parent.get(root)!].part?.kind === 'horn') root = parent.get(root)!;
+  const tip = p.nodes[f.idx];
+  const tipR = Math.max(f.radius, 0.06);
+  if (root === f.idx) return { r: tipR, reach: {} };
+  const base = p.nodes[root];
+  // (from where the root link leaves the skull: the root node itself)
+  const origin: Vec3 = [base.pos[0] - tip.pos[0], base.pos[1] - tip.pos[1], base.pos[2] - tip.pos[2]];
+  const along = Math.hypot(origin[0], origin[1], origin[2]);
+  const aim: Vec3 = along > 1e-9 ? [-origin[0] / along, -origin[1] / along, -origin[2] / along] : [0, 1, 0];
+  const r = Math.max(base.radius, tipR);
+  return { r, reach: { origin, aim, len: along + HORN_LEN * tipR } };
 }
 
 // Crystal shards: a cluster of pointed six-sided prisms in the body's own colour, lighter and lit from
