@@ -233,6 +233,45 @@ describe('beak mouth (mouth overhaul)', () => {
     }
   });
 
+  it("a hawk's bill is solid dark horn with a band of yellow cere — not a thin pale blade", () => {
+    // (a third as wide as deep and a pale blue-grey, it was a silver blade from the side, a needle from the
+    // front, its cere a sliver)
+    for (const seed of [1, 2, 23]) {
+      const p = grow(genomeOfMorphotype(seed, 'raptor'));
+      const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const b = buildBeak(p, idx, [], false)!;
+      expect(b.hooked, `#${seed}`).toBe(true);
+      // its width against its depth, a third of the way along: the upper mandible's ring of vertices there
+      const pos = b.upper.getAttribute('position');
+      const right = b.spec.right, up = b.up, dir = b.dir;
+      const root = b.upperPath[0];
+      let wMax = 0, hMax = 0;
+      for (let v = 0; v < pos.count; v++) {
+        const d = [pos.getX(v) - root[0], pos.getY(v) - root[1], pos.getZ(v) - root[2]];
+        const u = (d[0] * dir[0] + d[1] * dir[1] + d[2] * dir[2]) / b.upperLen;
+        if (Math.abs(u - 0.33) > 0.04) continue;
+        wMax = Math.max(wMax, Math.abs(d[0] * right[0] + d[1] * right[1] + d[2] * right[2]));
+      }
+      for (let v = 0; v < pos.count; v++) {
+        const d = [pos.getX(v) - root[0], pos.getY(v) - root[1], pos.getZ(v) - root[2]];
+        const u = (d[0] * dir[0] + d[1] * dir[1] + d[2] * dir[2]) / b.upperLen;
+        if (Math.abs(u - 0.33) > 0.04) continue;
+        hMax = Math.max(hMax, Math.abs(d[0] * up[0] + d[1] * up[1] + d[2] * up[2] - (b.upperPath[3][0] - root[0]) * up[0] - (b.upperPath[3][1] - root[1]) * up[1] - (b.upperPath[3][2] - root[2]) * up[2]));
+      }
+      expect(wMax / hMax, `#${seed} solid`).toBeGreaterThan(0.45);
+      // painted dark: its point near black, and a yellow band where it leaves the face
+      const col = b.upper.getAttribute('color');
+      let darkest = 3, yellow = 0;
+      for (let v = 0; v < col.count; v++) {
+        const r = col.getX(v), g = col.getY(v), bl = col.getZ(v);
+        darkest = Math.min(darkest, r + g + bl);
+        if (r > 0.6 && g > 0.4 && bl < 0.3) yellow++;
+      }
+      expect(darkest, `#${seed} dark horn`).toBeLessThan(0.45);
+      expect(yellow / col.count, `#${seed} cere`).toBeGreaterThan(0.1);
+    }
+  });
+
   it('recessed sinks the interior wedge into the cavity; the capsule kit keeps it a hair proud', () => {
     const p = grow(defaultGenome());
     const idx = forceBeak(p);

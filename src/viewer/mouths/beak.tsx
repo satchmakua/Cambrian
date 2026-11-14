@@ -154,11 +154,13 @@ export function buildBeak(
     upperPath.map((p) => ({ p, n: flatN })),
     // (a hooked bill stays deep most of its length and tapers late, into the hook: a cone's even taper
     // left no depth for the hook to turn down from)
-    { radius: (u) => Math.max(r * 0.03, upperR0 * (hooked ? 1 - Math.pow(u, 1.5) : Math.pow(1 - u, 0.95))), flatten: shelled ? 0.42 : 0.3 + 0.2 * sPos, radialSegments: 10 },
+    // (a hooked bill is compressed but solid — over half as wide as it is deep: at a third, from the front
+    // it was a needle, from the side a blade)
+    { radius: (u) => Math.max(r * 0.03, upperR0 * (hooked ? 1 - Math.pow(u, 1.5) : Math.pow(1 - u, 0.95))), flatten: shelled ? 0.42 : hooked ? HOOKED_WIDTH : 0.3 + 0.2 * sPos, radialSegments: 10 },
   );
   const lower = sweepTube(
     lowerPath.map((p) => ({ p, n: flatN })),
-    { radius: (u) => Math.max(r * 0.025, upperR0 * 0.72 * Math.pow(1 - u, 1.05)), flatten: shelled ? 0.42 : 0.3, radialSegments: 10 },
+    { radius: (u) => Math.max(r * 0.025, upperR0 * 0.72 * Math.pow(1 - u, 1.05)), flatten: shelled ? 0.42 : hooked ? HOOKED_WIDTH * 0.9 : 0.3, radialSegments: 10 },
   );
   // the buried root stays buried: where a ring's spine point is still inside the head, any of its
   // vertices that poke out are drawn back under the skin. (A tall blade-bill rooted up the face stood
@@ -170,7 +172,8 @@ export function buildBeak(
     // the face (a hawk's cere), then blue-grey horn darkening to the hook. (Painted from the bill's
     // root, the yellow lay buried in the head and the visible bill was all slate, lost against brown.)
     const out = emergence(f, carves, upperPathW);
-    const cere = Math.min(0.7, out + 0.1);
+    // (the cere a band a sixth of the bill long where it leaves the face: at a tenth, a sliver)
+    const cere = Math.min(0.7, out + 0.17);
     const pos = upper.getAttribute('position');
     const col = new Float32Array(pos.count * 3);
     const root = upperPath[0];
@@ -308,8 +311,11 @@ export function BeakMouth({
 /** a bill this low in the beak band (its style position) is a stout, hooked one: a hawk's, a parrot's */
 const HOOKED_BILL = 0.4;
 const CERE = new THREE.Color(0xe8b830);
-const BILL_GREY = new THREE.Color(0x7a8494);
-const BILL_TIP = new THREE.Color(0x2e3137);
+// (dark horn, slate to black at the hook: a paler blue-grey shone like steel, a silver blade)
+const BILL_GREY = new THREE.Color(0x4c535e);
+const BILL_TIP = new THREE.Color(0x1d1f23);
+/** a hooked bill's width against its depth */
+const HOOKED_WIDTH = 0.55;
 
 function smooth(a: number, b: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
