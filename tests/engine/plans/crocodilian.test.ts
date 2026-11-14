@@ -187,6 +187,9 @@ describe('crocodilian', () => {
       expect(nose[0].at[1], `#${seed} on top`).toBeGreaterThan(head[3].pos[1]);
       // the crest stands taller than the plates of the back
       expect(Math.max(...crest.map((s) => s.h)), `#${seed}`).toBeGreaterThan(1.5 * Math.max(...back.map((s) => s.h)));
+      // …which are low keeled slabs, not cones (keeled at half their width and more, peaked over a plate
+      // pitched to it, the back was a hairbrush of spikes)
+      for (const s of back) expect(s.h / s.wid, `#${seed} a low keel`).toBeLessThanOrEqual(0.3);
     }
   });
 

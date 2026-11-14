@@ -43,8 +43,13 @@ const BACK_LEN = 1.2;
 const BACK_PAIRS = 3;
 /** rows stay on the top of the back: none further out than this × the body's half-width there */
 const BACK_REACH = 0.9;
-/** a back scute's keel, × its width (the outer rows lie flatter) */
-const BACK_KEEL = [0.5, 0.42, 0.3] as const;
+/** a back scute's keel, × its width (the outer rows lie flatter). (At half its width and more, peaked
+ *  over a plate pitched to it, each scute was a cone: the back a hairbrush, a saw blade, of thin spikes.) */
+const BACK_KEEL = [0.24, 0.2, 0.15] as const;
+/** a back scute's slab: how far its flat top stands off the skin (× its width), and how far in from the
+ *  base its top's edges lie (× its half-size) */
+const PLATE_T = 0.1;
+const PLATE_INSET = 0.85;
 /** the tail's two crests start this far apart (× the trunk's half-width: the back's second rows)… */
 const CREST_SPREAD = 0.3;
 /** …and have closed into one by this fraction of the tail's length */
@@ -273,8 +278,10 @@ function pushTri(pos: number[], inside: Vec3, a: Vec3, b: Vec3, c: Vec3): void {
 }
 
 /**
- * One scute: a low keeled plate, its ridge rising from the front to a point over its rear edge — a
- * saw tooth from the side. Vertices are pushed onto `pos` in body space.
+ * One scute. A back scute is a low slab — its top a flat plate standing off the skin, PLATE_T of its
+ * width, with a keel along its middle rising from the front to its rear edge; a crest blade (the tail's)
+ * is a saw tooth from the side, its ridge rising from the front to a point over its rear edge. Vertices are
+ * pushed onto `pos` in body space.
  */
 function pushScute(s: Scute, pos: number[]): void {
   const { at, up, fwd } = s;
@@ -285,6 +292,27 @@ function pushScute(s: Scute, pos: number[]): void {
     at[2] + fwd[2] * a + rt[2] * r + up[2] * n,
   ];
   const hl = s.len / 2, hw = s.wid / 2;
+  if (s.on === 'back') {
+    const t = PLATE_T * s.wid;
+    const sink = -0.3 * (t + s.h) - 0.012; // (its base edges sit in the skin, whatever its curve)
+    const il = hl * PLATE_INSET, iw = hw * PLATE_INSET;
+    const b = [P(hl, -hw, sink), P(hl, hw, sink), P(-hl, hw, sink), P(-hl, -hw, sink)];
+    const top = [P(il, -iw, t), P(il, iw, t), P(-il, iw, t), P(-il, -iw, t)];
+    const keelF = P(il, 0, t), keelB = P(-il * 0.95, 0, t + s.h);
+    const inside = P(0, 0, t * 0.3);
+    const tri = (a: Vec3, c: Vec3, d: Vec3) => pushTri(pos, inside, a, c, d);
+    // the slab's four sides
+    for (let k = 0; k < 4; k++) {
+      const k1 = (k + 1) % 4;
+      tri(b[k], b[k1], top[k1]);
+      tri(b[k], top[k1], top[k]);
+    }
+    // its top, pitched up each side of the keel to the ridge (from the low front to the high rear)
+    tri(top[0], keelF, keelB); tri(top[0], keelB, top[3]); // one side
+    tri(top[1], keelB, keelF); tri(top[1], top[2], keelB); // the other
+    tri(top[3], keelB, top[2]); // the rear, under the ridge's end
+    return;
+  }
   const sink = -0.3 * s.h - 0.012; // the plate's edges sit in the skin, whatever its curve
   const fl = P(hl, -hw, sink), fr = P(hl, hw, sink), bl = P(-hl, -hw, sink), br = P(-hl, hw, sink);
   const nose = P(hl * 0.8, 0, s.h * 0.12);
