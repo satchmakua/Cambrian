@@ -5,6 +5,7 @@ import { genomeOfMorphotype } from '../../../src/engine/random';
 import { eyeVariant } from '../../../src/viewer/partStyles';
 import { buildJawed, noseScaleOf, snoutReach, SNOUT_SHORT } from '../../../src/viewer/mouths/jawed';
 import { mouthSpec } from '../../../src/viewer/mouthLine';
+import { coatMain } from '../../../src/viewer/palette';
 
 describe('felid', () => {
   it("looks out of a cat's slit eyes", () => {
@@ -55,5 +56,17 @@ describe('felid', () => {
       expect(c.patternScale, `#${seed} ${c.pattern}`).toBeGreaterThanOrEqual(8.5);
     }
     expect(marked).toBeGreaterThan(8);
+  });
+
+  it("wears a tawny, ginger, sandy or grey coat — never a pale salmon pink, a hairless cat's", () => {
+    // (on the reddest hues, lit pale, a plain cat came out salmon pink)
+    const hsl = { h: 0, s: 0, l: 0 };
+    for (let seed = 1; seed <= 32; seed++) {
+      const g = genomeOfMorphotype(seed, 'felid');
+      coatMain(g.palette).getHSL(hsl, THREE.SRGBColorSpace); // (as it is seen: the palette is sRGB)
+      if (hsl.s < 0.25) continue; // (a grey coat)
+      expect(hsl.h, `#${seed} hue`).toBeGreaterThan(0.064);
+      expect(hsl.l, `#${seed} light`).toBeLessThan(0.75);
+    }
   });
 });
