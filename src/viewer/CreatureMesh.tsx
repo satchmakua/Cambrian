@@ -20,7 +20,7 @@ import { unitHash } from '../engine/rng';
 import { buildMeshData, type MeshFeature } from './meshData';
 import { scutePlan, scuteGeometries } from './scutes';
 import { eyeVariant, earVariant } from './partStyles';
-import { earGeometry } from './ear';
+import { earGeometry, lowEar } from './ear';
 import { Mouth } from './mouths';
 import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
@@ -797,7 +797,7 @@ function Feature({
     case 'barb':
       return <Barb f={f} color={footColor} />;
     case 'ear':
-      return <Ear f={f} color={footColor} belly={coatBelly(phenotype.genomeRef.palette).getHex()} skin={skin} origin={phenotype.nodes[f.idx].pos} bare={ratLike(phenotype)} />;
+      return <Ear f={f} color={footColor} belly={coatBelly(phenotype.genomeRef.palette).getHex()} skin={skin} origin={phenotype.nodes[f.idx].pos} bare={ratLike(phenotype)} low={lowEar(phenotype, f.idx)} coat={coatMain(phenotype.genomeRef.palette).getHex()} />;
     case 'gill':
       return <Gill f={f} color={footColor} phenotype={phenotype} surface={surface} />;
     case 'crest':
@@ -2039,14 +2039,15 @@ function bakeSkin(g: THREE.BufferGeometry, origin: readonly number[]): THREE.Buf
 /** the flesh an inner ear's pale fur lets show through */
 const EAR_FLESH = srgbHSL(0.01, 0.38, 0.62);
 
-function Ear({ f, color, belly, skin, origin, bare = false }: { f: MeshFeature; color: number; belly: number; skin?: THREE.Material; origin: readonly number[]; bare?: boolean }) {
-  const r = Math.max(f.radius, 0.06);
+function Ear({ f, color, belly, skin, origin, bare = false, low = false, coat }: { f: MeshFeature; color: number; belly: number; skin?: THREE.Material; origin: readonly number[]; bare?: boolean; low?: boolean; coat?: number }) {
+  // (a small round ear keeps its own small size: floored at 0.06, a weasel's grew past what its genes asked)
+  const r = low ? f.radius : Math.max(f.radius, 0.06);
   const v = earVariant(f.style);
   const geo = useMemo(() => {
-    const g = earGeometry(v, r, f.quat);
+    const g = earGeometry(v, r, f.quat, low);
     bakeSkin(g.outer, origin);
     return g;
-  }, [v, r, f.quat, origin]);
+  }, [v, r, f.quat, origin, low]);
   useEffect(() => () => {
     geo.outer.dispose();
     geo.inner.dispose();
@@ -2054,7 +2055,16 @@ function Ear({ f, color, belly, skin, origin, bare = false }: { f: MeshFeature; 
   // (a mouse's ear is bare pink skin inside, like its paws: the dusky inner ear every mammal wears was,
   // in the shadow of a mouse's big round cup, a dark slot. Another's is the pale fur of its belly over
   // pink: in the coat's dark foot tone, maroon, a cat's and a dog's ears were dark paper triangles)
-  const innerColor = useMemo(() => (bare ? new THREE.Color(BARE_PAW).lerp(new THREE.Color(0xe8b4b0), 0.35).getHex() : new THREE.Color(belly).lerp(EAR_FLESH, 0.4).multiplyScalar(0.85).getHex()), [belly, bare]);
+  // (a small low ear's hollow is furred, the coat paling toward the belly: no flesh shows in it — see lowEar)
+  const innerColor = useMemo(
+    () =>
+      bare
+        ? new THREE.Color(BARE_PAW).lerp(new THREE.Color(0xe8b4b0), 0.35).getHex()
+        : low
+          ? new THREE.Color(coat ?? color).lerp(new THREE.Color(belly), 0.45).multiplyScalar(0.8).getHex()
+          : new THREE.Color(belly).lerp(EAR_FLESH, 0.4).multiplyScalar(0.85).getHex(),
+    [belly, bare, low, coat, color],
+  );
   return (
     <group>
       {skin ? (

@@ -22,8 +22,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { coatMain } from '../palette';
 import { faceMaskOf } from '../face';
 import { isTheropod, tailRootRatio } from '../feet';
-import type { Phenotype } from '../../engine/grow';
-import type { Vec3 } from '../../engine/genome';
+import { headStop, type Phenotype } from '../../engine/grow';
+import type { SegmentGene, Vec3 } from '../../engine/genome';
 import type { Carve } from '../bodyField';
 import { norm3 } from '../bodyField';
 import type { MeshFeature } from '../meshData';
@@ -369,7 +369,8 @@ export function buildJawed(
     const g = new THREE.SphereGeometry(1, 18, 12);
     // a short muzzle wears a small nose: a cat's is a little triangle, a dog's a broad pad (the same
     // pad on every muzzle gave a cat a dog's big black nose)
-    const ns = noseScaleOf(snoutReach(phenotype, idx));
+    // (…and a big pad only where the skull has a stop: see NOSE_POINTED)
+    const ns = Math.min(noseScaleOf(snoutReach(phenotype, idx)), NOSE_POINTED + (NOSE_LONG - NOSE_POINTED) * stopOf(phenotype, idx));
     // wider across the top than at the bottom: a rounded triangle, the classic mammal rhinarium (the
     // smaller, the more a triangle)
     const flare = 0.32 + 1.0 * Math.max(0, 1 - ns);
@@ -446,8 +447,8 @@ export const THEROPOD_TEETH: ToothProfile = { count: 12, len: (u: number) => 0.4
 
 /**
  * How far a muzzle runs out ahead of its braincase: the mouth's distance from its head section's first
- * node, in that node's radii — about 1.6 on a cat, 2 on a mouse or a weasel, 2.4 on a dog or a bear, 3
- * on a deer.
+ * node, in that node's radii — about 1.6 on a cat, 2 on a mouse, 2.4 on a dog or a bear, 2.7–2.9 on a
+ * weasel, 3 on a deer.
  */
 export function snoutReach(p: Phenotype, mouthIdx: number): number {
   const parent = p.edges.find(([, b]) => b === mouthIdx)?.[0];
@@ -467,6 +468,20 @@ const PAD_DROP = 0.3;
 
 /** …and a long muzzle's nose pad against the mouth's size */
 const NOSE_LONG = 1.5;
+/** …which only a skull with a STOP wears (grow's headStop: a dog's, a bear's). A muzzle running straight
+ *  on from the brow — a weasel's, a mouse's, a deer's — ends in a pad no bigger than this, however far it
+ *  reaches. (By reach alone a weasel's long snout ended in a dog's rhinarium as wide as the muzzle, past
+ *  the fur; a deer's in a glossy black rubber ball.) */
+export const NOSE_POINTED = 0.9;
+/** the stop of the head section a mouth is on (grow's headStop): 1 on a dog's or a bear's skull */
+export function stopOf(p: Phenotype, mouthIdx: number): number {
+  const parent = p.edges.find(([, b]) => b === mouthIdx)?.[0];
+  const depth = parent === undefined ? undefined : p.nodes[parent].segment;
+  if (depth === undefined) return 0;
+  let seg: SegmentGene | undefined = p.genomeRef.body;
+  for (let d = 0; d < depth && seg; d++) seg = seg.child;
+  return seg ? headStop(seg, depth) : 0;
+}
 /** the nose pad's size against the mouth's, by the muzzle's reach: 0.75 on a cat's short muzzle, half
  *  as big again on a dog's or a bear's, where the pad covers most of the muzzle's front (at 0.6 a
  *  cat's was a pink speck; at the cat's size a bear's was a dot on the end of a hippo's snout) */

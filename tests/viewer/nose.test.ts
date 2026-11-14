@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
-import { pinkNoseChance } from '../../src/viewer/mouths/jawed';
+import * as THREE from 'three';
+import { buildJawed, NOSE_POINTED, pinkNoseChance, stopOf, type JawedVariant } from '../../src/viewer/mouths/jawed';
+import { mouthCarves } from '../../src/viewer/mouthLine';
+import { mouthVariant } from '../../src/viewer/partStyles';
 
 describe('noses', () => {
   it('a pink nose is a small animal’s: about even on a mouse, never on a wolf or a bear', () => {
@@ -22,5 +25,33 @@ describe('noses', () => {
     for (let seed = 1; seed <= 12; seed++) {
       expect(pinkNoseChance(grow(genomeOfMorphotype(seed, 'mustelid'))), `weasel #${seed}`).toBeLessThan(0.25);
     }
+  });
+
+  it("a big dog's pad only where the skull has a stop: a weasel's long snout ends in a small nose", () => {
+    // (sized by the muzzle's reach alone, a weasel's — longer than a dog's — ended in a dog's rhinarium as
+    // wide as the muzzle and standing past the fur, a deer's in a glossy black rubber ball)
+    const padOf = (id: string, seed: number) => {
+      const p = grow(genomeOfMorphotype(seed, id));
+      const mi = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const b = buildJawed(p, mi, mouthCarves(p), true, mouthVariant(p.nodes[mi].part!.style) as JawedVariant, 'hybrid')!;
+      const depth = Math.max(...p.nodes.filter((n) => n.kind === 'spine').map((n) => n.segment ?? 0));
+      const skull = p.nodes.find((n) => n.kind === 'spine' && n.segment === depth)!;
+      b.nose!.computeBoundingBox();
+      const box = b.nose!.boundingBox!.getSize(new THREE.Vector3());
+      return { stop: stopOf(p, mi), across: box.x / (2 * skull.radius * (skull.scale?.[0] ?? 1)) };
+    };
+    let weasels = 0, dogs = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const weasel = padOf('mustelid', seed);
+      expect(weasel.stop, `weasel #${seed}`).toBeLessThan(0.05);
+      expect(weasel.across, `weasel #${seed}`).toBeLessThan(0.19);
+      weasels += weasel.across;
+      const dog = padOf('canid', seed);
+      expect(dog.stop, `dog #${seed}`).toBeGreaterThan(0.95);
+      dogs += dog.across;
+    }
+    // (the dog keeps its broad pad: the bigger nose for its skull of the two)
+    expect(dogs / weasels).toBeGreaterThan(1.15);
+    expect(NOSE_POINTED).toBeLessThan(1);
   });
 });

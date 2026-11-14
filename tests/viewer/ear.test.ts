@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { earGeometry } from '../../src/viewer/ear';
+import { earGeometry, lowEar } from '../../src/viewer/ear';
+import { fieldAt } from '../../src/viewer/bodyField';
+import { surfacePrims } from '../../src/viewer/mouthLine';
 import { earVariant } from '../../src/viewer/partStyles';
 import { buildFieldPrims } from '../../src/viewer/bodyField';
 import { grow } from '../../src/engine/grow';
@@ -107,6 +109,33 @@ describe('ears', () => {
         }
         expect((z1 - z0) / (x1 - x0), `${v} at ${t} of its height`).toBeGreaterThan(least);
       }
+    }
+  });
+
+  it("a weasel's small round ears are low flaps half hidden in its coat; a mouse's big ones keep their cups", () => {
+    // (drawn as a mouse's, a cup as tall as it was wide standing a fifth to a quarter of the skull's height
+    // clear of it, a weasel's ears were a hamster's)
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'mustelid'));
+      const prims = surfacePrims(p, 'hybrid');
+      const depth = Math.max(...p.nodes.filter((n) => n.kind === 'spine').map((n) => n.segment ?? 0));
+      const skull = p.nodes.find((n) => n.kind === 'spine' && n.segment === depth)!;
+      const skullH = 2 * skull.radius * (skull.scale?.[1] ?? 1);
+      p.nodes.forEach((n, i) => {
+        if (n.terminal !== 'ear') return;
+        expect(lowEar(p, i), `#${seed}`).toBe(true);
+        const g = earGeometry('round', n.radius, n.quat, true).outer;
+        const pos = g.getAttribute('position');
+        let proud = -Infinity;
+        for (let v = 0; v < pos.count; v++) proud = Math.max(proud, fieldAt(prims, pos.getX(v) + n.pos[0], pos.getY(v) + n.pos[1], pos.getZ(v) + n.pos[2]));
+        expect(proud / skullH, `#${seed} stands low`).toBeLessThan(0.18);
+      });
+    }
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'rodent'));
+      p.nodes.forEach((n, i) => {
+        if (n.terminal === 'ear') expect(lowEar(p, i), `mouse #${seed}`).toBe(false);
+      });
     }
   });
 });

@@ -3,12 +3,28 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { earVariant } from './partStyles';
+import type { Phenotype } from '../engine/grow';
+import { earVariant } from './partStyles';
 
 /** how deep an ear's hollow is (× its half-width there): a cat's ear is a rolled half-cone, a bear's
  *  or a mouse's a cup. (At 0.42 every ear was a shallow dish a fifth to a third as deep as it was wide:
  *  seen edge-on in a three-quarter view, the far one was a thin horn.) */
 export const EAR_CUP: Record<ReturnType<typeof earVariant>, number> = { pointed: 0.9, round: 0.72, leaf: 0.78 };
+
+/** A SMALL round ear — under LOW_EAR × the radius of the skull it stands on: a weasel's, a bear's — is a
+ *  low rounded flap half hidden in the coat: LOW_EAR_H × a round ear's height, its root sunk to
+ *  LOW_EAR_BASE (× its size), its hollow furred in the coat's own tone. (Drawn as a mouse's, a cup as
+ *  tall as it was wide standing clear of the skull with a pink hollow, it gave a weasel a hamster's
+ *  ears.) A mouse's big ears are not small: they keep their cups. */
+export const LOW_EAR = 0.36;
+export const LOW_EAR_H = 0.66;
+export const LOW_EAR_BASE = -0.8;
+export function lowEar(p: Phenotype, idx: number): boolean {
+  const n = p.nodes[idx];
+  if (n?.terminal !== 'ear' || earVariant(n.part?.style ?? 0.5) !== 'round') return false;
+  const parent = p.edges.find(([, b]) => b === idx)?.[0];
+  return parent !== undefined && n.radius < LOW_EAR * p.nodes[parent].radius;
+}
 
 /**
  * An ear, built in the BODY frame: it rises along the part's outward aim, its face turned forward
@@ -20,7 +36,7 @@ export const EAR_CUP: Record<ReturnType<typeof earVariant>, number> = { pointed:
  * sunk into the head. (A flat cone or a squashed sphere with a disc on its face read as cardboard.)
  *   pointed — a cat/fox triangle · round — a bear/mouse cup · leaf — a long rabbit/deer blade
  */
-export function earGeometry(v: ReturnType<typeof earVariant>, r: number, quat: readonly number[]): { outer: THREE.BufferGeometry; inner: THREE.BufferGeometry } {
+export function earGeometry(v: ReturnType<typeof earVariant>, r: number, quat: readonly number[], low = false): { outer: THREE.BufferGeometry; inner: THREE.BufferGeometry } {
   const out = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3])).normalize();
   // the ear's face normal: forward and turned OUT to its own side (a cat's opens ~30° out, a bear's
   // or a mouse's round cup ~45°, a rabbit's or a deer's blade more) — made perpendicular to the
@@ -37,7 +53,7 @@ export function earGeometry(v: ReturnType<typeof earVariant>, r: number, quat: r
   // local frame: X = across the ear, Y = up the ear (out), Z = its face normal (forward)
   const basis = new THREE.Matrix4().makeBasis(side, out, n);
   // the outline's half-width (×r) up the ear (v 0 base … 1 tip) and its height (×r)
-  const H = v === 'pointed' ? 1.95 : v === 'round' ? 1.75 : 3.5;
+  const H = (v === 'pointed' ? 1.95 : v === 'round' ? 1.75 : 3.5) * (low ? LOW_EAR_H : 1);
   const halfW = (t: number): number =>
     v === 'pointed'
       ? 0.95 * Math.pow(1 - t, 0.85) * (0.82 + 0.18 * Math.min(1, t / 0.2))
@@ -46,7 +62,7 @@ export function earGeometry(v: ReturnType<typeof earVariant>, r: number, quat: r
         : 0.8 * Math.pow(Math.sin(Math.PI * (0.08 + 0.92 * t)), 0.75);
   // the base sits sunk into the head (×r): deep enough that the corners of a wide ear are still under
   // the skin where the skull curves away beneath them, so no seam shows
-  const base = -0.5;
+  const base = low ? LOW_EAR_BASE : -0.5;
   const NU = 14, NV = 14;
   const cupK = EAR_CUP[v];
   // the ear's surfaces at (u across −1…1, t up 0…1): the front pushed back into a hollow (deepest low

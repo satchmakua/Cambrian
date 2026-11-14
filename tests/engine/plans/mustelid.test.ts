@@ -121,6 +121,10 @@ describe('mustelid', () => {
       expect(head[2].radius / head[1].radius, `#${seed} narrows to the nose`).toBeLessThan(0.75);
       // (the skull was up to 1.13 of the shoulders' width: a hamster's block on the end of a tube)
       expect(rx(head[0]) / shoulders, `#${seed} narrower than the shoulders`).toBeLessThan(0.92);
+      // …but not lost in front of them: at 0.59–0.67 of the trunk's width, narrower than its own neck,
+      // the head was a small ball framed on every side by the chest behind it
+      const { trunk } = parts(seed);
+      expect(rx(head[0]) / Math.max(...trunk.map(rx)), `#${seed} not lost in front of its chest`).toBeGreaterThan(0.645);
       // flat: wider than it is tall
       expect(ry(head[0]) / rx(head[0]), `#${seed} flat`).toBeLessThan(0.82);
       // a wedge: the muzzle well under the skull's girth, the head longer than before (it was
@@ -193,7 +197,12 @@ describe('mustelid', () => {
       const girth = Math.max(...trunk.map((n) => n.radius));
       expect(tail[0].radius / girth, `#${seed} thick at the root`).toBeGreaterThan(0.32);
       expect(tail[0].radius / girth, `#${seed} thinner than the body`).toBeLessThan(0.45);
-      expect(tail[tail.length - 1].radius / tail[0].radius, `#${seed} tapers`).toBeLessThan(0.52);
+      expect(tail[tail.length - 1].radius / tail[0].radius, `#${seed} tapers`).toBeLessThan(0.75);
+      // …but keeps its girth down its length, a furred brush: thinning ×0.8 a link it was a rat's whip,
+      // its back half under a fifth of the body's width
+      const mid = tail[Math.floor(tail.length / 2)];
+      expect(mid.radius / tail[0].radius, `#${seed} full down its length`).toBeGreaterThan(0.75);
+      expect(tail[tail.length - 1].radius / tail[0].radius, `#${seed} full to its tip`).toBeGreaterThan(0.5);
     }
   });
 
