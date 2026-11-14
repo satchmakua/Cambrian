@@ -71,8 +71,55 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   not cut against each other: cut to the rest shape, a walking crab bent its knees further, opened their
   outer side, and showed the ground through the gap. A furred spider's legs, tails and tentacles are
   drawn as they were; the skin builds no slower.
+- **Diagnosed in parallel.** The look's worst items went to read-only diagnosis agents, one each (horror,
+  crystal, theropod, fish, shark, bear, weasel, wing roots, goggle eyes), each tracing its defect to code
+  with measurements and a verified proposal; the fixes below from them are marked †.
+- From the list:
+  - *Horror: a cute octopus doll* [2] † — one small dark eye to an arm, five to eight round it, so every
+    camera saw a pair (a face), a third of them an insect's black domes; its crown feelers drooped over the
+    face between them (a trunk); its crown maw sat back on the crown, tilted 13°, a sucker whose lip
+    hovered over its carved hole (torn). Its eyes now always glow, in a band of twice as many round it (the
+    ring copied half a step round: no draw); its feelers rise round the crown; its maw is a centred
+    lamprey's rings of teeth, the lip of every carved ring mouth seated on the cut; its arms taper to
+    lashes; its hide is darker.
+  - *Crystal: a flaky potato* [3] † — cutting the smooth skin in place ran every edge between two faces
+    through the mesh, a seventh of the hide chips tilted every way (six rounds of tuning never got them
+    under a few percent). The trunk now wears one cut stone over its uncut skin (`facets.ts gemGeometry`):
+    the meet of 36 mirrored planes, each face exactly a plane, built as the polar dual of the convex hull of
+    their poles, riding the middle trunk bone; a glassy coat; shards in the body's own stone; glowing eyes
+    seated as low domes in the head; no smile seam on a crystal face.
+  - *Theropod: moss, a jawless ball of a head, a fuzz cliff at the knee* [3] † — a feathered body with no
+    wing was drawn as a flightless bird, so a theropod (arms, not wings) wore the ostrich's shaggy plumes,
+    a pile 0.4 of its skull's girth deep. Only flightless birds wear them now; a theropod's jaw carries a
+    dozen blades; its plumage ends at its ankle.
+  - *Fish: the gill arc two-thirds back, a loaf with a fan on its butt* [3] † — the gill cover was a trunk
+    part, drawn on the trunk's deepest link half way down the body. It and the pectoral pair hang on the
+    back of the skull now (`gillAt: 'head'`, no draw), each pectoral seated on the skin (they were half and
+    more buried); 8–10 trunk links and a real stalk taper the rear into the tail fin.
+  - *No jaw, no teeth* (crocodile, lizard, wyvern, dragon, theropod, snake) — a reptile's shut seam was
+    traced from its node, grown under the snout's tip, round the tip alone: it lay along the snout's
+    underside (0% of its depth up), and every tooth's tip was inside the closed lower jaw (0 of 17 on a
+    crocodile). The seam is now a level fan round the tip and a run back past the eye, a third of the way up
+    the head, sunk as a groove; its teeth tilt out over the closed jaw (a snake shows none).
+  - *Grey glass-button eyes* (dog, deer, bear, ostrich, hawk) — the iris swatches' lightness is linear, so
+    the natural palette's colourless "near-black" was `#595959` on screen. It is the darkest brown; an
+    animal's eye mirrors the studio at 0.3.
+  - *Hawk: a gourd head on a pear, no neck* [3] — its neck was thicker than its head (0.7–0.8 of the chest
+    under a head of 0.64–0.74); now 0.48–0.55 under 0.6–0.68.
+  - *Arthro-alien: a string of beads* [3] — the slim joint between two rings was pinched as deep from side to
+    side as over the back; it is 1.6 times as wide as deep, a notch at the sides.
+  - *Blunt tail tips* (snake, mouse, theropod, octopus, horror) — a tail or tentacle ending in nothing runs on
+    past its last node to a point, its last link drawn exact at any girth.
+  - *Crocodile: a hairbrush of cone spikes* — its back scutes are low keeled slabs, not pyramids.
 - **Tests:** `tests/viewer/limbTubes.test.ts › a row of segments, pinched in at each knee`, `› a knee
-  keeps its whole membrane`, `› a furred spider's legs keep their round knees`.
+  keeps its whole membrane`, `› a furred spider's legs keep their round knees`, `› a bare tail … runs on to
+  a point`, `tests/viewer/iris.test.ts › no grey ball bearing`, `raptor.test.ts › not a gourd on a pear`,
+  `tests/viewer/mouths/jawed.test.ts › a reptile's shut mouth runs along its jaw`, `› teeth hang outside`,
+  `› a theropod's shut jaw shows a row of blades`, `horror.test.ts › no face`, `› a lamprey's rings`,
+  `tests/viewer/facets.test.ts` (the cut stone), `eyeSeat.test.ts › a glowing eye is a low dome`,
+  `creatureMaterial.test.ts › a cut stone takes a glassy coat`, `pile.test.ts › a feathered theropod`,
+  `feet.test.ts › plumage ends at its ankle`, `fish.test.ts › gill cover … back of its head`, `› a slim
+  stalk`, `arthro-alien.test.ts › plates, not beads`, `crocodilian.test.ts › a low keel`.
 
 ## M96 — An eleventh look, and a deer named a deer · 2026-11-14
 

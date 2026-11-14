@@ -867,19 +867,18 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   `pile.test.ts`, `beak.test.ts › an ostrich's bill`, `creatureMaterial.test.ts › short down`,
   `jawed.test.ts › a slug's shut mouth`.
 
-- [x] **M97 — A twelfth look (3.45), and legs with joints.** A jointed shell's leg links each drawn as
-  a segment of its own, pinched in and dark at every knee (no straws strung with beads), its knees'
-  membranes whole so a walking crab's bent knee shows no gap.
-  **Tests:** `limbTubes.test.ts › a row of segments`, `› a knee keeps its whole membrane`, `› a furred
-  spider's legs keep their round knees`.
+- [x] **M97 — A twelfth look (3.45), and its worst diagnosed in parallel.** Legs with joints; a horror with
+  no face (a band of glowing eyes, rising feelers, a lamprey's maw); a crystal trunk as one cut stone; a
+  theropod's sleek feathers, toothy jaw and bare shanks; a fish's gill cover on its skull and a tail stock;
+  reptile jaws along the side of the head with teeth outside them; brown eyes, not grey ball bearings; a
+  hawk's neck; a centipede's plates; pointed tail and tentacle tips; a crocodile's low keeled plates.
+  **Tests:** see PROGRESS M97.
 
 ### Next up (unchecked — pick from here)
 
-- [ ] **What the twelfth look left.** The horror a cute octopus doll with a torn crown (2/5); a cut
-  stone still a flaky potato with glued-on prisms; the theropod's noisy moss of a coat and jawless head;
-  the fish's gill arc two-thirds back on an untapered loaf; the shark's dolphin head; the bear a dog on
-  stilts; the weasel's hamster face; the chimera's chest tube; the dragon's wings over its hips; the far
-  eye bulging out of the outline (bird, hawk, chimera, stone, cat, lizard).
+- [ ] **What the twelfth look left.** The shark's dolphin head; the bear a dog on stilts; the weasel's
+  hamster face; the chimera's chest tube; the dragon's wings over its hips; the far eye bulging out of the
+  outline (bird, hawk, chimera, cat, lizard); the crystal's smooth glass head on its cut stone.
 
 - [ ] **What the eleventh look left.** The crab's balloon claws; the arthro-alien's string of beads; a
   cut stone still papery; plush heads (a cat's box of a head, sock muzzles); the bare-shank seams on
