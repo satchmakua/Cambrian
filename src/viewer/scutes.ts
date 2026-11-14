@@ -367,8 +367,12 @@ export function scuteGeometries(p: Phenotype, scutes: readonly Scute[]): { node:
  * bolt-head beside the wing root, two square pads from above.)
  */
 export const DORSAL_SPIKE: readonly [number, number, number] = [3.4, 0.7, 0.3];
-export function dorsalSpikeGeometry(r: number, quat: readonly number[]): THREE.BufferGeometry {
-  const [len, sink, rake] = DORSAL_SPIKE;
+/** …and a tail's claw (a manticore's): a STING run on from the tail's tip along its last link, unraked —
+ *  [length, sink, rake] as DORSAL_SPIKE. (Drawn as a leg's claw it was a dark disc floating over the end of
+ *  the tail.) */
+export const TAIL_STING: readonly [number, number, number] = [2.8, 0.6, 0];
+export function dorsalSpikeGeometry(r: number, quat: readonly number[], shape: readonly [number, number, number] = DORSAL_SPIKE): THREE.BufferGeometry {
+  const [len, sink, rake] = shape;
   const g = new THREE.ConeGeometry(r, len * r, 9, 1);
   g.translate(0, (len / 2 - sink) * r, 0); // the base sunk into the hide, the point out
   g.rotateX(Math.PI / 2); // its point (+Y) along the node's aim (+Z)

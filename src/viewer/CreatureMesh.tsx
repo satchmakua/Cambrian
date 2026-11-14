@@ -18,7 +18,7 @@ import { blinkAt, LidContext } from './eyelids';
 import { legBearer, pointedLegs, type Phenotype } from '../engine/grow';
 import { unitHash } from '../engine/rng';
 import { buildMeshData, type MeshFeature } from './meshData';
-import { dorsalSpikeGeometry, scutePlan, scuteGeometries } from './scutes';
+import { dorsalSpikeGeometry, scutePlan, scuteGeometries, TAIL_STING } from './scutes';
 import { eyeVariant, earVariant } from './partStyles';
 import { earGeometry, lowEar } from './ear';
 import { Mouth } from './mouths';
@@ -788,8 +788,9 @@ function Feature({
         );
       }
       if (f.kind === 'horn') return <Horn f={f} color={footColor} seed={phenotype.genomeRef.seed} phenotype={phenotype} />;
-      // a back spine stands out along its aim (scutes.ts dorsalSpikeGeometry)
+      // a back spine stands out along its aim, a tail's claw runs on from its tip as a sting (scutes.ts)
       if (f.kind === 'spine') return <DorsalSpike f={f} color={footColor} />;
+      if (f.kind === 'tail') return <DorsalSpike f={f} color={footColor} shape={TAIL_STING} />;
       const reach = phenotype.nodes[f.idx].pos[1] - phenotype.bounds.min[1];
       if (f.kind === 'leg' && arthropodLegs(phenotype)) return <LegTip f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} reach={reach} />;
       const plan = f.kind === 'leg' ? footPlanOf(phenotype) : null;
@@ -1514,9 +1515,9 @@ function ToedFoot({ f, plan, skin, phenotype }: { f: MeshFeature; plan: FootPlan
 }
 
 // A claw: a darker, pointed talon.
-function DorsalSpike({ f, color }: { f: MeshFeature; color: number }) {
+function DorsalSpike({ f, color, shape }: { f: MeshFeature; color: number; shape?: readonly [number, number, number] }) {
   const r = Math.max(f.radius, 0.06);
-  const geo = useMemo(() => dorsalSpikeGeometry(r, f.quat), [r, f.quat]);
+  const geo = useMemo(() => dorsalSpikeGeometry(r, f.quat, shape), [r, f.quat, shape]);
   useEffect(() => () => geo.dispose(), [geo]);
   const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.7).getHex(), [color]);
   return (

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { buildFin, buildMembraneWing, buildFoldedMembraneWing, buildFeatheredWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, MEMBRANE_FOLD, wingOpenSpan, wingShoulder } from '../../src/viewer/wings';
-import { dorsalSpikeGeometry, DORSAL_SPIKE } from '../../src/viewer/scutes';
+import { dorsalSpikeGeometry, DORSAL_SPIKE, TAIL_STING } from '../../src/viewer/scutes';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
 
@@ -322,6 +322,35 @@ describe('a winged quadruped (a dragon, a chimera)', () => {
     // …and its point leans back along the body (−Z)
     expect(far[0].z).toBeLessThan(-0.3 * r);
     g.dispose();
+  });
+});
+
+describe("a tail's claw", () => {
+  it('runs on from the tail tip as a sting along the tail — not a disc floating over its end', () => {
+    // (drawn as a leg's claw — a cone stood point-down, never turned to its aim — a chimera's tail ended in a
+    // blunt fingertip with a dark slate disc floating just past it)
+    for (let seed = 1; seed <= 30; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'chimera'));
+      const tip = p.nodes.find((n) => n.terminal === 'claw' && n.part?.kind === 'tail');
+      if (!tip) continue;
+      const r = Math.max(tip.radius, 0.06);
+      const aim = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(tip.quat[0], tip.quat[1], tip.quat[2], tip.quat[3]));
+      const g = dorsalSpikeGeometry(r, tip.quat, TAIL_STING);
+      const pos = g.getAttribute('position');
+      let far = -Infinity, near = Infinity, side = 0;
+      for (let v = 0; v < pos.count; v++) {
+        const q = new THREE.Vector3().fromBufferAttribute(pos, v);
+        const along = q.dot(aim);
+        far = Math.max(far, along);
+        near = Math.min(near, along);
+        side = Math.max(side, q.clone().addScaledVector(aim, -along).length());
+      }
+      // its point out along the tail, its base sunk in the tip, no wider than the tail
+      expect(far / r, `#${seed} reach`).toBeGreaterThan((TAIL_STING[0] - TAIL_STING[1]) * 0.98);
+      expect(near / r, `#${seed} sunk`).toBeLessThan(-0.5 * TAIL_STING[1]);
+      expect(side / r, `#${seed} slim`).toBeLessThanOrEqual(1.0001);
+      g.dispose();
+    }
   });
 });
 
