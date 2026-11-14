@@ -489,20 +489,19 @@ describe('creature material shader injection', () => {
     expect(branch).toContain('return clamp(0.72 - dome * 0.42, 0.0, 1.0);');
   });
 
-  it('a slime hide wears long tubercles between soft grooves, under its wet ripple — not a smooth glossy pickle', () => {
-    // (a faint ripple alone was a pickle in a smear of highlight; flat-topped cells between dark seams were
-    // crazy paving)
+  it('a slime hide wears soft papillae laid along the body, under its wet ripple — not a glossy pickle, not hammered foil', () => {
+    // (a faint ripple alone was a pickle in a smear of highlight; Voronoi domes, creased against each other
+    // where their cells met, caught the light facet by facet: hammered foil, a golf ball)
     const f = compileShaderStrings('slime').fragmentShader;
     const i = f.indexOf('if (cover == 5) {');
     expect(i).toBeGreaterThan(0);
     const branch = f.slice(i, f.indexOf('if (cover == 6) {', i));
-    // cells laid along the body, longer than they are wide
-    expect(branch).toContain('voronoi(vec3(p.x, p.y, p.z * SLIME_LONG) * SLIME_CELL)');
+    // smooth noise, laid along the body, longer than it is wide: no cell boundaries to crease
+    expect(branch).toContain('fbmA(vec3(p.x, p.y, p.z * SLIME_LONG) * SLIME_CELL, SLIME_CELL)');
+    expect(branch).not.toContain('voronoi(');
     const num = (name: string) => Number(new RegExp(`const float ${name} = ([0-9.]+);`).exec(f)![1]);
     expect(num('SLIME_LONG')).toBeLessThan(0.6);
     expect(num('SLIME_CELL')).toBeGreaterThan(5);
-    // each a dome to its middle, not a plateau with a hairline seam round it
-    expect(branch).toMatch(/smoothstep\(0\.0, 0\.5\d? \+ gFw \* SLIME_CELL, F\.y - F\.x\)/);
     // standing proud enough to break the highlight, low enough to stay a skin
     expect(num('SLIME_TUBERCLE')).toBeGreaterThan(0.006);
     expect(num('SLIME_TUBERCLE')).toBeLessThan(0.03);

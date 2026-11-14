@@ -676,7 +676,7 @@ const float SCUTE_SEAM = 0.012;    // a tortoise shell's seam: its half-width in
 const float SCUTE_RINGS = 140.0;   // …and its growth rings' spatial frequency, in the same
 const float SLIME_CELL = 9.0;      // a slime hide's tubercles across (per body unit)…
 const float SLIME_LONG = 0.4;      // …fewer along the body: each two and a half times as long as wide
-const float SLIME_TUBERCLE = 0.012; // …and how high each stands (body units)
+const float SLIME_TUBERCLE = 0.01;  // …and how high each stands (body units)
 const float RETIC_RIM = 0.06;
 
 // --- color pattern field p(x) in [0,1] (MORPHOLOGY §7.1) — domain-warped for organic flow --------
@@ -907,18 +907,16 @@ float surfaceHeight(vec3 p, int cover) {
     gHb = swell * 0.006 - smoothstep(0.62, 0.8, pits) * 0.0012 * aaW(26.0);
     return h;
   }
-  if (cover == 5) {                                             // slime — tubercles under a wet ripple
-    // Long tubercles laid along the body between narrow grooves, dark and dull in the grooves, under a
-    // faint wet ripple: a slug's back, an octopus's papillae. (The ripple alone was a glossy pickle,
-    // its highlight one unbroken smear.)
-    // (each a round dome rising from its grooves to its middle, the grooves only a shade darker: flat-topped
-    // cells between dark seams were crazy paving, a turtle's shell)
-    vec2 F = voronoi(vec3(p.x, p.y, p.z * SLIME_LONG) * SLIME_CELL);
-    float w = aaW(SLIME_CELL);
-    float dome = mix(0.6, smoothstep(0.0, 0.55 + gFw * SLIME_CELL, F.y - F.x), w);
+  if (cover == 5) {                                             // slime — soft papillae under a wet ripple
+    // Soft round papillae and wrinkles — smooth blobs of noise, laid long along the body — dull and a shade
+    // darker between them, under a faint wet ripple: a slug's back, an octopus's warts. (The ripple alone
+    // was a glossy pickle, its highlight one unbroken smear. Voronoi domes, each creased against the next
+    // where their cells met, caught the light facet by facet: hammered foil, a golf ball.)
+    float n = fbmA(vec3(p.x, p.y, p.z * SLIME_LONG) * SLIME_CELL, SLIME_CELL);
+    float bump = smoothstep(0.38, 0.72, n);
     float ripple = fbmA(p * 3.5, 3.5);
-    gHb = dome * SLIME_TUBERCLE + ripple * 0.01;
-    return clamp(0.62 - dome * 0.3 + ripple * 0.1, 0.0, 1.0);
+    gHb = bump * SLIME_TUBERCLE + ripple * 0.01;
+    return clamp(0.62 - bump * 0.3 + ripple * 0.1, 0.0, 1.0);
   }
   if (cover == 6) {                                             // plates — domed scutes (osteoderms, ossicles)
     // A dragon's armour, a sea star's ossicles: each plate a low dome rising from a narrow groove to its
