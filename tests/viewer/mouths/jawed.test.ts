@@ -276,4 +276,34 @@ describe('jawed mouth build (mouth overhaul)', () => {
       }
     }
   });
+
+  it("a theropod's shut jaw shows a row of blades, none hanging below its chin", () => {
+    // (a crocodile's small pegs, sunk 0.42 of their length, stood a fiftieth of a unit off a theropod's
+    // skin — no teeth in its face — and an underbite's upper row was none)
+    for (let seed = 1; seed <= 10; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'biped'));
+      const idx = mouthIdx(p);
+      const spec = mouthSpec(p, idx);
+      if (!spec || !['herbivore', 'maw', 'fanged', 'underbite'].includes(spec.variant)) continue;
+      const b = buildJawed(p, idx, [], false, spec.variant as JawedVariant, 'hybrid')!;
+      expect(b.upperTeeth.length, `biped #${seed}`).toBeGreaterThanOrEqual(12);
+      const f = surfacePrims(p, 'hybrid');
+      const o = spec.node.pos;
+      let shown = 0;
+      for (const t of b.upperTeeth) {
+        const Y = qRotateV(t.quat, [0, 1, 0]);
+        let out = 0;
+        for (let k = 1; k <= 24; k++) {
+          const q = [o[0] + t.pos[0] + Y[0] * t.len * (k / 24), o[1] + t.pos[1] + Y[1] * t.len * (k / 24), o[2] + t.pos[2] + Y[2] * t.len * (k / 24)];
+          if (fieldAt(f, q[0], q[1], q[2]) > 0) out++;
+        }
+        shown += (out / 24) * t.len;
+        // its tip still above the head's underside there
+        const tip: [number, number, number] = [o[0] + t.pos[0] + Y[0] * t.len, o[1] + t.pos[1] + Y[1] * t.len, o[2] + t.pos[2] + Y[2] * t.len];
+        const below = rayToSurface(f, [], [spec.anchor.pos[0], tip[1] + 0.5, tip[2]], [0, -1, 0]);
+        if (below) expect(tip[1], `biped #${seed} tip under the chin`).toBeGreaterThan(below.p[1] - 1e-3 - 2 * (spec.anchor.radius));
+      }
+      expect(shown / b.upperTeeth.length, `biped #${seed} crown showing`).toBeGreaterThan(0.045);
+    }
+  });
 });

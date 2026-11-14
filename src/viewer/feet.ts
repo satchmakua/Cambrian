@@ -33,6 +33,14 @@ export function isTheropod(p: Phenotype): boolean {
   );
 }
 
+/** A FLIGHTLESS BIRD's plumage (an ostrich's, an emu's): loose shaggy plumes, drawn as long shells. A
+ *  feathered body with no wing but a pair of clawed arms is a theropod, and its feathers lie sleek: in the
+ *  ostrich's plumes (a pile 0.4 of its skull's girth deep, its strands two pixels across in the whole-body
+ *  view) a dinosaur was a ball of green moss, its jaw buried, its plumes ending in a cliff at the knee. */
+export function shaggyPlumage(p: Phenotype): boolean {
+  return p.genomeRef.covering.type === 'feathers' && !p.nodes.some((n) => n.part?.kind === 'wing') && !isTheropod(p);
+}
+
 /** Which toed foot a clawed leg ends in, by covering (arthropods keep their single tarsal claw):
  *  feathers → a bird's, scales/plates → a lizard's clawed fan, bare skin → a frog's pad-tipped toes.
  *  A theropod stands on three thick clawed toes whatever it wears: on a lizard's fan of five, or a
@@ -116,6 +124,9 @@ function legChains(p: Phenotype): number[][] {
 
 /** how much of the coat's own colour (darkened) a bare shank's keratin takes */
 export const SHANK_COAT = 0.4;
+/** where a THEROPOD's plumage ends, × its leg's standing height over the foot: at its ankle (0.36–0.37 of
+ *  it on every feathered theropod) — feathered to the end of the drumstick, scaly below */
+export const THEROPOD_BARE = 0.4;
 
 /** A feathered body's bare-shank line: plumage covers the thigh and "drumstick", the lower ~55% of
  *  the standing leg is scaly keratin. Null for anything that isn't feathered with legs. */
@@ -137,7 +148,9 @@ export function bareLegsOf(p: Phenotype): BareLegs | null {
   // and their keratin takes a little of the coat's own colour, darkened — a grey or a yellow unrelated
   // to the body above it was a pair of stockings, a mint theropod's or a beige ostrich's)
   const color = new THREE.Color(shankColor(p.genomeRef.seed)).lerp(coatMain(p.genomeRef.palette).multiplyScalar(0.6), SHANK_COAT).getHex();
-  return { y: foot + span * 0.55, band: span * 0.12, color };
+  // (at a bird's 0.55, a third of the way down a theropod's long shin, its plumage stopped mid-shank: a
+  // pair of stockings pulled up to the knee)
+  return { y: foot + span * (isTheropod(p) ? THEROPOD_BARE : 0.55), band: span * 0.12, color };
 }
 
 /**

@@ -200,4 +200,22 @@ describe('feet', () => {
     expect(probe(true)).toBe(true);
     expect(probe(false)).toBe(false);
   });
+
+  it("a feathered theropod's plumage ends at its ankle, not a third of the way down its shin", () => {
+    // (at a bird's 0.55 of the leg's height the plumage stopped mid-shank: stockings pulled up to the knee)
+    let checked = 0;
+    for (let seed = 1; seed <= 24; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'biped'));
+      const bare = bareLegsOf(p);
+      if (!bare) continue;
+      // one leg's chain, hip to foot (its links in order)
+      const leg = p.nodes.map((n, i) => [n, i] as const).filter(([n]) => n.part?.kind === 'leg' && n.pos[0] > 0);
+      const ys = leg.map(([n]) => n.pos[1]).sort((a, b) => b - a);
+      const span = ys[0] - ys[ys.length - 1];
+      const ankle = ys[ys.length - 2];
+      expect(Math.abs(bare.y - ankle), `biped #${seed}`).toBeLessThan(0.1 * span);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(3);
+  });
 });

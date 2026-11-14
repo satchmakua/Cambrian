@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
 import { pileLength } from '../../src/viewer/CreatureMesh';
+import { shaggyPlumage } from '../../src/viewer/feet';
 
 /** the trunk's girth: its fattest link's narrowest half-width */
 function girthOf(id: string, seed: number): { len: number; girth: number } {
@@ -24,5 +25,19 @@ describe('fur pile', () => {
       const cat = girthOf('felid', seed);
       expect(cat.len / cat.girth, `felid #${seed}`).toBeGreaterThan(0.08);
     }
+  });
+
+  it("a feathered theropod's plumage lies sleek: only a flightless bird wears the ostrich's shaggy plumes", () => {
+    // (in the ostrich's plumes — a pile 0.4 of its skull's girth deep, strands two pixels across in the
+    // whole-body view — a dinosaur was a ball of green moss, its jaw buried, a cliff of fuzz at the knee)
+    let feathered = 0;
+    for (let seed = 1; seed <= 24; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'biped'));
+      if (p.genomeRef.covering.type !== 'feathers') continue;
+      expect(shaggyPlumage(p), `biped #${seed}`).toBe(false);
+      feathered++;
+    }
+    expect(feathered).toBeGreaterThan(3);
+    for (let seed = 1; seed <= 6; seed++) expect(shaggyPlumage(grow(genomeOfMorphotype(seed, 'ratite'))), `ratite #${seed}`).toBe(true);
   });
 });

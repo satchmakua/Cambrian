@@ -21,7 +21,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { coatMain } from '../palette';
 import { faceMaskOf } from '../face';
-import { tailRootRatio } from '../feet';
+import { isTheropod, tailRootRatio } from '../feet';
 import type { Phenotype } from '../../engine/grow';
 import type { Vec3 } from '../../engine/genome';
 import type { Carve } from '../bodyField';
@@ -227,6 +227,8 @@ export function buildJawed(
         // theropod's nose.)
         ...base,
         ...SEALED_TEETH[variant],
+        // a theropod's: blades along its whole jaw, whatever band its mouth drew (see THEROPOD_TEETH)
+        ...(isTheropod(phenotype) ? { upper: THEROPOD_TEETH } : {}),
         project: base.project * 0.03,
         lipR: (u) => base.lipR(u) * 0.32,
         lowerLipR: (u) => base.lowerLipR(u) * 0.3,
@@ -437,6 +439,10 @@ const RUN_TEETH_MAX = 22;
 export const TEETH_OUT = 0.32;
 /** how deep a reptile's seam along its jaw lies in the skin (× its own thickness): a groove, not a wire */
 export const SEAM_SINK = 0.55;
+/** A THEROPOD's upper teeth: a dozen even blades along its jaw, most of each crown showing below the shut
+ *  lip. (A crocodile's small pegs, sunk 0.42 of their length, stood a fiftieth of a unit off a theropod's
+ *  skin — no teeth in its face — and an underbite's upper row was none.) */
+export const THEROPOD_TEETH: ToothProfile = { count: 12, len: (u: number) => 0.46 + 0.04 * u, width: 0.22, curl: -TEETH_OUT, jitterLen: 0.14, jitterRock: 0.08, sink: 0.28, margin: 0.14, salt: 2 };
 
 /**
  * How far a muzzle runs out ahead of its braincase: the mouth's distance from its head section's first
