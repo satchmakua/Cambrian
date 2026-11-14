@@ -125,6 +125,7 @@ export function makeCreatureMaterial(
   seam = 0, // a beetle's wing-cases: the half-width of the dark suture down the back's midline (0 = none)
   head: HeadMask | null = null, // where bands and stripes stop: the head takes one tone
   cut = false, // a crystal skin already cut into flat faces (facets.ts): the shader cuts none of its own
+  shag = false, // a flightless bird's plumage: loose hair-like plumes, no feather edges (see feathers)
 ): THREE.MeshPhysicalMaterial {
   // A moodier base than the raw palette: real integument is rarely a bright, saturated toy. We
   // desaturate and darken a touch so creatures read as living tissue, not painted plastic.
@@ -206,6 +207,7 @@ export function makeCreatureMaterial(
     shader.uniforms.uHeadB = { value: new THREE.Vector3(...(head ? head.b : [0, 0, 0])) };
     shader.uniforms.uSeam = { value: seam };
     shader.uniforms.uCut = { value: cut ? 1 : 0 };
+    shader.uniforms.uShag = { value: shag ? 1 : 0 };
     shader.uniforms.uMuscle = { value: preset.muscle };
     shader.uniforms.uFine = FINE_RELIEF; // (one object, shared: the graphics option switches every coat at once)
     // (unused slots keep r = 0, which clears nothing)
@@ -508,7 +510,7 @@ uniform float uPScale; uniform float uContrast; uniform float uSheen; uniform fl
 uniform vec3 uOff;
 uniform int uDebug;
 uniform float uBareY; uniform float uBareBand; uniform vec3 uBareCol;
-uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6]; uniform vec4 uFace; uniform vec3 uFaceCol; uniform vec4 uHeadA; uniform vec3 uHeadB; uniform float uSeam; uniform float uCut; uniform float uMuscle;
+uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[6]; uniform vec4 uFace; uniform vec3 uFaceCol; uniform vec4 uHeadA; uniform vec3 uHeadB; uniform float uSeam; uniform float uCut; uniform float uMuscle; uniform float uShag;
 uniform float uFine;
 
 // Per-fragment globals, primed at the top of the colour stage and reused by the roughness + normal
@@ -797,6 +799,21 @@ float surfaceHeight(vec3 p, int cover) {
     }
     lay = mix(lay, 0.66, plain * 0.85);
     shaft *= aaW(50.0) * (1.0 - plain);
+    // A FLIGHTLESS bird (an ostrich's, an emu's) wears loose plumes, hair-like, hanging along the lay: no
+    // feather's edge to be seen. (Scalloped like a flier's contour feathers, its neck, body and thighs
+    // were all one tight fish-scale pattern: plucked, scaly, a pinecone.) The strands run with the lay —
+    // the noise squeezed tenfold along it — and gather into locks.
+    // (…in a wider range of tone than a feather's edge: the strands' grooves deep enough to read)
+    if (uShag > 0.5) {
+      vec3 q = p * 15.0;
+      vec3 qs = q - gLay * dot(q, gLay) * 0.92;
+      float strands = fbmA(qs, 15.0);
+      float locks = fbmA(p * 3.0 - gLay * dot(p, gLay) * 2.2, 3.0);
+      float plume = clamp(0.2 + strands * 0.75 + (locks - 0.5) * 0.8, 0.0, 1.0);
+      float l = mix(plume, 0.66, plain * 0.85);
+      gHb = l * 0.012 + (barbs - 0.5) * 0.001;
+      return clamp(0.98 - l * 0.72 + (barbs - 0.5) * 0.05, 0.0, 1.0);
+    }
     gHb = lay * 0.0075 + (barbs - 0.5) * 0.001 + shaft * 0.0012;
     // (gH reads as a RECESS for the grime and roughness: where a feather comes out from under the
     // one in front is where the shadow sits; its tip is clean — a soft shadow, not an outline)

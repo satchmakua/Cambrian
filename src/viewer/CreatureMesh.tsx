@@ -225,22 +225,25 @@ export function CreatureMesh({
 
   const face = useMemo(() => faceMaskOf(phenotype), [phenotype]);
   const headMask = useMemo(() => headMaskOf(phenotype), [phenotype]);
-  const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed, bareOf(phenotype)?.bare ?? null, null, face, 0, headMask), [pal, cov, seed, phenotype, face, headMask]);
+  // (a feathered body with no wing to fly on — an ostrich, an emu — wears shaggy plumes: see the covering)
+  const shaggy = useMemo(() => cov.type === 'feathers' && !phenotype.nodes.some((n) => n.part?.kind === 'wing'), [cov, phenotype]);
+  const bodyMat = useMemo(() => makeCreatureMaterial(pal, cov, seed, bareOf(phenotype)?.bare ?? null, null, face, 0, headMask, false, shaggy), [pal, cov, seed, phenotype, face, headMask, shaggy]);
   useEffect(() => () => bodyMat.dispose(), [bodyMat]);
   // a crystal's smooth skin is cut into faces (buildSkin), and its material cuts none of its own
   const cutMat = useMemo(() => (cov.type === 'crystal' ? makeCreatureMaterial(pal, cov, seed, bareOf(phenotype)?.bare ?? null, null, face, 0, headMask, true) : null), [pal, cov, seed, phenotype, face, headMask]);
   useEffect(() => () => cutMat?.dispose(), [cutMat]);
   const skinMat = cutMat ?? bodyMat;
-  // shell fur: FUR_SHELLS layers of the body out to a pile scaled to the creature
+  // shell fur: FUR_SHELLS layers of the body out to a pile scaled to the creature — and a flightless bird's
+  // shaggy plumes, longer and coarser (drawn on the skin alone, its plumage was a smooth suede)
   const furMats = useMemo(() => {
-    if (!fur || cov.type !== 'fur' || skinMode === 'capsules') return [];
+    if (!fur || (cov.type !== 'fur' && !shaggy) || skinMode === 'capsules') return [];
     const { min, max } = phenotype.bounds;
     const size = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
-    const len = Math.min(0.08, Math.max(0.022, size * 0.0095));
+    const len = Math.min(0.08, Math.max(0.022, size * 0.0095)) * (shaggy ? PLUME_LEN : 1);
     const bare = bareOf(phenotype)?.bare ?? null;
     const eyes = eyeClearings(phenotype, data.features);
     return Array.from({ length: FUR_SHELLS }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / FUR_SHELLS, len, density: 3.2 / len, eyes }, face, 0, headMask));
-  }, [fur, cov, skinMode, phenotype, pal, seed, data, face, headMask]);
+  }, [fur, cov, skinMode, phenotype, pal, seed, data, face, headMask, shaggy]);
   useEffect(() => () => furMats.forEach((m) => m.dispose()), [furMats]);
 
   // physics playback (post-roadmap): when a recorded gait is present, capsules re-pose from it
@@ -666,6 +669,8 @@ function keepAt(detail: Detail, f: MeshFeature, crystal = false): boolean {
   return silhouette || f.type === 'eye' || f.type === 'ear' || f.type === 'pincer' || f.type === 'club' || f.type === 'barb';
 }
 
+/** a shaggy bird's plumes against a pelt's pile (× its length) */
+const PLUME_LEN = 2.2;
 /** layers of shell fur in the close-up views */
 const FUR_SHELLS = 12;
 

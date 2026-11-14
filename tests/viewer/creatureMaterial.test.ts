@@ -34,6 +34,34 @@ function braceBalance(src: string): number {
   return n;
 }
 
+describe('shaggy plumage', () => {
+  it("a flightless bird's coat is loose plumes along the lay: no feather edges — and its pile is drawn", () => {
+    // (scalloped like a flier's contour feathers, an ostrich's neck, body and thighs were one tight
+    // fish-scale pattern: a pinecone)
+    const g = defaultGenome();
+    const mat = makeCreatureMaterial(g.palette, { ...g.covering, type: 'feathers' }, g.seed, null, null, null, 0, null, false, true);
+    const shader = {
+      uniforms: {} as Record<string, { value: unknown }>,
+      vertexShader: THREE.ShaderLib.physical.vertexShader,
+      fragmentShader: THREE.ShaderLib.physical.fragmentShader,
+    };
+    (mat.onBeforeCompile as (s: typeof shader) => void)(shader);
+    mat.dispose();
+    expect(shader.uniforms.uShag.value).toBe(1);
+    // the plumes return before the scallops' edge relief is applied
+    const frag = shader.fragmentShader;
+    const shag = frag.indexOf('if (uShag > 0.5)');
+    expect(shag).toBeGreaterThan(0);
+    expect(frag.slice(shag, shag + 800)).toContain('return');
+    // …and a flier's stays scalloped
+    const flier = makeCreatureMaterial(g.palette, { ...g.covering, type: 'feathers' }, g.seed);
+    const s2 = { uniforms: {} as Record<string, { value: unknown }>, vertexShader: THREE.ShaderLib.physical.vertexShader, fragmentShader: THREE.ShaderLib.physical.fragmentShader };
+    (flier.onBeforeCompile as (s: typeof s2) => void)(s2);
+    flier.dispose();
+    expect(s2.uniforms.uShag.value).toBe(0);
+  });
+});
+
 describe('creature material shader injection', () => {
   it('every injection point matched — body-space texture + mouth flesh exist in both stages', () => {
     const s = compileShaderStrings();
