@@ -44,6 +44,22 @@ describe('eye seats', () => {
     expect(near / n).toBeGreaterThan(0.9);
   });
 
+  it('an eye grown above a flattened skull still sinks to its seat — it does not stand half out of the head', () => {
+    // (its sink was stopped at one radius: on a broad flat crown — a lizard's, a shark's, a bear's — the
+    // eye grown at the skull's round radius stood a radius proud and stopped half seated)
+    for (const id of ['lizard', 'shark', 'ursid']) {
+      for (let seed = 1; seed <= 4; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const prims = surfacePrims(p, 'hybrid');
+        for (const f of faceEyes(p)) {
+          const r = Math.max(f.radius, 0.06);
+          const c = eyeSeat(p, f.idx, f.quat, r).centre!;
+          expect(fieldAt(prims, c[0], c[1], c[2]) / r, `${id} #${seed}`).toBeLessThan(-0.4);
+        }
+      }
+    }
+  });
+
   it('a seated eye looks out of the face, within the tilt allowance of its normal', () => {
     for (let seed = 1; seed <= 40; seed++) {
       const p = grow(randomGenome(seed));

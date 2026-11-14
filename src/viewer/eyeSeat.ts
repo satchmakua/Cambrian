@@ -16,6 +16,8 @@ import { eyeVariant } from './partStyles';
 import { armoured } from './scutes';
 
 /** how deep the ball's centre sits under the skin, in eye radii */
+/** the deepest an eye's seat may sink its ball along its gaze (× its radius) */
+const SEAT_MAX_SINK = 2.0;
 export const SEAT_DEPTH = 0.52;
 /** …and a frog's: its eyes bulge from the crown, half the ball proud */
 export const BULGE_DEPTH = 0.06;
@@ -65,7 +67,9 @@ export function eyeSeat(p: Phenotype, idx: number, quat0: readonly number[], r: 
   let s = r * 0.36;
   for (let i = 0; i < 8; i++) {
     const d = fieldAt(prims, c[0] - aim[0] * s, c[1] - aim[1] * s, c[2] - aim[2] * s);
-    s = Math.min(r * 1.1, Math.max(-r * 0.6, s + d + r * depth));
+    // (as deep as two radii: an eye grown at a flattened skull's round radius floats a radius over its
+    // skin, and stopped at one it sat half out of the head — a bead on a lizard's broad flat crown)
+    s = Math.min(r * SEAT_MAX_SINK, Math.max(-r * 0.6, s + d + r * depth));
   }
   const seat: EyeSeat = { quat, sink: s, centre: [c[0] - aim[0] * s, c[1] - aim[1] * s, c[2] - aim[2] * s] };
   per.set(idx, seat);
