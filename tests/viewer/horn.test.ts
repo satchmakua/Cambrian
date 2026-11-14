@@ -65,4 +65,21 @@ describe('horn', () => {
     }
     expect(checked).toBeGreaterThan(5);
   });
+
+  it("a dragon's and a wyvern's horns sweep up and out off the skull: no fork laid on the neck", () => {
+    // (the part of −Z square to a back-and-up aim points down and in: their horns curled down onto the
+    // neck, the tips meeting — from above, a cream fork on the neck)
+    for (const id of ['dragon', 'wyvern']) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        for (const f of buildMeshData(p).features.filter((x) => x.kind === 'horn' && p.nodes[x.idx].pos[0] > 0)) {
+          const { r, reach } = hornReachOf(p, f);
+          const path = hornPath(r, f.quat, 0.5, reach);
+          const root = path[0], tip = path[path.length - 1];
+          expect(tip[1], `${id} #${seed} rises`).toBeGreaterThan(root[1]);
+          expect(tip[0], `${id} #${seed} spreads`).toBeGreaterThan(root[0]);
+        }
+      }
+    }
+  });
 });

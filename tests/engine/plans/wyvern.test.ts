@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { grow, type Phenotype } from '../../../src/engine/grow';
 import { genomeOfMorphotype } from '../../../src/engine/random';
 import { BROW_TILT, eyeTilt } from '../../../src/viewer/eyeSeat';
+import { ARM_FOLD, buildFoldedMembraneWing, foldedSpan, wingOpenSpan } from '../../../src/viewer/wings';
 
 type Node = Phenotype['nodes'][number];
 const rx = (n: Node) => n.radius * (n.scale?.[0] ?? 1);
@@ -23,7 +24,90 @@ describe('wyvern', () => {
       expect(rx(head[0]) / rx(top), `#${seed} against the neck`).toBeLessThan(1.9);
     }
   });
+  const trunkOf = (p: Phenotype) => p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0);
+
+  it('carries its tail out behind it, level from the rump — never a column hanging under its belly', () => {
+    // (curling down at the default's −0.1 a link, 17 in 40 hung below the belly line: from the front a pale
+    // column from the crotch to the floor, a third leg)
+    for (let seed = 1; seed <= 40; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'wyvern'));
+      const belly = Math.min(...trunkOf(p).map((n) => n.pos[1] - ry(n)));
+      const tail = p.nodes.filter((n) => n.part?.kind === 'tail');
+      expect(tail.length, `#${seed}`).toBeGreaterThan(0);
+      expect(Math.min(...tail.map((n) => n.pos[1] - n.radius)), `#${seed}`).toBeGreaterThanOrEqual(belly - 0.05);
+    }
+  });
+
+  it('folds wings that are its arms: back past its rump, not two frills on its shoulders', () => {
+    // (sized off its short reared trunk like a dragon's, a fold lay inside its flank's outline)
+    expect(ARM_FOLD).toBeGreaterThan(2);
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 29]) {
+      const p = grow(genomeOfMorphotype(seed, 'wyvern'));
+      const tip = p.nodes.find((n) => n.kind === 'terminal' && n.part?.kind === 'wing' && n.pos[0] > 0)!;
+      const geo = buildFoldedMembraneWing(1, foldedSpan(p, tip.radius)).surface;
+      geo.computeBoundingBox();
+      const b = geo.boundingBox!;
+      expect(b.max.z - b.min.z, `#${seed}`).toBeGreaterThanOrEqual(1.1 * wingOpenSpan(p, tip.radius).trunkLen);
+    }
+    // (a dragon's and a chimera's, on four legs, are as they were)
+    for (const id of ['dragon', 'chimera']) {
+      const p = grow(genomeOfMorphotype(5, id));
+      const tip = p.nodes.find((n) => n.kind === 'terminal' && n.part?.kind === 'wing' && n.pos[0] > 0)!;
+      const { openS } = wingOpenSpan(p, tip.radius);
+      expect(foldedSpan(p, tip.radius), id).toBeCloseTo(openS * 1.35, 6);
+    }
+  });
+
+  it('a banded wyvern wears four bands or more down its length: no saddle on its back, no tail dipped in paint', () => {
+    // (bands drawn from the default scale were a period of up to 5.6 body units: two or three on a wyvern)
+    let banded = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'wyvern'));
+      const c = p.genomeRef.covering;
+      if (c.pattern !== 'bands') continue;
+      banded++;
+      const period = (2 * Math.PI) / (0.8 * c.patternScale);
+      expect((p.bounds.max[2] - p.bounds.min[2]) / period, `#${seed}`).toBeGreaterThanOrEqual(3.5);
+    }
+    expect(banded).toBeGreaterThan(5);
+  });
+
+  it('stands on a thigh that is no ball over a thin shank, under a neck that is no pipe', () => {
+    // (its thighs nearly spheres, three times its ankles: pantaloons; its neck a third of its chest's girth
+    // under a head half again as wide: a ball on a pipe)
+    let thigh = 0, taper = 0;
+    const N = 12;
+    for (let seed = 1; seed <= N; seed++) {
+      const p = grow(genomeOfMorphotype(seed, 'wyvern'));
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      const leg = p.nodes.map((n, i) => ({ n, i })).filter(({ n, i }) => n.part?.kind === 'leg' && p.nodes[parent.get(i)!]?.kind === 'spine' && n.pos[0] > 0);
+      const hip = leg[0];
+      const kids = p.edges.filter(([a]) => a === hip.i).map(([, b]) => p.nodes[b]);
+      const knee = kids[0];
+      thigh += hip.n.radius / Math.hypot(knee.pos[0] - hip.n.pos[0], knee.pos[1] - hip.n.pos[1], knee.pos[2] - hip.n.pos[2]);
+      // down the leg to its foot
+      let j = hip.i, ankle = hip.n;
+      for (;;) {
+        const next = p.edges.find(([a]) => a === j);
+        if (!next) break;
+        j = next[1];
+        if (p.nodes[j].kind === 'terminal') break;
+        ankle = p.nodes[j];
+      }
+      taper += hip.n.radius / ankle.radius;
+      const spine = p.nodes.filter((n) => n.kind === 'spine');
+      const last = Math.max(...spine.map((n) => n.segment ?? 0));
+      const neck = spine.filter((n) => (n.segment ?? 0) > 0 && (n.segment ?? 0) < last);
+      const head = spine.filter((n) => n.segment === last);
+      const chest = Math.max(...trunkOf(p).map((n) => n.radius));
+      expect(neck[0].radius / chest, `#${seed} neck against chest`).toBeGreaterThanOrEqual(0.385);
+      expect(rx(head[0]) / rx(neck[neck.length - 1]), `#${seed} head against neck`).toBeLessThanOrEqual(1.45);
+    }
+    expect(thigh / N, 'thigh against its link').toBeLessThanOrEqual(0.6);
+    expect(taper / N, 'thigh against ankle').toBeLessThanOrEqual(2.7);
+  });
 });
+
 
 describe('a dragon’s head (and a wyvern’s)', () => {
   const heads = (fn: (p: Phenotype, id: string, seed: number) => void) => {

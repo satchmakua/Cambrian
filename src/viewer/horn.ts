@@ -38,8 +38,12 @@ export interface HornReach {
 export function hornPath(r: number, quat: readonly number[], sweep: number, reach: HornReach = {}): Vec3[] {
   const q = new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3]);
   const aim = reach.aim ? new THREE.Vector3(...reach.aim).normalize() : new THREE.Vector3(0, 0, 1).applyQuaternion(q);
-  // it sweeps back toward the tail (−Z), and up if it already points back
-  let back = new THREE.Vector3(0, 0, -1).addScaledVector(aim, aim.z);
+  // it sweeps back toward the tail (−Z); a horn that already points back sweeps UP and OUT off the
+  // skull. (The part of −Z square to a back-and-up aim points down and in: a dragon's and a wyvern's
+  // horns curled down onto the neck, their tips meeting — from above, a fork laid on the neck.)
+  const s = Math.max(0, -aim.z);
+  const toward = new THREE.Vector3(Math.sign(aim.x) * 0.5 * s, s, -(1 - s));
+  let back = toward.clone().addScaledVector(aim, -toward.dot(aim));
   if (back.lengthSq() < 1e-4) back = new THREE.Vector3(0, 1, 0).addScaledVector(aim, -aim.y);
   back.normalize();
   const L = reach.len ?? HORN_LEN * r;

@@ -193,6 +193,20 @@ export function wingOpenSpan(p: Phenotype, tipRadius: number): { openS: number; 
 /** a folded membrane wing's span ×its open one: folded along the flank, its fingers reach further back */
 export const MEMBRANE_FOLD = 1.35;
 
+/** a WYVERN's wings are its arms (membrane wings on a trunk carrying ONE pair of legs): folded, the wing
+ *  reaches back past the rump — its folded span at least ARM_FOLD of the trunk's length. (Sized off its
+ *  short, reared trunk like a dragon's, seed 29's fold lay inside the outline of its flank — 2% of the
+ *  side view, 9% of the front: two frills on its shoulders.) */
+export const ARM_FOLD = 2.3;
+
+/** a membrane wing's folded span: wingOpenSpan's, folded (MEMBRANE_FOLD) — and an arm-wing's floor */
+export function foldedSpan(p: Phenotype, tipRadius: number): number {
+  const { openS, trunkLen } = wingOpenSpan(p, tipRadius);
+  let legRoots = 0;
+  for (const [a, b] of p.edges) if (p.nodes[b].part?.kind === 'leg' && p.nodes[a].kind === 'spine' && (p.nodes[a].segment ?? 0) === 0) legRoots++;
+  return Math.max(openS * MEMBRANE_FOLD, legRoots === 2 ? ARM_FOLD * trunkLen : 0);
+}
+
 export function buildFoldedMembraneWing(side: number, S: number): WingBuild {
   const s = side >= 0 ? 1 : -1;
   const out = v3(s, 0, 0); // the side: the folded wing's skin faces out from the flank

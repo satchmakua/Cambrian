@@ -28,7 +28,7 @@ import { makeCreatureMaterial } from './creatureMaterial';
 import { bareOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, ratLike, shaggyPlumage, skinPartWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, shellScutes, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, type FinBuild, type TailRump } from './wings';
+import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, foldedSpan, type FinBuild, type TailRump } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
 import { BROW_TILT, bulgingEye, eyeClearings, eyeSeat, eyeTilt, FEELER_KNOB, FEELER_SPOT, feelerTip, isOcellus, isSwimmer } from './eyeSeat';
@@ -1866,10 +1866,10 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
       ? buildSpreadFeatheredWing(side, openS, plumage, accent, 0.62 + 0.2 * (g.seed % 7) / 7)
       : feathered
         ? buildFeatheredWing(side, foldS, plumage, accent, long?.axis)
-        : buildFoldedMembraneWing(side, openS * MEMBRANE_FOLD);
+        : buildFoldedMembraneWing(side, foldedSpan(phenotype, f.radius));
     // the flight posture: the same plumage opened out — a wing reaches further spread than folded
     const spread = feathered ? buildSpreadFeatheredWing(side, raised ? openS * 1.1 : foldS * 1.35, plumage, accent).surface : null;
-    const open = feathered ? null : buildMembraneWing(side, openS, 0.55 + 0.3 * (g.seed % 7) / 7);
+    const open = feathered ? null : buildMembraneWing(side, foldedSpan(phenotype, f.radius) / MEMBRANE_FOLD, 0.55 + 0.3 * (g.seed % 7) / 7);
     // (an upright body pitches forward to fly: its spread wings are built tilted back by as much, so
     // they come out level — see flightLevel)
     const level = spread ? flightLevel(phenotype) : 0;
