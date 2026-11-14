@@ -883,16 +883,19 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   hide's soft papillae and a slug's mantle; a chimera's tail sting; an urchin of one colour; shut reptile
   jaws showing only their animal's teeth; markings of another hue laid solid, an insect's mostly its own;
   each scale its own shade; eyes seated by the skin along their aim; a snake's spade head on a neck, its
-  open round eye and its seam; a spider's cluster of lenses, short chelicerae, tapering legs.
+  open round eye and its seam; a spider's cluster of lenses, short chelicerae, tapering legs; a bird's tail
+  closed at rest under its coverts, barred on a banded coat; an ape's jutting jaw, crest, forearms and
+  broad nose; a wyvern's level tail, arm-wings and parted horns; an ostrich's long flat bill; a dragon's
+  level tail, folded wing laid to its body, spines and horns apart.
   **Tests:** see PROGRESS M98.
 
 ### Next up (unchecked — pick from here)
 
-- [ ] **What the thirteenth look left.** The ape's black face mask; the wyvern's frills of wings and the
-  column hanging between its legs; the dragon's sac under its chest and its wings draped to the floor; a
-  deer's llama neck and dog nose; a bear's pig nose; the crystal's smooth head and legs; the octopus's
-  slit eye that reads as a mouth, its stiff splayed arms; the raptor's plank tail; the ostrich's pill
-  beak; the fish's jawless whale head.
+- [ ] **What the thirteenth look left.** A deer's llama neck and dog nose; a bear's pig nose; the
+  crystal's smooth head and legs; the octopus's slit eye that reads as a mouth, its stiff splayed arms;
+  the fish's jawless whale head (its head taper is already at its gene's floor); a cat's throat hanging
+  as a dewlap (its last neck node sits well under its skull, nearly as thick); a chimera's red cross and
+  harness bands.
 
 - [ ] **What the twelfth look left.** The crystal's smooth glass head on its cut stone; a slug's sole;
   the dragon's pale underwing web; a bear's paw still a step below its wrist.

@@ -124,6 +124,36 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
     its chelicerae are short swollen bases angled forward, not tusks hanging plumb; its legs taper from a
     stout femur to a fine tarsus and sweep toward their own end of the body; its coat is a darker brown,
     marked in its own hue or umber.
+  - *A thin flat plank out of the rump* (hawk; a songbird's "separate blades") — the tail fan was nine
+    feathers spread ±31°, as a bird spreads its tail only to land or display, on a bare stalk behind the
+    rump. At rest it is closed (`TAIL_SPREAD` 0.13): one long blade with a rounded end. Two hoods of coverts
+    come out of the rump's coat above and below its root, where a line from their ends on the tail meets
+    the rump's round, so the back's outline runs on into the tail; a banded coat bars it (`tailBandAt`: four
+    bars, a broad band before the tip, a pale tip).
+  - *A black mask on a bullet* (ape) † — its cranium and a muzzle ball 0.6 its size were meshed as one round
+    cone, an egg with a straight sloping front, and the bare face painted on that slope was a hood. On the
+    hybrid skin `bodyField apeSkull` adds a broad lower face jutting below the eyes, its jaw clear of the
+    throat, and a sagittal crest behind the crown; each forearm swells below its elbow and narrows to its
+    wrist (`apeForearms`), the fist as wide as the forearm; its nose is a gorilla's, broad and wider at its
+    foot (`APE_NOSE`).
+  - *A third leg; frills for wings; a fork on the neck* (wyvern) † — its tail, drawing the default's −0.1
+    curl a link (which bends a tail grown back from the rump DOWN), hung under its belly: from the front a
+    pale column to the floor. It runs back level now. Its wings are its arms: folded, at least `ARM_FOLD`
+    2.3 of its trunk (`foldedSpan`). A horn already aimed back sweeps up and out (`hornPath` swept it along
+    the part of −Z square to its aim: down and in, the pair meeting on the neck), and roots on the skull's
+    upper rear corner (`grow HORN_SEAT_BACK`). Its bands are four to six down the body, its thighs no
+    balls, its neck no pipe.
+  - *Two puffy pills* (ostrich) — its broad bill was a songbird's length, half of it in the face, two
+    uniform sausages, the lower pitched open under the upper. It is as long as the head is wide
+    (`BROAD_BILL.len` 2.25), deep at its root and thinning to a blunt spatula (`sweepTube flattenAt`), its
+    lower mandible laid along the upper's underside: one shut bill.
+  - *A ball under the chest, a cape to the floor, bullet holes on the back* (dragon) † — the ball was its
+    tail's tip seen end-on (half the dragons' tails ended under the belly line); it runs out level and
+    lifts toward its tip. `restingFold` lays a four-legged body's folded wing to it: no lower than a fifth
+    of the way down its legs, the tips over the rump (folded at 1.35 its open span, it hung to the floor).
+    Its three back spines stand on three links (`spineCount` 3; two always shared one), raked into
+    horn-coloured thorns (`DORSAL_SPIKE` [4.0, 0.7, 0.6]); its horns root apart and rise swept back; its
+    feet keep their girth. The wyvern's and chimera's spines are spread the same way.
 - **Tests:** `eyeSeat.test.ts › no seated face eye stands more than EYE_PROUD out`, `› a snake's eye shows`,
   `creatureMaterial.test.ts › a coat's grain runs along its lay`, `› a plated hide is domed scutes`, `› a
   slime hide wears soft papillae`, `› a marking of another hue is laid solid`, `› every scale wears its own
@@ -133,7 +163,13 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   `jawed.test.ts › only the reptiles that show their teeth`, `› a shut reptile's seam shows`,
   `serpent.test.ts › a spade … on a neck`, `iris.test.ts › apart from the hide`, `› open round under a clear
   scale`, `arachnid.test.ts › a cluster of distinct glossy lenses`, `› its legs taper`, `› a brown coat`,
-  `mandibles.test.ts › a spider's chelicerae`.
+  `mandibles.test.ts › a spider's chelicerae`, `wings.test.ts › a resting tail is closed`, `› a tail's root is
+  covered`, `› a banded coat bars its tail`, `bodyField.test.ts › an ape's skull juts`, `› an ape's forearm
+  swells`, `› … leave its eyes' seats`, `nose.test.ts › an ape's nose is a gorilla's`, `wyvern.test.ts ›
+  carries its tail out`, `› folds wings that are its arms`, `› four bands or more`, `› a thigh that is no
+  ball`, `horn.test.ts › sweep up and out`, `beak.test.ts › an ostrich's bill is as long as its head`,
+  `chimera.test.ts › no dragon's tail hangs under its belly`, `› a four-legged body's folded wing is laid to
+  it`, `› back spines stand on three links … horns root apart`.
 
 ## M97 — A twelfth look, and legs with joints · 2026-11-14
 
