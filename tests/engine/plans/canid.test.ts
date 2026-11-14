@@ -136,7 +136,9 @@ describe('canid', () => {
       expect(length / D, `#${seed} length`).toBeGreaterThan(1.25);
       // …hanging to about the hocks (its tip rode 0.4 of a chest depth or more above them)…
       const hock = hind[2];
-      expect((tip.pos[1] - hock.pos[1]) / D, `#${seed} to the hocks`).toBeLessThan(0.25);
+      // (…but carried a little out behind, not plumb: hung plumb, from the front it showed between the
+      // forelegs as a pale lobe under the chest, an udder)
+      expect((tip.pos[1] - hock.pos[1]) / D, `#${seed} to the hocks`).toBeLessThan(0.3);
       // …but trailing out behind and clear of the ground: seen from behind it is no fifth leg
       expect((root.pos[2] - tip.pos[2]) / D, `#${seed} trails`).toBeGreaterThan(0.7);
       expect((tip.pos[1] - ground) / D, `#${seed} off the ground`).toBeGreaterThan(0.25);
@@ -226,5 +228,12 @@ describe('canid', () => {
     expect(b.length).toBe(a.length);
     expect(Math.max(...b.map((n) => n.radius))).toBeCloseTo(b[0].radius, 9);
     expect(Math.max(...a.map((n) => n.radius))).toBeGreaterThan(1.8 * a[0].radius);
+  });
+  it('carries its brush out behind, falling only at its end — not hung plumb from the rump', () => {
+    // (hung plumb, from the front it showed between the forelegs as a pale lobe under the chest: an udder)
+    for (const seed of SEEDS) {
+      const g = genomeOfMorphotype(seed, 'canid');
+      for (const a of g.body.appendages) if (a.kind === 'tail') expect(a.attachElevation, `#${seed}`).toBeLessThan(-0.5);
+    }
   });
 });
