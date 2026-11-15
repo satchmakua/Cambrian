@@ -13,7 +13,7 @@
  * mode too. `Carve` ops subtract ellipsoidal cavities (mouth maws, lamprey funnels) with a soft
  * rim — a mouth becomes negative space cut into the head, not a lump glued in front of it.
  */
-import type { Phenotype, BodyNode } from '../engine/grow';
+import { isScullingTail, type Phenotype, type BodyNode } from '../engine/grow';
 import { quillNodes } from './quills';
 import type { Vec3 } from '../engine/genome';
 
@@ -122,6 +122,29 @@ const SMOOTH_LIMBS = new Set(['tail', 'tentacle']);
 export const ANTENNA_SLIM = 0.4;
 const slimOf = (n: BodyNode): number => (n.kind !== 'spine' && n.part?.kind === 'antenna' ? ANTENNA_SLIM : 1);
 
+/** A CROCODILE's body — one that sculls with its tail (grow's isScullingTail) — is one low hull from the
+ *  snout to the hips, flat throughout: its trunk, its neck and its head are skinned as ONE chain (blended
+ *  link to link by CHAIN_BLEND, as a trunk's own links are), its snout's tip is blended as that chain is,
+ *  and a leg's root sphere sits LEG_ROOT_SINK inside the flat flank it starts in. (Each section its own
+ *  chain, smooth-unioned to the next at the full blend where the two overlap whole, and a leg's root
+ *  sphere — the trunk's depth across — touching its back and its belly at the shoulder, every joint swelled
+ *  a ring round the body: from the front a stack of bands under the chin and the belly, an onion; and the
+ *  snout's last link, its ellipsoid swelled by the blend, ended in a knob a clown's nose.) */
+export const LEG_ROOT_SINK = 0.75;
+export function hullBody(p: Phenotype): boolean {
+  // (a walker's: a shark's tail links carry the same style, its last one a fin — see scutes.scullingTail)
+  let legs = false, scull = false;
+  for (const n of p.nodes) {
+    if (n.kind === 'spine') continue;
+    if (n.part?.kind === 'leg') legs = true;
+    else if (n.part?.kind === 'tail') {
+      if ((n.terminal ?? 'none') !== 'none') return false;
+      if (isScullingTail(n.part, n.terminal)) scull = true;
+    }
+  }
+  return legs && scull;
+}
+
 /** how far below a stopped skull's axis its jaw runs (×the braincase's and the nose's radii), and its
  *  girth there (the same) — the chin a little fuller against a nose that narrows to it */
 export const JAW_DROP: readonly [number, number] = [0.48, 0.42];
@@ -209,6 +232,7 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   // radii): the same body, without the corners. (A leg's links stay straight: those are joints.)
   // (…and a radial body's arms: a sea star's, cut at its joints, were strings of sausages, banded across)
   const radial = p.genomeRef.symmetry === 'radial';
+  const hull = hullBody(p);
   const sameChain = (a: BodyNode, b: BodyNode): boolean =>
     a.kind === 'spine' && b.kind === 'spine'
       ? (a.segment ?? 0) === (b.segment ?? 0)
@@ -272,7 +296,8 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
       // a limb's root cone starts INSIDE a shaped body node: at the node's scalar radius its base
       // sphere stood proud of a flattened body — a crab's eight leg roots swelled its flat carapace
       // into a ball — so it starts at the node's narrowest cross-section instead
-      const rA = a.kind === 'spine' && b.kind !== 'spine' && a.scale ? a.radius * Math.min(a.scale[0], a.scale[1], 1) : a.radius * slimOf(a);
+      // (…and on a crocodile's flat hull a leg's starts deeper still: see LEG_ROOT_SINK)
+      const rA = a.kind === 'spine' && b.kind !== 'spine' && a.scale ? a.radius * Math.min(a.scale[0], a.scale[1], 1) * (hull && b.part?.kind === 'leg' ? LEG_ROOT_SINK : 1) : a.radius * slimOf(a);
       girth += (rA + rB) * 0.5;
       included.add(a);
       included.add(b);
@@ -364,8 +389,9 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   // it by k/4 (a shark's last link a third fatter than its own: a dolphin's bottle-nose). It blends as its
   // own chain does.
   const eb = new Float64Array(ne).fill(1);
+  // (…and a crocodile's: see LEG_ROOT_SINK)
   const swimmer = p.nodes.some((n) => n.part?.kind === 'fin') && !p.nodes.some((n) => n.part?.kind === 'leg');
-  if (swimmer) {
+  if (swimmer || hull) {
     shaped.forEach((n, i) => {
       const j = p.nodes.indexOf(n);
       if (up[j] >= 0 && down[j] === -1) eb[i] = CHAIN_BLEND;
@@ -435,7 +461,8 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     for (let i = 0; i < nc; i++) {
       const b = ib[i];
       const nb = p.nodes[b];
-      ch[i] = nb.kind === 'spine' ? -1 - (nb.segment ?? 0) : rootOf(b);
+      // (a crocodile's sections are one chain: see LEG_ROOT_SINK)
+      ch[i] = nb.kind === 'spine' ? (hull ? -1 : -1 - (nb.segment ?? 0)) : rootOf(b);
     }
   } else {
     for (let i = 0; i < nc; i++) ch[i] = i;

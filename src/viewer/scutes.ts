@@ -56,8 +56,13 @@ const CREST_SPREAD = 0.3;
 const CREST_JOIN = 0.45;
 /** a crest blade's height, × the trunk's greatest half-width, at its tallest */
 const CREST_H = 0.36;
-/** the nostril boss sits this far out along the snout's last link (× its half-length)… */
-const NOSE_AT = 0.4;
+/** the nostril boss sits this far out along the snout's last link (× its half-length)… (at 0.4, 1.8 of the
+ *  tip's half-width long, its front ran out past the end of the snout and its rim stood off the skin there:
+ *  a cap over the tip, a clown's nose — from the front, a frog's nose between its eyes) */
+const NOSE_AT = 0.1;
+/** …this long and this wide (× the snout tip's half-width) */
+const NOSE_LEN = 1.2;
+const NOSE_WID = 1.0;
 /** …and stands this high (× the snout tip's half-depth) */
 const NOSE_H = 0.42;
 
@@ -241,7 +246,7 @@ export function scutePlan(p: Phenotype, surface: Surface = 'hybrid'): Scute[] {
     const reach = tip.radius * (tip.scale?.[2] ?? 1) * NOSE_AT;
     const st: Station = { c: [tip.pos[0] + fwd[0] * reach, tip.pos[1] + fwd[1] * reach, tip.pos[2] + fwd[2] * reach], fwd, node: head[head.length - 1].i, hw, hd, u: 1 };
     const s = seat(f, st, 0);
-    if (s) out.push({ node: st.node, at: s.at, up: s.up, fwd: along(fwd, s.up), len: hw * 1.8, wid: hw * 1.35, h: hd * NOSE_H, on: 'snout' });
+    if (s) out.push({ node: st.node, at: s.at, up: s.up, fwd: along(fwd, s.up), len: hw * NOSE_LEN, wid: hw * NOSE_WID, h: hd * NOSE_H, on: 'snout' });
   }
   return out;
 }

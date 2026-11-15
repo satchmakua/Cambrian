@@ -252,7 +252,7 @@ export function buildJawed(
     const show = shutTeeth(phenotype);
     const more = seamLength(line.upper) / Math.max(seamLength(traced.upper), 1e-6);
     const grin = (t: ToothProfile | null): ToothProfile | null =>
-      t ? { ...t, curl: -TEETH_OUT, count: Math.min(RUN_TEETH_MAX, Math.round(t.count * more)), jitterLen: Math.max(t.jitterLen, GRIN_JITTER), len: (u: number) => t.len(u) * (1 + GRIN_BULGE * Math.exp(-(((u - 0.4) / 0.13) ** 2))) } : null;
+      t ? { ...t, curl: -TEETH_OUT, count: Math.min(RUN_TEETH_MAX, Math.round(t.count * more)), jitterLen: Math.max(t.jitterLen, GRIN_JITTER), sink: GRIN_SINK, len: (u: number) => t.len(u) * GRIN_LEN * (1 + GRIN_BULGE * Math.exp(-(((u - 0.4) / 0.13) ** 2))) } : null;
     // (six fangs want a dragon's long jaw: along a blunt head's short seam they stood shoulder to shoulder
     // across its face, a grin of square teeth — a short seam shows its two foremost)
     const fangs = seamLength(line.upper) / r < FANG_RUN ? SHORT_FANGS : DRAGON_FANGS;
@@ -469,6 +469,11 @@ export const SHORT_FANGS: ToothProfile = { ...DRAGON_FANGS, count: 2, len: () =>
  *  way back along the jaw (GRIN_BULGE more, at 0.4 of the way to the corner) */
 export const GRIN_JITTER = 0.32;
 export const GRIN_BULGE = 0.55;
+/** …each crown GRIN_LEN of the sealed row's, sunk GRIN_SINK of its length (the sealed row's 0.42 of a crown
+ *  0.2–0.46 of the mouth's size laid its tips along the shut lower jaw a hundredth of a unit off the skin:
+ *  from the side and in the face close-up, no teeth at all) */
+export const GRIN_LEN = 1.1;
+export const GRIN_SINK = 0.15;
 /** Which teeth a shut reptile's jaw shows (its seam run back along the jaw): a crocodile's grin (a
  *  sculling-tailed, armoured body — scutes.ts armoured), a theropod's blades, a winged reptile's fangs; a
  *  lizard's and a snake's none. */

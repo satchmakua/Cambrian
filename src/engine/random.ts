@@ -125,6 +125,9 @@ interface Morpho {
   /** a neck's link-to-link taper (a constant: no draw) — default 0.96; a deer's neck is deep where it leaves the
    *  shoulders and slim at the throat (at 0.96 it was one even tube the head's own width: a llama's) */
   neckTaper?: number;
+  neckDeep?: number; // a neck link's depth ×its own width — default 1.08 (a round neck, a little deep); a
+  //                    crocodile's is flat like its back and its head (round, it stood up between the two as
+  //                    a hump, the head a frog's wide face set low on the front of it)
   neckLong?: number; // a neck link's length ×its girth — default 1.25; an ape's is a short thick nape, the head close
   //                    on the shoulders; shorter links let a fox's neck of three turn up steeply and carry
   //                    the head high without reaching far forward
@@ -265,7 +268,7 @@ const MORPHOTYPES: readonly Morpho[] = [
   // (its head broader than its slim neck at the hinge of the jaws, wedging to the snout, the eye a third of the way
   // back: no wider than its neck, the eye at its tip, the front of a lizard was a newt's round end)
   { id: 'lizard', cluster: 'familiar', weight: 0.6, tailTaper: [0.76, 0.82], tailAz: [4.6, 4.8], tailCurl: [0.04, 0.08], tailDroop: [-1.52, -1.4], tailLen: [0.92, 1.12], tailSegs: [6, 6], tailThick: [0.5, 0.62], eyeT: [0.38, 0.5], head: 1, girth: [0.32, 0.46], repeat: [4, 6], height: [0.6, 0.8], elong: [1.2, 1.5], neck: [0.5, 0.58], taper: [0.97, 1.0], neckLift: [-0.24, -0.14], headSize: [0.8, 0.94], headWide: [1.08, 1.22], headDome: [0.66, 0.8], headLong: [1.3, 1.55], legPairs: [2], posture: 'sprawling', legLen: [0.58, 0.88], legAz: [3.66, 3.86], legTerm: ['claw'], headShape: ['flat', 'wedge'], snout: [0.4, 0.65], tail: 0.95, frill: 0.25, eyeStyle: [0.4, 0.6], mouthStyle: [0.07, 0.18], covering: ['scales'], pattern: ['bands', 'reticulate', 'mottle'], hue: [0.22, 0.42], sat: [0.5, 0.85] },
-  { id: 'crocodilian', cluster: 'familiar', weight: 0.5, tailTaper: [0.78, 0.81], tailAz: [4.6, 4.8], tailCurl: [-0.05, -0.02], tailDroop: [-1.52, -1.4], tailLen: [1.6, 1.9], tailSegs: [6, 6], tailThick: [0.68, 0.8], tailStyle: [0.82, 0.97], eyeT: [0.02, 0.14], eyeEl: [0.45, 0.65], head: 1, girth: [0.4, 0.55], repeat: [5, 7], height: [0.66, 0.8], elong: [1.3, 1.6], taper: [0.95, 1.0], rear: [-0.012, 0.008], neck: [0.64, 0.72], neckLift: [0, 0.03], legPairs: [2], posture: 'sprawling', legLen: [0.5, 0.72], legThick: [0.44, 0.58], legAz: [3.55, 3.78], legTerm: ['claw'], headShape: ['flat'], headLinks: 4, headTaper: [0.75, 0.8], headSize: [0.6, 0.68], headWide: [1.15, 1.3], headDome: [0.58, 0.7], headCurve: [0.0, 0.04], mouthT: [0.3, 0.42], mouthEl: [1.2, 1.28], snout: [0.8, 1.0], tail: 1, eyeStyle: [0.4, 0.6], eyeAz: [0.62, 0.76], eyeSize: 1.35, mouthStyle: [0.14, 0.24], covering: ['scales'], pattern: ['mottle', 'mottle', 'plain'], patternScale: [3.5, 6], soberMarks: true, hue: [0.14, 0.28], sat: [0.24, 0.48], light: [0.3, 0.5] },
+  { id: 'crocodilian', cluster: 'familiar', weight: 0.5, tailTaper: [0.78, 0.81], tailAz: [4.6, 4.8], tailCurl: [-0.05, -0.02], tailDroop: [-1.52, -1.4], tailLen: [1.6, 1.9], tailSegs: [6, 6], tailThick: [0.68, 0.8], tailStyle: [0.82, 0.97], eyeT: [0.02, 0.14], eyeEl: [0.45, 0.65], head: 1, girth: [0.4, 0.55], repeat: [5, 7], height: [0.66, 0.8], elong: [1.3, 1.6], taper: [0.95, 1.0], rear: [-0.012, 0.008], neck: [0.64, 0.72], neckDeep: 0.8, neckLift: [0, 0.03], legPairs: [2], posture: 'sprawling', legLen: [0.5, 0.72], legThick: [0.44, 0.58], legAz: [3.55, 3.78], legTerm: ['claw'], headShape: ['flat'], headLinks: 4, headTaper: [0.75, 0.8], headSize: [0.6, 0.68], headWide: [1.15, 1.3], headDome: [0.58, 0.7], headCurve: [0.0, 0.04], mouthT: [0.3, 0.42], mouthEl: [1.2, 1.28], snout: [0.8, 1.0], tail: 1, eyeStyle: [0.4, 0.6], eyeAz: [0.62, 0.76], eyeSize: 1.35, mouthStyle: [0.14, 0.24], covering: ['scales'], pattern: ['mottle', 'mottle', 'plain'], patternScale: [3.5, 6], soberMarks: true, hue: [0.14, 0.28], sat: [0.24, 0.48], light: [0.3, 0.5] },
   // (its head a spade well wider than its neck, with an eye that reads: barely wider, with pinhead eyes, the front
   // of a snake was the blunt end of a worm)
   // (…and its head's own girth near the body's: headWide multiplies a girth drawn at the default 0.7–1.05 of the
@@ -538,7 +541,7 @@ function compileBilateral(rng: Rng, seed: number, m: Morpho, girth: number): Gen
       const links = randint(rng, ...(m.neckLinks ?? ([1, 1] as const)));
       const sb = GENERIC_SIZE;
       body.child = {
-        size: [clamp(girth * nf, sb), clamp(girth * nf * 1.08, sb), clamp(girth * nf * (m.neckLong ?? 1.25), sb)],
+        size: [clamp(girth * nf, sb), clamp(girth * nf * (m.neckDeep ?? 1.08), sb), clamp(girth * nf * (m.neckLong ?? 1.25), sb)],
         repeat: links,
         taper: m.neckTaper ?? 0.96,
         curve: [clamp(rg(rng, m.neckLift, [-0.15, -0.05]), GENE_BOUNDS.segment.curvePitch), 0],
