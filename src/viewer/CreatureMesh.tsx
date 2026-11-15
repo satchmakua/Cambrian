@@ -2219,6 +2219,8 @@ function bakeSkin(g: THREE.BufferGeometry, origin: readonly number[]): THREE.Buf
   return g;
 }
 
+/** how much a mouse's thin bare ear glows with the light through it (an emissive share of its pink) */
+const BARE_EAR_GLOW = 0.15;
 /** the flesh an inner ear's pale fur lets show through */
 const EAR_FLESH = srgbHSL(0.01, 0.38, 0.62);
 
@@ -2227,10 +2229,11 @@ function Ear({ f, color, belly, skin, origin, bare = false, low = false, coat }:
   const r = low ? f.radius : Math.max(f.radius, 0.06);
   const v = earVariant(f.style);
   const geo = useMemo(() => {
-    const g = earGeometry(v, r, f.quat, low);
+    // (a mouse's bare ear is a thin open leaf, pink to its rim — see ear.ts BARE_EAR_INNER)
+    const g = earGeometry(v, r, f.quat, low, bare && !low);
     bakeSkin(g.outer, origin);
     return g;
-  }, [v, r, f.quat, origin, low]);
+  }, [v, r, f.quat, origin, low, bare]);
   useEffect(() => () => {
     geo.outer.dispose();
     geo.inner.dispose();
@@ -2258,7 +2261,8 @@ function Ear({ f, color, belly, skin, origin, bare = false, low = false, coat }:
         </mesh>
       )}
       <mesh geometry={geo.inner}>
-        <meshStandardMaterial color={innerColor} roughness={0.75} />
+        {/* (a mouse's thin ear glows a little with the light through it) */}
+        <meshStandardMaterial color={innerColor} roughness={0.75} emissive={bare ? innerColor : 0x000000} emissiveIntensity={bare ? BARE_EAR_GLOW : 0} />
       </mesh>
     </group>
   );
