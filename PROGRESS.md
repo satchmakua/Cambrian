@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M99: what the thirteenth look left — a deer, a bear's nose, an octopus's eye, a crystal of stones, a cat's throat, a fish's jaw, a mouse; M98: a thirteenth look — spiders' eyes, snakes' heads, hides that read; M97: a twelfth look, and legs with joints; M96: an eleventh look, and a deer named a deer; M95: thin limbs drawn exact, and a tenth look; M94: an eighth look, harder; M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M99: what the thirteenth look left — a deer, a bear's nose, an octopus's eye, a crystal of stones, a cat's throat, a fish's jaw, a mouse, a crab's rim, an ant's feelers, a chimera's net, a songbird's wing, a crocodile's hull; M98: a thirteenth look — spiders' eyes, snakes' heads, hides that read; M97: a twelfth look, and legs with joints; M96: an eleventh look, and a deer named a deer; M95: thin limbs drawn exact, and a tenth look; M94: an eighth look, harder; M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -109,6 +109,40 @@ then rendered against the old build before it was taken.
   - The coat is plain.
   - A rat-like body's ear is bare: a thin, shallow leaf, pink nearly to its rim, lit faintly through
     (`ear BARE_EAR_CUP`, `BARE_EAR_THICK`, `BARE_EAR_INNER`, `BARE_EAR_GLOW`).
+- *Two lollipops on a bread roll* (crab):
+  - The eyestalks rise from the shell's front rim, a third of its width apart over the mouth (`grow
+    ensureFace`, `shellFront`).
+  - The shell is about a tenth broader at its front corners than at its back, with a ledge and four
+    anterolateral teeth along its front margin (`smoothSkin CRAB_MARGIN`, `CRAB_TOOTH`, `CRAB_TEETH`).
+  - Its mouthparts fold under the shell's front (`mandibles shellMouth`); seen from above they stood out
+    ahead of it as a handle.
+  - Its legs are a little shorter, so they no longer splay out like rays.
+- *A lime-green ant with cigarette butts for feelers* (insect):
+  - Two-link elbowed antennae, 2.6–4 head radii long. A curl past 0.4 rad a link is grown `ANTENNA_ELBOW`
+    times over, so the gene stays inside the `curlPitch` bound that breeding, mutation and sharing clamp to.
+  - Compound eyes are a smooth dome under a fine hex lattice of lenses (`ommatidia.ts`).
+  - Legs taper from a stout femur to a fine tarsus.
+  - The cuticle is darker and duller: plain, banded or spotted, never a reticulate camouflage.
+- *A red harness, a grin of square teeth, disc feet* (chimera):
+  - With no pattern scale of its own, the net's cells could be wider than the trunk, and their walls cut
+    the body as straps and a cross. It now has its own scale (`patternScale` [4.6, 7.2]).
+  - It stands on claws, paws or pincers.
+  - A blunt head's short jaw seam shows two fine fangs (`jawed SHORT_FANGS`, under `FANG_RUN` mouth
+    radii), not a dragon's six side by side.
+- *Fish scales on its breast, a pale pad of a wing, two blades behind, a cracked bill* (bird):
+  - A flier's feather edges show along its back alone (`FEATHER_EDGE_Y`).
+  - A band comes back by degrees down the neck (`FEATHER_HOOD`), with no edge round the throat.
+  - The folded wing wears the back's tone (`FOLD_TONE`) and tucks its front under the coat (`FOLD_TUCK`).
+  - A songbird's short wing lies onto its tail (`shortWingLie`).
+  - A slim bill is shut, its lower mandible lying under the upper to the tip (`SLIM_SHUT`).
+- *A frog's face, onion rings, a clown's nose* (crocodile):
+  - Its neck is as flat as its back and skull (`neckDeep` 0.8).
+  - The trunk, neck and head blend as one hull (`bodyField hullBody`), so their overlaps no longer swell
+    into rings.
+  - Its leg roots sink inside the trunk (`LEG_ROOT_SINK`).
+  - Its snout narrows to the tip.
+  - The nostril boss lies on the snout, its rim in the skin.
+  - Its grin's teeth clear the skin (`GRIN_LEN`, `GRIN_SINK`).
 - All of these are range values, constants or work done after the draws, so no genome stream moved.
 - **Tests:**
   - deer: `ungulate.test.ts` (neck, cannon, horns, coat), `nose.test.ts › a broad nose pad`, `face.test.ts ›
@@ -121,6 +155,11 @@ then rendered against the old build before it was taken.
   - cat: `felid.test.ts` (throat, paws, whiskers, pads).
   - fish: `fishHead.test.ts` (pointed snout, chin, gape, gill plate, tail stalk).
   - mouse: `rodentLook.test.ts` (bead eye, plain coat, bare ear).
+  - crab: `crabFront.test.ts` (eyes on the rim, toothed broad front, folded mouthparts, legs).
+  - insect: `insectoid.test.ts` (elbowed feelers, tapering legs, dark plain cuticle), `ommatidia.test.ts`.
+  - chimera: `chimeraMarks.test.ts` (cells under the trunk's width, paws, fangs apart).
+  - bird: `birdLook.test.ts` (shut bill, wing tone, tuck and lie, a smooth breast, the band's hood).
+  - crocodile: `crocHull.test.ts` (one hull, a flat neck, no rings, no knob, the nostril boss, teeth).
 
 ## M98 — A thirteenth look: spiders' eyes, snakes' heads, hides that read · 2026-11-14
 
