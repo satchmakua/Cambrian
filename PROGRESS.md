@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M99: what the thirteenth look left — a deer, a bear's nose, an octopus's eye, a crystal of stones, a cat's throat, a fish's jaw, a mouse, a crab's rim, an ant's feelers, a chimera's net, a songbird's wing, a crocodile's hull; M98: a thirteenth look — spiders' eyes, snakes' heads, hides that read; M97: a twelfth look, and legs with joints; M96: an eleventh look, and a deer named a deer; M95: thin limbs drawn exact, and a tenth look; M94: an eighth look, harder; M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M99: what the thirteenth look left — a deer, a bear's nose, an octopus's eye, a crystal of stones, a cat's throat, a fish's jaw, a mouse, a crab's rim, an ant's feelers, a chimera's net, a songbird's wing, a crocodile's hull, an arthro-alien's armour; M98: a thirteenth look — spiders' eyes, snakes' heads, hides that read; M97: a twelfth look, and legs with joints; M96: an eleventh look, and a deer named a deer; M95: thin limbs drawn exact, and a tenth look; M94: an eighth look, harder; M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -143,6 +143,14 @@ then rendered against the old build before it was taken.
   - Its snout narrows to the tip.
   - The nostril boss lies on the snout, its rim in the skin.
   - Its grin's teeth clear the skin (`GRIN_LEN`, `GRIN_SINK`).
+- *A toy caterpillar in camouflage* (arthro-alien):
+  - Each legged ring wears a flat tergite (`bodyField myriapodTergites`); from above it was a string of
+    soft beads.
+  - Its cuticle is dark indigo to oxblood, plain or graded, with sober marks.
+  - Each eye is a lozenge of four small lenses (`OCELLI_CLUSTER`), not one friendly dome.
+  - Its feelers root clear of its eyes.
+  - Its forcipules close level under the head in a near-black lacquer (`FORCIPULE_DROOP`,
+    `FORCIPULE_TONE`).
 - All of these are range values, constants or work done after the draws, so no genome stream moved.
 - **Tests:**
   - deer: `ungulate.test.ts` (neck, cannon, horns, coat), `nose.test.ts › a broad nose pad`, `face.test.ts ›
@@ -159,6 +167,7 @@ then rendered against the old build before it was taken.
   - insect: `insectoid.test.ts` (elbowed feelers, tapering legs, dark plain cuticle), `ommatidia.test.ts`.
   - chimera: `chimeraMarks.test.ts` (cells under the trunk's width, paws, fangs apart).
   - bird: `birdLook.test.ts` (shut bill, wing tone, tuck and lie, a smooth breast, the band's hood).
+  - arthro-alien: `arthroAlienLook.test.ts` (tergites, dark cuticle, feelers clear of the eyes, forcipules, lenses).
   - crocodile: `crocHull.test.ts` (one hull, a flat neck, no rings, no knob, the nostril boss, teeth).
 
 ## M98 — A thirteenth look: spiders' eyes, snakes' heads, hides that read · 2026-11-14

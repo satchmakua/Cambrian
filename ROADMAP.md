@@ -902,13 +902,14 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   - chimera: a net, not a harness; paws; two fine fangs.
   - bird: a smooth breast, the folded wing in the back's tone onto its tail, a shut bill.
   - crocodile: one flat hull, no rings, a snout that narrows to its tip.
+  - arthro-alien: plated rings, a dark cuticle, lens clusters, forcipules under the head.
   - Plus the fixes an independent review confirmed.
   **Tests:** see PROGRESS M99.
 
 ### Next up (unchecked — pick from here)
 
 - [ ] **What the thirteenth look left.** A songbird's pear shape from the front (a dark breast band over a
-  pale belly); a crocodile's teeth still unseen at studio scale; the arthro-alien diagnosis still running.
+  pale belly); a crocodile's teeth still unseen at studio scale.
 
 - [ ] **What the twelfth look left.** The crystal's smooth glass head on its cut stone; a slug's sole;
   the dragon's pale underwing web; a bear's paw still a step below its wrist.
