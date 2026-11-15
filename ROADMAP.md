@@ -889,13 +889,21 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   level tail, folded wing laid to its body, spines and horns apart.
   **Tests:** see PROGRESS M98.
 
+- [x] **M99 — What the thirteenth look left, diagnosed plan by plan.**
+  - deer: a grazer's straight neck carried forward, its head bowed, broad nose pad, dapples, knobbed knees.
+  - bear: a dark nose pad, never a cat's pink button.
+  - octopus: a raised gold eye and long arms curling at the tip.
+  - crystal: a beast of stones from head to toe.
+  - cat: its throat meets its jaw at an angle; whiskers fanned from the pads.
+  - fish: a pointed snout with a jaw and gape, a gill cover in relief, a narrowed tail stalk.
+  - mouse: bead eyes, thin pink ears, a plain coat.
+  - Plus the fixes an independent review confirmed.
+  **Tests:** see PROGRESS M99.
+
 ### Next up (unchecked — pick from here)
 
-- [ ] **What the thirteenth look left.** A deer's llama neck and dog nose; a bear's pig nose; the
-  crystal's smooth head and legs; the octopus's slit eye that reads as a mouth, its stiff splayed arms;
-  the fish's jawless whale head (its head taper is already at its gene's floor); a cat's throat hanging
-  as a dewlap (its last neck node sits well under its skull, nearly as thick); a chimera's red cross and
-  harness bands.
+- [ ] **What the thirteenth look left.** A chimera's red cross and harness bands; the crab, insect,
+  bird, crocodile and arthro-alien diagnoses still running.
 
 - [ ] **What the twelfth look left.** The crystal's smooth glass head on its cut stone; a slug's sole;
   the dragon's pale underwing web; a bear's paw still a step below its wrist.

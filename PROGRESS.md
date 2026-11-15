@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M98: a thirteenth look — spiders' eyes, snakes' heads, hides that read; M97: a twelfth look, and legs with joints; M96: an eleventh look, and a deer named a deer; M95: thin limbs drawn exact, and a tenth look; M94: an eighth look, harder; M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M99: what the thirteenth look left — a deer, a bear's nose, an octopus's eye, a crystal of stones, a cat's throat, a fish's jaw, a mouse; M98: a thirteenth look — spiders' eyes, snakes' heads, hides that read; M97: a twelfth look, and legs with joints; M96: an eleventh look, and a deer named a deer; M95: thin limbs drawn exact, and a tenth look; M94: an eighth look, harder; M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -55,6 +55,72 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M99 — What the thirteenth look left: a deer, a bear's nose, an octopus's eye, a crystal of stones · 2026-11-15
+
+Each plan below was diagnosed alone by an independent agent on a fresh render of the current code at
+seed 29 (side and face views), with probes. Its patch was checked against the old code by its tests,
+then rendered against the old build before it was taken.
+
+- *A llama with goat horns* (deer) — a grazer (a body on hooves) lifts its neck once at its root
+  (`grow NECK_CARRY`), so the neck grows straight, deep at the shoulders and slim at the throat (Morpho
+  `neckTaper`). It hangs its head from the poll (`HEAD_BOW`), with its mouth aimed down. Its nose is a broad
+  moist pad (`jawed GRAZER_NOSE`). Its spots are a fawn's dapples: small, pale, laid solid, on the back and
+  upper flanks only (`face dappled`, `palette coatDapple`, `uDapple`). The cannon drops plumb
+  (`HOOF_KNEE`), the knee and hock are knobs (`limbTubes HOOF_KNOB`), and the horns have two links,
+  swept back.
+- *A pig's nose* (bear) — two cat-only rules keyed on a short snout's reach alone. A bear's short
+  muzzle fell under that reach, so it wore a cat's pink button. Now a skull with a stop is never pink
+  (`pinkNose`) and wears at least `NOSE_STOPPED` 1.3. A bear's ears stay low furred flaps, and its muzzle
+  is as long as it is wide.
+- *A slit eye that reads as a mouth; a starfish's stiff arms* (octopus) — the eye sits at the middle of
+  the head's sides, looking a little up. It is raised in a turret of its own lids (`eyeSeat
+  TURRET_DEPTH`), and its iris is gold to bronze (`OCTOPUS_IRIS`). The arms reach 1.4–1.9 of the mantle's
+  height and lie on the floor. Each curls its tip to its own side, the last two joints only (`ARM_TIP`).
+- *Smooth glossy balloons on a cut torso* (crystal) — the head and every leg link are stones too
+  (`facets crystalStones`): a head stone of 22 mirrored cuts, and a bevelled prism around each leg link.
+  Each stone rides its own bone in the World, and the skin they enclose is no longer drawn
+  (`cullCovered`). The head stone is cut at the mouth with a V under the eyes, and each eye is a gem in a
+  face of its own.
+- *An independent review of the day's commits* confirmed four defects and refuted a fifth:
+  - Octopus arm tips ran into the next arm; none of 1,000 founders touch now.
+  - The crystal head stone pivoted about the head; it now blends from the neck root's bone to the
+    head's front.
+  - A crystal insect's head stone held its thorax; it now keeps to the rig's side of `legSeg`.
+  - A bird's tail coverts rode the fan's bone; they are now skinned from the rump to the fan
+    (`tailCovertsGeometry`).
+- *A dewlap under the jaw; two cheek balls; a scribble of whiskers* (cat):
+  - The neck is slimmer, carried up more steeply and drawn in under the skull, so the throat meets the
+    jaw at an angle.
+  - The whiskers root beside the nose on the pads and reach past the cheeks (`whiskerStretch`,
+    `WHISKER_REACH`). This is the shared muzzle builder, so a mouse's and a weasel's whiskers moved too.
+  - The pads run down onto the upper lip (`PAD_DROP`, `PAD_SIZE`).
+  - The paws are as wide as the wrists.
+- *A jawless whale head* (fish):
+  - A body with fish-cut fins and no legs slides its snout tip forward and slims it (`grow SNOUT_TIP`).
+  - A lower jaw sits under the snout on the hybrid skin (`bodyField FISH_JAW`).
+  - The gape runs as a sunk seam from the snout's point to under the front of the eye (`mouthLine
+    FISH_GAPE`, `fishSeam`).
+  - The gill cover is a plate in the body's own material, its rear edge standing proud of the skin
+    (`gills gillCoverFlap`), where it was a painted arc.
+  - The tail stalk narrows side to side into the fin (`PEDUNCLE_FLAT`). The shark is untouched.
+- *A goat's eye, a satellite dish for an ear, burns on the coat* (mouse):
+  - The eyes are black beads (the rodent row's `eyeStyle` [0.22, 0.36]).
+  - The coat is plain.
+  - A rat-like body's ear is bare: a thin, shallow leaf, pink nearly to its rim, lit faintly through
+    (`ear BARE_EAR_CUP`, `BARE_EAR_THICK`, `BARE_EAR_INNER`, `BARE_EAR_GLOW`).
+- All of these are range values, constants or work done after the draws, so no genome stream moved.
+- **Tests:**
+  - deer: `ungulate.test.ts` (neck, cannon, horns, coat), `nose.test.ts › a broad nose pad`, `face.test.ts ›
+    dapples`, `limbTubes.test.ts › knobs at the knee and hock`.
+  - bear: `nose.test.ts › a bear's nose never pink`, `ear.test.ts › low flaps`.
+  - octopus: `cephalopod.test.ts` (eyes, reach, tip curl, footing, no arm touches another),
+    `eyeSeat.test.ts › raised, gold`.
+  - crystal: `crystalStones.test.ts`.
+  - bird: `wings.test.ts › the coverts' weights`.
+  - cat: `felid.test.ts` (throat, paws, whiskers, pads).
+  - fish: `fishHead.test.ts` (pointed snout, chin, gape, gill plate, tail stalk).
+  - mouse: `rodentLook.test.ts` (bead eye, plain coat, bare ear).
 
 ## M98 — A thirteenth look: spiders' eyes, snakes' heads, hides that read · 2026-11-14
 
