@@ -105,6 +105,12 @@ const HEAD_BOW = 0.5;
 /** …and a hooved foreleg's cannon drops plumb from its knee: the wrist's forward fold (−0.32) is a paw's
  *  pastern, and on a leg whose third link is the cannon it slanted the whole lower leg 25° forward */
 const HOOF_KNEE = 0.12;
+/** An antenna's bend past ANTENNA_ELBOW_FROM (rad a link) is grown ANTENNA_ELBOW times over: the gene
+ *  stays within its curlPitch bound (0.6, which breeding, mutation and sharing clamp to), and an insect's
+ *  [0.55, 0.6] grows its elbowed feeler, 0.9–1.06 a link. Any |curl| under 0.4 (every random body's
+ *  feelers, an arthro-alien's) grows as it was. */
+const ANTENNA_ELBOW_FROM = 0.4;
+const ANTENNA_ELBOW = 2.3;
 
 /** Minimum grown radius for an eye bulb (bu) — the face must always read (M19/M24). */
 const EYE_R_MIN = 0.06;
@@ -1076,7 +1082,8 @@ export function grow(genome: Genome): Phenotype {
     // shoulder, the forearm drops near-vertical, the pastern angles forward to the paw. (The signs
     // were inverted: every hind knee pointed backward like a bird's heel, under every quadruped.)
     const fore = app.kind === 'leg' && !arch && legPairsHere === 2 && app.attachT > 0.5 && dev.symmetry !== 'radial';
-    let pitch = app.kind !== 'leg' ? app.curl[0] : fore ? 0.18 + 0.5 * Math.abs(app.curl[0]) : -app.curl[0];
+    const elbow = app.kind === 'antenna' ? Math.sign(app.curl[0]) * Math.max(0, Math.abs(app.curl[0]) - ANTENNA_ELBOW_FROM) * ANTENNA_ELBOW : 0;
+    let pitch = app.kind !== 'leg' ? app.curl[0] + elbow : fore ? 0.18 + 0.5 * Math.abs(app.curl[0]) : -app.curl[0];
     // An EAR is one node on the skull, whatever its gene says of links: the flap is drawn whole from
     // its root, and no stalk is meshed under it (see bodyField) — grown as a chain, a bred ear's flap
     // would hang in the air a link's length off the head.

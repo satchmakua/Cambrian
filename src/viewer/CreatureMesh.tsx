@@ -31,6 +31,7 @@ import { buildSmoothGeometry, buildShellGeometry, shellScutes, type SkinQuality 
 import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, foldedSpan, restingFold, type FinBuild, type TailRump, type TailPart } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
+import { ommatidiaMaps } from './ommatidia';
 import { BROW_TILT, bulgingEye, eyeClearings, eyeSeat, eyeTilt, FEELER_KNOB, FEELER_SPOT, feelerTip, isOcellus, isSwimmer } from './eyeSeat';
 import { coatBelly, coatDark, coatFin, coatMain, coatPattern, srgbHSL } from './palette';
 import { browRidgeGeometry, dappled, faceMaskOf, headMaskOf, isApe } from './face';
@@ -1031,8 +1032,9 @@ function rimGeometry(r: number, quat: readonly number[], origin: readonly number
   return g;
 }
 
-/** an insect's compound eye: dark bronze, rust, bottle green, slate */
-const COMPOUND = [0x3a2614, 0x4a1a12, 0x1e3420, 0x23252e];
+/** an insect's compound eye: near-black, a deep maroon, a dark bottle green, slate — under its facets'
+ *  walls (ommatidia.ts). (A dark bronze, 0x3a2614, under one glossy highlight was a chocolate.) */
+const COMPOUND = [0x16130f, 0x2e1210, 0x122218, 0x1a1c24];
 /** a glowing eye's light: a sickly teal, a bile green, an amber, a violet */
 const GLOW = [0x3fd8a8, 0x9fd84a, 0xe0a030, 0xb070e8];
 /** a crystal beast's eye: its stone's own hue, deep and saturated (sRGB HSL), and how brightly it glows */
@@ -1301,11 +1303,18 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
           </mesh>
         </>
       ) : v === 'compound' ? (
-        // compound — an insect's: a big glossy dome of fine facets, dark with a tint of bronze, rust or
-        // bottle green (coarse facets were a disco ball; jet black, a marble)
+        // compound — an insect's: a dark dome of fine facets, each a glint between dark walls (ommatidia.ts),
+        // matte between the glints. (Coarse facets were a disco ball; jet black, a marble; an icosahedron's
+        // flat faces under one glossy highlight, a chocolate truffle.)
         <mesh>
-          <icosahedronGeometry args={[r * 0.98, 3]} />
-          <meshStandardMaterial color={COMPOUND[Math.floor(unitHash(seed, 0xc0e) * COMPOUND.length)]} roughness={0.3} metalness={0.45} flatShading />
+          <sphereGeometry args={[r * 0.98, 48, 32]} />
+          <meshStandardMaterial
+            color={COMPOUND[Math.floor(unitHash(seed, 0xc0e) * COMPOUND.length)]}
+            map={ommatidiaMaps().shade}
+            roughnessMap={ommatidiaMaps().rough}
+            roughness={1}
+            metalness={0.2}
+          />
         </mesh>
       ) : gemEye ? (
         // a crystal's: a cut gem, a few broad facets catching the light, glowing from within
