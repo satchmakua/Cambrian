@@ -345,7 +345,10 @@ export function makeCreatureMaterial(
           if ((uPType == 2 || (uPType == 3 && uDapple > 0.5)) && uHeadA.w > 0.0) {
             vec3 hab = uHeadB - uHeadA.xyz;
             float ht = clamp(dot(vBodyPos - uHeadA.xyz, hab) / max(dot(hab, hab), 1e-6), 0.0, 1.0);
-            pat *= smoothstep(uHeadA.w * 1.1, uHeadA.w * 1.5, length(vBodyPos - uHeadA.xyz - hab * ht));
+            // (on plumage the marking comes back by degrees down the neck: let back within half a head's
+            // width, a band's edge ran round the throat from the bill's root to the nape, under a pale
+            // chin — a jowl and a smile)
+            pat *= smoothstep(uHeadA.w * 1.1, uHeadA.w * (uCover == 3 ? FEATHER_HOOD : 1.5), length(vBodyPos - uHeadA.xyz - hab * ht));
           }
           skin = mix(skin, uPattern, clamp(pat * uMarkW, 0.0, 1.0)); // (see markWeight)
           // a deeper accent in the cores of strong markings (rosette rings, ocelli) → richness
@@ -570,6 +573,10 @@ const float DAPPLE_MID = 0.045;
 uniform vec3 uScutes[${MAX_SCUTES}]; uniform int uScuteN;
 // a flightless bird's plumes on its head: their length there (× the body's)
 const float SHAG_HEAD_DOWN = 0.22;
+// a flier's feather edges: the skin normal's y (body space) below which they give out — up the back alone
+const float FEATHER_EDGE_Y = 0.25;
+// a feathered head's plain hood: how far (× the head's radius) its marking takes to come back down the neck
+const float FEATHER_HOOD = 2.2;
 
 // Per-fragment globals, primed at the top of the colour stage and reused by the roughness + normal
 // stages (so the expensive relief is evaluated once per pixel, not three times).
@@ -914,7 +921,12 @@ float surfaceHeight(vec3 p, int cover) {
       float ht = clamp(dot(vBodyPos - uHeadA.xyz, hab) / max(dot(hab, hab), 1e-6), 0.0, 1.0);
       plain = max(plain, 1.0 - smoothstep(uHeadA.w * 1.0, uHeadA.w * 1.6, length(vBodyPos - uHeadA.xyz - hab * ht)));
     }
-    lay = mix(lay, 0.66, plain * 0.85);
+    // …and a FLIER's breast, flanks and neck are smooth too: its feathers' edges show along its back alone
+    // (the mantle between its folded wings, its rump), giving out as the skin turns to the side or forward.
+    // (Kept off the belly and the head alone, the edges ran in rows of dark-rimmed arcs over the breast and
+    // up the neck to the chin, one tile to a feather: fish scales.)
+    if (uShag < 0.5) plain = max(plain, 1.0 - smoothstep(FEATHER_EDGE_Y, FEATHER_EDGE_Y + 0.45, gNb.y) * (1.0 - smoothstep(0.2, 0.6, gNb.z)));
+    lay = mix(lay, 0.66, plain * (uShag > 0.5 ? 0.85 : 0.95));
     shaft *= aaW(50.0) * (1.0 - plain);
     // A FLIGHTLESS bird (an ostrich's, an emu's) wears loose plumes, hair-like, hanging along the lay: no
     // feather's edge to be seen. (Scalloped like a flier's contour feathers, its neck, body and thighs

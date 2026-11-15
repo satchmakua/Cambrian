@@ -150,9 +150,24 @@ export function buildBeak(
   const flatL = (u: number) => Math.min(0.9, BROAD_BILL.depth * 0.6 * (1 - BROAD_BILL.taper * u) * blunt(u));
   const k = lowerLen / upperLen;
   const sep = (u: number) => 0.85 * upperR0 * (spoon(u) * flatU(u) + 0.86 * spoon(u / k) * flatL(u / k));
-  const lowerPathW = broad
-    ? loftPath([baseU[0] - bup[0] * sep(0), baseU[1] - bup[1] * sep(0), baseU[2] - bup[2] * sep(0)], dir, lowerLen, bup, (u) => hook * Math.pow(u * k, hookCurve) + sep(u * k) - sep(0))
-    : loftPath(baseL, dirL, lowerLen, bup, () => 0);
+  // A songbird's slim bill is SHUT: the lower mandible runs from its root to the upper's underside, its
+  // tip tucked a hair inside the upper's (see SLIM_SHUT). (Pitched down on its own line, it parted from
+  // the upper two thirds of the way along and ended a third of the mouth's size below it: a gaping bill,
+  // a cracked one, a drooping lower lip.)
+  const slimShut = !shelled && !hooked && !broad && phenotype.genomeRef.covering.type === 'feathers';
+  let lowerPathW: Vec3[];
+  if (broad) {
+    lowerPathW = loftPath([baseU[0] - bup[0] * sep(0), baseU[1] - bup[1] * sep(0), baseU[2] - bup[2] * sep(0)], dir, lowerLen, bup, (u) => hook * Math.pow(u * k, hookCurve) + sep(u * k) - sep(0));
+  } else if (slimShut) {
+    // the upper's underside where the lower ends: its spine there, dropped by its radius and the lower's tip
+    const below = upperR0 * Math.pow(1 - k, 0.95) + r * (0.025 - SLIM_SHUT);
+    const hk = hook * Math.pow(k, hookCurve);
+    const T: Vec3 = [0, 1, 2].map((i) => baseU[i] + dir[i] * upperLen * k - bup[i] * (hk + below)) as Vec3;
+    const dL: Vec3 = [T[0] - baseL[0], T[1] - baseL[1], T[2] - baseL[2]];
+    lowerPathW = loftPath(baseL, norm3(dL), Math.hypot(dL[0], dL[1], dL[2]), bup, () => 0);
+  } else {
+    lowerPathW = loftPath(baseL, dirL, lowerLen, bup, () => 0);
+  }
 
   const rel = (v: Vec3): Vec3 => [v[0] - o[0], v[1] - o[1], v[2] - o[2]];
   const ring = ringW.map((s) => ({ ...s, p: rel(s.p) }));
@@ -338,6 +353,8 @@ const BILL_GREY = new THREE.Color(0x4c535e);
 const BILL_TIP = new THREE.Color(0x1d1f23);
 /** a hooked bill's width against its depth */
 const HOOKED_WIDTH = 0.55;
+/** how far a shut slim bill's lower mandible tucks its tip inside the upper's underside (× the mouth's radius) */
+export const SLIM_SHUT = 0.04;
 /** a flightless bird's broad flat bill: its root's half-width (× the mouth's radius), its depth (× its
  *  width) and how far its tip droops */
 export const BROAD_BILL = { root: 0.6, depth: 0.42, hook: 0.25, len: 2.25, taper: 0.4 };

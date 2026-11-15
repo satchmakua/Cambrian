@@ -472,7 +472,8 @@ export function buildFeatheredWing(side: number, S: number, base: THREE.Color, a
   const L = S * 1.05;
   const H = S * 0.3;
   const HAND = 0.5;
-  const t = tiersOf(base, accent);
+  // (in the tone of the back and upper flank it lies on, not the raw coat: see FOLD_TONE)
+  const t = tiersOf(base.clone().multiplyScalar(FOLD_TONE), accent);
   const { geo, lift } = sheet(
     72, 20,
     (a, b, p) => {
@@ -483,14 +484,27 @@ export function buildFeatheredWing(side: number, S: number, base: THREE.Color, a
       const top = -0.04 * S + 0.05 * S * a;
       const h = H * depth * (1 - notch * b * b);
       // domed away from the flank; the stacked coverts make the shoulder end thickest
-      const dome = 0.045 * S * Math.sin(Math.PI * b) * (1 - 0.6 * a);
+      // (…rising out of the breast's coat over its first tenth: domed to its front end, that end was a cut
+      // edge standing off the breast, the mouth of a pocket)
+      const dome = 0.045 * S * Math.sin(Math.PI * b) * (1 - 0.6 * a) * (0.2 + 0.8 * sstep(0, 0.1, a));
       p.copy(back).multiplyScalar(a * L).addScaledVector(down, top + b * h).addScaledVector(normal, dome);
-      return dome;
+      // its leading edge and its front end tuck under the coat of the back and the breast (see FOLD_TUCK)
+      const tuck = Math.max(1 - sstep(0, 0.14, b), 1 - sstep(0, 0.08, a));
+      return dome - FOLD_TUCK * S * tuck;
     },
     (a, b, c) => plumageAt(t, a, b, HAND, 7, 9, 7, c),
   );
   return { surface: geo, bones: [], wrist: null, lift };
 }
+
+/** A folded wing's coverts against the coat (× coatMain): the tone of the back and upper flank it lies on,
+ *  which the coat's countershading, recesses and creases darken to ~0.6-0.8 of coatMain. (At the raw coat
+ *  the folded wing was a paler flat pad stuck on the flank — a pocket, a lifejacket.) */
+export const FOLD_TONE = 0.8;
+/** how far (× the wing's length) a folded wing's leading edge and front end sink under the skin past the
+ *  margin it is wrapped at: the coat of the back and the breast lies over them. (Riding the margin proud
+ *  of the skin all round, its edge was a hard step.) */
+export const FOLD_TUCK = 0.018;
 
 /** A wing part's style gene at or over this is the LONG cut of folded wing: a bird of prey's. */
 export const LONG_WING = 0.6;
@@ -542,6 +556,21 @@ export function longWingFold(p: Phenotype, side: number): WingFold | null {
   const len = axis.length();
   if (len < 1e-4) return null;
   return { anchor, axis: axis.divideScalar(len), S: len / 1.05 };
+}
+
+/**
+ * Where a songbird's SHORT folded leaf lies: from its own `anchor` on the upper flank to where a hawk's
+ * wing tips lie (longWingFold: on the tail, a third of the way down its fan), no longer than `S`. (Laid
+ * level along a trunk that falls to its rump, the leaf ran on a third of the body's length past the rump,
+ * its dark primaries two blades standing off over a drooping tail.) Null when there is no trunk.
+ */
+export function shortWingLie(p: Phenotype, side: number, anchor: readonly number[], S: number): { axis: THREE.Vector3; S: number } | null {
+  const lf = longWingFold(p, side);
+  if (!lf) return null;
+  const axis = v3(lf.anchor[0], lf.anchor[1], lf.anchor[2]).addScaledVector(lf.axis, lf.S * 1.05).sub(v3(anchor[0], anchor[1], anchor[2]));
+  const len = axis.length();
+  if (len < 1e-4) return null;
+  return { axis: axis.divideScalar(len), S: Math.min(S, len / 1.05) };
 }
 
 /**

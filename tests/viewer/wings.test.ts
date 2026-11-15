@@ -473,7 +473,8 @@ describe('plumage sheets (one continuous surface, painted in feather tiers)', ()
     let domed = 0;
     for (let i = 0; i < pos.count; i++) {
       const d = sphere(pos.getX(i) + 0.5, pos.getY(i), pos.getZ(i));
-      expect(d).toBeGreaterThan(0.015);
+      // (its leading edge and front end tuck under the coat — a negative lift: see FOLD_TUCK)
+      expect(d).toBeGreaterThan(0.015 + Math.min(0, w.lift![i]));
       if (w.lift![i] > 0.05 && d > 0.02 + w.lift![i] * 0.9) domed++;
     }
     expect(domed).toBeGreaterThan(0);

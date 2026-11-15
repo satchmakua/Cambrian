@@ -28,7 +28,7 @@ import { makeCreatureMaterial } from './creatureMaterial';
 import { bareOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, ratLike, shaggyPlumage, skinPartWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, shellScutes, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, foldedSpan, restingFold, type FinBuild, type TailRump, type TailPart } from './wings';
+import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, shortWingLie, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, foldedSpan, restingFold, type FinBuild, type TailRump, type TailPart } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
 import { ommatidiaMaps } from './ommatidia';
@@ -1922,19 +1922,6 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
     // a feathered wing on a four-legged body is held up and half open, to the span a membrane wing
     // on the same body would have (wings.ts wingCarriage)
     // (a membrane wing folds along the flank at rest, as a bat's or a dragon's does, and opens to fly)
-    const w = raised
-      ? buildSpreadFeatheredWing(side, openS, plumage, accent, 0.62 + 0.2 * (g.seed % 7) / 7)
-      : feathered
-        ? buildFeatheredWing(side, foldS, plumage, accent, long?.axis)
-        : // (at rest the fold is laid to the body it hangs on: see restingFold)
-          buildFoldedMembraneWing(side, restingFold(phenotype, foldedSpan(phenotype, f.radius), wingShoulder(phenotype, side) ?? shoulder));
-    // the flight posture: the same plumage opened out — a wing reaches further spread than folded
-    const spread = feathered ? buildSpreadFeatheredWing(side, raised ? openS * 1.1 : foldS * 1.35, plumage, accent).surface : null;
-    const open = feathered ? null : buildMembraneWing(side, foldedSpan(phenotype, f.radius) / MEMBRANE_FOLD, 0.55 + 0.3 * (g.seed % 7) / 7);
-    // (an upright body pitches forward to fly: its spread wings are built tilted back by as much, so
-    // they come out level — see flightLevel)
-    const level = spread ? flightLevel(phenotype) : 0;
-    if (spread && level > 0) spread.rotateX(-level);
     // a folded wing tucks against the UPPER FLANK (a bird's wing lies along its side, not on its
     // spine): anchor it on the trunk node nearest the shoulder, out at its side and a little above
     // the midline, slightly forward — rather than at the dorsal attach point the gene aimed for.
@@ -1951,6 +1938,21 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
         : (wingShoulder(phenotype, side) ?? [near.pos[0] + side * rx * 0.55, near.pos[1] + near.radius * 0.5, near.pos[2] + near.radius * 0.2]);
     }
     if (long) anchor = long.anchor;
+    // (a songbird's short leaf runs down the slope of its back onto its tail: see shortWingLie)
+    const lie = feathered && !raised && !long ? shortWingLie(phenotype, side, anchor, foldS) : null;
+    const w = raised
+      ? buildSpreadFeatheredWing(side, openS, plumage, accent, 0.62 + 0.2 * (g.seed % 7) / 7)
+      : feathered
+        ? buildFeatheredWing(side, lie ? lie.S : foldS, plumage, accent, long?.axis ?? lie?.axis)
+        : // (at rest the fold is laid to the body it hangs on: see restingFold)
+          buildFoldedMembraneWing(side, restingFold(phenotype, foldedSpan(phenotype, f.radius), wingShoulder(phenotype, side) ?? shoulder));
+    // the flight posture: the same plumage opened out — a wing reaches further spread than folded
+    const spread = feathered ? buildSpreadFeatheredWing(side, raised ? openS * 1.1 : foldS * 1.35, plumage, accent).surface : null;
+    const open = feathered ? null : buildMembraneWing(side, foldedSpan(phenotype, f.radius) / MEMBRANE_FOLD, 0.55 + 0.3 * (g.seed % 7) / 7);
+    // (an upright body pitches forward to fly: its spread wings are built tilted back by as much, so
+    // they come out level — see flightLevel)
+    const level = spread ? flightLevel(phenotype) : 0;
+    if (spread && level > 0) spread.rotateX(-level);
     const off: [number, number, number] = [anchor[0] - tip[0], anchor[1] - tip[1], anchor[2] - tip[2]];
     if (!raised) {
       // wrap the folded wing around the flank (the same field the hybrid skin is meshed from) — and a
