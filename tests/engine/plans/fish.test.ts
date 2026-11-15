@@ -89,7 +89,8 @@ describe('fish and shark', () => {
       const tip = fish.head[2];
       expect(fm.pos[2], `fish #${seed}: ahead of the snout's last link`).toBeGreaterThan(tip.pos[2]);
       expect(Math.abs(fm.pos[1] - tip.pos[1]), `fish #${seed}: on its axis`).toBeLessThan(0.25 * ry(tip));
-      expect(fm.radius, `fish #${seed}: small`).toBeLessThan(ry(tip));
+      // (small beside its head: its snout comes to a point narrower than the mouth's gape — see grow's SNOUT_TIP)
+      expect(fm.radius / ry(fish.head[0]), `fish #${seed}: small`).toBeLessThan(0.36);
       const shark = parts('shark', seed);
       const sm = terminal(shark.p, 'mouth')[0];
       expect(sm.pos[1], `shark #${seed}: under the head`).toBeLessThan(shark.head[1].pos[1] - 0.5 * ry(shark.head[1]));

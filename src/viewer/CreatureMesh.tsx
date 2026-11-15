@@ -45,7 +45,7 @@ import { whiskerFan, whiskerStretch } from './whiskers';
 import { frillGeometry, frillPlan } from './frill';
 import { getGeometry, retainGeometry, releaseGeometry, hasGeometry } from './geometryCache';
 import { drawnMouths, mouthCarves, surfacePrims } from './mouthLine';
-import { gillCutOf, gillGeometry, gillMarks, gillRadiusOf } from './gills';
+import { gillCoverFlap, gillCutOf, gillGeometry, gillMarks, gillRadiusOf } from './gills';
 import { sampleTrajectory, type Trajectory } from '../physics/fitness';
 import type { SkinMode } from '../ui/store';
 
@@ -832,7 +832,7 @@ function Feature({
     case 'ear':
       return <Ear f={f} color={footColor} belly={coatBelly(phenotype.genomeRef.palette).getHex()} skin={skin} origin={phenotype.nodes[f.idx].pos} bare={ratLike(phenotype)} low={lowEar(phenotype, f.idx)} coat={coatMain(phenotype.genomeRef.palette).getHex()} />;
     case 'gill':
-      return <Gill f={f} color={footColor} phenotype={phenotype} surface={surface} />;
+      return <Gill f={f} color={footColor} phenotype={phenotype} surface={surface} skin={skin} />;
     case 'crest':
       return <Crest f={f} color={finColor} feathered={phenotype.genomeRef.covering.type === 'feathers'} />;
     case 'carapace':
@@ -2268,12 +2268,34 @@ function Ear({ f, color, belly, skin, origin, bare = false, low = false, coat }:
 // rear rim of the plate over its gills; a rake of dark bars (what every gilled body had); or a
 // shark's SLITS — five thin creases. The cover and the slits lie IN the skin (standing proud as the
 // bars do, they broke a fish's outline like vents): they are traced over the surface (gills.ts).
-function Gill({ f, color, phenotype, surface }: { f: MeshFeature; color: number; phenotype: Phenotype; surface: SkinSurface }) {
+function Gill({ f, color, phenotype, surface, skin }: { f: MeshFeature; color: number; phenotype: Phenotype; surface: SkinSurface; skin?: THREE.Material }) {
   const r = Math.max(f.radius, 0.06);
   const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.5).getHex(), [color]);
   const cut = gillCutOf(f.style);
-  const marks = useMemo(() => (cut === 'bars' ? null : gillGeometry(gillMarks(phenotype, f.idx, surface, cut, gillRadiusOf(phenotype, f.idx, cut, r)))), [cut, phenotype, f.idx, surface, r]);
+  // (a gill COVER is a plate in the body's own skin with a raised rear edge, its dark line in the step at
+  // the edge's foot: see gillCoverFlap)
+  const plate = useMemo(() => {
+    if (cut !== 'cover' || !skin) return null;
+    const g = gillCoverFlap(phenotype, f.idx, surface, gillRadiusOf(phenotype, f.idx, cut, r));
+    bakeSkin(g.flap, phenotype.nodes[f.idx].pos);
+    return g;
+  }, [cut, skin, phenotype, f.idx, surface, r]);
+  useEffect(() => () => {
+    plate?.flap.dispose();
+    plate?.crease.dispose();
+  }, [plate]);
+  const marks = useMemo(() => (cut === 'bars' || plate ? null : gillGeometry(gillMarks(phenotype, f.idx, surface, cut, gillRadiusOf(phenotype, f.idx, cut, r)))), [cut, plate, phenotype, f.idx, surface, r]);
   useEffect(() => () => marks?.dispose(), [marks]);
+  if (plate && skin) {
+    return (
+      <group>
+        <mesh geometry={plate.flap} material={skin} castShadow receiveShadow />
+        <mesh geometry={plate.crease}>
+          <meshStandardMaterial color={dark} roughness={0.6} />
+        </mesh>
+      </group>
+    );
+  }
   if (marks) {
     return (
       <mesh geometry={marks}>

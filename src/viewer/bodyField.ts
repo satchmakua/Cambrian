@@ -356,7 +356,8 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   const mantle = edges ? slugMantle(p) : null;
   // …and an ape's skull and forearms (see apeSkull, apeForearms) — on the hybrid skin only: the capsule kit
   // draws none of them, and the mouth it traces must stay on the head it draws
-  const ape = edges && mode === 'hybrid' ? [...apeSkull(p), ...apeForearms(p)] : [];
+  const ape: { c: Vec3; q: [number, number, number, number]; r: Vec3; over: number; blend?: number }[] =
+    edges && mode === 'hybrid' ? [...apeSkull(p), ...apeForearms(p), ...fishJaw(p)] : [];
   const ne = shaped.length + webs.length + (mantle ? 1 : 0) + ape.length;
   // A swimmer's snout TIP — its chain's front end — keeps its ellipsoid only for the length it adds to the
   // cones' end cap: the two surfaces coincide round the tip, and smooth-unioned at the full k they swelled
@@ -402,6 +403,7 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     ec.set(a.c, i * 3);
     eq.set(a.q, i * 4);
     er.set(a.r, i * 3);
+    if (a.blend !== undefined) eb[i] = a.blend;
     excess = Math.max(excess, a.over);
   });
   const cx = new Float64Array(nc), cy = new Float64Array(nc), cz = new Float64Array(nc), hl = new Float64Array(nc);
@@ -792,6 +794,47 @@ export function apeForearms(p: Phenotype): { c: Vec3; q: [number, number, number
     });
   }
   return out;
+}
+
+/**
+ * A BONY FISH's LOWER JAW (a swimmer in scales — fins, no legs; a shark's skin is left as it is). Its head is
+ * a cone of three links to the mouth at the snout's point, and with only a seam across that point it had no
+ * jaw at all: a bullet, a dolphin's or a sock puppet's head. The mandible is one ellipsoid on the midline,
+ * in the snout tip's frame: its chin FISH_JAW.ahead × the tip's radius past the mouth and `drop` × the tip's
+ * half-depth below it, running back to under the eye; `wide` × the half-width of the head's middle link
+ * across, `deep` × the tip's half-depth deep; blended in at `blend` of the union's radius, so a crease runs
+ * where it meets the snout (the gape's line) and its chin stands a little under and ahead of the upper jaw.
+ */
+export const FISH_JAW = { ahead: 0.25, drop: 0.55, wide: 0.62, deep: 0.6, blend: 0.45 } as const;
+export function fishJaw(p: Phenotype): { c: Vec3; q: [number, number, number, number]; r: Vec3; over: number; blend: number }[] {
+  if (p.genomeRef.symmetry !== 'bilateral' || p.genomeRef.covering.type === 'skin') return [];
+  let fins = false;
+  for (const n of p.nodes) {
+    if (n.part?.kind === 'leg') return [];
+    if (n.part?.kind === 'fin') fins = true;
+  }
+  if (!fins) return [];
+  const mouth = p.nodes.findIndex((n) => n.terminal === 'mouth');
+  const holder = p.edges.find(([, b]) => b === mouth)?.[0];
+  const seg = holder === undefined ? undefined : p.nodes[holder].segment;
+  if (!seg) return [];
+  const head = p.nodes.filter((n) => n.kind === 'spine' && n.segment === seg);
+  const eye = p.nodes.find((n, i) => n.terminal === 'eye' && p.edges.some(([a, b]) => b === i && p.nodes[a].kind === 'spine' && p.nodes[a].segment === seg));
+  if (head.length < 3 || !eye) return [];
+  const T = head[head.length - 1], M = p.nodes[mouth];
+  const fwd = qRotateV(T.quat, [0, 0, 1]);
+  const up = qRotateV(T.quat, [0, 1, 0]);
+  const along = (q: readonly number[]) => (q[0] - T.pos[0]) * fwd[0] + (q[1] - T.pos[1]) * fwd[1] + (q[2] - T.pos[2]) * fwd[2];
+  const ry = T.radius * (T.scale?.[1] ?? 1);
+  const front = along(M.pos) + FISH_JAW.ahead * T.radius;
+  const back = along(eye.pos);
+  if (front - back < 1e-3) return [];
+  const mid = (front + back) / 2;
+  const lift = (M.pos[0] - T.pos[0]) * up[0] + (M.pos[1] - T.pos[1]) * up[1] + (M.pos[2] - T.pos[2]) * up[2] - FISH_JAW.drop * ry;
+  const c: Vec3 = [T.pos[0] + fwd[0] * mid + up[0] * lift, T.pos[1] + fwd[1] * mid + up[1] * lift, T.pos[2] + fwd[2] * mid + up[2] * lift];
+  const H = head[Math.floor(head.length / 2)];
+  const r: Vec3 = [FISH_JAW.wide * H.radius * (H.scale?.[0] ?? 1), FISH_JAW.deep * ry, (front - back) / 2];
+  return [{ c, q: [T.quat[0], T.quat[1], T.quat[2], T.quat[3]], r, over: FISH_JAW.ahead * T.radius, blend: FISH_JAW.blend }];
 }
 
 export function webPanels(p: Phenotype, include: (n: BodyNode) => boolean): { c: Vec3; q: [number, number, number, number]; r: Vec3 }[] {

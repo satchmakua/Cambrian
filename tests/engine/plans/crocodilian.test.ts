@@ -208,7 +208,8 @@ describe('crocodilian', () => {
         } else {
           expect(scullingTail(p).length, `${id} #${seed}`).toBe(0);
           expect(scutePlan(p).length, `${id} #${seed}`).toBe(0);
-          expect(blade, `${id} #${seed}`).toBe(false);
+          // (a bony fish's tail stalk narrows side to side into its fin too, but it does not scull: fishHead.test)
+          if (id !== 'fish') expect(blade, `${id} #${seed}`).toBe(false);
         }
       }
     }

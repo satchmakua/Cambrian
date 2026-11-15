@@ -101,6 +101,73 @@ export function gillMarks(p: Phenotype, idx: number, surface: SkinSurface, cut: 
   return { lines, radius };
 }
 
+/**
+ * A bony fish's gill COVER as a plate (the operculum), not a line painted on the cheek: a band of skin over
+ * the back of the head, flush at its front (COVER_FLAP.from of the way out to the rim) and rising to its rear
+ * edge — the rim gillMarks traces — COVER_FLAP.lift × the cover's radius proud of the skin, then dropping
+ * back to the skin just behind it (COVER_FLAP.wall past the rim), so the edge stands and the light catches
+ * its top and leaves the step behind it in shadow. It wears the body's own skin (bake it in body space: see
+ * CreatureMesh's bakeSkin); the dark cord of gillMarks is laid in the step at its foot, thinner. (Drawn as a
+ * dark cord alone, the rim was an arc in ink: with the mouth's seam, a smile.) Node-relative, like the marks.
+ */
+export const COVER_FLAP = { from: 0.62, lift: 0.1, wall: 0.06, sink: 0.25, cols: 25 } as const;
+export function gillCoverFlap(p: Phenotype, idx: number, surface: SkinSurface, r: number): { flap: THREE.BufferGeometry; crease: THREE.BufferGeometry } {
+  const prims = surfacePrims(p, surface);
+  const o = p.nodes[idx].pos;
+  const seat = projectToSurface(prims, [], [o[0], o[1], o[2]]);
+  const n = new THREE.Vector3(seat.n[0], seat.n[1], seat.n[2]).normalize();
+  const x = new THREE.Vector3(0, 0, 1).addScaledVector(n, -n.z);
+  if (x.lengthSq() < 1e-8) x.set(1, 0, 0).addScaledVector(n, -n.x);
+  x.normalize();
+  const y = new THREE.Vector3().crossVectors(n, x);
+  if (y.y < 0) y.negate();
+  const at = (u: number, v: number, h: number): THREE.Vector3 => {
+    const hit = projectToSurface(prims, [], [seat.p[0] + x.x * u + y.x * v, seat.p[1] + x.y * u + y.y * v, seat.p[2] + x.z * u + y.z * v]);
+    return new THREE.Vector3(hit.p[0] + hit.n[0] * h - o[0], hit.p[1] + hit.n[1] * h - o[1], hit.p[2] + hit.n[2] * h - o[2]);
+  };
+  const L = COVER_FLAP.lift * r;
+  // rows out from the plate's front to its rim, then down the wall behind it: [share of the rim's reach, height]
+  const rows: [number, number][] = [];
+  for (let k = 0; k <= 4; k++) {
+    const t = k / 4;
+    rows.push([COVER_FLAP.from + (1 - COVER_FLAP.from) * t, L * (-COVER_FLAP.sink + (1 + COVER_FLAP.sink) * t * t * (3 - 2 * t))]);
+  }
+  rows.push([1 + COVER_FLAP.wall * 0.5, L * 0.35], [1 + COVER_FLAP.wall, -L * COVER_FLAP.sink]);
+  const C = COVER_FLAP.cols;
+  const pos: number[] = [];
+  const crease: THREE.Vector3[] = [];
+  for (let i = 0; i < C; i++) {
+    const th = -COVER_SPAN + (2 * COVER_SPAN * i) / (C - 1);
+    // (its ends, where the rim runs out onto the nape and under the throat, settle into the skin)
+    const end = Math.sin(((i / (C - 1)) * Math.PI)) ** 0.5;
+    for (const [s, h] of rows) {
+      const q = at(-Math.cos(th) * COVER_RX * r * s, Math.sin(th) * COVER_RY * r * s, h * end - (1 - end) * L * COVER_FLAP.sink);
+      pos.push(q.x, q.y, q.z);
+    }
+    crease.push(at(-Math.cos(th) * COVER_RX * r * (1 + COVER_FLAP.wall * 0.8), Math.sin(th) * COVER_RY * r * (1 + COVER_FLAP.wall * 0.8), 0));
+  }
+  const R = rows.length;
+  const index: number[] = [];
+  for (let i = 0; i < C - 1; i++)
+    for (let k = 0; k < R - 1; k++) {
+      const a = i * R + k, b = (i + 1) * R + k;
+      index.push(a, b, a + 1, a + 1, b, b + 1);
+    }
+  const flap = new THREE.BufferGeometry();
+  flap.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  flap.setIndex(index);
+  flap.computeVertexNormals();
+  // (wound so its normals face out of the head: flip if they came out facing in)
+  const nrm = flap.getAttribute('normal') as THREE.BufferAttribute;
+  const mid = Math.floor(C / 2) * R + 2;
+  if (nrm.getX(mid) * n.x + nrm.getY(mid) * n.y + nrm.getZ(mid) * n.z < 0) {
+    for (let t = 0; t < index.length; t += 3) [index[t + 1], index[t + 2]] = [index[t + 2], index[t + 1]];
+    flap.setIndex(index);
+    flap.computeVertexNormals();
+  }
+  return { flap, crease: gillGeometry({ lines: [crease], radius: r * COVER_CORD * 0.7 }) };
+}
+
 /** The marks as one mesh: a cord along each line. */
 export function gillGeometry(m: GillMarks): THREE.BufferGeometry {
   const cords = m.lines.map((pts) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), (pts.length - 1) * 2, m.radius, 5, false));

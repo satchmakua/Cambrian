@@ -28,7 +28,7 @@ import type { SegmentGene, Vec3 } from '../../engine/genome';
 import type { Carve } from '../bodyField';
 import { norm3 } from '../bodyField';
 import type { MeshFeature } from '../meshData';
-import { buildMouthLine, hash01, mouthSpec, runSeamBack, type MouthSample, type SkinSurface } from '../mouthLine';
+import { buildMouthLine, fishSeam, hash01, mouthSpec, runSeamBack, type MouthSample, type SkinSurface } from '../mouthLine';
 import { isSwimmer } from '../eyeSeat';
 import { sweepTube, type SweepPoint } from '../sweep';
 import { bluntGeometry, fangGeometry, setToothInstances, toothRow, type ToothProfile, type ToothXform } from '../teeth';
@@ -239,9 +239,9 @@ export function buildJawed(
   const r = spec.r;
   const seed = phenotype.genomeRef.seed;
   const traced = buildMouthLine(phenotype, spec, carves, 17, surface);
-  // a long-headed reptile's seam runs back along its jaw to the hinge under its eye (a fish's and a
-  // slug's mouths are their own: see runSeamBack)
-  const line = sealed && !isSwimmer(phenotype) && phenotype.genomeRef.covering.type !== 'slime' ? runSeamBack(phenotype, spec, traced, surface) : traced;
+  // a long-headed reptile's seam runs back along its jaw to the hinge under its eye, a bony fish's gape to
+  // under the front of its eye (a shark's and a slug's mouths are their own: see runSeamBack, fishSeam)
+  const line = sealed && (!isSwimmer(phenotype) || fishSeam(phenotype, spec)) && phenotype.genomeRef.covering.type !== 'slime' ? runSeamBack(phenotype, spec, traced, surface) : traced;
   // A shut reptile's teeth hang OUTSIDE its closed jaw — raked in toward the throat like an open mouth's,
   // every crown ran down from the seam into the shut lower jaw, under the skin, and the animal had no
   // teeth at all — and only the reptiles that show them show them (see shutTeeth): a crocodile's grin, its

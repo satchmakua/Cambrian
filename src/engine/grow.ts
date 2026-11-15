@@ -134,6 +134,22 @@ export const SCULL_STYLE = 0.8;
  *  deepest (three-fifths of the way down) */
 const SCULL_PINCH = 0.4;
 const SCULL_DEPTH = 0.35;
+/** A BONY FISH (a bilateral body with fins of a fish's cut — FISH_FIN of their style, see wings.finCutOf —
+ *  and no legs) has a snout that comes to a point: its head's last link is at most SNOUT_TIP of its first
+ *  link's radius, set forward by SNOUT_SLIDE of the girth it gives up, so the head keeps its length. (Three
+ *  links tapering at the gene's floor ended in a cap 0.36–0.49 of the head's depth: a round dome with a seam
+ *  across its front — a whale's, a dolphin's, a sock puppet's.) */
+export const SNOUT_TIP = 0.2;
+const SNOUT_SLIDE = 0.9;
+/** …and its tail stalk is flattened side to side toward the fin, PEDUNCLE_FLAT of its width at each link.
+ *  (Round to its end, the stalk's last link stood out either side of the fan's root as a knob.) */
+export const PEDUNCLE_FLAT: readonly [number, number] = [0.75, 0.45];
+const FISH_FIN: readonly [number, number] = [0.3, 0.6];
+/** does a body section (or one after it) carry a part of this kind (and, if given, a style in [lo, hi)) */
+function carries(seg: SegmentGene | undefined, kind: string, style?: readonly [number, number]): boolean {
+  for (let s = seg; s; s = s.child) if (s.appendages.some((a) => a.kind === kind && (!style || (a.style >= style[0] && a.style < style[1])))) return true;
+  return false;
+}
 
 /** whether an appendage gene (or a grown node's part) is a sculling tail */
 export function isScullingTail(part: { kind: string; style: number } | undefined, terminal: Terminal | undefined): boolean {
@@ -290,6 +306,8 @@ export function grow(genome: Genome): Phenotype {
   const armWalker = dev.symmetry === 'bilateral' && dev.body.appendages.some((a) => a.kind === 'arm' && a.terminal === 'hand' && a.pair);
   /** a body that stands on hooves (a deer): its neck is a straight column and its head bows (NECK_CARRY) */
   const grazer = dev.symmetry === 'bilateral' && dev.body.appendages.some((a) => a.kind === 'leg' && a.terminal === 'hoof');
+  /** a bony fish: see SNOUT_TIP */
+  const bonyFish = dev.symmetry === 'bilateral' && carries(dev.body, 'fin', FISH_FIN) && !carries(dev.body, 'leg');
 
   growSegment(dev.body, [0, 0, 0], [0, 0, 0, 1], 0, -1, null);
 
@@ -508,6 +526,18 @@ export function grow(genome: Genome): Phenotype {
         const up = qRotate([0, 1, 0], quat);
         const rise = stop * NOSE_RISE * (radiusAt(1) - radiusAt(i + 1));
         pos = [pos[0] + up[0] * rise, pos[1] + up[1] * rise, pos[2] + up[2] * rise];
+      }
+    }
+
+    // (a bony fish's snout comes to a point: see SNOUT_TIP)
+    if (bonyFish && depth > 0 && !seg.child && spine.length >= 3) {
+      const t = nodes[spine[spine.length - 1]];
+      const cap = SNOUT_TIP * nodes[spine[0]].radius;
+      if (t.radius > cap) {
+        const fwd = qRotate([0, 0, 1], t.quat);
+        const slide = SNOUT_SLIDE * (t.radius - cap) * (t.scale?.[2] ?? 1);
+        t.pos = [t.pos[0] + fwd[0] * slide, t.pos[1] + fwd[1] * slide, t.pos[2] + fwd[2] * slide];
+        t.radius = cap;
       }
     }
 
@@ -1094,6 +1124,9 @@ export function grow(genome: Genome): Phenotype {
       if (j > 0 && segments > 1 && isScullingTail(app, app.terminal)) {
         const u = j / (segments - 1);
         nodes[idx].scale = [1 - SCULL_PINCH * u, 1 + SCULL_DEPTH * Math.sin(Math.PI * 0.8 * u), 1];
+      } else if (bonyFish && app.kind === 'tail' && app.terminal === 'fin') {
+        // (a bony fish's tail stalk: see PEDUNCLE_FLAT)
+        nodes[idx].scale = [PEDUNCLE_FLAT[Math.min(j, 1)], 1, 1];
       }
       edges.push([prev, idx]);
       prev = idx;
