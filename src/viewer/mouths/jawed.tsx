@@ -253,7 +253,10 @@ export function buildJawed(
     const more = seamLength(line.upper) / Math.max(seamLength(traced.upper), 1e-6);
     const grin = (t: ToothProfile | null): ToothProfile | null =>
       t ? { ...t, curl: -TEETH_OUT, count: Math.min(RUN_TEETH_MAX, Math.round(t.count * more)), jitterLen: Math.max(t.jitterLen, GRIN_JITTER), len: (u: number) => t.len(u) * (1 + GRIN_BULGE * Math.exp(-(((u - 0.4) / 0.13) ** 2))) } : null;
-    params.upper = show === 'grin' ? grin(params.upper) : show === 'fangs' ? DRAGON_FANGS : show === 'blades' ? THEROPOD_TEETH : null;
+    // (six fangs want a dragon's long jaw: along a blunt head's short seam they stood shoulder to shoulder
+    // across its face, a grin of square teeth — a short seam shows its two foremost)
+    const fangs = seamLength(line.upper) / r < FANG_RUN ? SHORT_FANGS : DRAGON_FANGS;
+    params.upper = show === 'grin' ? grin(params.upper) : show === 'fangs' ? fangs : show === 'blades' ? THEROPOD_TEETH : null;
     params.lower = show === 'grin' ? grin(params.lower) : null;
   }
   const o = spec.node.pos; // node-relative frame origin
@@ -458,6 +461,10 @@ export const SEAM_SINK = 0.2;
 export const THEROPOD_TEETH: ToothProfile = { count: 10, len: (u: number) => 0.34 + 0.26 * Math.sin(Math.PI * Math.min(1, (u + 0.1) / 0.95)), width: 0.24, curl: -TEETH_OUT, jitterLen: 0.15, jitterRock: 0.1, sink: 0.28, margin: 0.14, salt: 2 };
 /** A DRAGON's (a wyvern's) shut jaw shows a few long fangs at its front, the longest foremost. */
 export const DRAGON_FANGS: ToothProfile = { count: 6, len: (u: number) => 0.78 - 0.32 * u, width: 0.26, curl: -TEETH_OUT, jitterLen: 0.18, jitterRock: 0.1, sink: 0.3, margin: 0.42, salt: 3 };
+/** …but a blunt head's shorter jaw (its seam under FANG_RUN mouth radii long: a dragon's and a wyvern's run 8.3–13,
+ *  a chimera's 1.6–5.8) shows only its two foremost, apart, short and fine (as long as a dragon's they hung from a blunt face as buck teeth) */
+export const FANG_RUN = 7;
+export const SHORT_FANGS: ToothProfile = { ...DRAGON_FANGS, count: 2, len: () => 0.4, width: 0.12, margin: 0.7 };
 /** A crocodile's grin: its teeth each their own length (± this share), and a band of bigger ones a little
  *  way back along the jaw (GRIN_BULGE more, at 0.4 of the way to the corner) */
 export const GRIN_JITTER = 0.32;
