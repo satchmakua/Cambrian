@@ -14,7 +14,7 @@
  * smooth-skin field, so the curve, the carve, and the teeth all agree on one geometry. Everything
  * is deterministic from the phenotype (seeded via the engine's unitHash — no Math.random).
  */
-import type { Phenotype, BodyNode } from '../engine/grow';
+import { isBonyFish, type Phenotype, type BodyNode } from '../engine/grow';
 import type { Vec3 } from '../engine/genome';
 import { unitHash } from '../engine/rng';
 import {
@@ -594,13 +594,7 @@ export function reptileSeam(p: Phenotype, s: MouthSpec): boolean {
  *  a puppet's grin, from the side no jaw at all.) */
 export const FISH_GAPE = 0.25;
 export function fishSeam(p: Phenotype, s: MouthSpec): boolean {
-  if (s.muzzled || !JAWED.has(s.variant) || p.genomeRef.symmetry !== 'bilateral' || p.genomeRef.covering.type !== 'scales') return false;
-  let fins = false;
-  for (const n of p.nodes) {
-    if (n.part?.kind === 'leg') return false;
-    if (n.part?.kind === 'fin') fins = true;
-  }
-  return fins;
+  return !s.muzzled && JAWED.has(s.variant) && p.genomeRef.covering.type === 'scales' && isBonyFish(p);
 }
 
 /**

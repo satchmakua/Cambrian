@@ -228,8 +228,11 @@ function shellField(p: Phenotype): ShellField | null {
   for (const n of trunk) {
     rMax = Math.max(rMax, n.radius);
     ySum += n.pos[1];
-    zMin = Math.min(zMin, n.pos[2] - n.radius);
-    zMax = Math.max(zMax, n.pos[2] + n.radius);
+    // (its own length: a crab grown longer than round reached past a box cut to its radius alone, and the
+    // crab's tight pad no longer hid that, so its shell was sliced open front and back)
+    const rz = n.radius * Math.max(1, n.scale?.[2] ?? 1);
+    zMin = Math.min(zMin, n.pos[2] - rz);
+    zMax = Math.max(zMax, n.pos[2] + rz);
   }
   const yMid = ySum / trunk.length;
   prims.k = 0.4 * rMax;

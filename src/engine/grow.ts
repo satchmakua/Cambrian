@@ -156,6 +156,19 @@ function carries(seg: SegmentGene | undefined, kind: string, style?: readonly [n
   for (let s = seg; s; s = s.child) if (s.appendages.some((a) => a.kind === kind && (!style || (a.style >= style[0] && a.style < style[1])))) return true;
   return false;
 }
+/** whether a grown body is a BONY FISH's: bilateral, fins of a fish's cut, no legs (grow's own test of its
+ *  developed genome, read back off the nodes). The snout's point (grow), the lower jaw (bodyField fishJaw) and
+ *  the gape (mouthLine fishSeam) all key on it, so they come together: a lamprey, or a plated or chitin swimmer
+ *  whose fins are of another cut, gets none of them. */
+export function isBonyFish(p: Phenotype): boolean {
+  if (p.genomeRef.symmetry !== 'bilateral') return false;
+  let fins = false;
+  for (const n of p.nodes) {
+    if (n.part?.kind === 'leg') return false;
+    if (n.part?.kind === 'fin' && n.part.style >= FISH_FIN[0] && n.part.style < FISH_FIN[1]) fins = true;
+  }
+  return fins;
+}
 
 /** whether an appendage gene (or a grown node's part) is a sculling tail */
 export function isScullingTail(part: { kind: string; style: number } | undefined, terminal: Terminal | undefined): boolean {

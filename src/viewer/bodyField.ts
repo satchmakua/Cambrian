@@ -13,7 +13,8 @@
  * mode too. `Carve` ops subtract ellipsoidal cavities (mouth maws, lamprey funnels) with a soft
  * rim — a mouth becomes negative space cut into the head, not a lump glued in front of it.
  */
-import { pointedLegs, isScullingTail, type Phenotype, type BodyNode } from '../engine/grow';
+import { pointedLegs, isScullingTail, isBonyFish, type Phenotype, type BodyNode } from '../engine/grow';
+import { mouthVariant } from './partStyles';
 import { quillNodes } from './quills';
 import type { Vec3 } from '../engine/genome';
 
@@ -770,9 +771,17 @@ export const TERGITE = { wide: 1.1, thick: 0.42, lift: 0.62, long: 0.84, back: 0
 export function myriapodTergites(p: Phenotype): { ring: number; a: Vec3; b: Vec3; r: number; s: [number, number] }[] {
   const g = p.genomeRef;
   if (g.covering.type !== 'chitin' || !pointedLegs(g)) return [];
-  const legged = new Set<number>();
-  for (const [a, b] of p.edges) if (p.nodes[a].kind === 'spine' && (p.nodes[a].segment ?? 0) === 0 && p.nodes[b].part?.kind === 'leg') legged.add(a);
-  const rings = [...legged].sort((i, j) => i - j); // (grown rump to shoulders)
+  // every ring's centre — the trunk's nodes standing prouder than both their neighbours along it (its rims
+  // and the slim joints between rings are smaller) — legged or not: a mutant with more rings than leg pairs
+  // left a ring bare, and the legged ring before it measured its plate two rings long, over the next
+  const trunk = (i: number) => p.nodes[i].kind === 'spine' && (p.nodes[i].segment ?? 0) === 0;
+  const near = new Map<number, number[]>();
+  for (const [a, b] of p.edges) {
+    if (!trunk(a) || !trunk(b)) continue;
+    near.set(a, [...(near.get(a) ?? []), b]);
+    near.set(b, [...(near.get(b) ?? []), a]);
+  }
+  const rings = [...near.keys()].filter((i) => near.get(i)!.every((j) => p.nodes[j].radius < p.nodes[i].radius)).sort((i, j) => i - j); // (grown rump to shoulders)
   if (rings.length < 2) return [];
   return rings.map((i, k) => {
     const n = p.nodes[i];
@@ -870,15 +879,13 @@ export function apeForearms(p: Phenotype): { c: Vec3; q: [number, number, number
  * where it meets the snout (the gape's line) and its chin stands a little under and ahead of the upper jaw.
  */
 export const FISH_JAW = { ahead: 0.25, drop: 0.55, wide: 0.62, deep: 0.6, blend: 0.45 } as const;
+const FISH_JAWED: ReadonlySet<string> = new Set(['herbivore', 'maw', 'fanged']);
 export function fishJaw(p: Phenotype): { c: Vec3; q: [number, number, number, number]; r: Vec3; over: number; blend: number }[] {
-  if (p.genomeRef.symmetry !== 'bilateral' || p.genomeRef.covering.type === 'skin') return [];
-  let fins = false;
-  for (const n of p.nodes) {
-    if (n.part?.kind === 'leg') return [];
-    if (n.part?.kind === 'fin') fins = true;
-  }
-  if (!fins) return [];
+  // (the same body as the snout's point and the gape: a bony fish in scales with a jaw — a lamprey's funnel, a
+  // sucker, a proboscis or a plated swimmer's mandibles grew a fish's chin under them, with no gape to it)
+  if (!isBonyFish(p) || p.genomeRef.covering.type !== 'scales') return [];
   const mouth = p.nodes.findIndex((n) => n.terminal === 'mouth');
+  if (mouth < 0 || !FISH_JAWED.has(mouthVariant(p.nodes[mouth].part?.style ?? 0))) return [];
   const holder = p.edges.find(([, b]) => b === mouth)?.[0];
   const seg = holder === undefined ? undefined : p.nodes[holder].segment;
   if (!seg) return [];
