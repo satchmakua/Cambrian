@@ -66,8 +66,11 @@ export function buildMandibles(
 
   // blade arc: forward reach + tip clearance — seeded once, shared by both sides (M18). Reach
   // stays under the 1.3r protrusion cap (1.2r centerline + the 0.025r tip radius).
-  const reach = r * (0.95 + 0.25 * hash01(seed, idx + 41));
-  const droop = r * (0.12 + 0.12 * hash01(seed, idx + 59));
+  // (a CRAB's mouthparts are folded flat under the front of its shell, between its claws: reached out
+  // like an ant's jaws, the pair stood out ahead of the shell's rim as a loop — a handle from above)
+  const folded = shellMouth(phenotype, idx);
+  const reach = r * (folded ? FOLDED_REACH : 0.95 + 0.25 * hash01(seed, idx + 41));
+  const droop = r * (folded ? FOLDED_DROOP : 0.12 + 0.12 * hash01(seed, idx + 59));
   const gap = r * (0.12 + 0.2 * spec.gape); // tip-to-tip clearance — nearly meeting, never touching
   const latMax = Math.max(0, (line.width - gap) / 2);
 
@@ -154,6 +157,20 @@ export function buildMandibles(
 
 /** the share of the opening hidden at each end, behind the blades' roots */
 const OPENING_FROM = 0.28;
+
+/** a crab's folded mouthparts: how far they reach on ahead of their hinges, and droop (×the mouth's radius) */
+export const FOLDED_REACH = 0.3;
+export const FOLDED_DROOP = 0.3;
+
+/** Whether this mouth is a CRAB's: on a trunk that wears the shell itself, with claws — its mouthparts
+ *  fold under the shell's front (see FOLDED_REACH). An insect's or a spider's is on a head. */
+export function shellMouth(p: Phenotype, idx: number): boolean {
+  const parent = new Int32Array(p.nodes.length).fill(-1);
+  for (const [a, b] of p.edges) parent[b] = a;
+  const s = parent[idx];
+  if (s < 0 || p.nodes[s].kind !== 'spine' || (p.nodes[s].segment ?? 0) !== 0) return false;
+  return p.nodes.some((n, i) => n.terminal === 'carapace' && parent[i] === s) && p.nodes.some((n) => n.terminal === 'pincer');
+}
 
 /**
  * A SPIDER's mouth: its mandibled face sits on the leg-bearing cephalothorax (it has no separate

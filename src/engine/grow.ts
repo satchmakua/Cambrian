@@ -1360,14 +1360,17 @@ function ensureBilateralFace(g: Genome): void {
   const links = Math.max(0, head.repeat - 1);
   const frontR = girth * Math.pow(head.taper, links) * muzzleShare(links, links, stop);
   // (a head that carries legs is a spider's cephalothorax: its eyes are a cluster, see OCELLI)
-  ensureFace(head.appendages, girth, frontR, head.repeat > 1 && !!g.body.child, depth > 0 && head.appendages.some((a) => a.kind === 'leg'));
+  // (a face on a trunk with no head before it, carrying a shell or claws, is a crab's: its stalked eyes
+  // stand on the front rim of its shell, see ensureFace)
+  const shellFront = depth === 0 && head.appendages.some((a) => a.terminal === 'carapace' || a.terminal === 'pincer');
+  ensureFace(head.appendages, girth, frontR, head.repeat > 1 && !!g.body.child, depth > 0 && head.appendages.some((a) => a.kind === 'leg'), shellFront);
 }
 
 /** Guarantee a prominent eye-set + a mouth (M24/M19): synthesize them if mutation deleted them,
  *  and floor the sizes so they always read. The mouth is kept on the face front. */
 // a paired eye's azimuth stays at least this far (rad) off the vertical midline
 const EYE_AZ_MAX = 1.1;
-function ensureFace(apps: AppendageGene[], girth: number, frontR = girth, linkedHead = false, cephalothorax = false): void {
+function ensureFace(apps: AppendageGene[], girth: number, frontR = girth, linkedHead = false, cephalothorax = false, shellFront = false): void {
   const eyes = apps.filter((p) => p.terminal === 'eye');
   if (eyes.length === 0) apps.push(faceEye(girth));
   else
@@ -1392,7 +1395,11 @@ function ensureFace(apps: AppendageGene[], girth: number, frontR = girth, linked
       // CRANIUM of a multi-link head (the muzzle runs on ahead, lower and narrower) may look forward,
       // a cat's or an ape's gaze; one on a plain head's front stays at 0.75 (~47° to the side)
       const cranium = linkedHead && e.attachT < 0.35;
-      e.attachElevation = clamp(Math.min(e.attachElevation, cranium ? 1.15 : 0.75), AP.attachElevation);
+      // …and so may a crab's STALKED eyes: they root on the front rim of its shell, close together over
+      // the mouth, and stand up from there (see STALK_RISE). (Held to 0.75 like a plain head's, they rose
+      // from the shell's shoulders, nearly half its width apart: two lollipops stuck in the dome.)
+      const rimStalk = shellFront && e.kind === 'eyestalk' && e.segments >= 2;
+      e.attachElevation = clamp(Math.min(e.attachElevation, cranium || rimStalk ? 1.15 : 0.75), AP.attachElevation);
       // a PAIR aimed near straight up (or down) lands both eyes on the midline as one merged ball —
       // fold the azimuth off it so the mirrored eyes always clear each other
       if (e.pair && Math.abs(Math.cos(e.attachAzimuth)) < Math.cos(EYE_AZ_MAX)) {

@@ -23,7 +23,7 @@
  */
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
-import { buildFieldPrims, fieldAt, fieldAtCarved, carveDist, type Carve, type FieldPrims } from './bodyField';
+import { buildFieldPrims, fieldAt, fieldAtCarved, carveDist, qRotateV, type Carve, type FieldPrims } from './bodyField';
 import { polygonize, gridCells } from './polygonize';
 import { splitThin, limbTubes, type Tubes } from './limbTubes';
 
@@ -154,6 +154,17 @@ export function buildSmoothGeometry(
 const HIP_COVER = 1.15;
 const HIP_COVER_REACH = 2.4;
 
+/** A CRAB's carapace (a thin shell on a one-node trunk that bears claws) has a front rim: its
+ *  anterolateral margin, from beside the eyes round toward its widest point, is cut into CRAB_TEETH teeth
+ *  CRAB_TOOTH (×the trunk's radius) proud, on a ledge CRAB_LEDGE proud standing just above the shell's
+ *  lower edge. (Inflated evenly from the body's ellipsoid, it was a smooth glossy bread roll: no rim,
+ *  no teeth, the outline an egg from above.) The margin runs between these bearings (rad from dead
+ *  ahead, about the vertical). */
+export const CRAB_TEETH = 4;
+export const CRAB_TOOTH = 0.045;
+export const CRAB_LEDGE = 0.03;
+export const CRAB_MARGIN: readonly [number, number] = [0.4, 1.2];
+
 /**
  * A carapace that CONFORMS to the body: the trunk's own field inflated by a shell thickness (more on
  * top — a domed back) and cut off below the flank by a skirt plane that flares out at the rim. The
@@ -256,6 +267,26 @@ function shellField(p: Phenotype): ShellField | null {
       for (const [a, b] of p.edges) if (a === i && p.nodes[b].part?.kind === 'leg') roots.add(b);
     });
   const hips = [...roots].map((i) => p.nodes[i]);
+  // (a crab's: see CRAB_TEETH)
+  const crab = thin && trunk.length === 1 && p.nodes.some((n) => n.terminal === 'pincer') ? trunk[0] : null;
+  const cq = crab ? [-crab.quat[0], -crab.quat[1], -crab.quat[2], crab.quat[3]] : null;
+  const ce = crab ? (crab.scale ?? [1, 1, 1]).map((k) => k * crab.radius) : null;
+  const margin = (x: number, y: number, z: number): number => {
+    if (!crab || !cq || !ce) return 0;
+    const l = qRotateV(cq, [x - crab.pos[0], y - crab.pos[1], z - crab.pos[2]]);
+    // a band round the shell just above its lower edge (the node's widest line)
+    const v = (l[1] / ce[1] - 0.12) / 0.3;
+    const band = Math.exp(-v * v);
+    if (band < 1e-3) return 0;
+    // the bearing about the vertical, 0 dead ahead: the margin's teeth from beside the eyes to the widest point
+    const th = Math.atan2(Math.abs(l[0]) / ce[0], l[2] / ce[2]);
+    const u = (th - CRAB_MARGIN[0]) / (CRAB_MARGIN[1] - CRAB_MARGIN[0]);
+    if (u <= 0 || u >= 1) return 0;
+    const ph = u * CRAB_TEETH;
+    const tri = 1 - Math.abs(2 * (ph - Math.floor(ph)) - 1); // a point at each tooth's middle
+    const fade = Math.sin(Math.PI * u); // the ledge eases in beside the eyes and out at the widest point
+    return crab.radius * band * (CRAB_LEDGE * Math.sqrt(fade) + CRAB_TOOTH * tri * Math.min(1, fade * 2.5));
+  };
 
   const field = (x: number, y: number, z: number): number => {
     const up = Math.min(1, Math.max(0, (y - yCut) / (rMax * 1.4)));
@@ -266,12 +297,13 @@ function shellField(p: Phenotype): ShellField | null {
       const d = Math.hypot(x - h.pos[0], y - h.pos[1], z - h.pos[2]) / (HIP_COVER_REACH * h.radius);
       if (d < 1) over = Math.max(over, h.radius * HIP_COVER * (1 - d) * (1 - d));
     }
-    const t = t0 + dome * up * up + flare * rim + over;
+    const t = t0 + dome * up * up + flare * rim + over + margin(x, y, z);
     const body = fieldAt(prims, x, y, z) - t;
     const cut = yCut - y; // > 0 below the skirt → outside
     return body > cut ? body : cut;
   };
-  const pad = rMax * 0.9 + 0.1;
+  // (a crab's thin shell stands barely proud of its body: a tighter box gives its teeth a finer grid)
+  const pad = crab ? rMax * (CRAB_TOOTH + 0.3) + 0.05 : rMax * 0.9 + 0.1;
   let xMin = Infinity, xMax = -Infinity, yMax = -Infinity;
   for (const n of trunk) {
     xMin = Math.min(xMin, n.pos[0] - n.radius * (n.scale?.[0] ?? 1));
