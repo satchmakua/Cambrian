@@ -28,7 +28,7 @@ import { makeCreatureMaterial } from './creatureMaterial';
 import { bareOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, ratLike, shaggyPlumage, skinPartWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, shellScutes, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, foldedSpan, restingFold, type FinBuild, type TailRump } from './wings';
+import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, foldedSpan, restingFold, type FinBuild, type TailRump, type TailPart } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
 import { BROW_TILT, bulgingEye, eyeClearings, eyeSeat, eyeTilt, FEELER_KNOB, FEELER_SPOT, feelerTip, isOcellus, isSwimmer } from './eyeSeat';
@@ -496,6 +496,19 @@ export function CreatureMesh({
   // rigged (World): the shared smooth surface gains skin weights once, and each creature binds its own
   // skeleton to it. Bones are children of the skinned mesh ('attached' bind mode follows the actor).
   const rigged = !!rig && showSmooth && !!smoothGeo;
+  // a feathered tail fan's coverts, on a rig (see tailCovertsGeometry)
+  const coverts = useMemo(() => {
+    if (!rigged) return null;
+    const geo = tailCovertsGeometry(phenotype);
+    return geo ? { geo, mat: new THREE.MeshPhysicalMaterial(TAIL_FAN_MAT) } : null;
+  }, [rigged, phenotype]);
+  useEffect(
+    () => () => {
+      coverts?.geo.dispose();
+      coverts?.mat.dispose();
+    },
+    [coverts],
+  );
   const skinned = useMemo(() => {
     if (!rigged || !rig || !smoothGeo) return null;
     ensureSkinWeights(smoothGeo, phenotype);
@@ -521,8 +534,15 @@ export function CreatureMesh({
       st.bind(rig.skeleton, new THREE.Matrix4());
       sm.add(st);
     }
+    // …and so do a tail fan's coverts, stretched from the rump's bone to the fan's (see tailCovertsGeometry)
+    if (coverts) {
+      const cv = new THREE.SkinnedMesh(coverts.geo, coverts.mat);
+      cv.castShadow = true;
+      cv.bind(rig.skeleton, new THREE.Matrix4());
+      sm.add(cv);
+    }
     return sm;
-  }, [rigged, rig, smoothGeo, skinMat, phenotype, furMats]);
+  }, [rigged, rig, smoothGeo, skinMat, phenotype, furMats, coverts]);
   useEffect(
     () => () => {
       if (skinned && rig) skinned.remove(rig.root);
@@ -599,6 +619,7 @@ export function CreatureMesh({
         surface={showSmooth ? (full ? 'hybrid' : 'smooth') : 'kit'}
         lite={detail !== 'full'}
         fur={furMats}
+        rigged={rigged}
       />
     );
     // rigged: the feature sits at its bone's origin (= its node at rest) and moves with it
@@ -748,6 +769,7 @@ function Feature({
   surface,
   lite = false,
   fur = NO_FUR,
+  rigged = false,
 }: {
   f: MeshFeature;
   footColor: number;
@@ -760,6 +782,7 @@ function Feature({
   surface: SkinSurface;
   lite?: boolean; // reduced detail: structural spars (fin rays, wing bones) are dropped
   fur?: readonly THREE.Material[]; // the coat's fur shells, for the parts the coat runs onto (a paw)
+  rigged?: boolean; // on a skeleton: a tail fan's coverts are skinned apart (see tailCovertsGeometry)
 }) {
   switch (f.type) {
     case 'eye':
@@ -776,7 +799,7 @@ function Feature({
       return f.kind === 'wing' ? (
         <Wing f={f} color={finColor} phenotype={phenotype} lite={lite} />
       ) : f.kind === 'tail' && phenotype.genomeRef.covering.type === 'feathers' ? (
-        <TailFan phenotype={phenotype} />
+        <TailFan phenotype={phenotype} part={rigged ? 'fan' : 'all'} />
       ) : f.kind === 'frill' ? (
         <Frill f={f} color={finColor} phenotype={phenotype} />
       ) : (
@@ -2046,39 +2069,96 @@ function MembraneWing({ surface, bones, wrist, skin, bone, lite }: { surface: TH
 }
 
 // A feathered tail: a fan of long rectrices spread behind the tail tip (wings.ts), sized to the trunk.
-function TailFan({ phenotype }: { phenotype: Phenotype }) {
+/** A feathered tail's fan, as buildTailFan takes it: the fan's node (its terminal tail part), the trunk node
+ *  its coverts come out of (the nearest to the fan's root), its length and droop and colours. Null for none. */
+function tailFanSpec(phenotype: Phenotype) {
   const g = phenotype.genomeRef;
+  const fanIdx = phenotype.nodes.findIndex((n) => n.kind === 'terminal' && n.part?.kind === 'tail');
+  if (fanIdx < 0) return null;
+  const fan = phenotype.nodes[fanIdx];
+  const trunkIdx = phenotype.nodes.map((n, i) => (n.kind === 'spine' && (n.segment ?? 0) === 0 ? i : -1)).filter((i) => i >= 0);
+  let girth = 0.3;
+  let z0 = Infinity, z1 = -Infinity;
+  for (const i of trunkIdx) {
+    const n = phenotype.nodes[i];
+    girth = Math.max(girth, n.radius);
+    z0 = Math.min(z0, n.pos[2] - n.radius);
+    z1 = Math.max(z1, n.pos[2] + n.radius);
+  }
+  const len = Number.isFinite(z1 - z0) ? z1 - z0 : 1;
+  // its coverts come out of the rump: the trunk node nearest the tail's root, from the fan's root
+  let nearIdx = -1;
+  let rump: TailRump | undefined;
+  if (trunkIdx.length) {
+    const gap = (i: number) => {
+      const n = phenotype.nodes[i];
+      return Math.hypot(n.pos[0] - fan.pos[0], n.pos[1] - fan.pos[1], n.pos[2] - fan.pos[2]) - n.radius;
+    };
+    nearIdx = trunkIdx.reduce((a, b) => (gap(a) <= gap(b) ? a : b));
+    const near = phenotype.nodes[nearIdx];
+    rump = { at: new THREE.Vector3(near.pos[0] - fan.pos[0], near.pos[1] - fan.pos[1], near.pos[2] - fan.pos[2]), r: near.radius * Math.min(near.scale?.[0] ?? 1, near.scale?.[1] ?? 1) };
+  }
+  // (a little longer than it was: at a little over half the trunk, behind a hawk's wing tips it was a stub)
+  // a banded coat's tail is barred across
+  return {
+    fanIdx,
+    nearIdx,
+    S: Math.max(len * 0.68, girth * 1.8),
+    plumage: coatMain(g.palette),
+    accent: coatPattern(g.palette),
+    droop: 0.2 + (g.seed % 5) * 0.06,
+    barred: g.covering.pattern === 'bands',
+    rump,
+  };
+}
+
+/** a tail fan's feathers (and their coverts) */
+const TAIL_FAN_MAT = { vertexColors: true, roughness: 0.72, sheen: 0.6, sheenRoughness: 0.4, side: THREE.DoubleSide } as const;
+
+function TailFan({ phenotype, part = 'all' }: { phenotype: Phenotype; part?: TailPart }) {
   const geo = useMemo(() => {
-    const trunk = phenotype.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0);
-    let girth = 0.3;
-    let z0 = Infinity, z1 = -Infinity;
-    for (const n of trunk) {
-      girth = Math.max(girth, n.radius);
-      z0 = Math.min(z0, n.pos[2] - n.radius);
-      z1 = Math.max(z1, n.pos[2] + n.radius);
-    }
-    const len = Number.isFinite(z1 - z0) ? z1 - z0 : 1;
-    const pal = g.palette;
-    const plumage = coatMain(pal);
-    const accent = coatPattern(pal);
-    // its coverts come out of the rump: the trunk node nearest the tail's root, from the fan's root
-    const fan = phenotype.nodes.find((n) => n.kind === 'terminal' && n.part?.kind === 'tail');
-    let rump: TailRump | undefined;
-    if (fan && trunk.length) {
-      const gap = (n: (typeof trunk)[number]) => Math.hypot(n.pos[0] - fan.pos[0], n.pos[1] - fan.pos[1], n.pos[2] - fan.pos[2]) - n.radius;
-      const near = trunk.reduce((a, b) => (gap(a) <= gap(b) ? a : b));
-      rump = { at: new THREE.Vector3(near.pos[0] - fan.pos[0], near.pos[1] - fan.pos[1], near.pos[2] - fan.pos[2]), r: near.radius * Math.min(near.scale?.[0] ?? 1, near.scale?.[1] ?? 1) };
-    }
-    // (a little longer than it was: at a little over half the trunk, behind a hawk's wing tips it was a stub)
-    // a banded coat's tail is barred across
-    return buildTailFan(Math.max(len * 0.68, girth * 1.8), plumage, accent, 0.2 + (g.seed % 5) * 0.06, g.covering.pattern === 'bands', rump);
-  }, [phenotype, g]);
-  useEffect(() => () => geo.dispose(), [geo]);
+    const t = tailFanSpec(phenotype);
+    return t ? buildTailFan(t.S, t.plumage, t.accent, t.droop, t.barred, t.rump, part) : null;
+  }, [phenotype, part]);
+  useEffect(() => () => geo?.dispose(), [geo]);
+  if (!geo) return null;
   return (
     <mesh geometry={geo} castShadow>
-      <meshPhysicalMaterial vertexColors roughness={0.72} sheen={0.6} sheenRoughness={0.4} side={THREE.DoubleSide} />
+      <meshPhysicalMaterial {...TAIL_FAN_MAT} />
     </mesh>
   );
+}
+
+/**
+ * On a rig, a tail fan's COVERTS are skinned apart from its feathers: in body space, each vertex riding the
+ * rump's bone at its root and the fan's at its end, blended by where it lies between the two. (Riding the
+ * fan's bone with the feathers, their root, set in the rump's coat, swung off it as the tail rose to display:
+ * a flap a quarter of a unit over the back.) Null for a body with no feathered tail fan.
+ */
+export function tailCovertsGeometry(phenotype: Phenotype): THREE.BufferGeometry | null {
+  if (phenotype.genomeRef.covering.type !== 'feathers') return null;
+  const t = tailFanSpec(phenotype);
+  if (!t || t.nearIdx < 0) return null;
+  const g = buildTailFan(t.S, t.plumage, t.accent, t.droop, t.barred, t.rump, 'coverts');
+  const F = phenotype.nodes[t.fanIdx].pos, R = phenotype.nodes[t.nearIdx].pos;
+  g.translate(F[0], F[1], F[2]);
+  const pos = g.getAttribute('position');
+  const ab = [F[0] - R[0], F[1] - R[1], F[2] - R[2]];
+  const L = Math.max(Math.hypot(ab[0], ab[1], ab[2]), 1e-6);
+  // (on the rump's bone to its skin, the blend running from there to the fan's node)
+  const r0 = Math.min(t.rump?.r ?? 0, 0.9 * L);
+  const si = new Uint16Array(pos.count * 4), sw = new Float32Array(pos.count * 4);
+  for (let v = 0; v < pos.count; v++) {
+    const along = ((pos.getX(v) - R[0]) * ab[0] + (pos.getY(v) - R[1]) * ab[1] + (pos.getZ(v) - R[2]) * ab[2]) / L;
+    const u = Math.min(1, Math.max(0, (along - r0) / (L - r0)));
+    si[v * 4] = t.fanIdx + 1; // (bone k + 1 is node k's: see ensureSkinWeights)
+    sw[v * 4] = u;
+    si[v * 4 + 1] = t.nearIdx + 1;
+    sw[v * 4 + 1] = 1 - u;
+  }
+  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+  g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+  return g;
 }
 
 // A tail club: a knobbed mace with short spikes (ankylosaur / dragon).

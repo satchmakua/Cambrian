@@ -88,10 +88,57 @@ describe('a crystal beast is cut stone from its snout to its toes', () => {
     }
   });
 
-  it('is the same stone every time, and every stone rides one bone', () => {
-    const a = beast(5).stones, b = beast(5).stones;
+  it("is the same stone every time; every stone rides one bone, the head's bending from its neck root to its front", () => {
+    const { p, stones: a } = beast(5);
+    const b = beast(5).stones;
     expect(Array.from(a.getAttribute('position').array)).toEqual(Array.from(b.getAttribute('position').array));
-    const w = a.getAttribute('skinWeight');
-    for (let v = 0; v < w.count; v++) expect(w.getX(v)).toBe(1);
+    const w = a.getAttribute('skinWeight'), i = a.getAttribute('skinIndex');
+    const pos = a.getAttribute('position');
+    const head = p.nodes.map((n, k) => (n.kind === 'spine' && (n.segment ?? 0) >= 1 ? k : -1)).filter((k) => k >= 0);
+    const rear = head.reduce((m, k) => (p.nodes[k].pos[2] < p.nodes[m].pos[2] ? k : m), head[0]);
+    const front = head.reduce((m, k) => (p.nodes[k].pos[2] > p.nodes[m].pos[2] ? k : m), head[0]);
+    let blended = 0, nearRoot = 0, onRoot = 0;
+    for (let v = 0; v < w.count; v++) {
+      expect(w.getX(v) + w.getY(v), `vertex ${v}`).toBeCloseTo(1, 6);
+      if (w.getX(v) === 1) continue;
+      // (only the head's stone bends, and only between its own two bones)
+      blended++;
+      expect(i.getX(v) - 1, `vertex ${v}`).toBe(front);
+      expect(i.getY(v) - 1, `vertex ${v}`).toBe(rear);
+      // (its rear rides its neck root: a glance turns no part of it about the head's front)
+      if (pos.getZ(v) <= p.nodes[rear].pos[2]) {
+        nearRoot++;
+        if (w.getY(v) > 0.99) onRoot++;
+      }
+    }
+    expect(blended).toBeGreaterThan(0);
+    expect(onRoot).toBe(nearRoot);
+  });
+
+  it("an insect's crystal head is a stone of its own: its thorax, which carries its legs, is no part of it", () => {
+    // (a stone holding both swung the thorax round with every glance, the rig turning the head's sections
+    // and leaving its legs on the thorax's bones)
+    for (const seed of [1, 5, 29]) {
+      const g = genomeOfMorphotype(seed, 'insectoid');
+      g.covering = { ...g.covering, type: 'crystal' };
+      const p = grow(g);
+      const parent = new Map(p.edges.map(([x, y]) => [y, x]));
+      let legSeg = 0;
+      p.nodes.forEach((n, k) => {
+        const up = parent.get(k);
+        if (n.part?.kind === 'leg' && up !== undefined && p.nodes[up].kind === 'spine') legSeg = Math.max(legSeg, p.nodes[up].segment ?? 0);
+      });
+      expect(legSeg, `insect #${seed}`).toBeGreaterThan(0);
+      const stones = crystalStones(p, buildSmoothGeometry(p, true, [], 'low'));
+      if (!stones) continue;
+      const solids = stones.userData.solids as Plane[][];
+      const holds = (pl: Plane[], q: readonly number[]) => pl.every((h) => h.n.x * q[0] + h.n.y * q[1] + h.n.z * q[2] <= h.d);
+      // the stone that holds the head's front (its eyes' bone) holds none of the thorax's nodes
+      const spine = p.nodes.filter((n) => n.kind === 'spine');
+      const front = spine.reduce((m, n) => (n.pos[2] > m.pos[2] ? n : m), spine[0]);
+      const headStone = solids.find((pl) => holds(pl, front.pos));
+      if (!headStone) continue;
+      for (const n of spine) if ((n.segment ?? 0) >= 1 && (n.segment ?? 0) <= legSeg) expect(holds(headStone, n.pos), `insect #${seed} thorax in the head's stone`).toBe(false);
+    }
   });
 });

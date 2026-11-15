@@ -642,7 +642,11 @@ export function tailBandAt(t: number, tail: THREE.Color, bar: THREE.Color, pale:
   return tail.clone().lerp(bar, 0.45 * sstep(0.45, 0.9, t));
 }
 
-export function buildTailFan(S: number, base: THREE.Color, accent: THREE.Color, droop = 0.25, barred = false, rump?: TailRump): THREE.BufferGeometry {
+/** which of a tail's pieces to build: all of it, its feathers alone, or its coverts alone (on a rig the
+ *  coverts are skinned apart, from the rump's bone to the tail's: see CreatureMesh) */
+export type TailPart = 'all' | 'fan' | 'coverts';
+
+export function buildTailFan(S: number, base: THREE.Color, accent: THREE.Color, droop = 0.25, barred = false, rump?: TailRump, part: TailPart = 'all'): THREE.BufferGeometry {
   const pos: number[] = [];
   const col: number[] = [];
   const idx: number[] = [];
@@ -653,7 +657,7 @@ export function buildTailFan(S: number, base: THREE.Color, accent: THREE.Color, 
   const bar = accent.clone().lerp(base, 0.2).multiplyScalar(0.42);
   const pale = base.clone().lerp(new THREE.Color(0.95, 0.92, 0.84), 0.6);
   const colourAt = (t: number) => tailBandAt(t, tail, bar, pale, barred);
-  for (let i = 0; i < N; i++) {
+  for (let i = 0; i < (part === 'coverts' ? 0 : N); i++) {
     const t = i / (N - 1);
     const ang = (t - 0.5) * 2 * TAIL_SPREAD;
     // …in a shallow trough, the outer feathers lifted to either side as a resting tail's layers lie:
@@ -720,8 +724,10 @@ export function buildTailFan(S: number, base: THREE.Color, accent: THREE.Color, 
       }
     }
   };
-  hood(1, COVERT_REACH, 0.16, base.clone().multiplyScalar(0.96), 0.04);
-  hood(-1, COVERT_REACH * 0.9, 0.13, base.clone().lerp(pale, 0.15), -0.005);
+  if (part !== 'fan') {
+    hood(1, COVERT_REACH, 0.16, base.clone().multiplyScalar(0.96), 0.04);
+    hood(-1, COVERT_REACH * 0.9, 0.13, base.clone().lerp(pale, 0.15), -0.005);
+  }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));

@@ -176,7 +176,14 @@ function trunkStone(p: Phenotype, pos: Float32Array, nV: number, own: Int32Array
 
 /** the geometry the creature material reads off a set of stones: rest-pose body place, no mouth flesh, a
  *  shade per triangle (aAO), cut (lit face by face: see the material's flat branch) */
-function stoneGeometry(P: number[], N: number[], ao: number[], bone: number[]): THREE.BufferGeometry {
+/** a stone that bends with a chain of bones (the head's): its vertices ride `rear`'s bone at A blended
+ *  into the stone's own bone at B, by where they lie along A→B */
+interface StoneBlend {
+  rear: number;
+  A: readonly number[];
+  B: readonly number[];
+}
+function stoneGeometry(P: number[], N: number[], ao: number[], bone: number[], blends?: ReadonlyMap<number, StoneBlend>): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
   const at = new THREE.Float32BufferAttribute(P, 3);
   const n = at.count;
@@ -190,12 +197,26 @@ function stoneGeometry(P: number[], N: number[], ao: number[], bone: number[]): 
   g.setAttribute('aCut', new THREE.Float32BufferAttribute(new Float32Array(n).fill(1), 1));
   // (a rigged body: each stone rides one bone, rigidly — the skeleton's bone k + 1 is node k's, as
   // ensureSkinWeights has it)
+  // (…or a head's: blended from its neck root's bone to its foremost's along the chain, so a glance turns
+  // its front with the eyes on it while its rear stays at the neck's root — on the foremost bone alone, the
+  // whole stone pivoted about the head and its rear slid sideways off the trunk)
   const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
-  for (let t = 0; t < bone.length; t++)
+  for (let t = 0; t < bone.length; t++) {
+    const b = blends?.get(bone[t]);
     for (let k = 0; k < 3; k++) {
-      si[(t * 3 + k) * 4] = bone[t] + 1;
-      sw[(t * 3 + k) * 4] = 1;
+      const v = t * 3 + k;
+      si[v * 4] = bone[t] + 1;
+      sw[v * 4] = 1;
+      if (!b) continue;
+      const ab = [b.B[0] - b.A[0], b.B[1] - b.A[1], b.B[2] - b.A[2]];
+      const L2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+      if (L2 < 1e-9) continue;
+      const u = Math.min(1, Math.max(0, ((P[v * 3] - b.A[0]) * ab[0] + (P[v * 3 + 1] - b.A[1]) * ab[1] + (P[v * 3 + 2] - b.A[2]) * ab[2]) / L2));
+      sw[v * 4] = u;
+      si[v * 4 + 1] = b.rear + 1;
+      sw[v * 4 + 1] = 1 - u;
     }
+  }
   g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
   g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
   g.computeBoundingSphere();
@@ -230,7 +251,8 @@ export function gemGeometry(p: Phenotype, skin: THREE.BufferGeometry, own?: Int3
  * eye stands on, so each eye is a gem set in a face of its own — cut at its mouth into a skull and a jaw (a
  * V of two planes from the seam's corners, MOUTH_CUT of the head's height open at its front: the cut IS the
  * mouth); and a six-sided crystal for every link of every leg, tangent to the link's round cone and holding
- * the skin it owns, its ends cut to low points. Each stone rides one bone (skinIndex/skinWeight). The stones'
+ * the skin it owns, its ends cut to low points. Each stone rides one bone (skinIndex/skinWeight), the head's
+ * bending from its neck root's to its foremost (see stoneGeometry). The stones'
  * solids (the head's before its cut) are userData.solids: the skin inside them is never seen (cullCovered).
  * What no stone holds (a tail, an arm, a fin; a snake's trunk) keeps its uncut skin. Pure; null when no
  * stone fits.
@@ -242,6 +264,7 @@ export function crystalStones(p: Phenotype, skin: THREE.BufferGeometry): THREE.B
   const own = skinOwners(p, pos, nAll);
   const P: number[] = [], N: number[] = [], ao: number[] = [], bone: number[] = [];
   const solids: Plane[][] = [];
+  const blends = new Map<number, StoneBlend>();
   const add = (F: number[], at: number, shadeOf: (plane: number) => number = () => 1) => {
     for (const f of F) {
       ao.push(shadeOf(f));
@@ -266,7 +289,19 @@ export function crystalStones(p: Phenotype, skin: THREE.BufferGeometry): THREE.B
   }
   // (its spine and the organs set in it — eyes, mouth, ears, gills: not a leg grown from it, as a spider's
   // legs are from its head, nor a horn, whose shards stand on the skull and hide its root)
-  const hs = p.nodes.map((n, i) => (n.kind === 'spine' && (n.segment ?? 0) >= 1 ? i : -1)).filter((i) => i >= 0);
+  // (…and on the rig's side of its split: the sections up to the last that carries legs ride the trunk's
+  // bones, those past it turn with the head — rig.ts rigTemplate. A stone that held both, an insect's thorax
+  // with its head, swung the thorax round with every glance and left its six legs behind: then the head is
+  // the stone and the thorax keeps its skin)
+  const parentOf = new Map(p.edges.map(([a, b]) => [b, a]));
+  let legSeg = 0;
+  p.nodes.forEach((n, i) => {
+    const up = parentOf.get(i);
+    if (n.part?.kind === 'leg' && up !== undefined && p.nodes[up].kind === 'spine') legSeg = Math.max(legSeg, p.nodes[up].segment ?? 0);
+  });
+  let hs = p.nodes.map((n, i) => (n.kind === 'spine' && (n.segment ?? 0) >= 1 ? i : -1)).filter((i) => i >= 0);
+  const sectionOf = (i: number) => p.nodes[i].segment ?? 0;
+  if (hs.some((i) => sectionOf(i) <= legSeg) && hs.some((i) => sectionOf(i) > legSeg)) hs = hs.filter((i) => sectionOf(i) > legSeg);
   const head = new Set<number>(hs);
   for (const s of hs) for (const k of kids.get(s) ?? []) if (p.nodes[k].kind === 'terminal' && FACE_PARTS.has(p.nodes[k].part?.kind ?? 'leg')) head.add(k);
   // (a neck and head too long or bent to be one stone keep their skin, as a snake's trunk does)
@@ -318,6 +353,9 @@ export function crystalStones(p: Phenotype, skin: THREE.BufferGeometry): THREE.B
       solids.push(whole);
       // the stone rides the bone the eyes hang from: the head's foremost spine node
       const at = hs.reduce((m, i) => (p.nodes[i].pos[2] > p.nodes[m].pos[2] ? i : m), hs[0]);
+      // …bending back to the bone at its root (see stoneGeometry)
+      const rear = hs.reduce((m, i) => (p.nodes[i].pos[2] < p.nodes[m].pos[2] ? i : m), hs[0]);
+      if (rear !== at) blends.set(at, { rear, A: p.nodes[rear].pos, B: p.nodes[at].pos });
       // ---- the mouth: the stone cut in two along the seam a shut jaw traces (mouthLine runSeamBack) — a V
       // whose apex runs between the seam's corners, MOUTH_CUT of the head's height open at its front
       let cut = false;
@@ -426,7 +464,7 @@ export function crystalStones(p: Phenotype, skin: THREE.BufferGeometry): THREE.B
     });
   }
   if (P.length === 0) return null;
-  const g = stoneGeometry(P, N, ao, bone);
+  const g = stoneGeometry(P, N, ao, bone, blends);
   g.userData.solids = solids;
   return g;
 }
