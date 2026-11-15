@@ -41,7 +41,7 @@ import type { Vec3 } from '../engine/genome';
 import { shardGeometry } from './shards';
 import { crystalStones, cullCovered, type Plane } from './facets';
 import { quillGeometry } from './quills';
-import { whiskerFan } from './whiskers';
+import { whiskerFan, whiskerStretch } from './whiskers';
 import { frillGeometry, frillPlan } from './frill';
 import { getGeometry, retainGeometry, releaseGeometry, hasGeometry } from './geometryCache';
 import { drawnMouths, mouthCarves, surfacePrims } from './mouthLine';
@@ -838,7 +838,7 @@ function Feature({
     case 'carapace':
       return null; // the conforming shell is drawn by CreatureMesh from the trunk field
     case 'whisker':
-      return <Whisker f={f} color={footColor} />;
+      return <Whisker f={f} color={footColor} stretch={whiskerStretch(phenotype, f.idx, Math.max(f.radius, 0.06))} />;
     case 'paw':
       return <Paw f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} leg={f.kind === 'leg'} fur={fur} bare={f.kind === 'leg' && ratLike(phenotype)} />;
     case 'hoof':
@@ -2352,10 +2352,10 @@ function Crest({ f, color, feathered }: { f: MeshFeature; color: number; feather
 const CREST_BLADES = 5;
 
 // Whiskers: a fan of fine pale filaments set out level from the pad (whiskers.ts).
-function Whisker({ f, color }: { f: MeshFeature; color: number }) {
+function Whisker({ f, color, stretch = 1 }: { f: MeshFeature; color: number; stretch?: number }) {
   const r = Math.max(f.radius, 0.06);
   const pale = useMemo(() => new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.45).getHex(), [color]);
-  const geo = useMemo(() => whiskerFan(f.quat, r).geometry, [f.quat, r]);
+  const geo = useMemo(() => whiskerFan(f.quat, r, stretch).geometry, [f.quat, r, stretch]);
   useEffect(() => () => geo.dispose(), [geo]);
   return (
     <group quaternion={f.quat}>

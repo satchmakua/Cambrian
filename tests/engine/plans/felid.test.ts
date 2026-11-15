@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { grow } from '../../../src/engine/grow';
+import { grow, type Phenotype } from '../../../src/engine/grow';
 import { genomeOfMorphotype } from '../../../src/engine/random';
 import { eyeVariant } from '../../../src/viewer/partStyles';
 import { buildJawed, noseScaleOf, snoutReach, SNOUT_SHORT } from '../../../src/viewer/mouths/jawed';
 import { mouthSpec } from '../../../src/viewer/mouthLine';
 import { coatMain } from '../../../src/viewer/palette';
+import { buildFieldPrims, fieldAt } from '../../../src/viewer/bodyField';
+import { WHISKER_FAN, whiskerStretch } from '../../../src/viewer/whiskers';
 
 describe('felid', () => {
   it("looks out of a cat's slit eyes", () => {
@@ -67,6 +69,85 @@ describe('felid', () => {
       if (hsl.s < 0.25) continue; // (a grey coat)
       expect(hsl.h, `#${seed} hue`).toBeGreaterThan(0.064);
       expect(hsl.l, `#${seed} light`).toBeLessThan(0.75);
+    }
+  });
+});
+
+const skullOf = (p: Phenotype) => p.nodes.find((n) => n.kind === 'spine' && n.segment === 2)!;
+const ry = (n: { radius: number; scale?: readonly number[] }) => n.radius * (n.scale?.[1] ?? 1);
+
+describe('felid: throat, muzzle, whiskers, paws', () => {
+  it("meets its throat at the angle of the jaw — no dewlap hung from chin to chest", () => {
+    // (its neck as thick as its skull to the end, run into it from below and behind: the underside from chin to
+    // chest was one slope, bellied out below the skull — a sagging dewlap)
+    for (const seed of [29, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
+      const p = grow(genomeOfMorphotype(seed, 'felid'));
+      const C = skullOf(p);
+      const f = buildFieldPrims(p, 'hybrid');
+      f.k = 0.34 * f.meanR;
+      // the midline underside's height at dz skull radii ahead of the skull's centre (× its radius)
+      const under = (dz: number): number => {
+        const z = C.pos[2] + dz * C.radius;
+        for (let y = C.pos[1] - 4 * C.radius; y < C.pos[1] + C.radius; y += 0.003) if (fieldAt(f, 0, y, z) < 0) return (y - C.pos[1]) / C.radius;
+        return NaN;
+      };
+      // against the straight line from a radius behind the skull (the throat) to the jaw half a radius ahead,
+      // the underside between them hangs no lower than a tenth of a radius: an angle at the jaw, not a pouch
+      const a = under(-1), b = under(0.5);
+      for (const d of [-0.75, -0.5, -0.25, 0, 0.25]) {
+        const line = a + ((b - a) * (d + 1)) / 1.5;
+        expect(line - under(d), `#${seed} at ${d}`).toBeLessThan(0.12);
+      }
+      // …and under the skull's centre the skin is within a third of a radius of the skull's own floor
+      expect(under(0), `#${seed} under the skull`).toBeGreaterThan(-(C.scale?.[1] ?? 1) - 0.52);
+    }
+  });
+
+  it("stands on paws as wide as its wrists — not tiny balls at the ends of tapering dowels", () => {
+    for (const seed of [29, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
+      const p = grow(genomeOfMorphotype(seed, 'felid'));
+      const D = 2 * Math.max(...p.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0).map(ry));
+      const parent = new Map(p.edges.map(([a, b]) => [b, a]));
+      for (const n of p.nodes) {
+        if (n.terminal !== 'paw') continue;
+        expect((2 * n.radius) / D, `#${seed} paw`).toBeGreaterThan(0.16);
+        // a paw (its sole 1.12 × its radius across) nearly as wide as the shank it ends (0.70–0.84 of it on HEAD)
+        const shank = p.nodes[parent.get(p.nodes.indexOf(n))!];
+        expect(1.12 * n.radius, `#${seed} paw vs shank`).toBeGreaterThan(0.83 * shank.radius);
+      }
+    }
+  });
+
+  it("wears its whiskers on the pads beside its nose, reaching out past its cheeks", () => {
+    // (rooted on the muzzle's flank behind the corner of the mouth, a fifth of a unit long, they ended inside the
+    // cheeks' outline: a short white scribble at the jaw)
+    const mean = WHISKER_FAN.reduce((t, w) => t + w[2], 0) / WHISKER_FAN.length;
+    for (const seed of [29, 1, 2, 3, 4, 5, 6]) {
+      const p = grow(genomeOfMorphotype(seed, 'felid'));
+      const w = p.nodes.findIndex((n) => n.part?.kind === 'whisker' && n.terminal && n.pos[0] > 0);
+      if (w < 0) continue;
+      const n = p.nodes[w];
+      const mouth = p.nodes.find((m) => m.terminal === 'mouth')!;
+      const C = skullOf(p);
+      const half = C.radius * (C.scale?.[0] ?? 1);
+      const r = Math.max(n.radius, 0.06);
+      // the root no further behind the mouth's front than its own radius (it sat 0.85–1.05 mouth radii back)
+      expect(mouth.pos[2] - n.pos[2], `#${seed} root`).toBeLessThan(0.75 * mouth.radius);
+      // the tips out past the cheeks
+      expect((n.pos[0] + mean * r * whiskerStretch(p, w, r)) / half, `#${seed} reach`).toBeGreaterThan(1.15);
+    }
+  });
+
+  it("wears whisker pads that run down from its nose onto its upper lip — no bare chin between", () => {
+    for (const seed of [29, 1, 3, 5, 9, 12]) {
+      const p = grow(genomeOfMorphotype(seed, 'felid'));
+      const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
+      const spec = mouthSpec(p, idx)!;
+      const b = buildJawed(p, idx, [], false, spec.variant as 'fanged')!;
+      expect(b.pads, `#${seed}`).not.toBeNull();
+      b.pads!.computeBoundingBox();
+      const lip = b.upper[Math.floor(b.upper.length / 2)].p[1];
+      expect((b.pads!.boundingBox!.min.y - lip) / b.r, `#${seed} gap`).toBeLessThan(0.15);
     }
   });
 });

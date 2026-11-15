@@ -414,8 +414,8 @@ export function buildJawed(
       for (const side of [-1, 1]) {
         const lobe = new THREE.SphereGeometry(1, 16, 12);
         const local = new THREE.Matrix4()
-          .makeTranslation(side * r * PAD_SPREAD, -r * PAD_DROP, -r * 0.1)
-          .multiply(new THREE.Matrix4().makeScale(r * 0.32, r * 0.26, r * 0.24));
+          .makeTranslation(side * r * PAD_SPREAD, -r * PAD_DROP, -r * PAD_SINK)
+          .multiply(new THREE.Matrix4().makeScale(r * PAD_SIZE[0], r * PAD_SIZE[1], r * PAD_SIZE[2]));
         lobe.applyMatrix4(frame.clone().setPosition(at).multiply(local));
         lobes.push(lobe.toNonIndexed());
         lobe.dispose();
@@ -492,7 +492,12 @@ export const SNOUT_SHORT = 1.85;
 const SNOUT_LONG = 2.4;
 /** a whisker pad's offset from the nose, sideways and down (×the mouth's radius) */
 const PAD_SPREAD = 0.3;
-const PAD_DROP = 0.3;
+const PAD_DROP = 0.5;
+/** …its size (×the mouth's radius: across, down, out) and how far it is set back into the muzzle: a tall lobe
+ *  from under the nose down onto the upper lip. (Two round balls 0.26 tall under the nose stopped a third of the
+ *  mouth's radius short of the lip, a band of bare chin between: a teddy's muzzle over a drawn-on mouth.) */
+export const PAD_SIZE: readonly [number, number, number] = [0.3, 0.4, 0.2];
+const PAD_SINK = 0.14;
 
 /** …and a long muzzle's nose pad against the mouth's size */
 const NOSE_LONG = 1.5;

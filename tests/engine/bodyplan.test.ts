@@ -547,7 +547,9 @@ describe('body plans', () => {
   });
 
   it('a cat’s head is big and round on a thick neck, a dog’s carried above its back — not a fawn’s', () => {
-    for (const [id, cranium, neckMin] of [['felid', 0.52, 0.6], ['canid', 0.46, 0.52]] as const) {
+    // (a cat's neck is deep at the shoulders but drawn in under its skull: as thick there as the skull, it hung
+    // under the jaw as a dewlap — see plans/felid.test.ts)
+    for (const [id, cranium, neckMin] of [['felid', 0.52, 0.4], ['canid', 0.46, 0.52]] as const) {
       for (let seed = 1; seed <= 16; seed++) {
         const p = grow(genomeOfMorphotype(seed, id));
         const spine = p.nodes.filter((n) => n.kind === 'spine');

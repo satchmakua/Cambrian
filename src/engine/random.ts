@@ -236,7 +236,11 @@ const MORPHOTYPES: readonly Morpho[] = [
   // --- familiar ---
   // (a cat's eye is a slit: amber, gold or green round an upright pupil. Round and brown, it was a dog's)
   // (its coat tawny, ginger or sandy: on the reddest hues, lit pale, it was a salmon-pink cat, a hairless one)
-  { id: 'felid', cluster: 'familiar', weight: 0.8, earSize: [0.95, 1.2], legThick: [0.48, 0.6], taper: [1.07, 1.12], eyeEl: [1.0, 1.12], girth: [0.45, 0.6], repeat: [3, 4], height: [1.0, 1.1], elong: [1.4, 1.6], neck: [0.8, 0.92], neckLinks: [2, 2], neckLift: [-0.4, -0.28], headWide: [1.12, 1.28], headDome: [0.8, 0.92], headSize: [0.9, 1.04], muzzle: [0.6, 0.66], legPairs: [2], posture: 'digitigrade', legAz: [4.42, 4.58], legLen: [1.05, 1.25], legTerm: ['paw'], snout: [0, 0.2], tail: 0.97, tailSegs: [5, 6], tailLen: [0.8, 1.05], tailThick: [0.22, 0.3], tailDroop: [-1.25, -1.05], tailCurl: [0.12, 0.22], horns: 0.03, ears: 0.9, earAz: [0.62, 0.88], earStyle: [0, 0.3], whiskers: 0.9, eyeStyle: [0.44, 0.56], mouthStyle: [0.15, 0.23], covering: ['fur'], pattern: ['spots', 'stripes', 'plain'], patternScale: [8.5, 11], hue: [0.065, 0.12], sat: [0.4, 0.7], light: [0.3, 0.6] },
+  // (its neck deep at the shoulders and drawn in under the back of its skull, carried up steeply, so the jaw
+  // line meets the throat at an angle: as thick as the skull to its end and run into it from below and behind,
+  // chin to chest was one slope — a dewlap. Its legs keep their girth down to a paw as wide as the wrist: at the
+  // default taper a foreleg thinned to a fifth of the chest's depth over a paw narrower than its own shank)
+  { id: 'felid', cluster: 'familiar', weight: 0.8, earSize: [0.95, 1.2], legThick: [0.48, 0.6], taper: [1.07, 1.12], eyeEl: [1.0, 1.12], girth: [0.45, 0.6], repeat: [3, 4], height: [1.0, 1.1], elong: [1.4, 1.6], neck: [0.68, 0.78], neckLinks: [2, 2], neckLift: [-0.5, -0.36], neckTaper: 0.8, headWide: [1.12, 1.28], headDome: [0.8, 0.92], headSize: [0.9, 1.04], muzzle: [0.6, 0.66], legPairs: [2], posture: 'digitigrade', legAz: [4.42, 4.58], legLen: [1.05, 1.25], legTaper: [0.84, 0.9], legTerm: ['paw'], snout: [0, 0.2], tail: 0.97, tailSegs: [5, 6], tailLen: [0.8, 1.05], tailThick: [0.22, 0.3], tailDroop: [-1.25, -1.05], tailCurl: [0.12, 0.22], horns: 0.03, ears: 0.9, earAz: [0.62, 0.88], earStyle: [0, 0.3], whiskers: 0.9, eyeStyle: [0.44, 0.56], mouthStyle: [0.15, 0.23], covering: ['fur'], pattern: ['spots', 'stripes', 'plain'], patternScale: [8.5, 11], hue: [0.065, 0.12], sat: [0.4, 0.7], light: [0.3, 0.6] },
   // a dog / fox / wolf: a braincase with a stop and a muzzle, the head carried up on a short neck, a level
   // back over near-straight legs that keep their girth down to real paws, a brush hanging to the hocks.
   // (as a long-snouted cat it stood crouched on dowels with a sloping back, one cone for a head and a
@@ -757,7 +761,9 @@ function muzzleHead(rng: Rng, g: number, m: Morpho, eyeStyle: number): SegmentGe
   if (chance(rng, m.horns ?? 0)) apps.push({ ...horns(rng, g, m), attachT: range(rng, 0.0, 0.2) });
   if (chance(rng, m.ears ?? 0)) apps.push({ ...ear(rng, g * rg(rng, m.earSize, [1, 1]), m.earStyle, m.earAz), attachT: range(rng, 0.0, 0.2) });
   // whiskers fan out sideways from the muzzle's flanks (the generic whisker hangs off a snout's underside)
-  if (chance(rng, m.whiskers ?? 0)) apps.push({ ...whisker(rng, mg), attachT: 1, attachAzimuth: range(rng, 5.75, 6.05), attachElevation: range(rng, 0.15, 0.4) });
+  // …rooted on its front, level with the pads either side of the nose (aimed out to the side and a little
+  // down, they sat on the muzzle's flank behind the corner of the mouth: a scribble at the jaw)
+  if (chance(rng, m.whiskers ?? 0)) apps.push({ ...whisker(rng, mg), attachT: 1, attachAzimuth: range(rng, 6.0, 6.2), attachElevation: range(rng, 0.85, 1.05) });
   if (chance(rng, m.crest ?? 0)) apps.push({ ...crest(rng, g), attachT: range(rng, 0.0, 0.2) });
   const arch = HEAD_ARCHETYPES[m.headShape ? pick(rng, m.headShape) : 'round'];
   const wide = rg(rng, m.headWide, arch.wide);
