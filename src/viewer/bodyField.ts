@@ -13,7 +13,7 @@
  * mode too. `Carve` ops subtract ellipsoidal cavities (mouth maws, lamprey funnels) with a soft
  * rim — a mouth becomes negative space cut into the head, not a lump glued in front of it.
  */
-import { isScullingTail, type Phenotype, type BodyNode } from '../engine/grow';
+import { pointedLegs, isScullingTail, type Phenotype, type BodyNode } from '../engine/grow';
 import { quillNodes } from './quills';
 import type { Vec3 } from '../engine/genome';
 
@@ -340,6 +340,8 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
       const br = bridgeOf(p);
       if (br) cone(jaw.edge, jaw.i0, jaw.i1, br.a, br.b, br.ra, br.rb, null, [1, 1], [1, 1]);
     }
+    // …and a MYRIAPOD's tergites: a flat plate over each ring's back (see myriapodTergites), in its ring's frame
+    for (const t of myriapodTergites(p)) cone(-1, t.ring, t.ring, t.a, t.b, t.r, t.r, p.nodes[t.ring], t.s, t.s);
   } else {
     // (one ball per node — but not the parts that draw themselves, where there is anything else; and a
     // shaped node's ball no bigger than its narrowest girth, so the ellipsoid it carries gives the shape)
@@ -752,6 +754,41 @@ export function slugMantle(p: Phenotype): { c: Vec3; q: [number, number, number,
   const hh = lerp(a.radius * (a.scale?.[1] ?? 1), b.radius * (b.scale?.[1] ?? 1));
   const r: Vec3 = [MANTLE.wide * hw, MANTLE.high * hh, (zb - za) / 2];
   return { c: [lerp(a.pos[0], b.pos[0]), lerp(a.pos[1], b.pos[1]) + MANTLE.lift * hh, zc], q: [0, 0, 0, 1], r, over: Math.max(r[0] - hw, MANTLE.lift * hh + r[1] - hh, 0) };
+}
+
+/**
+ * A MYRIAPOD's TERGITES (a chitin trunk of rings with a leg pair to each: grow's isRinged, pointedLegs). Each
+ * ring's back is armoured by a broad, low, flat plate — wider than the ring, its rim standing out over the leg
+ * roots, a groove between it and the next — so from above the trunk is a row of plates, not a string of beads.
+ * Each is an elliptical round cone in its ring's own frame: TERGITE.thick × the ring's half-depth thick, TERGITE.wide
+ * × its half-width across, its middle TERGITE.lift × the half-depth over the axis, TERGITE.long × the stride to the
+ * next ring from end to end, set TERGITE.back of the stride behind the ring's middle (each plate laps the joint
+ * behind it). It is one of the trunk's own cones, so it meets the ring in a crease, not a fillet. (Rings of round
+ * cones, each barely longer than it was deep and blended smooth, were a string of soft beads: a caterpillar.)
+ */
+export const TERGITE = { wide: 1.1, thick: 0.42, lift: 0.62, long: 0.84, back: 0.06 } as const;
+export function myriapodTergites(p: Phenotype): { ring: number; a: Vec3; b: Vec3; r: number; s: [number, number] }[] {
+  const g = p.genomeRef;
+  if (g.covering.type !== 'chitin' || !pointedLegs(g)) return [];
+  const legged = new Set<number>();
+  for (const [a, b] of p.edges) if (p.nodes[a].kind === 'spine' && (p.nodes[a].segment ?? 0) === 0 && p.nodes[b].part?.kind === 'leg') legged.add(a);
+  const rings = [...legged].sort((i, j) => i - j); // (grown rump to shoulders)
+  if (rings.length < 2) return [];
+  return rings.map((i, k) => {
+    const n = p.nodes[i];
+    const o = p.nodes[rings[k + 1 < rings.length ? k + 1 : k - 1]];
+    const stride = Math.hypot(o.pos[0] - n.pos[0], o.pos[1] - n.pos[1], o.pos[2] - n.pos[2]);
+    const hw = n.radius * (n.scale?.[0] ?? 1);
+    const hh = n.radius * (n.scale?.[1] ?? 1);
+    const r = TERGITE.thick * hh;
+    // its two ends a radius in from the plate's (the round cone's caps reach them)
+    const half = Math.max(0, (TERGITE.long * stride) / 2 - r);
+    const at = (dz: number): Vec3 => {
+      const o3 = qRotateV(n.quat, [0, TERGITE.lift * hh, dz - TERGITE.back * stride]);
+      return [n.pos[0] + o3[0], n.pos[1] + o3[1], n.pos[2] + o3[2]];
+    };
+    return { ring: i, a: at(-half), b: at(half), r, s: [(TERGITE.wide * hw) / r, 1] as [number, number] };
+  });
 }
 
 /** An APE: a furred body that walks on its arms — face.ts isApe's test (face.ts imports this module, so it is

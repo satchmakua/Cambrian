@@ -32,7 +32,7 @@ import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSp
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
 import { ommatidiaMaps } from './ommatidia';
-import { BROW_TILT, bulgingEye, eyeClearings, eyeSeat, eyeTilt, FEELER_KNOB, FEELER_SPOT, feelerTip, isOcellus, isSwimmer } from './eyeSeat';
+import { BROW_TILT, bulgingEye, COMPOUND_DEPTH, eyeClearings, eyeSeat, eyeTilt, FEELER_KNOB, FEELER_SPOT, feelerTip, isOcellus, isSwimmer } from './eyeSeat';
 import { coatBelly, coatDark, coatFin, coatMain, coatPattern, srgbHSL } from './palette';
 import { browRidgeGeometry, dappled, faceMaskOf, headMaskOf, isApe } from './face';
 import { apeFootGeometry, fistGeometry } from './apeLimbs';
@@ -1035,6 +1035,11 @@ function rimGeometry(r: number, quat: readonly number[], origin: readonly number
 /** an insect's compound eye: near-black, a deep maroon, a dark bottle green, slate — under its facets'
  *  walls (ommatidia.ts). (A dark bronze, 0x3a2614, under one glossy highlight was a chocolate.) */
 const COMPOUND = [0x16130f, 0x2e1210, 0x122218, 0x1a1c24];
+/** A MYRIAPOD's eye (a ringed trunk on pointed legs: grow pointedLegs) is a cluster of OCELLI: four small glossy
+ *  lenses in a lozenge — their places in the eye's seat (× its radius) and each one's radius. (One compound dome
+ *  0.28 of its head's radius, glossy, was a cartoon's eye: a friendly caterpillar.) */
+export const OCELLI_CLUSTER: readonly (readonly [number, number])[] = [[-0.42, 0], [0.42, 0], [0, 0.36], [0, -0.36]];
+export const OCELLI_BEAD = 0.28;
 /** a glowing eye's light: a sickly teal, a bile green, an amber, a violet */
 const GLOW = [0x3fd8a8, 0x9fd84a, 0xe0a030, 0xb070e8];
 /** a crystal beast's eye: its stone's own hue, deep and saturated (sRGB HSL), and how brightly it glows */
@@ -1056,6 +1061,8 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   // iris, at its own size — the small ones are beads, under the floor a face eye keeps. (Drawn as a mammal's
   // lidded eye, three or four a side a hair apart, each side's ran together into one blot cut by its lids.)
   const ocellus = useMemo(() => onFace && !!phenotype && isOcellus(phenotype, f.idx), [onFace, phenotype, f.idx]);
+  // …and a MYRIAPOD's, its compound or glowing eye drawn as a cluster of ocelli (OCELLI_CLUSTER)
+  const cluster = useMemo(() => onFace && !ocellus && !!phenotype && pointedLegs(phenotype.genomeRef) && (v === 'compound' || v === 'glowing'), [onFace, ocellus, phenotype, v]);
   const r = ocellus ? f.radius : Math.max(f.radius, 0.06);
   // a dark bony orbit tone
   const socketDark = useMemo(() => new THREE.Color(socket).multiplyScalar(0.5).getHex(), [socket]);
@@ -1203,7 +1210,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
       {/* (a lidded eye needs no ring: its coat-covered lids set it into the face) */}
       {/* (only a glowing eye wears a rim, and in the hide's own covering: see rimGeometry; an insect's
           compound eye is a bare dome on the head — ringed in dark, it was a pair of goggles) */}
-      {v === 'glowing' && !gemEye && (rim && skin ? (
+      {v === 'glowing' && !gemEye && !cluster && (rim && skin ? (
         <mesh geometry={rim} material={skin} />
       ) : (
         <mesh position={[0, 0, -r * 0.12]}>
@@ -1222,6 +1229,21 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
             <sphereGeometry args={[r * 0.07, 8, 8]} />
             <meshBasicMaterial color={0xdce4f0} />
           </mesh>
+        </>
+      ) : cluster ? (
+        // a myriapod's ocelli: four lenses in a lozenge, each about half out of the head (its skin lies
+        // COMPOUND_DEPTH × r out along the seat's gaze) — black, or lit on an alien's glowing eye
+        <>
+          {OCELLI_CLUSTER.map(([x, y], i) => (
+            <mesh key={i} position={[x * r, y * r, r * (COMPOUND_DEPTH - 0.04)]}>
+              <sphereGeometry args={[r * OCELLI_BEAD, 14, 10]} />
+              {v === 'glowing' ? (
+                <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.6} roughness={0.15} />
+              ) : (
+                <meshStandardMaterial color={0x040405} roughness={0.07} envMapIntensity={EYE_ENV} />
+              )}
+            </mesh>
+          ))}
         </>
       ) : fishEye ? (
         // a fish's eye: a flattened dark ball flush in the head, a broad metallic iris ring (silver,
