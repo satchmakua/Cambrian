@@ -906,6 +906,12 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   - Plus the fixes an independent review confirmed.
   **Tests:** see PROGRESS M99.
 
+- [x] **M100 — A fourteenth look (3.68), and parts an animal is never without.**
+  - The review of round 2's commits: a fish's jaw only on a bony fish, a long crab's shell closed, every ring
+    plated.
+  - Tails, ears, wings and whiskers that define a plan are certain.
+  **Tests:** see PROGRESS M100.
+
 ### Next up (unchecked — pick from here)
 
 - [ ] **What the thirteenth look left.** A songbird's pear shape from the front (a dark breast band over a

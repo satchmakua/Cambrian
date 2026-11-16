@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M99: what the thirteenth look left — a deer, a bear's nose, an octopus's eye, a crystal of stones, a cat's throat, a fish's jaw, a mouse, a crab's rim, an ant's feelers, a chimera's net, a songbird's wing, a crocodile's hull, an arthro-alien's armour; M98: a thirteenth look — spiders' eyes, snakes' heads, hides that read; M97: a twelfth look, and legs with joints; M96: an eleventh look, and a deer named a deer; M95: thin limbs drawn exact, and a tenth look; M94: an eighth look, harder; M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M100: a fourteenth look (3.68), and parts an animal is never without; M99: what the thirteenth look left — a deer, a bear's nose, an octopus's eye, a crystal of stones, a cat's throat, a fish's jaw, a mouse, a crab's rim, an ant's feelers, a chimera's net, a songbird's wing, a crocodile's hull, an arthro-alien's armour; M98: a thirteenth look — spiders' eyes, snakes' heads, hides that read; M97: a twelfth look, and legs with joints; M96: an eleventh look, and a deer named a deer; M95: thin limbs drawn exact, and a tenth look; M94: an eighth look, harder; M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -55,6 +55,32 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M100 — A fourteenth look, and parts an animal is never without · 2026-11-16
+
+- **A review of the round-2 commits** (four finders, each followed by a skeptic) confirmed three defects:
+  - A fish's lower jaw grew on 18 of 3,000 random bodies that are no bony fish: under a lamprey's funnel, a
+    sucker, a proboscis or a plated swimmer's mandibles, with no gape and no pointed snout. `grow isBonyFish`
+    is now the one test the snout, the jaw (plus scales and a jawed mouth) and the gape all key on.
+  - A crab mutant grown longer than round had its shell sliced open front and back. The shell's box now
+    takes the trunk's length.
+  - A ringed mutant with more rings than leg pairs left a ring bare. `myriapodTergites` now plates every
+    ring centre.
+- **A fourteenth look** (seed 37; four family critics, each followed by a second viewer that confirmed or
+  rejected every defect and scored each plan itself) gave a mean of **3.68**. Its best plans were the bear,
+  the ape, the wyvern, the shark, the octopus and the horror; its worst were the lizard, the dog, the
+  chimera, the slug, the cat and the songbird.
+- *A stump of a rump, a bald dome of a head* (cat, dog, lizard, songbird; mouse) — four of its six worst plans
+  had lost their tails to one roll. Each tail was a chance of 0.85–0.97, drawn at the same place in every
+  plan's stream, so seed 37 took them all at once (and seeds 36–37 the mouse's ears). The parts that make
+  these animals what they are are now certain:
+  - tails for the cat, dog, lizard, songbird and wyvern;
+  - ears for the cat, mouse and deer;
+  - wings for the songbird;
+  - whiskers for the cat and mouse.
+  Only the seeds that used to lose a part change, and they gain its genes.
+- **Tests:** `reviewRound2.test.ts` (no fish jaw on non-fish, a long crab's closed shell, a plate on every
+  ring), `definingParts.test.ts` (200 seeds of each plan grow their defining parts).
 
 ## M99 — What the thirteenth look left: a deer, a bear's nose, an octopus's eye, a crystal of stones · 2026-11-15
 
