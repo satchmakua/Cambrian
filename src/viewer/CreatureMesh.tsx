@@ -47,7 +47,7 @@ import { frillGeometry, frillPlan } from './frill';
 import { getGeometry, retainGeometry, releaseGeometry, hasGeometry } from './geometryCache';
 import { drawnMouths, mouthCarves, surfacePrims } from './mouthLine';
 import { SHORT_WING_SEAT } from './wings';
-import { gillCoverFlap, gillCutOf, gillGeometry, gillMarks, gillRadiusOf } from './gills';
+import { gillCoverFlap, gillCutOf, gillGeometry, gillMarks, gillRadiusOf, gillSlits } from './gills';
 import { sampleTrajectory, type Trajectory } from '../physics/fitness';
 import type { SkinMode } from '../ui/store';
 
@@ -2315,7 +2315,7 @@ function Ear({ f, color, belly, skin, origin, bare = false, low = false, coat, f
 
 // Gills on the side of the neck, by the part's style: a bony fish's gill COVER — one curved edge, the
 // rear rim of the plate over its gills; a rake of dark bars (what every gilled body had); or a
-// shark's SLITS — five thin creases. The cover and the slits lie IN the skin (standing proud as the
+// shark's SLITS — five thin cuts. The cover and the slits lie IN the skin (standing proud as the
 // bars do, they broke a fish's outline like vents): they are traced over the surface (gills.ts).
 function Gill({ f, color, phenotype, surface, skin }: { f: MeshFeature; color: number; phenotype: Phenotype; surface: SkinSurface; skin?: THREE.Material }) {
   const r = Math.max(f.radius, 0.06);
@@ -2333,7 +2333,16 @@ function Gill({ f, color, phenotype, surface, skin }: { f: MeshFeature; color: n
     plate?.flap.dispose();
     plate?.crease.dispose();
   }, [plate]);
-  const marks = useMemo(() => (cut === 'bars' || plate ? null : gillGeometry(gillMarks(phenotype, f.idx, surface, cut, gillRadiusOf(phenotype, f.idx, cut, r)))), [cut, plate, phenotype, f.idx, surface, r]);
+  // (a shark's slits are cuts: dark lenses flat in the skin — see gillSlits; a cover with no skin to wear, a cord)
+  const marks = useMemo(
+    () =>
+      cut === 'bars' || plate
+        ? null
+        : cut === 'slits'
+          ? gillSlits(phenotype, f.idx, surface, gillRadiusOf(phenotype, f.idx, cut, r))
+          : gillGeometry(gillMarks(phenotype, f.idx, surface, cut, gillRadiusOf(phenotype, f.idx, cut, r))),
+    [cut, plate, phenotype, f.idx, surface, r],
+  );
   useEffect(() => () => marks?.dispose(), [marks]);
   if (plate && skin) {
     return (
@@ -2348,7 +2357,8 @@ function Gill({ f, color, phenotype, surface, skin }: { f: MeshFeature; color: n
   if (marks) {
     return (
       <mesh geometry={marks}>
-        <meshStandardMaterial color={dark} roughness={0.6} />
+        {/* (a slit lies a hair over the skin: pulled forward in depth too, so the skin's facets never show through it) */}
+        <meshStandardMaterial color={dark} roughness={0.6} polygonOffset={cut === 'slits'} polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
       </mesh>
     );
   }

@@ -1,6 +1,6 @@
 /**
  * Gills that lie in the skin: a bony fish's gill COVER — one curved edge, the rear rim of the plate
- * over its gills — and a shark's SLITS, five thin creases.
+ * over its gills — and a shark's SLITS, five thin cuts (drawn as dark lenses flat in the skin: gillSlits).
  *
  * They are drawn on the surface, so they are laid on the surface: each mark is a line traced over the
  * skin as it is actually drawn — every one of its points dropped onto the blended body field — and
@@ -99,6 +99,70 @@ export function gillMarks(p: Phenotype, idx: number, surface: SkinSurface, cut: 
     }
   }
   return { lines, radius };
+}
+
+/** a slit's half-width at its middle (×the gill's radius): a cut, narrowing to a point at either end */
+export const SLIT_HALF = 0.035;
+/** …and how far it lies over the skin (×the gill's radius): a hair, so the polygonized skin's facets
+ *  and vertices, a little off the field, never cover it — and nothing of it stands out of the outline */
+export const SLIT_LIFT = 0.01;
+const SLIT_ROWS = 13;
+
+/**
+ * A shark's gill SLITS as the skin draws them: each a dark lens lying flat in the skin, SLIT_LIFT over it,
+ * its rows across the slit re-laid on the surface and lit by the skin's own normal. (Drawn as round cords
+ * a tenth of the gill's radius thick and a third of it proud, they were five black rods standing on the
+ * flank: from three-quarters a vent grille bolted to the head, the far ones breaking its outline.)
+ * Node-relative, like the marks: the same five slits, at the same places, as gillMarks traces.
+ */
+export function gillSlits(p: Phenotype, idx: number, surface: SkinSurface, r: number): THREE.BufferGeometry {
+  const prims = surfacePrims(p, surface);
+  const o = p.nodes[idx].pos;
+  const seat = projectToSurface(prims, [], [o[0], o[1], o[2]]);
+  const n = new THREE.Vector3(seat.n[0], seat.n[1], seat.n[2]).normalize();
+  const x = new THREE.Vector3(0, 0, 1).addScaledVector(n, -n.z);
+  if (x.lengthSq() < 1e-8) x.set(1, 0, 0).addScaledVector(n, -n.x);
+  x.normalize();
+  const y = new THREE.Vector3().crossVectors(n, x);
+  if (y.y < 0) y.negate();
+  const lift = SLIT_LIFT * r;
+  const pos: number[] = [];
+  const nrm: number[] = [];
+  const index: number[] = [];
+  const lay = (q: THREE.Vector3) => {
+    const hit = projectToSurface(prims, [], [q.x, q.y, q.z]);
+    const hn = new THREE.Vector3(hit.n[0], hit.n[1], hit.n[2]).normalize();
+    pos.push(hit.p[0] + hn.x * lift - o[0], hit.p[1] + hn.y * lift - o[1], hit.p[2] + hn.z * lift - o[2]);
+    nrm.push(hn.x, hn.y, hn.z);
+  };
+  for (const off of SLITS) {
+    const len = r * (1.05 - 0.12 * Math.abs(off));
+    // the slit's centre line on the skin, then a row across it at each point
+    const mid: { p: THREE.Vector3; n: THREE.Vector3 }[] = [];
+    for (let j = 0; j < SLIT_ROWS; j++) {
+      const t = j / (SLIT_ROWS - 1) - 0.5;
+      const u = off * r - SLIT_LEAN * t * len, v = t * len;
+      const hit = projectToSurface(prims, [], [seat.p[0] + x.x * u + y.x * v, seat.p[1] + x.y * u + y.y * v, seat.p[2] + x.z * u + y.z * v]);
+      mid.push({ p: new THREE.Vector3(hit.p[0], hit.p[1], hit.p[2]), n: new THREE.Vector3(hit.n[0], hit.n[1], hit.n[2]).normalize() });
+    }
+    const first = pos.length / 3;
+    for (let j = 0; j < SLIT_ROWS; j++) {
+      const along = mid[Math.min(SLIT_ROWS - 1, j + 1)].p.clone().sub(mid[Math.max(0, j - 1)].p);
+      const across = new THREE.Vector3().crossVectors(mid[j].n, along).normalize();
+      const w = SLIT_HALF * r * Math.sin((Math.PI * j) / (SLIT_ROWS - 1)) ** 0.5;
+      for (const s of [-1, 0, 1]) lay(mid[j].p.clone().addScaledVector(across, s * w));
+    }
+    for (let j = 0; j < SLIT_ROWS - 1; j++)
+      for (let k = 0; k < 2; k++) {
+        const a = first + j * 3 + k, b = a + 3;
+        index.push(a, b, a + 1, a + 1, b, b + 1);
+      }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  g.setIndex(index);
+  return g;
 }
 
 /**

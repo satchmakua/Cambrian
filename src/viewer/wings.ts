@@ -886,10 +886,26 @@ export function finChord(kind: FinKind, aim: THREE.Vector3, cut: FinCut = 'plain
  * fan, never the old billboards whose chord inherited an arbitrary axis from the growth quaternion.
  * Origin at the fin root (on the skin); the root edge tucks a little into the body.
  */
+/**
+ * A SHARK's pectoral is a hydrofoil, not a sheet: it meets the water nose up — its chord pitched SHARK_PECTORAL
+ * .pitch (rad) about its span, the trailing edge down — and it is thick at the root, SHARK_PECTORAL.thick × the
+ * girth either side of its mid-plane at the root, thinning to SHARK_PECTORAL.tip of that at the tip. (A flat
+ * sheet edge-on to the front, from ahead it was two needles a fiftieth of a girth thick stuck in a ball.)
+ */
+export const SHARK_PECTORAL = { pitch: 0.2, thick: 0.08, tip: 0.25 } as const;
+
 export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 1, cut: FinCut = 'plain', root?: (along: number) => number): FinBuild {
   const aim = aimIn.clone().normalize();
   const chord = finChord(kind, aim, cut);
+  const foil = cut === 'shark' && kind === 'pectoral';
+  if (foil) {
+    // pitched nose up: the chord (running back) turned about the span toward the side under the fin
+    const under = new THREE.Vector3().crossVectors(aim, chord).normalize();
+    if (under.y > 0) under.negate();
+    chord.multiplyScalar(Math.cos(SHARK_PECTORAL.pitch)).addScaledVector(under, Math.sin(SHARK_PECTORAL.pitch)).normalize();
+  }
   const normal = new THREE.Vector3().crossVectors(aim, chord).normalize();
+  if (foil && normal.y < 0) normal.negate(); // (a foil's camber bows up, on either side)
   const k = Math.min(1.5, Math.max(0.6, gene));
   // [span, chord, sweep (how far back the tip rakes, ×chord)] per kind, × girth
   const PLAIN: Record<FinKind, [number, number, number]> = {
@@ -1052,6 +1068,24 @@ export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 
   for (let i = 0; i < outline.length - 1; i++) {
     const mi = base + i, mj = base + i + 1, oi = 1 + i, oj = 2 + i;
     idx.push(0, mi, mj, mi, oi, oj, mi, oj, mj);
+  }
+  if (foil) {
+    // a foil: the camber ring raised by the fin's thickness over its mid-plane, and a second ring as far
+    // under it, both thinning out toward the tip; the outline is the edge where the two skins meet
+    const T = SHARK_PECTORAL.thick * g;
+    const lower = base + outline.length;
+    outline.forEach((o, i) => {
+      const t = T * (1 - (1 - SHARK_PECTORAL.tip) * Math.min(1, Math.max(0, o.dot(aim) / H)));
+      pos[(base + i) * 3] += normal.x * t;
+      pos[(base + i) * 3 + 1] += normal.y * t;
+      pos[(base + i) * 3 + 2] += normal.z * t;
+      const m = hub.clone().lerp(o, 0.55).addScaledVector(normal, -t);
+      pos.push(m.x, m.y, m.z);
+    });
+    for (let i = 0; i < outline.length - 1; i++) {
+      const mi = lower + i, mj = lower + i + 1, oi = 1 + i, oj = 2 + i;
+      idx.push(0, mj, mi, mi, oj, oi, mi, mj, oj);
+    }
   }
   const membrane = new THREE.BufferGeometry();
   membrane.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
