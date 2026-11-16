@@ -125,12 +125,13 @@ describe('body field chains', () => {
       const p = grow(genomeOfMorphotype(seed, 'canid'));
       expect(bridgeOf(p), `canid #${seed}`).not.toBeNull();
       const j = jawOf(p)!;
-      const c = p.nodes[j.i0], t = p.nodes[j.i1];
+      const c = p.nodes[j.i0];
       const m = p.nodes[p.edges.find(([a, b]) => a === j.i0 && p.nodes[b].kind === 'spine')![1]];
       const prims = buildFieldPrims(p, 'hybrid');
-      // the top line where the stop was, under half-way from the braincase to the nose: the bridge lifts
-      // the skin there well over where it dipped without it (the bridge is the field's last cone)
-      const q = [0, 1, 2].map((k) => c.pos[k] + (t.pos[k] - c.pos[k]) * 0.45);
+      // the top line where the stop is, just ahead of the muzzle's first link: the bridge lifts the skin
+      // there well over where it dipped without it (the bridge is the field's last cone). (Sampled at a
+      // share of the way to the nose, it fell past the bridge's end once the muzzle ran its full length.)
+      const q = [0, 1, 2].map((k) => c.pos[k] + (m.pos[k] - c.pos[k]) * 1.1);
       const top = (f: typeof prims) => {
         let s = 0;
         while (s < 2 && fieldAt(f, q[0], q[1] + s, q[2]) < 0) s += 0.002;

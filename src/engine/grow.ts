@@ -94,6 +94,12 @@ const REARED_HIP_BACK = 0.34;
 
 /** How far on toward the trunk's end a hooved leg roots (×the trunk's radius there): see hoofSet. */
 const HOOF_SET = 0.55;
+/** …and a PAW-tipped leg of a runner's trunk under a dog's skull (see longStoppedSkull), its hips
+ *  and shoulders at the trunk's ends like a deer's — hung from the chain's end nodes' middles, the rump
+ *  stood out a quarter of the body behind the hocks and the chest as far ahead of the elbows */
+const PAW_SET = 0.55;
+/** (a dog's skull runs longer than this ×its girth, its muzzle included; a bear's is near 1) */
+const DOG_MUZZLE = 1.25;
 /** A GRAZER (a body on hooves: a deer, an antelope, a goat) carries its neck as one straight column from
  *  the top of its shoulders, lifted at its root by this many links' worth of the neck's bend, and grown
  *  straight from there (bent a little at every link, a neck of four or five rose from level out of the
@@ -211,6 +217,9 @@ export function muzzleShare(i: number, links: number, stop: number): number {
   return 1 - stop * (1 - STOP_MUZZLE * (1 - (1 - STOP_NOSE) * t));
 }
 const STOP_STRIDE = 0.62;
+/** the longest stride (×the head chain's girth) a stopped skull's muzzle links take — past the 1.4 every
+ *  other chain is held to (a muzzle's cones keep it whole: see growSegment) */
+const STOP_ELONG = 1.9;
 const STOP_LOW = 0.55;
 
 /** How much of a stop a head section has, `depth` sections out from the trunk: 0 a plain tapering
@@ -325,6 +334,8 @@ export function grow(genome: Genome): Phenotype {
   const armWalker = dev.symmetry === 'bilateral' && dev.body.appendages.some((a) => a.kind === 'arm' && a.terminal === 'hand' && a.pair);
   /** a body that stands on hooves (a deer): its neck is a straight column and its head bows (NECK_CARRY) */
   const grazer = dev.symmetry === 'bilateral' && dev.body.appendages.some((a) => a.kind === 'leg' && a.terminal === 'hoof');
+  /** a DOG's skull: a stop (see headStop) and a long muzzle — not a bear's short one (see PAW_SET) */
+  const dogSkull = dev.symmetry === 'bilateral' && longStoppedSkull(dev);
   /** a bony fish: see SNOUT_TIP */
   const bonyFish = dev.symmetry === 'bilateral' && carries(dev.body, 'fin', FISH_FIN) && !carries(dev.body, 'leg');
 
@@ -367,7 +378,12 @@ export function grow(genome: Genome): Phenotype {
     // 1.4, and that excess was simply discarded, so every muzzle came out stubby. Recover it as a
     // z-stretch on the node ellipsoid: the stride — and so continuity — is untouched, but the segment
     // finally reads as long as the genome asked. Unclamped segments get 1 (no change).
-    const csz = Math.min(1.9, Math.max(0.7, rawElong / elong));
+    // (a head with a stop — see headStop — carries a long muzzle's length in the muzzle's own stride,
+    // up to STOP_ELONG: stretched instead, its braincase grew as long as its muzzle, the eye stayed half way
+    // down the head and the muzzle a stub ahead of it, however long the genes asked for it)
+    const stop = !seg.child && dev.symmetry === 'bilateral' ? headStop(seg, depth) : 0;
+    const muzzleElong = stop > 0 ? lerp(elong, Math.min(STOP_ELONG, Math.max(elong, rawElong)), stop) : elong;
+    const csz = Math.min(1.9, Math.max(0.7, rawElong / muzzleElong));
     const segScale: Vec3 | undefined =
       Math.abs(csx - 1) > 0.02 || Math.abs(csy - 1) > 0.02 || Math.abs(csz - 1) > 0.02
         ? [csx, csy, csz]
@@ -466,8 +482,7 @@ export function grow(genome: Genome): Phenotype {
       pos = [wPos[0] + fwd[0] * cAt, wPos[1] + fwd[1] * cAt, wPos[2] + fwd[2] * cAt];
     }
 
-    // (a head — the chain's last section — may have a stop: see headStop)
-    const stop = !seg.child && dev.symmetry === 'bilateral' ? headStop(seg, depth) : 0;
+    // (a head — the chain's last section — may have a stop: see headStop, above)
     // (…its muzzle broad at the stop and narrowing to the nose: see muzzleShare; a myriapod's rings draw
     // in to its rump: see isRinged)
     // (…and a slitherer's trunk draws in to its neck: see NECK_PINCH)
@@ -525,7 +540,7 @@ export function grow(genome: Genome): Phenotype {
       if (stop > 0) {
         // the muzzle's links stride by the chain's measure, not their own slimmer one (it keeps the
         // length its genes asked for); the first is drawn in against the braincase
-        step = i === 0 ? step * (1 - stop * (1 - STOP_STRIDE)) : girth * Math.pow(seg.taper, i) * elong;
+        step = i === 0 ? step * (1 - stop * (1 - STOP_STRIDE)) : girth * Math.pow(seg.taper, i) * muzzleElong;
       }
       if (ringed && (i + 1 < seg.repeat || seg.child) && !atCap()) {
         const fore = radius * RING_RIM[1];
@@ -599,7 +614,7 @@ export function grow(genome: Genome): Phenotype {
       // Legs ride the CHAIN, not the nearest node: the slot is interpolated between neighbouring spine
       // nodes (and extrapolated past a 1-node trunk's ends), so a hexapod's or a spider's legs spread
       // fore-aft along the body instead of collapsing onto the same one or two nodes.
-      if (app.kind === 'leg' && dev.symmetry !== 'radial') growAppendage(app, spine[ai], hoofSet(app, chainBase(spine, app.attachT), spine));
+      if (app.kind === 'leg' && dev.symmetry !== 'radial') growAppendage(app, spine[ai], hoofSet(app, chainBase(spine, app.attachT), spine, runner && dogSkull));
       else growAppendage(app, spine[ai]);
     }
 
@@ -639,13 +654,14 @@ export function grow(genome: Genome): Phenotype {
    * quadruped shares, a deer stood with its legs bunched under its middle, a barrel of a body
    * overhanging them at both ends: a barrel balanced on a trestle.)
    */
-  function hoofSet(app: AppendageGene, base: BodyNode, spine: number[]): BodyNode {
-    if (app.terminal !== 'hoof' || spine.length < 2) return base;
+  function hoofSet(app: AppendageGene, base: BodyNode, spine: number[], runner = false): BodyNode {
+    const set = app.terminal === 'hoof' ? HOOF_SET : app.terminal === 'paw' && runner ? PAW_SET : 0;
+    if (set === 0 || spine.length < 2) return base;
     const t = clamp(app.attachT, [0, 1]);
     const a = nodes[spine[t < 0.5 ? 0 : spine.length - 1]].pos;
     const b = nodes[spine[t < 0.5 ? 1 : spine.length - 2]].pos;
     const axis = norm([a[0] - b[0], a[1] - b[1], a[2] - b[2]]);
-    const k = HOOF_SET * Math.abs(t - 0.5) * 2 * base.radius;
+    const k = set * Math.abs(t - 0.5) * 2 * base.radius;
     return { ...base, pos: [base.pos[0] + axis[0] * k, base.pos[1] + axis[1] * k, base.pos[2] + axis[2] * k] };
   }
 
@@ -1364,6 +1380,14 @@ export function legBearer(g: Genome): SegmentGene {
 }
 
 /** The head = the front-most body section (the deepest `child`), or the trunk if there is none. */
+/** Is the head a skull with a stop (see headStop) and a muzzle longer than DOG_MUZZLE ×its girth — a dog's? */
+function longStoppedSkull(g: Genome): boolean {
+  let depth = 0;
+  for (let s = g.body; s.child; s = s.child) depth++;
+  const head = frontSegment(g);
+  return headStop(head, depth) > 0 && head.size[2] / Math.max((head.size[0] + head.size[1]) / 2, 1e-3) > DOG_MUZZLE;
+}
+
 function frontSegment(g: Genome): SegmentGene {
   let s = g.body;
   while (s.child) s = s.child;
