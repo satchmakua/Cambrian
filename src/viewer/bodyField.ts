@@ -729,12 +729,15 @@ function quatOfBasis(X: Vec3, Y: Vec3, Z: Vec3): [number, number, number, number
  * A SLUG's MANTLE (a slime body whose eyes ride feelers — see eyeSeat feelerTip): the low shield over the
  * front of its back, behind its head, every slug's saddle. An ellipsoid from MANTLE.from to MANTLE.to of the
  * body's length, MANTLE.wide × the body's half-width there and MANTLE.high × its half-depth, its middle
- * MANTLE.lift × the half-depth above the body's axis — so it stands a little proud of the back and its rim
- * stands off the flanks — blended in at MANTLE.blend × the union's radius, a crease round its edge. (With
- * none, a slug was a glossy teardrop: an aubergine with feelers.) Null for anything else; `over` is how far
- * it reaches past its nodes' radii (the grid's padding).
+ * MANTLE.lift × the half-depth above the body's axis — so it stands a little proud of the back, as far over
+ * its flanks as over its top, its edge low on the flank — blended in at MANTLE.blend × the union's radius, a
+ * crease round its edge. (With none, a slug was a glossy teardrop: an aubergine with feelers. Flatter than
+ * the body and wider — 0.6 of its depth, 1.07 of its width, set half its depth up — its rim stood out from the
+ * flanks three times as far as its top stood over the back: from the front a brim, two flaps either side of
+ * the head, the slug a hamburger bun.) Null for anything else; `over` is how far it reaches past its nodes'
+ * radii (the grid's padding).
  */
-export const MANTLE = { from: 0.4, to: 0.84, wide: 1.07, high: 0.6, lift: 0.52, blend: 0.3 } as const;
+export const MANTLE = { from: 0.4, to: 0.84, wide: 1.0, high: 0.9, lift: 0.2, blend: 0.3 } as const;
 export function slugMantle(p: Phenotype): { c: Vec3; q: [number, number, number, number]; r: Vec3; over: number } | null {
   if (p.genomeRef.covering.type !== 'slime' || p.genomeRef.symmetry !== 'bilateral') return null;
   const feeler = p.nodes.some((n, i) => n.terminal === 'eye' && p.edges.some(([a, b]) => b === i && p.nodes[a].kind === 'limb' && p.nodes[a].part?.kind === 'eyestalk'));

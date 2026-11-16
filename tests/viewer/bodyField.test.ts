@@ -162,7 +162,7 @@ describe('body field chains', () => {
     }
   });
 
-  it("a slug wears a mantle over the front of its back: proud of the back, its rim standing off the flanks", () => {
+  it("a slug wears a mantle over the front of its back: proud of the back, lapping down over its flanks", () => {
     // (with none, a slug was a glossy teardrop: an aubergine with feelers)
     for (let seed = 1; seed <= 8; seed++) {
       const p = grow(genomeOfMorphotype(seed, 'slime'));
@@ -196,7 +196,12 @@ describe('body field chains', () => {
         }
         return lo;
       };
-      expect(side(prims) - side(bare), `#${seed} its rim off the flank`).toBeGreaterThan(0.04 * m.r[0]);
+      // …down over the flank, but standing off it no further than it stands over the back: a saddle, not a
+      // brim (flatter and wider than the body, its rim stood out three times as far: two flaps from the front)
+      const off = side(prims) - side(bare);
+      const over = above(prims, 0, m.c[2]) - above(bare, 0, m.c[2]);
+      expect(off, `#${seed} over the flank`).toBeGreaterThan(0.005 * m.r[0]);
+      expect(off / over, `#${seed} no brim`).toBeLessThan(1.4);
     }
     // a slime body without feelers (an octopus) and anything else wears none
     expect(slugMantle(grow(genomeOfMorphotype(23, 'cephalopod')))).toBeNull();

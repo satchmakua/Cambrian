@@ -68,6 +68,20 @@ export const CHELIPED_SLIM = 0.62;
 /** An eye stalk rises at least this steeply (the Y of its unit direction: about 51° above level). */
 const STALK_RISE = 0.78;
 
+/**
+ * A SLUG's FACE (a headless slime trunk whose eyes ride feelers: isSlug). Its feelers and its mouth root on
+ * its FRONT link whatever their slot says: on six links the slot's 0.85-0.98 rounded to the link behind the
+ * front for over a third of slugs (and their mouths for a third), their feelers standing up out of the middle
+ * of the mantle behind a blank dome.
+ * Under the feelers, on the front of its head, a shorter pair of LOWER TENTACLES grown from the feeler's own gene
+ * (no gene of their own, so no draw is added and nothing is bred for them): feelers without eyes, drawn as an
+ * antenna is (bodyField ANTENNA_SLIM: SLUG_FACE.thick × the feeler's girth comes out a little under its stalk's),
+ * SLUG_FACE.len × its link length on two links, aimed SLUG_FACE.el toward the front from the side and
+ * SLUG_FACE.az below it, bending SLUG_FACE.curl down. (Without them, and with its feelers behind the front, a
+ * slug's head end was a blank glossy dome: a bean.)
+ */
+export const SLUG_FACE = { len: 0.8, thick: 1.0, az: -0.15, el: 1.25, curl: 0.3 } as const;
+
 /** How far up the chest a fully raised neck roots (×the chest's half-depth above its axis). */
 const NECK_ROOT = 0.4;
 
@@ -602,9 +616,11 @@ export function grow(genome: Genome): Phenotype {
       ringFloorHere = belly - RING_CLEARANCE * mean;
       ringPoint = RING_POINT * mean;
     }
+    // (a slug's face is its front link's: see SLUG_FACE)
+    const slug = dev.symmetry === 'bilateral' && dev.covering.type === 'slime' && isSlug(seg, depth) ? slugFeeler(seg) : undefined;
     for (const app of seg.appendages) {
       if (atCap()) break;
-      const ai = clampInt(Math.round(app.attachT * (spine.length - 1)), 0, spine.length - 1);
+      const ai = slug && (app.terminal === 'eye' || app.terminal === 'mouth') ? spine.length - 1 : clampInt(Math.round(app.attachT * (spine.length - 1)), 0, spine.length - 1);
       // shoulder / haunch: legs thicken the spine node they attach to, giving the body muscular
       // structure instead of a uniform tube. Once per node: on a short trunk several leg pairs share
       // a node, and compounding ×1.22 per pair swelled a spider's 1–2 node body into a giant ball.
@@ -624,6 +640,8 @@ export function grow(genome: Genome): Phenotype {
       if (app.kind === 'leg' && dev.symmetry !== 'radial') growAppendage(app, spine[ai], hoofSet(app, chainBase(spine, app.attachT), spine, runner && dogSkull));
       else growAppendage(app, spine[ai]);
     }
+    // …and below its feelers, its LOWER TENTACLES (see SLUG_FACE)
+    if (slug && !atCap()) growAppendage(lowerTentacle(slug), spine[spine.length - 1]);
 
     if (seg.child && depth + 1 < DEPTH_MAX && !atCap()) {
       growSegment(seg.child, pos, quat, depth + 1, prev, seg);
@@ -1406,6 +1424,18 @@ function longStoppedSkull(g: Genome): boolean {
   for (let s = g.body; s.child; s = s.child) depth++;
   const head = frontSegment(g);
   return headStop(head, depth) > 0 && head.size[2] / Math.max((head.size[0] + head.size[1]) / 2, 1e-3) > DOG_MUZZLE;
+}
+
+/** Is this section a SLUG's trunk (on a bilateral slime body): the body's only section, its eyes on jointed stalks? */
+function isSlug(seg: SegmentGene, depth: number): boolean {
+  return depth === 0 && !seg.child && slugFeeler(seg) !== undefined;
+}
+function slugFeeler(seg: SegmentGene): AppendageGene | undefined {
+  return seg.appendages.find((a) => a.kind === 'eyestalk' && a.terminal === 'eye' && a.pair && a.segments >= 2);
+}
+/** a slug's lower tentacle, from its feeler's gene (see SLUG_FACE) */
+function lowerTentacle(f: AppendageGene): AppendageGene {
+  return { ...f, kind: 'antenna', terminal: 'none', pair: true, segments: 2, length: f.length * SLUG_FACE.len, thickness: f.thickness * SLUG_FACE.thick, taper: 0.9, attachAzimuth: SLUG_FACE.az, attachElevation: SLUG_FACE.el, roll: 0, curl: [SLUG_FACE.curl, 0] };
 }
 
 function frontSegment(g: Genome): SegmentGene {
