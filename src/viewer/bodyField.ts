@@ -876,12 +876,13 @@ export function apeForearms(p: Phenotype): { c: Vec3; q: [number, number, number
  * A BONY FISH's LOWER JAW (a swimmer in scales — fins, no legs; a shark's skin is left as it is). Its head is
  * a cone of three links to the mouth at the snout's point, and with only a seam across that point it had no
  * jaw at all: a bullet, a dolphin's or a sock puppet's head. The mandible is one ellipsoid on the midline,
- * in the snout tip's frame: its chin FISH_JAW.ahead × the tip's radius past the mouth and `drop` × the tip's
- * half-depth below it, running back to under the eye; `wide` × the half-width of the head's middle link
- * across, `deep` × the tip's half-depth deep; blended in at `blend` of the union's radius, so a crease runs
- * where it meets the snout (the gape's line) and its chin stands a little under and ahead of the upper jaw.
+ * in the snout tip's frame: its chin FISH_JAW.ahead × the tip's radius past the mouth, its centre `drop` × the
+ * half-depth of the head's middle link below it, running back to under the eye; `wide` × that link's half-width
+ * across, `deep` × its half-depth deep (its top at the gape, its underside standing below the snout's cone over
+ * the front half of the gape); blended in at `blend` of the union's radius, so a crease runs where it meets the
+ * snout (the gape's line) and its chin stands a little under and ahead of the upper jaw.
  */
-export const FISH_JAW = { ahead: 0.25, drop: 0.55, wide: 0.62, deep: 0.6, blend: 0.45 } as const;
+export const FISH_JAW = { ahead: 0.25, drop: 0.4, wide: 0.62, deep: 0.25, blend: 0.45 } as const;
 const FISH_JAWED: ReadonlySet<string> = new Set(['herbivore', 'maw', 'fanged']);
 export function fishJaw(p: Phenotype): { c: Vec3; q: [number, number, number, number]; r: Vec3; over: number; blend: number }[] {
   // (the same body as the snout's point and the gape: a bony fish in scales with a jaw — a lamprey's funnel, a
@@ -899,14 +900,17 @@ export function fishJaw(p: Phenotype): { c: Vec3; q: [number, number, number, nu
   const fwd = qRotateV(T.quat, [0, 0, 1]);
   const up = qRotateV(T.quat, [0, 1, 0]);
   const along = (q: readonly number[]) => (q[0] - T.pos[0]) * fwd[0] + (q[1] - T.pos[1]) * fwd[1] + (q[2] - T.pos[2]) * fwd[2];
-  const ry = T.radius * (T.scale?.[1] ?? 1);
+  const H = head[Math.floor(head.length / 2)];
+  // (measured on the head's middle link, not on the snout's tip: grow's SNOUT_TIP caps the tip at a fifth of the
+  // head's girth, and a jaw sized to it was a pea inside the snout's cone — its chin 0.06 under the snout's point,
+  // nothing under the gape: the gape a dark line drawn on a blob)
+  const ry = H.radius * (H.scale?.[1] ?? 1);
   const front = along(M.pos) + FISH_JAW.ahead * T.radius;
   const back = along(eye.pos);
   if (front - back < 1e-3) return [];
   const mid = (front + back) / 2;
   const lift = (M.pos[0] - T.pos[0]) * up[0] + (M.pos[1] - T.pos[1]) * up[1] + (M.pos[2] - T.pos[2]) * up[2] - FISH_JAW.drop * ry;
   const c: Vec3 = [T.pos[0] + fwd[0] * mid + up[0] * lift, T.pos[1] + fwd[1] * mid + up[1] * lift, T.pos[2] + fwd[2] * mid + up[2] * lift];
-  const H = head[Math.floor(head.length / 2)];
   const r: Vec3 = [FISH_JAW.wide * H.radius * (H.scale?.[0] ?? 1), FISH_JAW.deep * ry, (front - back) / 2];
   return [{ c, q: [T.quat[0], T.quat[1], T.quat[2], T.quat[3]], r, over: FISH_JAW.ahead * T.radius, blend: FISH_JAW.blend }];
 }

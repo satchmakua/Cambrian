@@ -826,6 +826,13 @@ export const FISH_TAIL: readonly [number, number] = [0.16, 0.66];
  */
 export type FinCut = 'plain' | 'fish' | 'shark';
 
+/** A BONY FISH's pectoral roots on a short line up its flank behind the gill cover, and its paddle fans
+ *  back from it along the fin's aim, standing off the flank by the aim's outward lean. (Its chord run back
+ *  along the body like a shark's, squared against an aim that is itself laid back 45-60 degrees — the
+ *  fish row's pectoralEl — turned in and up into the body: the paddle lay as a shelf facing the sky, half
+ *  of it under the skin, the half that showed lit white by the key light — a paper tag on the flank.) */
+export const FISH_PECTORAL_ROOT = new THREE.Vector3(0, 1, 0);
+
 export function finCutOf(style: number): FinCut {
   return style < 0.3 ? 'plain' : style < 0.6 ? 'fish' : 'shark';
 }
@@ -853,9 +860,10 @@ export function finKindOf(aim: THREE.Vector3, partKind: string | undefined): Fin
 }
 
 /** The direction a fin's chord runs: back along the body, squared off against the fin's aim (a
- *  caudal fin's chord stands vertical). */
-export function finChord(kind: FinKind, aim: THREE.Vector3): THREE.Vector3 {
-  let chord = kind === 'caudal' ? v3(0, 1, 0) : v3(0, 0, -1);
+ *  caudal fin's chord stands vertical). A bony fish's pectoral roots on a line up its flank instead
+ *  (see FISH_PECTORAL_ROOT). */
+export function finChord(kind: FinKind, aim: THREE.Vector3, cut: FinCut = 'plain'): THREE.Vector3 {
+  let chord = kind === 'caudal' ? v3(0, 1, 0) : kind === 'pectoral' && cut === 'fish' ? FISH_PECTORAL_ROOT.clone() : v3(0, 0, -1);
   chord.addScaledVector(aim, -chord.dot(aim));
   if (chord.lengthSq() < 1e-6) chord = v3(0, 1, 0).addScaledVector(aim, -aim.y);
   return chord.normalize();
@@ -870,7 +878,7 @@ export function finChord(kind: FinKind, aim: THREE.Vector3): THREE.Vector3 {
  */
 export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 1, cut: FinCut = 'plain', root?: (along: number) => number): FinBuild {
   const aim = aimIn.clone().normalize();
-  const chord = finChord(kind, aim);
+  const chord = finChord(kind, aim, cut);
   const normal = new THREE.Vector3().crossVectors(aim, chord).normalize();
   const k = Math.min(1.5, Math.max(0.6, gene));
   // [span, chord, sweep (how far back the tip rakes, ×chord)] per kind, × girth
