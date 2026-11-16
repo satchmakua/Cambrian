@@ -25,7 +25,7 @@ import { Mouth } from './mouths';
 import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
-import { bareOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, ratLike, shaggyPlumage, skinPartWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
+import { bareOf, clawedHandGeometry, footPlanOf, hoofGeometry, isHindFoot, isTheropod, lastLinkOf, ratLike, shaggyPlumage, skinPartWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, shellScutes, type SkinQuality } from './smoothSkin';
 import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, shortWingLie, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, foldedSpan, restingFold, type FinBuild, type TailRump, type TailPart } from './wings';
@@ -1499,17 +1499,21 @@ function Paw({ f, color, skin, origin, leg = false, fur = NO_FUR, bare = false }
 }
 
 // A hoof: a big solid keratin block, flat on the ground, with a cleft (ungulate).
+// (a wedge, its toe ahead of the leg: see feet.ts hoofGeometry)
 function Hoof({ f, color }: { f: MeshFeature; color: number }) {
   const r = Math.max(f.radius, 0.06);
   const horn = useMemo(() => new THREE.Color(color).multiplyScalar(0.4).getHex(), [color]);
+  const geo = useMemo(() => hoofGeometry(r), [r]);
+  useEffect(() => () => {
+    geo.horn.dispose();
+    geo.cleft.dispose();
+  }, [geo]);
   return (
     <group>
-      <mesh position={[0, -r * 0.2, r * 0.05]} scale={[r * 1.45, r * 1.35, r * 1.6]} castShadow>
-        <cylinderGeometry args={[0.78, 1.0, 1, 12]} />
+      <mesh geometry={geo.horn} castShadow>
         <meshStandardMaterial color={horn} roughness={0.42} metalness={0.06} />
       </mesh>
-      <mesh position={[0, -r * 0.85, r * 0.4]} scale={[r * 0.1, r * 0.7, r * 1.3]}>
-        <boxGeometry args={[1, 1, 1]} />
+      <mesh geometry={geo.cleft}>
         <meshStandardMaterial color={0x0e0a07} roughness={0.6} />
       </mesh>
     </group>

@@ -532,3 +532,72 @@ export function clawedHandGeometry(r: number, quat: readonly number[]): { finger
   };
   return { fingers: merge(fingers), claws: merge(claws) };
 }
+
+/**
+ * A HOOF: a keratin wedge, its sole flat on the ground and its toe ahead of the leg, its front wall sloping back
+ * up to a coronet a little wider than the cannon it caps, a dark cleft down the toe. In the body frame round the
+ * hoof node (+Y up, +Z forward), sized by the cannon's girth `r`. (A short round puck HOOF_H[0] of a girth tall —
+ * 1.35 of it, hardly wider than the cannon — was a black dot under every leg.)
+ */
+export const HOOF_H: readonly [number, number] = [1.25, -0.95];
+/** the coronet's and the sole's half-width, half-length and centre ahead of the leg (×r) */
+export const HOOF_TOP: readonly [number, number, number] = [1.1, 1.12, -0.06];
+export const HOOF_SOLE: readonly [number, number, number] = [1.3, 1.62, 0.45];
+export function hoofGeometry(r: number): { horn: THREE.BufferGeometry; cleft: THREE.BufferGeometry } {
+  const SEG = 20;
+  const RINGS = 6;
+  const pos: number[] = [];
+  const idx: number[] = [];
+  for (let i = 0; i <= RINGS; i++) {
+    const f = i / RINGS; // 0 the coronet, 1 the sole
+    // (the wall bellies out a little below the coronet: a hoof, not a frustum)
+    const k = Math.min(1, f + 0.18 * Math.sin(Math.PI * f));
+    const y = r * (HOOF_H[0] + (HOOF_H[1] - HOOF_H[0]) * f);
+    const ax = r * (HOOF_TOP[0] + (HOOF_SOLE[0] - HOOF_TOP[0]) * k);
+    const az = r * (HOOF_TOP[1] + (HOOF_SOLE[1] - HOOF_TOP[1]) * k);
+    const cz = r * (HOOF_TOP[2] + (HOOF_SOLE[2] - HOOF_TOP[2]) * k);
+    for (let j = 0; j < SEG; j++) {
+      const a = (2 * Math.PI * j) / SEG;
+      // (squarer at the toe than at the heel)
+      const sx = Math.sin(a), cz2 = Math.cos(a);
+      const toe = Math.max(0, cz2);
+      pos.push(ax * sx * (1 + 0.08 * toe), y, cz + az * cz2);
+    }
+  }
+  for (let i = 0; i < RINGS; i++) {
+    for (let j = 0; j < SEG; j++) {
+      const j1 = (j + 1) % SEG;
+      const a = i * SEG + j, b = i * SEG + j1, c = (i + 1) * SEG + j, d = (i + 1) * SEG + j1;
+      idx.push(a, c, b, b, c, d);
+    }
+  }
+  // the caps: the coronet's (inside the leg) and the sole
+  for (const [ring, up] of [[0, 1], [RINGS, -1]] as const) {
+    const c = pos.length / 3;
+    let sx = 0, sy = 0, sz = 0;
+    for (let j = 0; j < SEG; j++) {
+      sx += pos[(ring * SEG + j) * 3];
+      sy += pos[(ring * SEG + j) * 3 + 1];
+      sz += pos[(ring * SEG + j) * 3 + 2];
+    }
+    pos.push(sx / SEG, sy / SEG, sz / SEG);
+    for (let j = 0; j < SEG; j++) {
+      const j1 = (j + 1) % SEG;
+      if (up > 0) idx.push(c, ring * SEG + j, ring * SEG + j1);
+      else idx.push(c, ring * SEG + j1, ring * SEG + j);
+    }
+  }
+  const horn = new THREE.BufferGeometry();
+  horn.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  horn.setIndex(idx);
+  horn.computeVertexNormals();
+  // the cleft: a dark slit down the front of the toe, lying along its sloping wall
+  const yTop = r * (HOOF_H[0] + (HOOF_H[1] - HOOF_H[0]) * 0.35), yBot = r * HOOF_H[1];
+  const zTop = r * (HOOF_TOP[2] + HOOF_TOP[1] + (HOOF_SOLE[2] + HOOF_SOLE[1] - HOOF_TOP[2] - HOOF_TOP[1]) * 0.5);
+  const zBot = r * (HOOF_SOLE[2] + HOOF_SOLE[1]);
+  const len = Math.hypot(yTop - yBot, zTop - zBot);
+  const cleft = new THREE.BoxGeometry(0.1 * r, len, 0.5 * r);
+  cleft.rotateX(-Math.atan2(zBot - zTop, yTop - yBot));
+  cleft.translate(0, (yTop + yBot) / 2, (zTop + zBot) / 2 - 0.15 * r);
+  return { horn, cleft };
+}

@@ -111,6 +111,13 @@ const HEAD_BOW = 0.5;
 /** …and a hooved foreleg's cannon drops plumb from its knee: the wrist's forward fold (−0.32) is a paw's
  *  pastern, and on a leg whose third link is the cannon it slanted the whole lower leg 25° forward */
 const HOOF_KNEE = 0.12;
+/** …and a hooved HIND leg folds as a deer's does: its gaskin runs back from the stifle HOOF_GASKIN[0] rad off the
+ *  plumb, and HOOF_GASKIN[1] more per rad of its curl gene (the curl stays in its bound: this is grown, not
+ *  drawn), and its hock turns the cannon back to HOOF_CANNON rad forward of plumb. (On a paw's knee and hock —
+ *  ×2.15 and ×2.0 the curl — a deer's 0.12–0.28 curl ran its gaskin back 18–29° and the cannon on 6–13° forward:
+ *  a straight stilt bent a little, no hock to speak of.) */
+const HOOF_GASKIN: readonly [number, number] = [0.62, 0.6];
+const HOOF_CANNON = 0.05;
 /** An antenna's bend past ANTENNA_ELBOW_FROM (rad a link) is grown ANTENNA_ELBOW times over: the gene
  *  stays within its curlPitch bound (0.6, which breeding, mutation and sharing clamp to), and an insect's
  *  [0.55, 0.6] grows its elbowed feeler, 0.9–1.06 a link. Any |curl| under 0.4 (every random body's
@@ -1113,6 +1120,14 @@ export function grow(genome: Genome): Phenotype {
     const fore = app.kind === 'leg' && !arch && legPairsHere === 2 && app.attachT > 0.5 && dev.symmetry !== 'radial';
     const elbow = app.kind === 'antenna' ? Math.sign(app.curl[0]) * Math.max(0, Math.abs(app.curl[0]) - ANTENNA_ELBOW_FROM) * ANTENNA_ELBOW : 0;
     let pitch = app.kind !== 'leg' ? app.curl[0] + elbow : fore ? 0.18 + 0.5 * Math.abs(app.curl[0]) : -app.curl[0];
+    // (a hooved hind leg's links grow as much longer as its deeper fold costs it height — see HOOF_GASKIN — so it
+    // stands as tall as it did on a paw's angles, and the body no lower)
+    const hoofHind = app.kind === 'leg' && !arch && !fore && app.terminal === 'hoof' && app.segments >= 4 && dev.symmetry !== 'radial';
+    const c0 = app.curl[0], ac0 = Math.abs(c0);
+    const linkLen = hoofHind
+      ? (app.length * (Math.cos(c0) + Math.cos(2.15 * ac0 + 0.2 - c0) + Math.cos(0.15 * ac0 - c0))) /
+        (Math.cos(c0) + Math.cos(HOOF_GASKIN[0] + HOOF_GASKIN[1] * ac0) + Math.cos(HOOF_CANNON))
+      : app.length;
     // An EAR is one node on the skull, whatever its gene says of links: the flap is drawn whole from
     // its root, and no stalk is meshed under it (see bodyField) — grown as a chain, a bred ear's flap
     // would hang in the air a link's length off the head.
@@ -1177,7 +1192,7 @@ export function grow(genome: Genome): Phenotype {
       const tc = tipCurl !== 0 && segments > 2 ? (j >= segments - 2 ? 1 : j === segments - 3 ? 0.5 : 0) : 0;
       quat = qMul(quat, qFromEuler(pitch, app.curl[1] + tipCurl * tc));
       dir = qRotate([0, 0, 1], quat);
-      pos = [pos[0] + dir[0] * app.length, pos[1] + dir[1] * app.length, pos[2] + dir[2] * app.length];
+      pos = [pos[0] + dir[0] * linkLen, pos[1] + dir[1] * linkLen, pos[2] + dir[2] * linkLen];
       // a real jointed leg: thigh forward → (knee folds the shin sharply back under the body) → (hock
       // swings the foot forward) — a clear Z stance, not one gentle curved sweep; a foreleg's mirror
       // fold (see `fore`). Other limbs keep their curl.
@@ -1188,6 +1203,11 @@ export function grow(genome: Genome): Phenotype {
         if (fore) {
           if (j === 0) pitch = -(0.3 + 0.5 * Math.abs(app.curl[0])); // elbow — the forearm comes back to vertical
           else if (j === 1) pitch = app.terminal === 'hoof' && app.segments >= 4 ? HOOF_KNEE : -0.32; // wrist — the pastern angles forward to the paw (a hooved leg's knee: its cannon drops plumb)
+        } else if (hoofHind) {
+          // (a hooved hind leg: the gaskin back to HOOF_GASKIN off the plumb, the cannon back near plumb)
+          const gaskin = HOOF_GASKIN[0] + HOOF_GASKIN[1] * Math.abs(app.curl[0]);
+          if (j === 0) pitch = gaskin + app.curl[0]; // stifle — from the thigh's forward lean (−curl) to the gaskin's
+          else if (j === 1) pitch = -(gaskin + HOOF_CANNON); // hock
         } else if (j === 0) pitch = Math.abs(app.curl[0]) * 2.15 + 0.2; // knee — the shin folds back
         else if (j === 1) pitch = -(Math.abs(app.curl[0]) * 2.0 + 0.2); // hock — swing the foot forward
       }

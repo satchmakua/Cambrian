@@ -400,9 +400,9 @@ export function buildJawed(
     for (const side of [-1, 1]) {
       const h = new THREE.SphereGeometry(1, 10, 6);
       const local = new THREE.Matrix4()
-        .makeTranslation(side * r * (ape ? 0.2 : grazer ? 0.25 : 0.13) * ns, -r * (ape ? 0.07 : grazer ? 0.02 : 0.035) * ns, r * (grazer ? 0.06 : 0.085) * ns)
-        .multiply(new THREE.Matrix4().makeRotationZ(side * (grazer ? 1.0 : 0.45)))
-        .multiply(new THREE.Matrix4().makeScale(r * (ape ? 0.09 : grazer ? 0.12 : 0.07) * ns, r * (ape ? 0.05 : grazer ? 0.04 : 0.036) * ns, r * (grazer ? 0.045 : 0.03) * ns));
+        .makeTranslation(side * r * (ape ? 0.2 : grazer ? GRAZER_NOSTRIL[0] : 0.13) * ns, -r * (ape ? 0.07 : grazer ? GRAZER_NOSTRIL[1] : 0.035) * ns, r * (grazer ? 0.06 : 0.085) * ns)
+        .multiply(new THREE.Matrix4().makeRotationZ(side * (grazer ? GRAZER_NOSTRIL[2] : 0.45)))
+        .multiply(new THREE.Matrix4().makeScale(r * (ape ? 0.09 : grazer ? 0.14 : 0.07) * ns, r * (ape ? 0.05 : grazer ? 0.05 : 0.036) * ns, r * (grazer ? 0.045 : 0.03) * ns));
       h.applyMatrix4(frame.clone().setPosition(at).multiply(local));
       holes.push(h);
     }
@@ -535,6 +535,23 @@ export const APE_NOSE_FLARE = -0.3;
  *  dog's — its nostrils specks a seventieth of a unit across, black on black: none.) */
 export const GRAZER_NOSE = 1.25;
 export const GRAZER_NOSE_FLARE = 0.15;
+/** …its nostrils' place on the pad (across, down — ×the mouth's radius × GRAZER_NOSE) and their slant (rad): low on
+ *  its FACE, half-way out. (At 0.25 across and level with its middle, each lay on the pad's rim where it rounds
+ *  away: from three-quarters the far one was gone and the near one a dark nick in the edge — a pad with no
+ *  nostrils, the open end of a tube.) */
+export const GRAZER_NOSTRIL: readonly [number, number, number] = [0.16, 0.1, 0.8];
+/** …and the pad is a deer's charcoal, not black: its black nostrils show on it (black on black they were none) */
+export const GRAZER_PAD = 0x3a3032;
+/** A wet nose's colour: a grazer's charcoal, near-black, or on a small animal as often the dusky pink of a mouse's or a
+ *  kitten's; an ape's is its bare face's own skin, a shade darker. */
+export function noseColorOf(p: Phenotype, mouthIdx: number): number {
+  const ape = faceMaskOf(p);
+  if (ape) return new THREE.Color(ape.color).multiplyScalar(0.7).getHex();
+  if (pinkNose(p, mouthIdx)) return new THREE.Color().setHSL(0.98, 0.32, 0.42).getHex();
+  return isGrazer(p) ? GRAZER_PAD : 0x1c1416;
+}
+/** the nostrils' colour */
+export const NOSTRIL = 0x050405;
 /** Does this mouth wear a cat's whisker pads? A short muzzle on a skull with no stop, not an ape's. */
 export function whiskerPads(p: Phenotype, mouthIdx: number, muzzled: boolean): boolean {
   return muzzled && snoutReach(p, mouthIdx) < SNOUT_SHORT && stopOf(p, mouthIdx) < 0.5 && !isApe(p);
@@ -620,15 +637,10 @@ export function JawedMouth({
   // (a pink nose on a bear or a wolf made a giant rodent of it — the bigger the body, the rarer)
   // (an ape has no wet rhinarium: its nose is the bare face's own skin, a shade darker)
   const ape = useMemo(() => faceMaskOf(phenotype), [phenotype]);
-  const noseColor = useMemo(
-    () =>
-      ape
-        ? new THREE.Color(ape.color).multiplyScalar(0.7).getHex()
-        : pinkNose(phenotype, f.idx)
-          ? new THREE.Color().setHSL(0.98, 0.32, 0.42).getHex()
-          : 0x1c1416,
-    [phenotype, ape, f.idx],
-  );
+  const noseColor = useMemo(() => noseColorOf(phenotype, f.idx), [phenotype, f.idx]);
+  // (a grazer's muzzle is furred to its pad: the jaw's skirt, bare under the coat's shells, was a smooth pale rim
+  // round the dark pad — the lip of a hollow tube)
+  const furredSkirt = useMemo(() => isGrazer(phenotype), [phenotype]);
 
   const fang = useMemo(() => ((JAWED_PARAMS[variant] as JawedParams).blunt ? bluntGeometry() : fangGeometry()), [variant]);
   const muzzled = built?.muzzled ?? false;
@@ -647,7 +659,7 @@ export function JawedMouth({
       // mammal's wear its coat (the chin and the lip fold are fur)
       jaw: new THREE.MeshStandardMaterial({ color: muzzled ? coat : dark, roughness: muzzled ? 0.85 : 0.62 }),
       nose: new THREE.MeshPhysicalMaterial({ color: noseColor, roughness: ape ? 0.7 : 0.38, clearcoat: ape ? 0 : 0.6, clearcoatRoughness: 0.35 }),
-      nostril: new THREE.MeshStandardMaterial({ color: 0x050405, roughness: 0.9 }),
+      nostril: new THREE.MeshStandardMaterial({ color: NOSTRIL, roughness: 0.9 }),
       interior: new THREE.MeshStandardMaterial({ color: INTERIOR, roughness: 0.3, side: THREE.DoubleSide }),
       teeth: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42 }),
     };
@@ -710,6 +722,7 @@ export function JawedMouth({
           in the hide's own material it fought the skin for the same pixels, a dashed line along the mouth
           — a zipper. A seam's skull is its upper jaw.) */}
       {!sealed && <mesh geometry={built.muzzle} material={coatMat} castShadow />}
+      {!sealed && furredSkirt && skin && fur.map((m, i) => <mesh key={`skirtFur${i}`} geometry={built.muzzle} material={m} />)}
       {seamShown(phenotype, sealed) && <mesh geometry={built.upperLip} material={mats.lip} castShadow />}
       {/* (a mammal's mouth wears no fold: with only its canines/incisors there are no tooth roots to
           hide, and draped under the lip line in the coat it hung below the chin as a pale band; nor

@@ -20,6 +20,17 @@ export const TUBE_THIN = 1.6;
  *  there this much wider than the links it joins. (A ball of the joint's own girth, swept through or not,
  *  a deer's leg ran from its forearm to its hoof as one smooth tapering stilt: no knee, no hock.) */
 export const HOOF_KNOB = 1.35;
+/** …and the knob is a SWELLING, not a ball on a stick: each link it joins widens into it over this many of
+ *  the joint's girths (a smoothstep, flat where it meets the ball), and the field's limb above it swells
+ *  into it as well (see KNOB_COLLAR). A bare ball 1.35× its links met them in a crease at either side of
+ *  its equator — its top lit, a dark line under it: a pale ring seam at every knee and hock, the leg a
+ *  stack of tubes. */
+export const KNOB_EASE = 2.2;
+/** where the field's limb hands on at a knob, a collar of tube rises out of it into the knob: from this
+ *  share of the field limb's girth (sunk inside its polygonized skin) at KNOB_EASE_FIELD girths above the
+ *  joint, swelling to the knob's girth there */
+export const KNOB_COLLAR = 0.9;
+export const KNOB_EASE_FIELD = 2.6;
 /** a field cone that tapers this steeply into a tube's joint (girth per length) or more is tucked in by
  *  slimming its end (to TUCK_SLIM of the joint's girth); a gentler one by stopping it short */
 const TUCK_STEEP = 0.3;
@@ -203,6 +214,8 @@ interface Joint {
   pinch: boolean;
   /** a bare tip: one link in, none out, no field skin here — drawn on to a point (see TIP_POINT) */
   tip: boolean;
+  /** a hooved leg's knee or hock: a swelling the links widen into (see HOOF_KNOB, KNOB_EASE) */
+  knob?: boolean;
 }
 
 /**
@@ -257,6 +270,7 @@ export function limbTubes(
     // (a hooved leg's knee or hock: a ball, never swept through, wider than its links — see HOOF_KNOB)
     if (split.knobs?.has(k)) {
       j.r *= HOOF_KNOB;
+      j.knob = true;
       continue;
     }
     if (split.fieldEnds.has(k)) continue;
@@ -283,8 +297,19 @@ export function limbTubes(
     if (startOf.get(m)!.pinch) pinA[m] = Math.min(PODO_EASE * full.ra[m], 0.25 * L);
     if (endOf.get(m)!.pinch) pinB[m] = Math.min(PODO_EASE * full.rb[m], 0.25 * L);
   }
+  // a link's SWELL into a knob at each end: how far it reaches back from the knob (0 — none)
+  const swA = new Float64Array(full.nc);
+  const swB = new Float64Array(full.nc);
+  for (const m of tubes) {
+    const L = lenOf(m);
+    if (startOf.get(m)!.knob) swA[m] = Math.min(KNOB_EASE * full.ra[m], 0.45 * L);
+    if (endOf.get(m)!.knob) swB[m] = Math.min(KNOB_EASE * full.rb[m], 0.45 * L);
+  }
   const ease = (d: number, e: number) => (e <= 0 || d >= e ? 1 : PODO_WAIST + (1 - PODO_WAIST) * (1 - (1 - d / e) ** 2));
-  const girthAt = (m: number, t: number, L: number) => (full.ra[m] + ((full.rb[m] - full.ra[m]) * t) / L) * ease(t, pinA[m]) * ease(L - t, pinB[m]);
+  const smooth = (x: number) => x * x * (3 - 2 * x);
+  const swell = (d: number, e: number) => (e <= 0 || d >= e ? 1 : 1 + (HOOF_KNOB - 1) * smooth(1 - d / e));
+  const girthAt = (m: number, t: number, L: number) =>
+    (full.ra[m] + ((full.rb[m] - full.ra[m]) * t) / L) * ease(t, pinA[m]) * ease(L - t, pinB[m]) * swell(t, swA[m]) * swell(L - t, swB[m]);
   const shadeOf = (d: number, e: number) => (e <= 0 ? 1 : PODO_DARK + (1 - PODO_DARK) * Math.min(1, d / (0.6 * e)) ** 2);
   const membrane = (m: number, t: number, L: number) => Math.min(shadeOf(t, pinA[m]), shadeOf(L - t, pinB[m]));
 
@@ -345,16 +370,28 @@ export function limbTubes(
       const s = L > 1e-9 ? (full.ra[m] - full.rb[m]) / L : 0; // the flank's lean (sin of its half-angle)
       const along = Math.min(6, Math.max(1, Math.round(L / (2 * Math.max(full.ra[m], full.rb[m])))));
       const at = (t: number) => [a[0] + u[0] * t, a[1] + u[1] * t, a[2] + u[2] * t];
-      if (pinA[m] > 0 || pinB[m] > 0) {
-        // a pinched podomere (always a run of its own): rings close enough through each pinch to draw
-        // its shoulder, each leaning as the girth there runs in
+      if (pinA[m] > 0 || pinB[m] > 0 || swA[m] > 0 || swB[m] > 0) {
+        // a pinched podomere (always a run of its own), or a link swelling into a knob: rings close enough
+        // through each pinch or swell to draw its shoulder, each leaning as the girth there runs in or out
         const ts = new Set<number>();
         for (let j = 0; j <= along; j++) ts.add((j / along) * L);
         for (const f of [0.2, 0.45, 0.7, 1]) {
           if (pinA[m] > 0) ts.add(f * pinA[m]);
           if (pinB[m] > 0) ts.add(L - f * pinB[m]);
         }
+        for (const f of [0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1]) {
+          if (swA[m] > 0) ts.add(f * swA[m]);
+          if (swB[m] > 0) ts.add(L - f * swB[m]);
+        }
         const h = 1e-4 * L;
+        // (a link swept on from the one before it shares that link's last ring: see the joint ring below)
+        if (k > 0) {
+          const prev = rings[rings.length - 1];
+          const t = [prev.t[0] + u[0], prev.t[1] + u[1], prev.t[2] + u[2]];
+          const tl = Math.hypot(t[0], t[1], t[2]) || 1;
+          prev.t = [t[0] / tl, t[1] / tl, t[2] / tl];
+          ts.delete(0);
+        }
         for (const t of [...ts].sort((x, y) => x - y)) {
           const dr = (girthAt(m, Math.min(L, t + h), L) - girthAt(m, Math.max(0, t - h), L)) / (Math.min(L, t + h) - Math.max(0, t - h));
           rings.push({ p: at(t), t: u, r: girthAt(m, t, L), s: -dr / Math.sqrt(1 + dr * dr), k: membrane(m, t, L) });
@@ -420,6 +457,50 @@ export function limbTubes(
     const inRun = new Set(run);
     const near = [...new Set(ends.flatMap((j) => [...j.ins, ...j.outs]))].filter((o) => !inRun.has(o));
     piece(base, near, 0.03 * rMax, tris);
+  }
+
+  // --- the collars: where the field's limb hands on at a knob, it swells into it (see KNOB_COLLAR) ---
+  const tubeSet = new Set(tubes);
+  for (const [k, j] of joints) {
+    if (!j.knob || !split.fieldEnds.has(k)) continue;
+    for (let m = 0; m < full.nc; m++) {
+      if (tubeSet.has(m) || full.ia[m] === full.ib[m] || keyOf(full.bx[m], full.by[m], full.bz[m]) !== k) continue;
+      const a = A(m), u = dirOf(m), L = lenOf(m);
+      const e = Math.min(KNOB_EASE_FIELD * full.rb[m], 0.45 * L);
+      if (e <= 1e-6) continue;
+      const rAt = (d: number) => {
+        const lin = full.rb[m] + ((full.ra[m] - full.rb[m]) * d) / L;
+        return lin * (KNOB_COLLAR + (HOOF_KNOB - KNOB_COLLAR) * smooth(1 - d / e));
+      };
+      const K = 10;
+      const segs = segsFor(HOOF_KNOB * full.rb[m], cell);
+      const base = pos.length / 3;
+      const e1 = perp(u);
+      const e2 = [u[1] * e1[2] - u[2] * e1[1], u[2] * e1[0] - u[0] * e1[2], u[0] * e1[1] - u[1] * e1[0]];
+      for (let i = 0; i <= K; i++) {
+        const d = e * (1 - i / K); // from the top of the collar down to the joint
+        const c = [a[0] + u[0] * (L - d), a[1] + u[1] * (L - d), a[2] + u[2] * (L - d)];
+        const hh = 1e-4 * e;
+        const dr = (rAt(Math.max(0, d - hh)) - rAt(Math.min(e, d + hh))) / (Math.min(e, d + hh) - Math.max(0, d - hh)); // girth per length along u
+        const sn = Math.max(-0.95, Math.min(0.95, -dr / Math.sqrt(1 + dr * dr))), cs = Math.sqrt(1 - sn * sn);
+        const r = rAt(d);
+        for (let q = 0; q < segs; q++) {
+          const ph = (2 * Math.PI * q) / segs;
+          const dx = e1[0] * Math.cos(ph) + e2[0] * Math.sin(ph), dy = e1[1] * Math.cos(ph) + e2[1] * Math.sin(ph), dz = e1[2] * Math.cos(ph) + e2[2] * Math.sin(ph);
+          pos.push(c[0] + dx * r, c[1] + dy * r, c[2] + dz * r);
+          nrm.push(dx * cs + u[0] * sn, dy * cs + u[1] * sn, dz * cs + u[2] * sn);
+          mem.push(1);
+        }
+      }
+      const tris: number[] = [];
+      for (let i = 0; i < K; i++) {
+        for (let q = 0; q < segs; q++) {
+          const q1 = (q + 1) % segs;
+          tris.push(i * segs + q, i * segs + q1, (i + 1) * segs + q, i * segs + q1, (i + 1) * segs + q1, (i + 1) * segs + q);
+        }
+      }
+      piece(base, j.outs, 0.03 * j.r, tris);
+    }
   }
 
   // --- the balls: every joint not swept through (a podomere joint's, its links' pinched girth) ---
