@@ -59,6 +59,20 @@ const RING_CLEARANCE = 0.7;
  *  that far above the ground and the point — a hard spike the viewer draws — stands on it. */
 const RING_POINT = 0.5;
 
+/** A WALKING SPRAWLER's limb (a lizard's, a crocodile's): the upper limb runs out of the flank near level
+ *  — its elbow or knee a touch above the shoulder (rise per unit run) and SPRAWL_UPPER ×the gene's link
+ *  length out — the forearm or shin drops near plumb from it (its run per unit fall) just as far as
+ *  brings the foot to SPRAWL_FLOOR ×the trunk's mean radius under the lowest belly, and on a three-link
+ *  leg the foot runs on out along the ground (SPRAWL_FOOT: its length ×the link, its fall per unit run).
+ *  (Every link the gene's length, the forearm dropping as far as the upper arm reached, the shin and the
+ *  foot both falling: the elbow sat in the flank's swell, a two-link leg was stretched plumb to the
+ *  floor of a three-link one, and the body stood high on four posts — a push-up, not a sprawl.) */
+const SPRAWL_RISE = 0.12;
+const SPRAWL_UPPER = 1.4;
+const SPRAWL_SHIN_RUN = 0.2;
+const SPRAWL_FLOOR = 0.12;
+const SPRAWL_FOOT: readonly [number, number] = [0.6, 0.3];
+
 /** An eye stalk's links, ×the radius the eye's gene gives them. */
 const STALK_SLIM = 0.5;
 /** A claw-bearing arm's links (a crab's cheliped), ×the radius its gene gives them: the claw at its end
@@ -349,6 +363,7 @@ export function grow(genome: Genome): Phenotype {
   let ringedHere = false; // …and whether it is a myriapod's trunk of rings (see isRinged)
   let ringFloorHere = 0; // …and the ground its legs then reach down to
   let ringPoint = 0; // …and the length of the points they stand on (see RING_POINT)
+  let sprawlFloorHere = 0; // …and the ground a walking sprawler's feet reach down to (see SPRAWL_FLOOR)
   /** a body under a horn SHELL (a tortoise's: a carapace over a trunk not wearing an arthropod's chitin) */
   const shelled = dev.symmetry === 'bilateral' && genome.covering.type !== 'chitin' && dev.body.appendages.some((a) => a.terminal === 'carapace');
   /** a body that walks on its arms as well as its legs (an ape): its trunk carries a pair of hand-tipped arms */
@@ -615,6 +630,19 @@ export function grow(genome: Genome): Phenotype {
       }
       ringFloorHere = belly - RING_CLEARANCE * mean;
       ringPoint = RING_POINT * mean;
+    } else if (sprawlHere && !shelled) {
+      // a walking sprawler's feet all reach the same floor, just under its lowest belly — as it will be
+      // once its shoulders and hips have swollen (see the haunch, below)
+      const hips = new Set(legGenesHere.map((a) => spine[clampInt(Math.round(a.attachT * (spine.length - 1)), 0, spine.length - 1)]));
+      let belly = Infinity;
+      let mean = 0;
+      for (const i of spine) {
+        const n = nodes[i];
+        const swell = hips.has(i) ? Math.min(n.radius * 1.12, n.radius + 0.2) / n.radius : 1;
+        belly = Math.min(belly, n.pos[1] - nodeReach(n)[1] * swell);
+        mean += n.radius / spine.length;
+      }
+      sprawlFloorHere = belly - SPRAWL_FLOOR * mean;
     }
     // (a slug's face is its front link's: see SLUG_FACE)
     const slug = dev.symmetry === 'bilateral' && dev.covering.type === 'slime' && isSlug(seg, depth) ? slugFeeler(seg) : undefined;
@@ -923,6 +951,7 @@ export function grow(genome: Genome): Phenotype {
     let arch: Vec3[] | null = null; // an explicit leg polyline (segment directions): arthropod or sprawler
     let sprawl = false; // the polyline is a vertebrate sprawler's (thick, normal-length segments)
     let lizardLeg = false; // …a walking sprawler's (a lizard's, a crocodile's, a frog's arm): see below
+    let archLen: number[] | null = null; // …and, for a walking sprawler's, each link's length ×the gene's (see SPRAWL_UPPER)
     const brush = isBrushTail(app, app.terminal) && dev.symmetry === 'bilateral';
     if (app.kind === 'leg' && dev.symmetry !== 'radial') {
       // Legs attach at the shoulder/hip — the body's *side*, a touch above the belly — not the
@@ -1055,7 +1084,25 @@ export function grow(genome: Genome): Phenotype {
           // down, under a haunch that swallowed the upper limb, each was a stub on a table leg: a
           // push-up stance with no elbow or knee to be seen.)
           lizardLeg = true;
-          for (let k = 0; k < n; k++) {
+          // (a frog's arms, beside its folded hind legs, keep their own stance: see the jumper)
+          const leaper = legPairsHere === 2 && legGenesHere.some((a) => a.attachT < 0.5 && a.length > 1.4 * fore.length);
+          if (!leaper) {
+            // out near level to an elbow or knee clear of the flank, the forearm or shin plumb to the floor
+            // (and on three links the foot on out along it): see SPRAWL_RISE
+            const upper = norm([sideX, SPRAWL_RISE, zf * 0.4]);
+            const L = app.length;
+            const hipY = base.pos[1] - base.radius * 0.12;
+            const footLinks = n >= 3 ? n - 2 : 0;
+            const foot = norm([sideX, -SPRAWL_FOOT[1], zf * 0.6]);
+            const drop = hipY + upper[1] * L * SPRAWL_UPPER + foot[1] * L * SPRAWL_FOOT[0] * footLinks - sprawlFloorHere;
+            const shin = norm([sideX * SPRAWL_SHIN_RUN, -1, zf * 0.25]);
+            archLen = [SPRAWL_UPPER, clamp(drop / (-shin[1] * L), [0.5, 2.2])];
+            arch.push(upper, shin);
+            for (let k = 2; k < n; k++) {
+              arch.push(foot);
+              archLen.push(SPRAWL_FOOT[0]);
+            }
+          } else for (let k = 0; k < n; k++) {
             if (k === 0) arch.push(norm([sideX, 0.32, zf * 0.4]));
             else if (k === n - 1) arch.push(norm([sideX * 0.42, -1, zf * 0.5]));
             else arch.push(norm([sideX * 0.48, -1, zf * 0.25]));
@@ -1201,7 +1248,7 @@ export function grow(genome: Genome): Phenotype {
       prev = idx;
       if (arch) {
         const d = arch[Math.min(j, arch.length - 1)];
-        const L = app.length * (sprawl ? 1.0 : 1.2); // an arthropod's long spindly segments
+        const L = app.length * (sprawl ? (archLen?.[Math.min(j, archLen.length - 1)] ?? 1.0) : 1.2); // an arthropod's long spindly segments
         pos = [pos[0] + d[0] * L, pos[1] + d[1] * L, pos[2] + d[2] * L];
         continue;
       }
