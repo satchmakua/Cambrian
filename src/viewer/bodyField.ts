@@ -121,6 +121,12 @@ const SMOOTH_LIMBS = new Set(['tail', 'tentacle']);
  *  a leg's tip — on an ant's or a centipede's small head, two pipes; drawn at its own fineness it is a
  *  feeler. */
 export const ANTENNA_SLIM = 0.4;
+
+/** A crab's CLAW (the `pincer` on a cheliped) draws its own side-flattened palm (claw.ts), so the arm's skin ends at
+ *  its node no thicker than this × the claw's radius — inside the palm, whose half-width is 0.46 of it. (Run on to
+ *  the claw node at the claw's own radius, like any other link, the skin hung a round ball as wide as the palm is
+ *  deep on the wrist — twice the palm's width — and the flat palm only poked out of its front: a balloon.) */
+export const CLAW_WRIST = 0.36;
 const slimOf = (n: BodyNode): number => (n.kind !== 'spine' && n.part?.kind === 'antenna' ? ANTENNA_SLIM : 1);
 
 /** A CROCODILE's body — one that sculls with its tail (grow's isScullingTail) — is one low hull from the
@@ -215,6 +221,7 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   // an eyestalk's last link runs INTO the eyeball (which draws itself): mesh it as a thin cone ending
   // at the eye, or the eye hangs in the air above a stump
   const stalkTip = (a: BodyNode, b: BodyNode) => mode === 'hybrid' && b.terminal === 'eye' && a.kind === 'limb' && a.part?.kind === 'eyestalk';
+  const clawWrist = (a: BodyNode, b: BodyNode) => mode === 'hybrid' && b.terminal === 'pincer' && a.kind === 'limb' && a.part?.kind === 'arm';
   let bodyEdges = p.edges.filter(([a, b]) => include(p.nodes[a]) && (include(p.nodes[b]) || stalkTip(p.nodes[a], p.nodes[b])));
   // (a body with no limb of its own but its quills — an urchin without tube feet — falls back on every
   // link but those and the parts that draw themselves: on every link, its quills were skinned as beaded
@@ -293,7 +300,9 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
       const ell = (bothSpine || bothLimb) && (a.scale || b.scale) ? a : null;
       const sa: [number, number] = ell ? [a.scale?.[0] ?? 1, a.scale?.[1] ?? 1] : [1, 1];
       const sb: [number, number] = ell ? [b.scale?.[0] ?? 1, b.scale?.[1] ?? 1] : [1, 1];
-      const rB = stalkTip(a, b) ? Math.min(a.radius * 0.8, b.radius * 0.45) : b.radius * slimOf(b);
+      // (…and a claw-arm's last link runs into its CLAW, which draws its own palm: it ends at the palm's wrist, no
+      // wider than the palm is thick — see CLAW_WRIST)
+      const rB = stalkTip(a, b) ? Math.min(a.radius * 0.8, b.radius * 0.45) : clawWrist(a, b) ? Math.min(a.radius, b.radius * CLAW_WRIST) : b.radius * slimOf(b);
       // a limb's root cone starts INSIDE a shaped body node: at the node's scalar radius its base
       // sphere stood proud of a flattened body — a crab's eight leg roots swelled its flat carapace
       // into a ball — so it starts at the node's narrowest cross-section instead

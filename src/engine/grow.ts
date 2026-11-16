@@ -1464,6 +1464,11 @@ function ensureBilateralFace(g: Genome): void {
  *  and floor the sizes so they always read. The mouth is kept on the face front. */
 // a paired eye's azimuth stays at least this far (rad) off the vertical midline
 const EYE_AZ_MAX = 1.1;
+/** A crab's eyestalk (rooted on its shell's front rim — see ensureFace): at least this many nodes (two links
+ *  and the eye), each link at least this × the trunk's girth long. */
+export const RIM_STALK_SEGS = 3;
+export const RIM_STALK = 0.62;
+export const RIM_STALK_BEND = -0.1;
 function ensureFace(apps: AppendageGene[], girth: number, frontR = girth, linkedHead = false, cephalothorax = false, shellFront = false): void {
   const eyes = apps.filter((p) => p.terminal === 'eye');
   if (eyes.length === 0) apps.push(faceEye(girth));
@@ -1494,6 +1499,16 @@ function ensureFace(apps: AppendageGene[], girth: number, frontR = girth, linked
       // from the shell's shoulders, nearly half its width apart: two lollipops stuck in the dome.)
       const rimStalk = shellFront && e.kind === 'eyestalk' && e.segments >= 2;
       e.attachElevation = clamp(Math.min(e.attachElevation, cranium || rimStalk ? 1.15 : 0.75), AP.attachElevation);
+      // …on a stalk that stands the eye clear over the shell's crown: two links of RIM_STALK × the trunk's girth.
+      // (Half the crabs drew a stalk of one link, and every link was the length gene's floor, 0.2: the eye hung a
+      // link off the rim, the foot of its ball a sixth of a unit under the crown — an eye half-buried on the dome,
+      // a tenth of a unit of stalk to see.)
+      if (rimStalk) {
+        e.segments = Math.max(e.segments, RIM_STALK_SEGS);
+        e.length = clamp(Math.max(e.length, girth * RIM_STALK), AP.length);
+        // (and its upper link bends up, never forward: bent forward, it set the eye back down by the rim)
+        e.curl = [clamp(Math.min(e.curl[0], RIM_STALK_BEND), AP.curlPitch), e.curl[1]];
+      }
       // a PAIR aimed near straight up (or down) lands both eyes on the midline as one merged ball —
       // fold the azimuth off it so the mirrored eyes always clear each other
       if (e.pair && Math.abs(Math.cos(e.attachAzimuth)) < Math.cos(EYE_AZ_MAX)) {
