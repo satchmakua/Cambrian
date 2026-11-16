@@ -31,10 +31,12 @@ export function Mouth({
   recessed,
   surface = 'kit',
   skin,
+  fur,
 }: {
   f: MeshFeature;
   dark: number;
   skin?: THREE.Material; // the body's covering material (a mammal's jaw wears it)
+  fur?: readonly THREE.Material[]; // …and its fur shells (a cat's whisker pads wear them)
   phenotype: Phenotype;
   carves: readonly Carve[];
   recessed: boolean;
@@ -45,7 +47,7 @@ export function Mouth({
   if (v === 'herbivore' || v === 'maw' || v === 'fanged') {
     // the old fanged band split hinged (style < 0.22) vs underbite — kept as a parameter flip
     const variant: JawedVariant = v === 'fanged' && f.style >= 0.22 ? 'underbite' : v;
-    return <JawedMouth {...shared} variant={variant} skin={skin} />;
+    return <JawedMouth {...shared} variant={variant} skin={skin} fur={fur} />;
   }
   if (v === 'beak') return <BeakMouth {...shared} />;
   if (v === 'mandibles') return <MandiblesMouth {...shared} />;

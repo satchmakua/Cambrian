@@ -425,10 +425,9 @@ export function buildJawed(
       }
       pads = mergeGeometries(lobes) ?? null;
       for (const l of lobes) l.dispose();
-      if (pads) {
-        pads.computeVertexNormals();
-        bakeBodySpace(pads, o);
-      }
+      // (the lobes keep the sphere's own normals, carried through the scale by applyMatrix4: recomputed on
+      // the unwelded triangles, every face got its own normal and the pads were two faceted eggs)
+      if (pads) bakeBodySpace(pads, o);
     }
   }
 
@@ -502,6 +501,7 @@ export function snoutReach(p: Phenotype, mouthIdx: number): number {
 /** a muzzle reaching no further than this ahead of its braincase is a short one: a cat's */
 export const SNOUT_SHORT = 1.85;
 const SNOUT_LONG = 2.4;
+const NO_FUR: readonly THREE.Material[] = [];
 /** a whisker pad's offset from the nose, sideways and down (×the mouth's radius) */
 const PAD_SPREAD = 0.3;
 const PAD_DROP = 0.5;
@@ -509,7 +509,10 @@ const PAD_DROP = 0.5;
  *  from under the nose down onto the upper lip. (Two round balls 0.26 tall under the nose stopped a third of the
  *  mouth's radius short of the lip, a band of bare chin between: a teddy's muzzle over a drawn-on mouth.) */
 export const PAD_SIZE: readonly [number, number, number] = [0.3, 0.4, 0.2];
-const PAD_SINK = 0.14;
+/** (…sunk far enough that, furred in the coat's shells like the skin round them, they stand 0.4–0.75 of a pile
+ *  proud of the muzzle: at 0.14 the bare lobes stood a whole pile — a quarter of the mouth's radius — off it,
+ *  and furred they would be two puffballs) */
+export const PAD_SINK = 0.3;
 
 /** …and a long muzzle's nose pad against the mouth's size */
 const NOSE_LONG = 1.5;
@@ -595,6 +598,7 @@ export function JawedMouth({
   dark,
   skin,
   surface = 'kit',
+  fur = NO_FUR,
 }: {
   f: MeshFeature;
   phenotype: Phenotype;
@@ -604,6 +608,7 @@ export function JawedMouth({
   dark: number;
   skin?: THREE.Material; // the body's covering material — a mammal's jaw wears it
   surface?: SkinSurface; // which rendered skin to trace lips onto (kit vs blended smooth/hybrid)
+  fur?: readonly THREE.Material[]; // the coat's fur shells (close-up views): a cat's whisker pads wear them
 }) {
   const built = useMemo(
     () => buildJawed(phenotype, f.idx, carves, recessed, variant, surface),
@@ -712,6 +717,9 @@ export function JawedMouth({
       {!muzzled && built.upperTeeth.length > 0 && <mesh geometry={built.upperFold} material={shut ? coatMat : mats.lip} castShadow />}
       {built.nose && <mesh geometry={built.nose} material={mats.nose} castShadow />}
       {built.pads && <mesh geometry={built.pads} material={coatMat} castShadow />}
+      {/* (…and the coat's shells over them, as over the muzzle round them: bare, they were two smooth suede
+          lobes poking out through the fur — pasted on) */}
+      {built.pads && skin && fur.map((m, i) => <mesh key={`padFur${i}`} geometry={built.pads!} material={m} />)}
       {built.nostrils && <mesh geometry={built.nostrils} material={mats.nostril} />}
       {built.upperTeeth.length > 0 && (
         <instancedMesh

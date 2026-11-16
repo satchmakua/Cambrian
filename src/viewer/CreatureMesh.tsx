@@ -792,7 +792,7 @@ function Feature({
       // (one of a radial body's copies of its central maw: see drawnMouths)
       if (!drawnMouths(phenotype).has(f.idx)) return null;
       return (
-        <Mouth f={f} dark={footColor} skin={skin} phenotype={phenotype} carves={carves} recessed={recessed} surface={surface} />
+        <Mouth f={f} dark={footColor} skin={skin} fur={fur} phenotype={phenotype} carves={carves} recessed={recessed} surface={surface} />
       );
     case 'pincer':
       return <Pincer f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} />;
@@ -831,7 +831,7 @@ function Feature({
     case 'barb':
       return <Barb f={f} color={footColor} />;
     case 'ear':
-      return <Ear f={f} color={footColor} belly={coatBelly(phenotype.genomeRef.palette).getHex()} skin={skin} origin={phenotype.nodes[f.idx].pos} bare={ratLike(phenotype)} low={lowEar(phenotype, f.idx)} coat={coatMain(phenotype.genomeRef.palette).getHex()} />;
+      return <Ear f={f} color={footColor} belly={coatBelly(phenotype.genomeRef.palette).getHex()} skin={skin} origin={phenotype.nodes[f.idx].pos} bare={ratLike(phenotype)} low={lowEar(phenotype, f.idx)} coat={coatMain(phenotype.genomeRef.palette).getHex()} fur={isApe(phenotype) ? NO_FUR : fur} />;
     case 'gill':
       return <Gill f={f} color={footColor} phenotype={phenotype} surface={surface} skin={skin} />;
     case 'crest':
@@ -2254,10 +2254,12 @@ function bakeSkin(g: THREE.BufferGeometry, origin: readonly number[]): THREE.Buf
 
 /** how much a mouse's thin bare ear glows with the light through it (an emissive share of its pink) */
 const BARE_EAR_GLOW = 0.15;
+/** the share of the coat's fur shells an ear wears (the inner ones: a pile that much of the body's long) */
+export const EAR_PILE = 0.5;
 /** the flesh an inner ear's pale fur lets show through */
 const EAR_FLESH = srgbHSL(0.01, 0.38, 0.62);
 
-function Ear({ f, color, belly, skin, origin, bare = false, low = false, coat }: { f: MeshFeature; color: number; belly: number; skin?: THREE.Material; origin: readonly number[]; bare?: boolean; low?: boolean; coat?: number }) {
+function Ear({ f, color, belly, skin, origin, bare = false, low = false, coat, fur = NO_FUR }: { f: MeshFeature; color: number; belly: number; skin?: THREE.Material; origin: readonly number[]; bare?: boolean; low?: boolean; coat?: number; fur?: readonly THREE.Material[] }) {
   // (a small round ear keeps its own small size: floored at 0.06, a weasel's grew past what its genes asked)
   const r = low ? f.radius : Math.max(f.radius, 0.06);
   const v = earVariant(f.style);
@@ -2293,6 +2295,10 @@ function Ear({ f, color, belly, skin, origin, bare = false, low = false, coat }:
           <meshStandardMaterial color={color} roughness={0.7} />
         </mesh>
       )}
+      {/* the coat runs on up over the ear, its inner half of the shells — a short pile (see EAR_PILE): bare, a
+          cat's or a dog's ear was a smooth card with knife edges standing off a furred head (a mouse's thin
+          bare leaf wears none, nor an ape's ear of bare skin) */}
+      {skin && !bare && fur.slice(0, Math.ceil(fur.length * EAR_PILE)).map((m, i) => <mesh key={`earFur${i}`} geometry={geo.outer} material={m} />)}
       <mesh geometry={geo.inner}>
         {/* (a mouse's thin ear glows a little with the light through it) */}
         <meshStandardMaterial color={innerColor} roughness={0.75} emissive={bare ? innerColor : 0x000000} emissiveIntensity={bare ? BARE_EAR_GLOW : 0} />
