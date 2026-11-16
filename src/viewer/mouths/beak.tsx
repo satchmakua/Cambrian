@@ -192,11 +192,13 @@ export function buildBeak(
     // left no depth for the hook to turn down from)
     // (a hooked bill is compressed but solid — over half as wide as it is deep: at a third, from the front
     // it was a needle, from the side a blade)
-    { radius: (u) => Math.max(r * 0.03, upperR0 * (hooked ? 1 - Math.pow(u, 1.5) : broad ? spoon(u) : Math.pow(1 - u, 0.95))), flatten: shelled ? 0.42 : hooked ? HOOKED_WIDTH : 0.3 + 0.2 * sPos, flattenAt: broad ? flatU : undefined, radialSegments: 10 },
+    // (a songbird's shut bill is a finch's cone, near as wide as it is deep: pressed to under half its depth,
+    // from in front it was a sliver and from three-quarters a flat cream card stuck on the face)
+    { radius: (u) => Math.max(r * 0.03, upperR0 * (hooked ? 1 - Math.pow(u, 1.5) : broad ? spoon(u) : Math.pow(1 - u, 0.95))), flatten: shelled ? 0.42 : hooked ? HOOKED_WIDTH : slimShut ? SLIM_WIDTH : 0.3 + 0.2 * sPos, flattenAt: broad ? flatU : undefined, radialSegments: 10 },
   );
   const lower = sweepTube(
     lowerPath.map((p) => ({ p, n: flatN })),
-    { radius: (u) => Math.max(r * 0.025, upperR0 * (broad ? 0.86 * spoon(u) : 0.72 * Math.pow(1 - u, 1.05))), flatten: shelled ? 0.42 : hooked ? HOOKED_WIDTH * 0.9 : 0.3, flattenAt: broad ? flatL : undefined, radialSegments: 10 },
+    { radius: (u) => Math.max(r * 0.025, upperR0 * (broad ? 0.86 * spoon(u) : 0.72 * Math.pow(1 - u, 1.05))), flatten: shelled ? 0.42 : hooked ? HOOKED_WIDTH * 0.9 : slimShut ? SLIM_WIDTH : 0.3, flattenAt: broad ? flatL : undefined, radialSegments: 10 },
   );
   // the buried root stays buried: where a ring's spine point is still inside the head, any of its
   // vertices that poke out are drawn back under the skin. (A tall blade-bill rooted up the face stood
@@ -228,9 +230,12 @@ export function buildBeak(
   // a hair proud (+0.012r..0.015r) otherwise so the dark backdrop never hides inside the body
   const w = Math.max(0.1 * r, ringR * 0.5);
   const h = Math.max(0.08 * r, 0.45 * Math.hypot(cu[0] - cl[0], cu[1] - cl[1], cu[2] - cl[2]));
-  // (a broad bill is shut, its gape a line down its side: its dark wedge stays under the skin)
-  const rimInset = recessed || broad ? -0.3 * r : 0.015 * r;
-  const centerInset = recessed || broad ? -0.65 * r : 0.012 * r;
+  // (a broad bill is shut, its gape a line down its side: its dark wedge stays under the skin — and so does
+  // a songbird's shut slim bill's: laid flat on the face under the bill's lifted root, its corners stood out
+  // of the cheek behind the bill, a black spike)
+  const shut = broad || slimShut;
+  const rimInset = recessed || shut ? -0.3 * r : 0.015 * r;
+  const centerInset = recessed || shut ? -0.65 * r : 0.012 * r;
   const interior = interiorWedge(seat.p, seat.n, spec.right, spec.up, w, h, rimInset, centerInset);
 
   return { spec, r, collar, upper, lower, interior, ring, seat, upperPath, lowerPath, upperLen, lowerLen, hook, hooked, dir, up: bup };
@@ -355,6 +360,8 @@ const BILL_TIP = new THREE.Color(0x1d1f23);
 const HOOKED_WIDTH = 0.55;
 /** how far a shut slim bill's lower mandible tucks its tip inside the upper's underside (× the mouth's radius) */
 export const SLIM_SHUT = 0.04;
+/** a shut slim (songbird's) bill's width against its depth: a finch's cone, not a blade on edge */
+export const SLIM_WIDTH = 0.8;
 /** a flightless bird's broad flat bill: its root's half-width (× the mouth's radius), its depth (× its
  *  width) and how far its tip droops */
 export const BROAD_BILL = { root: 0.6, depth: 0.42, hook: 0.25, len: 2.25, taper: 0.4 };

@@ -509,6 +509,12 @@ export const FOLD_TUCK = 0.018;
 /** A wing part's style gene at or over this is the LONG cut of folded wing: a bird of prey's. */
 export const LONG_WING = 0.6;
 
+/** Where a songbird's short folded wing roots on the trunk node nearest its shoulder: out at its side (× the
+ *  node's half-width), up (× its radius) and forward (× its radius) — high on the flank, where a hawk's roots
+ *  (longWingFold), its leading edge along the edge of the back. (Rooted at 0.28 of the radius up, a quarter of
+ *  the way up the side, the leaf hung mid-flank under a bare upper flank: a shield strapped to an egg.) */
+export const SHORT_WING_SEAT = { out: 0.8, up: 0.5, fwd: 0.35 } as const;
+
 export interface WingFold {
   anchor: [number, number, number]; // the shoulder, body space
   axis: THREE.Vector3; // shoulder → wingtips

@@ -5,7 +5,7 @@ import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
 import type { Vec3 } from '../../src/engine/genome';
 import { buildBeak, type BeakBuild } from '../../src/viewer/mouths/beak';
-import { buildFeatheredWing, conformToSurface, shortWingLie, wingOpenSpan, FOLD_TUCK } from '../../src/viewer/wings';
+import { buildFeatheredWing, conformToSurface, shortWingLie, wingOpenSpan, FOLD_TUCK, SHORT_WING_SEAT } from '../../src/viewer/wings';
 import { surfacePrims } from '../../src/viewer/mouthLine';
 import { fieldAt } from '../../src/viewer/bodyField';
 import { coatMain, coatPattern } from '../../src/viewer/palette';
@@ -97,7 +97,7 @@ describe("a songbird's folded wing", () => {
       const shoulderZ = p.nodes[tipIdx].pos[2];
       let near = trunk[0];
       for (const n of trunk) if (Math.abs(n.pos[2] - shoulderZ) < Math.abs(near.pos[2] - shoulderZ)) near = n;
-      const anchor = [near.pos[0] + near.radius * (near.scale?.[0] ?? 1) * 0.86, near.pos[1] + near.radius * 0.28, near.pos[2] + near.radius * 0.35];
+      const anchor = [near.pos[0] + near.radius * (near.scale?.[0] ?? 1) * SHORT_WING_SEAT.out, near.pos[1] + near.radius * SHORT_WING_SEAT.up, near.pos[2] + near.radius * SHORT_WING_SEAT.fwd];
       const lie = shortWingLie(p, 1, anchor, foldS)!;
       expect(lie, `#${seed}`).not.toBeNull();
       expect(lie.S).toBeLessThanOrEqual(foldS);

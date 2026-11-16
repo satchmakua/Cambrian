@@ -46,6 +46,7 @@ import { whiskerFan, whiskerStretch } from './whiskers';
 import { frillGeometry, frillPlan } from './frill';
 import { getGeometry, retainGeometry, releaseGeometry, hasGeometry } from './geometryCache';
 import { drawnMouths, mouthCarves, surfacePrims } from './mouthLine';
+import { SHORT_WING_SEAT } from './wings';
 import { gillCoverFlap, gillCutOf, gillGeometry, gillMarks, gillRadiusOf } from './gills';
 import { sampleTrajectory, type Trajectory } from '../physics/fitness';
 import type { SkinMode } from '../ui/store';
@@ -1960,7 +1961,7 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
       // body — from the dorsal attach point it stuck out of the spine like a broom handle)
       // (…at the shoulders: see wingShoulder)
       anchor = feathered && !raised
-        ? [near.pos[0] + side * rx * 0.86, near.pos[1] + near.radius * 0.28, near.pos[2] + near.radius * 0.35]
+        ? [near.pos[0] + side * rx * SHORT_WING_SEAT.out, near.pos[1] + near.radius * SHORT_WING_SEAT.up, near.pos[2] + near.radius * SHORT_WING_SEAT.fwd]
         : (wingShoulder(phenotype, side) ?? [near.pos[0] + side * rx * 0.55, near.pos[1] + near.radius * 0.5, near.pos[2] + near.radius * 0.2]);
     }
     if (long) anchor = long.anchor;
