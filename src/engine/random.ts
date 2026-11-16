@@ -195,6 +195,11 @@ interface Morpho {
   thoraxLong?: Rg; // its length ×its girth — default [1.1, 1.3]
   eyeStyle?: Rg; // 0 round … 1 glowing
   eyeCount?: readonly number[];
+  /** how many of the eye pairs drawn on a plain head it keeps (the rest are drawn all the same, so no later gene
+   *  moves): grow seats every pair on the same node of the head, at the same elevation, so a second pair
+   *  lands straight above the first and half over it — a chimera's four eyes were two holes punched one
+   *  over the other on each side of its head */
+  eyePairs?: number;
   eyeAz?: Rg; // placement (1.0 up-fwd, ~0.3 side, ~1.6 top — but a PAIR near 1.57 merges on the midline)
   eyeEl?: Rg; // forward tilt of the eyes: ~1.1 forward (cat, ape) … ~0.6 lateral (deer, mouse) … ~0.25 a fish's
   eyeT?: Rg; // where along a plain head the eyes sit — default [0.7, 0.98] (front); a croc's ride far back
@@ -370,12 +375,15 @@ const MORPHOTYPES: readonly Morpho[] = [
   // griffin/manticore mishmash: a winged horned tailed quadruped wearing a spliced back sail + a clashing skin.
   // It stands on stout legs under its body (splayed like a lizard's, on thin shanks, it was a heavy trunk
   // on an A-frame of sticks), carries its tail clear of the ground, and wears its ruff round its head.
+  // (one pair of eyes, a reptile's — gold, amber or copper round a slit: its second pair stood straight over the
+  // first, half over it, and a beady eye — a black ball, a hair of iris round its pupil — was a hole punched in
+  // the head; four of them, two sockets stacked each side of a pig's face)
   // (a chimera's mouth is a jaw, fangs or a beak: an insect's mandibles on its soft head hung from the corners of
   // a dark box like two tusks — a muppet's mouth)
   // (its markings at least four to a body's girth: a net of cells as wide as its trunk was a few planes cut
   // through it — red straps round its neck, chest and legs, a cross on its back, a harness; and it stands on
   // padded paws in its own coat, not on discs of a dark foot colour — rubber caps)
-  { id: 'chimera', cluster: 'uncanny', weight: 0.9, girth: [0.45, 0.65], repeat: [3, 4], elong: [1.1, 1.4], taper: [1.04, 1.1], legThick: [0.5, 0.62], neck: [0.5, 0.6], neckLinks: [2, 3], neckLift: [-0.36, -0.26], headSize: [0.56, 0.7], headShape: ['wedge', 'tapered', 'blocky', 'round'], legPairs: [2], posture: 'digitigrade', legAz: [4.38, 4.56], legLen: [0.8, 1.1], legTerm: ['claw', 'paw', 'pincer'], wings: 1, dorsal: 0.85, pectoral: 0.6, flankFins: false, tail: 1, tailTerm: ['fin', 'claw', 'none'], wingSize: [1.3, 1.6], tailThick: [0.4, 0.54], tailTaper: [0.78, 0.86], tailDroop: [-1.57, -1.42], tailCurl: [0.02, 0.1], horns: 0.8, hornT: 0, hornAz: [0.85, 1.25], frill: 0.4, frillAt: 'head', spines: 0.4, spineCount: 3, eyeStyle: [0, 1], eyeCount: [2, 3], mouthStyle: [0.07, 0.37], covering: ['skin', 'scales', 'fur', 'feathers', 'chitin', 'plates'], pattern: ['stripes', 'bands', 'spots', 'ocelli', 'reticulate', 'gradient'], patternScale: [4.6, 7.2], sheen: [0.2, 0.9], hue: [0, 1], sat: [0.5, 0.9] },
+  { id: 'chimera', cluster: 'uncanny', weight: 0.9, girth: [0.45, 0.65], repeat: [3, 4], elong: [1.1, 1.4], taper: [1.04, 1.1], legThick: [0.5, 0.62], neck: [0.5, 0.6], neckLinks: [2, 3], neckLift: [-0.36, -0.26], headSize: [0.56, 0.7], headShape: ['wedge', 'tapered', 'blocky', 'round'], legPairs: [2], posture: 'digitigrade', legAz: [4.38, 4.56], legLen: [0.8, 1.1], legTerm: ['claw', 'paw', 'pincer'], wings: 1, dorsal: 0.85, pectoral: 0.6, flankFins: false, tail: 1, tailTerm: ['fin', 'claw', 'none'], wingSize: [1.3, 1.6], tailThick: [0.4, 0.54], tailTaper: [0.78, 0.86], tailDroop: [-1.57, -1.42], tailCurl: [0.02, 0.1], horns: 0.8, hornT: 0, hornAz: [0.85, 1.25], frill: 0.4, frillAt: 'head', spines: 0.4, spineCount: 3, eyeStyle: [0.42, 0.58], eyeCount: [2, 3], eyePairs: 1, mouthStyle: [0.07, 0.37], covering: ['skin', 'scales', 'fur', 'feathers', 'chitin', 'plates'], pattern: ['stripes', 'bands', 'spots', 'ocelli', 'reticulate', 'gradient'], patternScale: [4.6, 7.2], sheen: [0.2, 0.9], hue: [0, 1], sat: [0.5, 0.9] },
   // wrong-arthropod: a myriapod — a low flat chain of armoured rings, a pair of jointed legs to each,
   // a shield of a head with compound eyes, mandibles and long feelers, iridescent chitin. (A smooth
   // bottle with ten pegs under its middle, a rod of a tail and rivets down its back was a grub.)
@@ -719,7 +727,9 @@ function headSeg(rng: Rng, bodyGirth: number, m: Morpho, eyeStyle: number): Segm
   const stalk = chance(rng, m.stalkEyes ?? 0);
   const eyeCount = pick(rng, m.eyeCount ?? ([2] as const));
   for (let p = 0; p < Math.max(1, Math.round(eyeCount / 2)); p++) {
-    apps.push(eyes(rng, rg(rng, m.eyeT, [0.7, 0.98]), false, g, { style: [eyeStyle, eyeStyle], az: m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.18, 0.5) + p * 0.3, stalk, el: m.eyeEl, size: m.eyeSize }));
+    const e = eyes(rng, rg(rng, m.eyeT, [0.7, 0.98]), false, g, { style: [eyeStyle, eyeStyle], az: m.eyeAz ? rg(rng, m.eyeAz) : range(rng, 0.18, 0.5) + p * 0.3, stalk, el: m.eyeEl, size: m.eyeSize });
+    if (p >= (m.eyePairs ?? Infinity)) continue; // (drawn, not kept: see eyePairs)
+    apps.push(e);
     if (m.eyeTilt) apps[apps.length - 1].roll = m.eyeTilt; // (a constant: no draw)
   }
   const mouthGene = mouth(rng, g, m.mouthStyle); // every face has a mouth

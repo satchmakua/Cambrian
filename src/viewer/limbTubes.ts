@@ -51,9 +51,15 @@ export const PODO_DARK = 0.62;
 /** how far a podomere's pinch reaches from its joint, in its girths (at most a quarter of its length) */
 export const PODO_EASE = 0.6;
 
+/** the leg terminals of a vertebrate's column — a leg ending in one is never a row of podomeres */
+const BEAST_FEET: ReadonlySet<string> = new Set(['paw', 'hoof', 'hand']);
+
 /** Which of the field's cones are a jointed shell's leg links (podomeres), or null when none is. */
 export function podomeres(p: Phenotype, full: FieldPrims): Uint8Array | null {
   if (p.genomeRef.covering.type !== 'chitin') return null;
+  // (a leg that stands on a paw, a hoof or a hand is a beast's, whatever its hide: a chitin-coated chimera's,
+  // pinched in and darkened at its knee and its wrist, was a jointed doll's, a stack of capsules on padded paws)
+  if (p.nodes.some((n) => n.part?.kind === 'leg' && BEAST_FEET.has(n.terminal ?? ''))) return null;
   const out = new Uint8Array(full.nc);
   let any = false;
   for (let m = 0; m < full.nc; m++) {
