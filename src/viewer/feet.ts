@@ -413,6 +413,7 @@ const TALON_ROOT = 0.72;
 /** The toes (skin) and claws (dark keratin) of one foot, in the body frame about the foot node.
  *  `taloned` is the cut of a bird of prey's foot (a bird's only): stout toes ending in long hooks. */
 export function toedFootGeometry(plan: FootPlan, r: number, link: number, taloned = false, webbed = false): { toes: THREE.BufferGeometry; claws: THREE.BufferGeometry } {
+  if (plan === 'stump') return stumpFootGeometry(r);
   const hooked = taloned && plan === 'bird';
   // each toe's centre line, for the webs between them (a frog's hind foot)
   const lines: { pts: THREE.Vector3[]; r0: number }[] = [];
@@ -423,8 +424,8 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number, talone
   // a pad under the ankle joining the toes
   const pad = new THREE.SphereGeometry(1, 12, 8);
   // (tall enough to swallow the end of the leg tube above it)
-  // (a tortoise's sole is broad: the stump of its leg spread a little on the ground)
-  const sole = plan === 'stump' ? 1.35 : 1.08;
+  // (a tortoise's foot is its own: stumpFootGeometry, above)
+  const sole = 1.08;
   pad.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(0, floor + r * 0.62, 0), new THREE.Quaternion(), new THREE.Vector3(r * sole, r * 0.72, r * sole)));
   toes.push(pad);
   for (const t of toesOf(plan, r, link, hooked, webbed && plan === 'frog')) {
@@ -462,7 +463,7 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number, talone
     }
     // the claw: a curved-down cone off the tip
     const cdir = dir.clone().setY(-0.55).normalize();
-    const cl = t.r0 * (plan === 'bird' ? 2.2 : plan === 'theropod' ? 2.3 : plan === 'stump' ? 1.1 : 1.9);
+    const cl = t.r0 * (plan === 'bird' ? 2.2 : plan === 'theropod' ? 2.3 : 1.9);
     const claw = new THREE.ConeGeometry(t.r0 * 0.5, cl, 6);
     claw.applyMatrix4(
       new THREE.Matrix4().compose(tip.clone().add(cdir.clone().multiplyScalar(cl * 0.45)), new THREE.Quaternion().setFromUnitVectors(up, cdir), new THREE.Vector3(1, 1, 1)),
@@ -480,6 +481,35 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number, talone
   };
   // (a frog's foot has no claws: an empty geometry keeps the mesh pair uniform)
   return { toes: merge(toes), claws: claws.length ? merge(claws) : new THREE.BufferGeometry() };
+}
+
+/** A TORTOISE's foot (an elephant's): the leg's column flaring a little to a flat round sole, STUMP_SOLE of the
+ *  leg's girth across, the toes inside it — only a few short blunt nails (STUMP_NAILS, their bearings from dead
+ *  ahead) showing out of the front of its rim, down to the ground. (Five toes of two knuckle-balls each round a
+ *  ball of a pad, every joint a sphere, was a pile of grapes under the shell, claw spikes poking out of it.) */
+export const STUMP_SOLE = 1.3;
+export const STUMP_NAILS: readonly number[] = [-0.8, -0.27, 0.27, 0.8];
+/** …the column's profile, [radius ×r, height ×r over the sole], from the sole's middle up into the leg */
+const STUMP_PROFILE: readonly (readonly [number, number])[] = [[0, 0], [STUMP_SOLE * 0.94, 0], [STUMP_SOLE, 0.08], [STUMP_SOLE * 0.98, 0.26], [1.12, 0.7], [1.0, 1.2], [0.96, 1.7]];
+function stumpFootGeometry(r: number): { toes: THREE.BufferGeometry; claws: THREE.BufferGeometry } {
+  const floor = -r; // the foot node's underside sits on the ground (levelFeet)
+  const lathe = new THREE.LatheGeometry(STUMP_PROFILE.map(([x, y]) => new THREE.Vector2(x * r, floor + y * r)), 20);
+  const foot = lathe.toNonIndexed();
+  lathe.dispose();
+  const up = new THREE.Vector3(0, 1, 0);
+  const nails = STUMP_NAILS.map((az) => {
+    // a blunt horn nail out of the rim of the sole, pointing out and down, its tip at the ground
+    const out = new THREE.Vector3(Math.sin(az), 0, Math.cos(az));
+    const dir = out.clone().setY(-0.7).normalize();
+    const len = r * 0.42;
+    const root = out.clone().multiplyScalar(r * STUMP_SOLE * 0.9).setY(floor + len * 0.62);
+    const nail = new THREE.ConeGeometry(r * 0.2, len, 6);
+    nail.applyMatrix4(new THREE.Matrix4().compose(root.addScaledVector(dir, len * 0.5), new THREE.Quaternion().setFromUnitVectors(up, dir), new THREE.Vector3(1, 1, 1)));
+    return nail.toNonIndexed();
+  });
+  const claws = mergeGeometries(nails, false) ?? nails[0];
+  for (const g of nails) if (g !== claws) g.dispose();
+  return { toes: foot, claws };
 }
 
 /**

@@ -153,6 +153,12 @@ export function buildSmoothGeometry(
 /** how far a horn shell swells out over a leg's root (×the root's radius), and over how wide a patch */
 const HIP_COVER = 1.15;
 const HIP_COVER_REACH = 2.4;
+/** A horn shell's dome is highest over the middle of the back and falls away to its rim every way round:
+ *  its crown's extra thickness × DOME_GAIN at the centre, easing to ×1 (its flanks as they were, over the
+ *  legs) as DOME_SPREAD × the squared distance out (in the trunk's half-width and half-length) reaches 1. (Laid on evenly by height, the trunk's flat back and straight
+ *  flanks showed through: a flat-topped loaf with upright walls, its marginal scutes run up them as ribs.) */
+export const DOME_GAIN = 2.6;
+export const DOME_SPREAD = 1;
 
 /** A CRAB's carapace (a thin shell on a one-node trunk that bears claws) has a front rim: its
  *  anterolateral margin, from beside the eyes round toward its widest point, is cut into CRAB_TEETH teeth
@@ -235,6 +241,10 @@ function shellField(p: Phenotype): ShellField | null {
     zMax = Math.max(zMax, n.pos[2] + rz);
   }
   const yMid = ySum / trunk.length;
+  // (the crown's centre and reach over the ground plan: see DOME_GAIN)
+  const zc = (zMin + zMax) / 2, hz = Math.max((zMax - zMin) / 2, 1e-3);
+  let hx = 1e-3;
+  for (const n of trunk) hx = Math.max(hx, Math.abs(n.pos[0]) + n.radius * (n.scale?.[0] ?? 1));
   prims.k = 0.4 * rMax;
   // the shell's size gene: the carapace part's thickness (relative to the trunk) sets how proud it sits
   const prominence = Math.min(1.6, Math.max(0.6, shellNode.radius / Math.max(rMax, 1e-3)));
@@ -300,7 +310,8 @@ function shellField(p: Phenotype): ShellField | null {
       const d = Math.hypot(x - h.pos[0], y - h.pos[1], z - h.pos[2]) / (HIP_COVER_REACH * h.radius);
       if (d < 1) over = Math.max(over, h.radius * HIP_COVER * (1 - d) * (1 - d));
     }
-    const t = t0 + dome * up * up + flare * rim + over + margin(x, y, z);
+    const crown = thin ? 1 : 1 + (DOME_GAIN - 1) * Math.max(0, 1 - DOME_SPREAD * ((x / hx) ** 2 + ((z - zc) / hz) ** 2));
+    const t = t0 + dome * up * up * crown + flare * rim + over + margin(x, y, z);
     const body = fieldAt(prims, x, y, z) - t;
     const cut = yCut - y; // > 0 below the skirt → outside
     return body > cut ? body : cut;
@@ -314,7 +325,8 @@ function shellField(p: Phenotype): ShellField | null {
     yMax = Math.max(yMax, n.pos[1] + n.radius * (n.scale?.[1] ?? 1));
   }
   const min = [xMin - pad, yCut - rMax * 0.1, zMin - pad];
-  const max = [xMax + pad, yMax + pad, zMax + pad];
+  // (a horn shell's crown stands higher than its flanks by the dome's gain: room for it over the back)
+  const max = [xMax + pad, yMax + pad + (thin ? 0 : dome * DOME_GAIN), zMax + pad];
   return { field, min, max, rMax, yCut, thin };
 }
 
@@ -325,6 +337,8 @@ function shellField(p: Phenotype): ShellField | null {
  *  thin shell (a crab's carapace, a beetle's wing-cases) or none. (Seamed by a random net, a tortoise's
  *  shell was crazy paving.) */
 export const SHELL_SCUTES = { vertebral: 5, costal: 4, marginal: 24 } as const;
+/** how far out the costal scutes sit, ×the shell's half-width at the skirt */
+export const COSTAL_OUT = 0.74;
 export function shellScutes(p: Phenotype): Float32Array | null {
   const sf = shellField(p);
   if (!sf || sf.thin) return null;
@@ -367,10 +381,12 @@ export function shellScutes(p: Phenotype): Float32Array | null {
   for (let j = 0; j < SHELL_SCUTES.costal; j++) {
     const z = back + L * (0.23 + (0.54 * j) / (SHELL_SCUTES.costal - 1));
     const w = reach(0, z, 1, 0, yLow);
-    for (const side of [1, -1]) seat(side * 0.52 * w, z);
+    // (out on the flank, down the dome's side: seated on its crown, at half the width, they left the marginals
+    // the whole wall below them, and its seams ran up it as ribs)
+    for (const side of [1, -1]) seat(side * COSTAL_OUT * w, z);
   }
   // the marginals: round the rim, from over the neck, a little in from its edge and up off the skirt
-  const yRim = yCut + (max[1] - yCut) * 0.12;
+  const yRim = yCut + (max[1] - yCut) * 0.06;
   for (let k = 0; k < SHELL_SCUTES.marginal; k++) {
     const a = (2 * Math.PI * k) / SHELL_SCUTES.marginal;
     const dx = Math.sin(a), dz = Math.cos(a);
