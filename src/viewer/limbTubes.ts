@@ -35,6 +35,41 @@ export const KNOB_EASE_FIELD = 2.6;
  *  slimming its end (to TUCK_SLIM of the joint's girth); a gentler one by stopping it short */
 const TUCK_STEEP = 0.3;
 const TUCK_SLIM = 0.6;
+/** How a field cone's end at a hand-over is tucked in (see splitThin): how far it is drawn in (× its
+ *  length) and its girth there. A steep cone slims its end; a gentle one stops short by enough that its
+ *  end cap stays inside the joint sphere (the ball of the joint's girth on the tube's side). */
+function tuckEnd(r: number, rOther: number, L: number): { t: number; r: number } {
+  const steep = (rOther - r) / L;
+  if (steep >= TUCK_STEEP) return { t: 0, r: r * TUCK_SLIM };
+  const s = Math.min(r * Math.max(0.3, (2.2 * steep) / (1 - steep * steep) + 0.15), 0.42 * L);
+  return { t: s / L, r: r + (rOther - r) * (s / L) };
+}
+
+/**
+ * THE HAND-OVER COLLAR. Where the field hands a limb on to a tube, the field's end is tucked in under the
+ * tube's joint ball — and the polygonized skin round a tucked end is not the limb's: its rounded end
+ * turns its face down (lit from above, a dark band), the ball's top turns its face up just under it (a
+ * bright one), and the marching tets bend the skin's normals down a cell or more above that. A dog's every
+ * wrist and hock wore a sock's top: a crease ring, the leg dark above it and pale below. So the tube runs
+ * on UP the field's limb as a collar of the limb's own girth — HAND_PROUD proud of it at the hold, where the
+ * field's tucked end and its bent normals lie (the tuck, and HAND_HOLD_CELLS grid cells beyond it) — then
+ * sinks into the field's own clean flank, to HAND_SINK of its girth, over HAND_EASE of the joint's girths:
+ * where the two cross they have one girth and one lean, and no seam shows. (A knob's collar: KNOB_COLLAR.)
+ */
+export const HAND_PROUD = 0.025;
+export const HAND_HOLD_CELLS = 1.5;
+export const HAND_SINK = 0.97;
+export const HAND_EASE = 1.6;
+/** …the hold is at most this share of the collar (the rest, its ease) */
+export const HAND_HOLD_SHARE = 0.4;
+/** …the collar reaches at most this share of the field's limb up from the joint (clear of its next joint):
+ *  up the one link, or through the gentle joints of a chain (a tail's spline) as far as HAND_RUN girths */
+export const HAND_REACH = 0.8;
+export const HAND_RUN = 6;
+/** …in this many rings */
+export const HAND_RINGS = 9;
+/** …and is drawn only where that much of the field's limb is at least this many of the joint's girths long */
+export const HAND_LINK = 1.0;
 
 const keyOf = (x: number, y: number, z: number) => `${x.toFixed(6)},${y.toFixed(6)},${z.toFixed(6)}`;
 
@@ -112,6 +147,9 @@ export interface ThinSplit {
   tips: Uint8Array | null;
   /** the joints (keyOf) drawn as knobs: a hooved leg's knee and hock (see HOOF_KNOB) */
   knobs?: Set<string>;
+  /** per cone of the full field: 1 — its a end hands a limb on to a tube under a collar, 2 — its b end does
+   *  (a limb's own round link; see HAND_PROUD) */
+  collars?: Uint8Array;
 }
 
 /** Which of the field's limb links are too thin for the grid (`cell`) — or are a jointed shell's leg
@@ -147,6 +185,9 @@ export function splitThin(p: Phenotype, full: FieldPrims, cell: number): ThinSpl
     bump(keyOf(field.bx[i], field.by[i], field.bz[i]));
   }
   const handoff = new Uint8Array(field.nc);
+  const collars = new Uint8Array(full.nc);
+  const fullOf: number[] = [];
+  for (let m = 0; m < full.nc; m++) if (!thin[m]) fullOf.push(m);
   for (let i = 0; i < field.nc; i++) {
     const A = [field.ax[i], field.ay[i], field.az[i]];
     const B = [field.bx[i], field.by[i], field.bz[i]];
@@ -159,14 +200,8 @@ export function splitThin(p: Phenotype, full: FieldPrims, cell: number): ThinSpl
     if (L < 1e-9) continue;
     let rA = field.ra[i], rB = field.rb[i];
     let tA = 0, tB = 0; // how far each end is drawn in (× L)
-    // tuck an end in: a steep cone slims its end, a gentle one stops short by enough that its end cap
-    // stays inside the joint sphere (the ball of the joint's girth on the tube's side)
-    const tuck = (r: number, rOther: number): { t: number; r: number } => {
-      const steep = (rOther - r) / L;
-      if (steep >= TUCK_STEEP) return { t: 0, r: r * TUCK_SLIM };
-      const s = Math.min(r * Math.max(0.3, (2.2 * steep) / (1 - steep * steep) + 0.15), 0.42 * L);
-      return { t: s / L, r: r + (rOther - r) * (s / L) };
-    };
+    // tuck an end in (see tuckEnd)
+    const tuck = (r: number, rOther: number) => tuckEnd(r, rOther, L);
     if (atB) {
       const k = tuck(rB, rA);
       tB = k.t;
@@ -181,6 +216,10 @@ export function splitThin(p: Phenotype, full: FieldPrims, cell: number): ThinSpl
     }
     const at = (t: number) => [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t];
     setCone(field, i, at(tA), at(1 - tB), rA, rB);
+    // (a limb's own round link hands on under a collar: a cone from the trunk is the limb's root, blended
+    // into the body, and a shaped link keeps its cross-section)
+    const m = fullOf[i];
+    if (!field.an[i] && p.nodes[field.ia[i]].kind !== 'spine' && p.nodes[field.ib[i]].kind !== 'spine') collars[m] = handoff[i];
   }
   // a hooved leg's knee and hock: the leg node its hoof hangs from
   const knobs = new Set<string>();
@@ -189,7 +228,12 @@ export function splitThin(p: Phenotype, full: FieldPrims, cell: number): ThinSpl
     const k = n.terminal === 'hoof' ? parentOf.get(i) : undefined;
     if (k !== undefined && p.nodes[k].part?.kind === 'leg') knobs.add(keyOf(p.nodes[k].pos[0], p.nodes[k].pos[1], p.nodes[k].pos[2]));
   });
-  return { field, handoff, tubes, fieldEnds: new Set(fieldAt.keys()), podo, tips, knobs };
+  for (let m = 0; m < full.nc; m++) {
+    // (a knob's own collar swells into it: see KNOB_COLLAR)
+    if (collars[m] & 1 && knobs.has(keyOf(full.ax[m], full.ay[m], full.az[m]))) collars[m] &= 2;
+    if (collars[m] & 2 && knobs.has(keyOf(full.bx[m], full.by[m], full.bz[m]))) collars[m] &= 1;
+  }
+  return { field, handoff, tubes, fieldEnds: new Set(fieldAt.keys()), podo, tips, knobs, collars };
 }
 
 export interface Tubes {
@@ -234,7 +278,7 @@ interface Joint {
  */
 export function limbTubes(
   full: FieldPrims,
-  split: Pick<ThinSplit, 'tubes' | 'fieldEnds'> & { podo?: Uint8Array | null; tips?: Uint8Array | null; knobs?: Set<string> },
+  split: Pick<ThinSplit, 'tubes' | 'fieldEnds'> & { podo?: Uint8Array | null; tips?: Uint8Array | null; knobs?: Set<string>; collars?: Uint8Array },
   cell: number,
   aoAt: (x: number, y: number, z: number, nx: number, ny: number, nz: number) => number,
   skin?: { positions: Float32Array; ao: Float32Array },
@@ -465,8 +509,122 @@ export function limbTubes(
     piece(base, near, 0.03 * rMax, tris);
   }
 
-  // --- the collars: where the field's limb hands on at a knob, it swells into it (see KNOB_COLLAR) ---
+  // --- the collars: where the field's limb hands on, the tube runs on up it (see HAND_PROUD) — and where
+  // it hands on at a knob, it swells into the knob instead (see KNOB_COLLAR) ---
   const tubeSet = new Set(tubes);
+  const fieldEndsAt = new Map<string, number[]>(); // the field's cones (full indices) with an end at a point
+  for (let m = 0; m < full.nc; m++) {
+    if (tubeSet.has(m)) continue;
+    for (const k of [keyOf(full.ax[m], full.ay[m], full.az[m]), keyOf(full.bx[m], full.by[m], full.bz[m])]) fieldEndsAt.set(k, [...(fieldEndsAt.get(k) ?? []), m]);
+  }
+  for (let m0 = 0; m0 < full.nc; m0++) {
+    const hand = split.collars?.[m0] ?? 0;
+    for (const atB of [false, true]) {
+      if (!(hand & (atB ? 2 : 1))) continue;
+      const J = atB ? B(m0) : A(m0);
+      const j = joints.get(keyOf(J[0], J[1], J[2]));
+      if (!j) continue;
+      // the field's limb up from the joint: this link, and on through the gentle joints of its chain (a tail's
+      // or a tentacle's spline pieces) — its axis as a polyline, its girth at each point, the length along it
+      const pts: number[][] = [J];
+      const rs: number[] = [atB ? full.rb[m0] : full.ra[m0]];
+      const at: number[] = [0];
+      let m = m0, fromB = atB;
+      for (let guard = 0; guard < 8; guard++) {
+        const O = fromB ? A(m) : B(m);
+        const P = pts[pts.length - 1];
+        const L = Math.hypot(O[0] - P[0], O[1] - P[1], O[2] - P[2]);
+        pts.push(O);
+        rs.push(fromB ? full.ra[m] : full.rb[m]);
+        at.push(at[at.length - 1] + L);
+        if (at[at.length - 1] >= HAND_RUN * rs[0]) break;
+        const kO = keyOf(O[0], O[1], O[2]);
+        const next = (fieldEndsAt.get(kO) ?? []).filter((o) => o !== m);
+        if (next.length !== 1 || (fieldEndsAt.get(kO) ?? []).length !== 2 || tubeSet.has(next[0])) break;
+        const n = next[0];
+        // (the same limb's chain — a trunk's cones are a chain of their own — and round)
+        if (full.ia[n] === full.ib[n] || full.an[n] || full.ch[n] !== full.ch[m]) break;
+        const nFromB = keyOf(full.bx[n], full.by[n], full.bz[n]) === kO;
+        const O2 = nFromB ? A(n) : B(n);
+        const u1 = [O[0] - P[0], O[1] - P[1], O[2] - P[2]], u2 = [O2[0] - O[0], O2[1] - O[1], O2[2] - O[2]];
+        const c = (u1[0] * u2[0] + u1[1] * u2[1] + u1[2] * u2[2]) / ((Math.hypot(u1[0], u1[1], u1[2]) * Math.hypot(u2[0], u2[1], u2[2])) || 1);
+        if (Math.acos(Math.max(-1, Math.min(1, c))) >= SWEEP_BEND) break;
+        m = n;
+        fromB = nFromB;
+      }
+      const Ltot = at[at.length - 1];
+      const rJ = rs[0];
+      if (rJ <= 1e-6 || Ltot < HAND_LINK * rJ) continue;
+      const seg = (d: number) => {
+        let i = 0;
+        while (i < at.length - 2 && d > at[i + 1]) i++;
+        return { i, f: Math.min(1, Math.max(0, (d - at[i]) / Math.max(at[i + 1] - at[i], 1e-9))) };
+      };
+      const lin = (d: number) => {
+        const { i, f } = seg(d);
+        return rs[i] + (rs[i + 1] - rs[i]) * f;
+      };
+      // the hold: the tucked end (where a slimmed one comes back within a hair of the limb's girth) and the
+      // cells over which the skin's normals still bend round it
+      const L0 = at[1];
+      const tk = tuckEnd(rJ, rs[1], L0);
+      let held = tk.t * L0;
+      if (tk.r < lin(held) * 0.99) {
+        for (let i = 1; i <= 40; i++) {
+          held = (i / 40) * L0;
+          if (tk.r + ((rs[1] - tk.r) * held) / L0 >= 0.98 * lin(held)) break;
+        }
+      }
+      const e = Math.min(held + HAND_HOLD_CELLS * cell + HAND_EASE * rJ, HAND_REACH * Ltot);
+      const h = Math.min(held + HAND_HOLD_CELLS * cell, HAND_HOLD_SHARE * e);
+      const w = (d: number) =>
+        d <= h ? 1 + HAND_PROUD * smooth(d / h) : 1 + HAND_PROUD + (HAND_SINK - 1 - HAND_PROUD) * smooth(Math.min(1, (d - h) / (e - h)));
+      const rAt = (d: number) => lin(d) * w(d);
+      const K = HAND_RINGS;
+      const segs = segsFor((1 + HAND_PROUD) * Math.max(rJ, lin(e)), cell);
+      const base = pos.length / 3;
+      // (the frame carried along without twist, as a run's rings are)
+      const dirAt = (d: number) => {
+        const { i } = seg(d);
+        const a = pts[i], b2 = pts[i + 1];
+        const l = Math.hypot(b2[0] - a[0], b2[1] - a[1], b2[2] - a[2]) || 1;
+        return [(b2[0] - a[0]) / l, (b2[1] - a[1]) / l, (b2[2] - a[2]) / l];
+      };
+      let e1 = perp(dirAt(0));
+      for (let i = 0; i <= K; i++) {
+        const d = (e * i) / K;
+        const { i: si, f } = seg(d);
+        const c = [0, 1, 2].map((x) => pts[si][x] + (pts[si + 1][x] - pts[si][x]) * f);
+        const v = dirAt(d); // up the field's limb, from the joint
+        const dd = e1[0] * v[0] + e1[1] * v[1] + e1[2] * v[2];
+        let q1 = [e1[0] - v[0] * dd, e1[1] - v[1] * dd, e1[2] - v[2] * dd];
+        const ql = Math.hypot(q1[0], q1[1], q1[2]);
+        q1 = ql > 1e-6 ? [q1[0] / ql, q1[1] / ql, q1[2] / ql] : perp(v);
+        e1 = q1;
+        const e2 = [v[1] * e1[2] - v[2] * e1[1], v[2] * e1[0] - v[0] * e1[2], v[0] * e1[1] - v[1] * e1[0]];
+        const hh = 1e-4 * e;
+        const dr = (rAt(Math.min(e, d + hh)) - rAt(Math.max(0, d - hh))) / (Math.min(e, d + hh) - Math.max(0, d - hh)); // girth per length up v
+        // (the girth growing up the limb leans the face down it: −v)
+        const sn = Math.max(-0.95, Math.min(0.95, dr / Math.sqrt(1 + dr * dr))), cs = Math.sqrt(1 - sn * sn);
+        const r = rAt(d);
+        for (let q = 0; q < segs; q++) {
+          const ph = (2 * Math.PI * q) / segs;
+          const dx = e1[0] * Math.cos(ph) + e2[0] * Math.sin(ph), dy = e1[1] * Math.cos(ph) + e2[1] * Math.sin(ph), dz = e1[2] * Math.cos(ph) + e2[2] * Math.sin(ph);
+          pos.push(c[0] + dx * r, c[1] + dy * r, c[2] + dz * r);
+          nrm.push(dx * cs - v[0] * sn, dy * cs - v[1] * sn, dz * cs - v[2] * sn);
+          mem.push(1);
+        }
+      }
+      const tris: number[] = [];
+      for (let i = 0; i < K; i++) {
+        for (let q = 0; q < segs; q++) {
+          const q1 = (q + 1) % segs;
+          tris.push(i * segs + q, i * segs + q1, (i + 1) * segs + q, i * segs + q1, (i + 1) * segs + q1, (i + 1) * segs + q);
+        }
+      }
+      piece(base, [...j.ins, ...j.outs], 0.03 * j.r, tris);
+    }
+  }
   for (const [k, j] of joints) {
     if (!j.knob || !split.fieldEnds.has(k)) continue;
     for (let m = 0; m < full.nc; m++) {
