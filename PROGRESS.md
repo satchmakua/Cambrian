@@ -79,8 +79,43 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   - wings for the songbird;
   - whiskers for the cat and mouse.
   Only the seeds that used to lose a part change, and they gain its genes.
+- **From its list**, diagnosed plan by plan as before (each patch's tests fail on the old code; each was
+  rendered against the old build before it was taken):
+  - *Faceted eggs for whisker pads, cardboard ears, a hyena's slope* (cat): the pads keep the sphere's
+    normals, sit deeper and wear the coat's fur shells. A pointed ear's sides bow out to a blunt tip
+    (`POINTED_EDGE`), it stands up (`EAR_UPRIGHT`) and it wears a short pile of the coat (`EAR_PILE`). The
+    felid row's own `rear` keeps the back level.
+  - *A fawn* (dog): a fourth neck link, carried less steeply, lifts the head off the chest. A stopped
+    skull lays its muzzle out in its own stride (`grow STOP_ELONG`, canid `muzzleLong` 1.3). A runner's paws
+    root toward the trunk's ends (`PAW_SET`).
+  - *Pipes with ring seams on black dots* (deer): a knee knob swells smoothly into the links either side
+    (`limbTubes KNOB_EASE`, `KNOB_COLLAR`). A hooved hind leg folds at a hock (`HOOF_GASKIN`,
+    `HOOF_CANNON`). The hoof is a keratin wedge (`feet hoofGeometry`). The nostrils show, low on a
+    charcoal pad.
+  - *A cardboard beak, a thumb of a head, a shield of a wing* (songbird): the shut bill is a cone
+    (`SLIM_WIDTH`) with its gape wedge sunk. The head sits down (bird `neckLong` 1.0). The folded wing
+    roots at the hawk's height (`SHORT_WING_SEAT`).
+  - *Stacked black holes for eyes, doll's legs* (chimera): one eye pair (`eyePairs`: the second is still
+    drawn, not grown), a reptile's slit eye, and no podomeres on a leg that ends in a paw, hoof or hand.
+  - *A blank bean with pins in its back, a bun* (slug): its feelers and mouth root on the front node
+    (`grow isSlug`), with a shorter pair of lower tentacles from the feeler's own gene (`SLUG_FACE`). The
+    mantle follows the body's section, so it has no brim.
+  - *A paper tag of a fin, a wire smile on a dome* (fish): a fish-cut pectoral's root runs up the flank
+    (`FISH_PECTORAL_ROOT`), so it fans back off the skin. The lower jaw is sized on the head's middle link,
+    not the capped tip, so the gape runs between two jaws.
+  - *A pot belly, a frog's head, stitches for teeth, cardboard wings* (dragon): a narrower, keeled chest,
+    with what is drawn against girth scaled back up. A head 2.1–2.5 times as long as it is wide. One long
+    fang either side of the snout (`DRAGON_FANGS`). A folded wing that reaches the rump, its bones darker
+    than its web (`WING_BONE_SHADE`).
+  - *Buried eyes, balloon claws, black cones* (crab): a rim stalk of at least three nodes stands clear of
+    the shell (`RIM_STALK*`), with compound eyes. The arm's skin ends inside the flat palm (`CLAW_WRIST`).
+    The fingers are toothed (`CLAW_TEETH`).
+- Known: the dog's longer body gets a coarser skin grid, which hands its lower leg links to the exact
+  tubes; their joint shows a seam, like the deer's knee ring before its fix (which covers hooved legs
+  only).
 - **Tests:** `reviewRound2.test.ts` (no fish jaw on non-fish, a long crab's closed shell, a plate on every
-  ring), `definingParts.test.ts` (200 seeds of each plan grow their defining parts).
+  ring), `definingParts.test.ts` (200 seeds of each plan grow their defining parts), `felidLook`, `canidCarriage`,
+  `ungulateLook`, `songbirdLook`, `chimeraFace`, `slugFace`, `fishFace`, `dragonLook`, `crabStalksClaws`.
 
 ## M99 — What the thirteenth look left: a deer, a bear's nose, an octopus's eye, a crystal of stones · 2026-11-15
 

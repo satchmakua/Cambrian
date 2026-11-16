@@ -910,9 +910,18 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   - The review of round 2's commits: a fish's jaw only on a bony fish, a long crab's shell closed, every ring
     plated.
   - Tails, ears, wings and whiskers that define a plan are certain.
+  - From its list: a cat's pads, ears and back; a dog's head and muzzle; a deer's knees, hocks, hooves and
+    nose; a songbird's bill, head and wing; a chimera's eyes and legs; a slug's face and mantle; a fish's
+    pectoral and jaw; a dragon's chest, head, fangs and wings; a crab's stalks and claws.
   **Tests:** see PROGRESS M100.
 
 ### Next up (unchecked — pick from here)
+
+- [ ] **What the fourteenth look left.** The seam where a field limb hands on to an exact tube (a longer
+  dog's legs); a lizard's stick legs held high; a tortoise's ball head on the shell and grape-cluster feet; a
+  crocodile's wire mouth loop; a shark's gill slabs; an ostrich's slab bill; a hawk's dagger beak; a
+  theropod's muppet mouth; an octopus's ring spectacles; a weasel's slit eyes; the mouse's neckless wedge
+  head.
 
 - [ ] **What the thirteenth look left.** A songbird's pear shape from the front (a dark breast band over a
   pale belly); a crocodile's teeth still unseen at studio scale.
