@@ -133,6 +133,12 @@ export function buildMembraneWing(side: number, S: number, raise = 0.6): WingBui
   return { surface, bones, wrist: W };
 }
 
+/** a membrane wing's bones are drawn in its colour ×this, its web ×MEMBRANE_SHADE: the frame a shade
+ *  deeper than the skin it holds (at 0.7 against 0.85 it did not show: a folded wing was a flat sheet
+ *  of the skin's colour with no arm or fingers in it) */
+export const WING_BONE_SHADE = 0.5;
+export const MEMBRANE_SHADE = 0.85;
+
 /** how far each finger tip of a folded membrane wing stands out from the flank (+) or in toward it (−),
  *  × the span: the gathered skin's pleats */
 export const FOLD_PLEAT = [0.05, -0.02, 0.045, -0.01] as const;
@@ -209,8 +215,8 @@ export function foldedSpan(p: Phenotype, tipRadius: number): number {
 
 /** a folded membrane wing's lowest point and its furthest reach back from the shoulder, × its span (the
  *  fold buildFoldedMembraneWing lays down: its last finger's tip, its first's) */
-export const FOLD_DROP = 0.284;
-export const FOLD_BACK = 0.481;
+export const FOLD_DROP = 0.268;
+export const FOLD_BACK = 0.55;
 /** how far down its legs a four-legged body's folded skin may hang, × the belly's height off the ground */
 export const FOLD_HANG = 0.2;
 
@@ -247,11 +253,13 @@ export function buildFoldedMembraneWing(side: number, S: number): WingBuild {
   // down over the flank, so the folded skin hangs from the wrist like a cape, its top edge falling from
   // the wrist. (Run back nearly level — the first at 0.22 rad and 0.7 of the span long — the top finger
   // was a straight rod from the wrist to past the rump, the skin a flag hung from it.)
+  // (…and long: the first finger runs back over the hips to the rump. Raked down from a span of 0.56, the
+  // fold ended mid-back, shorter than the trunk under it: a dorsal fin's triangle, not a folded wing)
   const fingers: [number, number][] = [
-    [0.42, 0.56],
-    [0.66, 0.52],
-    [0.9, 0.47],
-    [1.12, 0.42],
+    [0.36, 0.62],
+    [0.58, 0.56],
+    [0.8, 0.5],
+    [1.0, 0.43],
   ];
   const back = v3(0, 0, -1), down = v3(0, -1, 0);
   const roots = fingers.map((_, i) => W.clone().add(v3(0, -0.012 * i * S, -0.018 * i * S)));
@@ -261,7 +269,7 @@ export function buildFoldedMembraneWing(side: number, S: number): WingBuild {
     roots[i].clone().add(back.clone().multiplyScalar(Math.cos(th) * L * S)).add(down.clone().multiplyScalar(Math.sin(th) * L * S)).add(out.clone().multiplyScalar(FOLD_PLEAT[i] * S)),
   );
   // the hind panel meets the flank behind the elbow, low on it
-  const B = v3(0.03 * s * S, -0.26 * S, -0.42 * S);
+  const B = v3(0.03 * s * S, -0.25 * S, -0.48 * S);
 
   const pos: number[] = [];
   const idx: number[] = [];
@@ -307,9 +315,11 @@ export function buildFoldedMembraneWing(side: number, S: number): WingBuild {
   const bones: WingBone[] = [
     // (the upper arm of a folded wing lies in the shoulder's own flesh: drawn, lifted off the skin with
     // the rest, it stood out of the shoulder as a round-ended dowel)
-    { a: P0, b: E, r0: 0.009 * S, r1: 0.008 * S, buried: true }, // humerus
-    { a: E, b: W, r0: 0.008 * S, r1: 0.007 * S }, // forearm
-    ...tips.map((t, i) => ({ a: roots[i], b: t, r0: 0.01 * S * (1 - i * 0.12), r1: 0.003 * S })),
+    { a: P0, b: E, r0: 0.0115 * S, r1: 0.011 * S, buried: true }, // humerus
+    // (the forearm and the fingers are the folded wing's frame: at 0.008 and 0.01 of the span, in the skin's
+    // own colour, they did not show — a flat green triangle with no arm in it)
+    { a: E, b: W, r0: 0.011 * S, r1: 0.009 * S }, // forearm
+    ...tips.map((t, i) => ({ a: roots[i], b: t, r0: 0.011 * S * (1 - i * 0.12), r1: 0.004 * S })),
   ];
   return { surface, bones, wrist: W };
 }

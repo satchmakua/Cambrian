@@ -28,7 +28,7 @@ import { makeCreatureMaterial } from './creatureMaterial';
 import { bareOf, clawedHandGeometry, footPlanOf, hoofGeometry, isHindFoot, isTheropod, lastLinkOf, ratLike, shaggyPlumage, skinPartWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, shellScutes, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, shortWingLie, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, foldedSpan, restingFold, type FinBuild, type TailRump, type TailPart } from './wings';
+import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, shortWingLie, WING_BONE_SHADE, MEMBRANE_SHADE, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, foldedSpan, restingFold, type FinBuild, type TailRump, type TailPart } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
 import { ommatidiaMaps } from './ommatidia';
@@ -2034,10 +2034,11 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
       o.scale.setScalar(opening);
     }
   });
-  // the arm and finger bones wear the wing's own skin, a shade deeper (a flat dark cylinder read as a
-  // stick laid on the membrane)
-  const bone = useMemo(() => new THREE.Color(color).multiplyScalar(0.7).getHex(), [color]);
-  const skin = useMemo(() => new THREE.Color(color).multiplyScalar(0.85).getHex(), [color]);
+  // the arm and finger bones wear the wing's own skin, deeper (a flat dark cylinder read as a stick laid
+  // on the membrane; at 0.7 of the skin's colour against the web's 0.85 the frame did not show, and a
+  // folded wing was a flat green triangle with no arm in it)
+  const bone = useMemo(() => new THREE.Color(color).multiplyScalar(WING_BONE_SHADE).getHex(), [color]);
+  const skin = useMemo(() => new THREE.Color(color).multiplyScalar(MEMBRANE_SHADE).getHex(), [color]);
   return (
     <group position={build.off}>
      <group ref={flapRef}>

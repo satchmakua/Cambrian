@@ -458,8 +458,10 @@ export const SEAM_SINK = 0.2;
  *  length, stood a fiftieth of a unit off a theropod's skin — no teeth in its face — and an underbite's upper
  *  row was none; a dozen even blades, multiplied by the seam's length, were a row of stitching.) */
 export const THEROPOD_TEETH: ToothProfile = { count: 10, len: (u: number) => 0.34 + 0.26 * Math.sin(Math.PI * Math.min(1, (u + 0.1) / 0.95)), width: 0.24, curl: -TEETH_OUT, jitterLen: 0.15, jitterRock: 0.1, sink: 0.28, margin: 0.14, salt: 2 };
-/** A DRAGON's (a wyvern's) shut jaw shows a few long fangs at its front, the longest foremost. */
-export const DRAGON_FANGS: ToothProfile = { count: 6, len: (u: number) => 0.78 - 0.32 * u, width: 0.26, curl: -TEETH_OUT, jitterLen: 0.18, jitterRock: 0.1, sink: 0.3, margin: 0.42, salt: 3 };
+/** A DRAGON's (a wyvern's) shut jaw shows a pair of long fangs either side of its snout, just behind the
+ *  turn of its nose. (Six along the front third of the seam, the foremost pair stood on the front of the
+ *  snout over the chin: from the front a row of stitches across the face, from the side two whiskers.) */
+export const DRAGON_FANGS: ToothProfile = { count: 2, len: (u: number) => 0.95 - 0.32 * u, width: 0.26, curl: -TEETH_OUT, jitterLen: 0.18, jitterRock: 0.1, sink: 0.3, margin: 0.56, salt: 3 };
 /** …but a blunt head's shorter jaw (its seam under FANG_RUN mouth radii long: a dragon's and a wyvern's run 8.3–13,
  *  a chimera's 1.6–5.8) shows only its two foremost, apart, short and fine (as long as a dragon's they hung from a blunt face as buck teeth) */
 export const FANG_RUN = 7;
