@@ -24,7 +24,7 @@
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
 import { buildFieldPrims, fieldAt, fieldAtCarved, carveDist, qRotateV, type Carve, type FieldPrims } from './bodyField';
-import { polygonize, gridCells } from './polygonize';
+import { polygonize, gridCells, drawnField } from './polygonize';
 import { splitThin, limbTubes, type Tubes } from './limbTubes';
 
 // Grid resolution, in cells along the creature's longest padded extent. The grid is sampled as a
@@ -91,12 +91,9 @@ function toGeometry(
   return geo;
 }
 
-export function buildSmoothGeometry(
-  p: Phenotype,
-  full = false,
-  carves: readonly Carve[] = [],
-  quality: SkinQuality = 'high',
-): THREE.BufferGeometry {
+/** The skin's field as it is polygonized — its prims (thin limb links split off, the rest floored to the grid),
+ *  its carves (their rims softened to the grid) — and the grid: what buildSmoothGeometry draws, and drawnSkin reads. */
+function skinField(p: Phenotype, full: boolean, carves: readonly Carve[], quality: SkinQuality) {
   // the shared body field as flat typed arrays — `full` (hybrid) meshes every part for full
   // definition; otherwise just the locomotor body (see bodyField for the filters + fallbacks).
   const whole = buildFieldPrims(p, full ? 'hybrid' : 'body');
@@ -121,6 +118,26 @@ export function buildSmoothGeometry(
   // a carve rim thinner than a grid cell aliases into stair-steps — soften it to the cell size
   const carved: Carve[] =
     carves.length === 0 ? [] : carves.map((c) => (c.blend >= cell * 0.8 ? c : { ...c, blend: cell * 0.8 }));
+  return { whole, split, prims, carved, meanR, min, max, res, cell };
+}
+
+/**
+ * The skin as it is DRAWN, as a field (polygonize's drawnField over the skin's own grid), and its grid's cell:
+ * a part thinner than a cell is drawn short (a crocodile's snout, its tip a cell deep, ended up to most of a
+ * cell short of its field), a curved one a little inside its field.
+ */
+export function drawnSkin(p: Phenotype, full: boolean, carves: readonly Carve[] = [], quality: SkinQuality = 'high'): { field: (x: number, y: number, z: number) => number; cell: number } {
+  const s = skinField(p, full, carves, quality);
+  return { field: drawnField((x, y, z) => fieldAtCarved(s.prims, s.carved, x, y, z), s.min, s.max, s.res), cell: s.cell };
+}
+
+export function buildSmoothGeometry(
+  p: Phenotype,
+  full = false,
+  carves: readonly Carve[] = [],
+  quality: SkinQuality = 'high',
+): THREE.BufferGeometry {
+  const { whole, split, prims, carved, meanR, min, max, res, cell } = skinField(p, full, carves, quality);
 
   const poly = polygonize((x, y, z) => fieldAtCarved(prims, carved, x, y, z), min, max, {
     res,

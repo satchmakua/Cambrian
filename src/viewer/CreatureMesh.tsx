@@ -619,6 +619,7 @@ export function CreatureMesh({
         carves={showSmooth ? carves : NO_CARVES}
         recessed={showSmooth && carves.length > 0}
         surface={showSmooth ? (full ? 'hybrid' : 'smooth') : 'kit'}
+        quality={quality}
         lite={detail !== 'full'}
         fur={furMats}
         rigged={rigged}
@@ -769,6 +770,7 @@ function Feature({
   carves,
   recessed,
   surface,
+  quality = 'high',
   lite = false,
   fur = NO_FUR,
   rigged = false,
@@ -782,6 +784,7 @@ function Feature({
   carves: readonly Carve[];
   recessed: boolean;
   surface: SkinSurface;
+  quality?: SkinQuality; // the skin's quality (a reptile's seam is laid on the skin as drawn at it)
   lite?: boolean; // reduced detail: structural spars (fin rays, wing bones) are dropped
   fur?: readonly THREE.Material[]; // the coat's fur shells, for the parts the coat runs onto (a paw)
   rigged?: boolean; // on a skeleton: a tail fan's coverts are skinned apart (see tailCovertsGeometry)
@@ -793,7 +796,7 @@ function Feature({
       // (one of a radial body's copies of its central maw: see drawnMouths)
       if (!drawnMouths(phenotype).has(f.idx)) return null;
       return (
-        <Mouth f={f} dark={footColor} skin={skin} fur={fur} phenotype={phenotype} carves={carves} recessed={recessed} surface={surface} />
+        <Mouth f={f} dark={footColor} skin={skin} fur={fur} phenotype={phenotype} carves={carves} recessed={recessed} surface={surface} quality={quality} />
       );
     case 'pincer':
       return <Pincer f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} />;

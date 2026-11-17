@@ -5,6 +5,7 @@ import { buildFieldPrims, fieldAt, hullBody, qRotateV } from '../../src/viewer/b
 import { scutePlan } from '../../src/viewer/scutes';
 import { mouthSpec, surfacePrims } from '../../src/viewer/mouthLine';
 import { buildJawed } from '../../src/viewer/mouths/jawed';
+import { drawnSkin } from '../../src/viewer/smoothSkin';
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 29];
 const croc = (seed: number) => grow(genomeOfMorphotype(seed, 'crocodilian'));
@@ -90,14 +91,15 @@ describe("a crocodile's hull", () => {
       const idx = p.nodes.findIndex((n) => n.terminal === 'mouth');
       const spec = mouthSpec(p, idx)!;
       const b = buildJawed(p, idx, [], false, spec.variant as 'fanged', 'hybrid')!;
-      const f = surfacePrims(p, 'hybrid');
+      // (off the skin as it is DRAWN: the seam the teeth root on is laid on it — see jawed's layOnDrawn)
+      const f = drawnSkin(p, true).field;
       const o = spec.node.pos;
       const out = [...b.upperTeeth, ...b.lowerTeeth]
-        .map((t) => { const ax = qRotateV(t.quat, [0, 1, 0]); return fieldAt(f, o[0] + t.pos[0] + ax[0] * t.len, o[1] + t.pos[1] + ax[1] * t.len, o[2] + t.pos[2] + ax[2] * t.len); })
+        .map((t) => { const ax = qRotateV(t.quat, [0, 1, 0]); return f(o[0] + t.pos[0] + ax[0] * t.len, o[1] + t.pos[1] + ax[1] * t.len, o[2] + t.pos[2] + ax[2] * t.len); })
         .sort((a, c) => a - c);
       // (HEAD: the median crown tip 0.03–0.045 of the mouth's size off the skin — a hair, invisible in the face
-      // close-up; patched 0.064–0.09)
-      expect(out[out.length >> 1] / spec.r, `#${seed} median tooth tip off the skin`).toBeGreaterThan(0.055);
+      // close-up; patched 0.064–0.09 — off the field. Off the drawn skin, the seam laid on it: 0.046–0.105)
+      expect(out[out.length >> 1] / spec.r, `#${seed} median tooth tip off the skin`).toBeGreaterThan(0.04);
     }
   });
 });

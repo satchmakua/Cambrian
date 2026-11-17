@@ -26,10 +26,11 @@ import { armoured } from '../scutes';
 import { headStop, type Phenotype } from '../../engine/grow';
 import type { SegmentGene, Vec3 } from '../../engine/genome';
 import type { Carve } from '../bodyField';
-import { norm3 } from '../bodyField';
+import { hullBody, norm3 } from '../bodyField';
 import type { MeshFeature } from '../meshData';
-import { buildMouthLine, fishSeam, hash01, mouthSpec, runSeamBack, type MouthSample, type SkinSurface } from '../mouthLine';
+import { buildMouthLine, fishSeam, hash01, mouthSpec, runSeamBack, type MouthLine, type MouthSample, type SkinSurface } from '../mouthLine';
 import { isSwimmer } from '../eyeSeat';
+import { drawnSkin, type SkinQuality } from '../smoothSkin';
 import { sweepTube, type SweepPoint } from '../sweep';
 import { bluntGeometry, fangGeometry, setToothInstances, toothRow, type ToothProfile, type ToothXform } from '../teeth';
 import { INTERIOR, LIP } from './palette';
@@ -204,6 +205,7 @@ export function buildJawed(
   recessed: boolean,
   variant: JawedVariant,
   surface: SkinSurface = 'kit',
+  quality: SkinQuality = 'high',
 ): JawedBuild | null {
   const spec = mouthSpec(phenotype, idx);
   if (!spec) return null;
@@ -241,7 +243,9 @@ export function buildJawed(
   const traced = buildMouthLine(phenotype, spec, carves, 17, surface);
   // a long-headed reptile's seam runs back along its jaw to the hinge under its eye, a bony fish's gape to
   // under the front of its eye (a shark's and a slug's mouths are their own: see runSeamBack, fishSeam)
-  const line = sealed && (!isSwimmer(phenotype) || fishSeam(phenotype, spec)) && phenotype.genomeRef.covering.type !== 'slime' ? runSeamBack(phenotype, spec, traced, surface) : traced;
+  const seam = sealed && (!isSwimmer(phenotype) || fishSeam(phenotype, spec)) && phenotype.genomeRef.covering.type !== 'slime' ? runSeamBack(phenotype, spec, traced, surface) : traced;
+  // (a crocodile's seam lies on its skin as the skin is drawn: see layOnDrawn)
+  const line = seam !== traced && surface !== 'kit' && hullBody(phenotype) ? layOnDrawn(seam, drawnSkin(phenotype, surface === 'hybrid', carves, quality), spec.anchor.pos) : seam;
   // A shut reptile's teeth hang OUTSIDE its closed jaw — raked in toward the throat like an open mouth's,
   // every crown ran down from the seam into the shut lower jaw, under the skin, and the animal had no
   // teeth at all — and only the reptiles that show them show them (see shutTeeth): a crocodile's grin, its
@@ -434,6 +438,52 @@ export function buildJawed(
   return { r, aim: spec.aim, upper, lower, muzzle, upperFold, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior, nose, nostrils, pads, muzzled, sealed };
 }
 
+/**
+ * A seam laid onto the skin as it is DRAWN (smoothSkin's drawnSkin): each sample moved along its normal to the
+ * drawn surface, at most a cell either way — or, where the drawn skin is not there along its normal (past the
+ * drawn end of a snout), straight in toward `inner` (a point inside the head) to where it is. A crocodile's snout
+ * is only a cell or two deep, and its skin, read off a grid that coarse, lies inside its field — a tenth to
+ * two-fifths of the mouth's size along the jaw, and at the tip, where it narrows below a cell, short by up to
+ * most of a cell. Traced on the field, the seam (and the skin-toned fold over it) stood off the drawn snout all
+ * along the jaw and ran on round the end of it through the air: a wire hoop with teeth.
+ */
+export function layOnDrawn(line: MouthLine, drawn: { field: (x: number, y: number, z: number) => number; cell: number }, inner: Vec3): MouthLine {
+  // the crossing of the drawn surface along `dir` from `p`, within `reach` (null if there is none)
+  const cross = (p: Vec3, dir: Vec3, reach: number, both: boolean): Vec3 | null => {
+    const at = (t: number) => drawn.field(p[0] + dir[0] * t, p[1] + dir[1] * t, p[2] + dir[2] * t);
+    const inside = at(0) < 0;
+    // inside: walk out along `dir` (if `both`); outside: walk in, against it
+    if (inside && !both) return null;
+    const sgn = inside ? 1 : -1, step = drawn.cell / 16;
+    let a = 0, b = NaN;
+    for (let t = step; t <= reach + 1e-9; t += step) {
+      if (at(sgn * t) < 0 !== inside) {
+        b = sgn * t;
+        break;
+      }
+      a = sgn * t;
+    }
+    if (Number.isNaN(b)) return null;
+    for (let k = 0; k < 24; k++) {
+      const m = (a + b) / 2;
+      if (at(m) < 0 === inside) a = m;
+      else b = m;
+    }
+    const t = (a + b) / 2;
+    return [p[0] + dir[0] * t, p[1] + dir[1] * t, p[2] + dir[2] * t];
+  };
+  const lay = (sm: MouthSample): MouthSample => {
+    let q = cross(sm.p, sm.n, drawn.cell, true);
+    if (!q) {
+      const d: Vec3 = [sm.p[0] - inner[0], sm.p[1] - inner[1], sm.p[2] - inner[2]];
+      const L = Math.hypot(d[0], d[1], d[2]);
+      if (L > 1e-9) q = cross(sm.p, [d[0] / L, d[1] / L, d[2] / L], L, false);
+    }
+    return q ? { ...sm, p: q } : sm;
+  };
+  return { ...line, upper: line.upper.map(lay), lower: line.lower.map(lay) };
+}
+
 function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
@@ -617,6 +667,7 @@ export function JawedMouth({
   dark,
   skin,
   surface = 'kit',
+  quality = 'high',
   fur = NO_FUR,
 }: {
   f: MeshFeature;
@@ -627,11 +678,12 @@ export function JawedMouth({
   dark: number;
   skin?: THREE.Material; // the body's covering material — a mammal's jaw wears it
   surface?: SkinSurface; // which rendered skin to trace lips onto (kit vs blended smooth/hybrid)
+  quality?: SkinQuality; // …and the quality it is drawn at (a crocodile's seam is laid on it: see layOnDrawn)
   fur?: readonly THREE.Material[]; // the coat's fur shells (close-up views): a cat's whisker pads wear them
 }) {
   const built = useMemo(
-    () => buildJawed(phenotype, f.idx, carves, recessed, variant, surface),
-    [phenotype, f.idx, carves, recessed, variant, surface],
+    () => buildJawed(phenotype, f.idx, carves, recessed, variant, surface, quality),
+    [phenotype, f.idx, carves, recessed, variant, surface, quality],
   );
   const pal = phenotype.genomeRef.palette;
   const coat = useMemo(() => coatMain(pal).getHex(), [pal]);
