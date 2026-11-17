@@ -195,6 +195,8 @@ export interface JawedBuild {
   muzzled: boolean;
   /** a reptile's / amphibian's seam mouth (see sealedMouth) */
   sealed: boolean;
+  /** is the fold over the upper teeth's roots drawn? (not on a mammal's mouth, a toothless one, or a theropod's) */
+  fold: boolean;
 }
 
 /** Pure, node-relative jawed-mouth build — everything derived from the surface mouth line. */
@@ -244,8 +246,9 @@ export function buildJawed(
   // a long-headed reptile's seam runs back along its jaw to the hinge under its eye, a bony fish's gape to
   // under the front of its eye (a shark's and a slug's mouths are their own: see runSeamBack, fishSeam)
   const seam = sealed && (!isSwimmer(phenotype) || fishSeam(phenotype, spec)) && phenotype.genomeRef.covering.type !== 'slime' ? runSeamBack(phenotype, spec, traced, surface) : traced;
-  // (a crocodile's seam lies on its skin as the skin is drawn: see layOnDrawn)
-  const line = seam !== traced && surface !== 'kit' && hullBody(phenotype) ? layOnDrawn(seam, drawnSkin(phenotype, surface === 'hybrid', carves, quality), spec.anchor.pos) : seam;
+  // (a crocodile's and a theropod's seam lies on its skin as the skin is drawn: see layOnDrawn — traced on the field,
+  // a theropod's stood a seventh of the mouth's size off its drawn jaw, and the teeth hung from it with it)
+  const line = seam !== traced && surface !== 'kit' && (hullBody(phenotype) || isTheropod(phenotype)) ? layOnDrawn(seam, drawnSkin(phenotype, surface === 'hybrid', carves, quality), spec.anchor.pos) : seam;
   // A shut reptile's teeth hang OUTSIDE its closed jaw — raked in toward the throat like an open mouth's,
   // every crown ran down from the seam into the shut lower jaw, under the skin, and the animal had no
   // teeth at all — and only the reptiles that show them show them (see shutTeeth): a crocodile's grin, its
@@ -435,7 +438,12 @@ export function buildJawed(
     }
   }
 
-  return { r, aim: spec.aim, upper, lower, muzzle, upperFold, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior, nose, nostrils, pads, muzzled, sealed };
+  // (a theropod's blades hang from the seam itself, with no fold over their roots: the fold every other toothed seam
+  // wears lay a seventh of the mouth's size BELOW the seam and stood a quarter of it proud of the drawn skin, the
+  // teeth's broad roots showing above it — from the front a raised lip ring round the snout, the teeth a fringe hung
+  // outside it: a muppet's mouth)
+  const fold = !muzzled && upperTeeth.length > 0 && !(line !== traced && params.upper === THEROPOD_TEETH);
+  return { r, aim: spec.aim, upper, lower, muzzle, upperFold, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior, nose, nostrils, pads, muzzled, sealed, fold };
 }
 
 /**
@@ -506,8 +514,10 @@ export const SEAM_SINK = 0.2;
 /** A THEROPOD's upper teeth: ten blades along its jaw, most of each crown showing below the shut lip, the
  *  biggest a third of the way back, each its own length. (A crocodile's small pegs, sunk 0.42 of their
  *  length, stood a fiftieth of a unit off a theropod's skin — no teeth in its face — and an underbite's upper
- *  row was none; a dozen even blades, multiplied by the seam's length, were a row of stitching.) */
-export const THEROPOD_TEETH: ToothProfile = { count: 10, len: (u: number) => 0.34 + 0.26 * Math.sin(Math.PI * Math.min(1, (u + 0.1) / 0.95)), width: 0.24, curl: -TEETH_OUT, jitterLen: 0.15, jitterRock: 0.1, sink: 0.28, margin: 0.14, salt: 2 };
+ *  row was none; a dozen even blades, multiplied by the seam's length, were a row of stitching.) They hang straight
+ *  from the seam, rooted in it — a twentieth of their length sunk, inside the seam's own width, and slimmer — with no
+ *  fold over them (see buildJawed's `fold`): sunk 0.28 of their length, their broad roots stood above the seam. */
+export const THEROPOD_TEETH: ToothProfile = { count: 10, len: (u: number) => 0.34 + 0.26 * Math.sin(Math.PI * Math.min(1, (u + 0.1) / 0.95)), width: 0.18, curl: -TEETH_OUT, jitterLen: 0.15, jitterRock: 0.1, sink: 0.05, margin: 0.14, salt: 2 };
 /** A DRAGON's (a wyvern's) shut jaw shows a pair of long fangs either side of its snout, just behind the
  *  turn of its nose. (Six along the front third of the seam, the foremost pair stood on the front of the
  *  snout over the chin: from the front a row of stitches across the face, from the side two whiskers.) */
@@ -781,7 +791,7 @@ export function JawedMouth({
       {/* (a mammal's mouth wears no fold: with only its canines/incisors there are no tooth roots to
           hide, and draped under the lip line in the coat it hung below the chin as a pale band; nor
           does a toothless seam — a frog's, a fish's — where it jutted ahead of the snout as a hook) */}
-      {!muzzled && built.upperTeeth.length > 0 && <mesh geometry={built.upperFold} material={shut ? coatMat : mats.lip} castShadow />}
+      {built.fold && <mesh geometry={built.upperFold} material={shut ? coatMat : mats.lip} castShadow />}
       {built.nose && <mesh geometry={built.nose} material={mats.nose} castShadow />}
       {built.pads && <mesh geometry={built.pads} material={coatMat} castShadow />}
       {/* (…and the coat's shells over them, as over the muzzle round them: bare, they were two smooth suede
