@@ -21,6 +21,7 @@ import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
 import { projectToSurface } from './bodyField';
 import { surfacePrims, type SkinSurface } from './mouthLine';
+import { trunkRise } from './rig';
 
 export type WingKind = 'feathered' | 'membrane';
 
@@ -559,7 +560,7 @@ export function longWingFold(p: Phenotype, side: number): WingFold | null {
   const fan = p.nodes.find((n) => n.kind === 'terminal' && n.part?.kind === 'tail');
   const tip = v3(s * rump.radius * 0.32, 0, 0);
   if (fan) {
-    const droop = 0.2 + (p.genomeRef.seed % 5) * 0.06;
+    const droop = tailFanDroop(p);
     const reach = 0.3 * Math.max((z1 - z0) * 0.55, girth * 1.6);
     const back = v3(0, -droop, -1).normalize();
     tip.y = fan.pos[1] + back.y * reach + rump.radius * 0.12;
@@ -665,6 +666,18 @@ export const TAIL_SPREAD = 0.13;
 const TAIL_TROUGH = 0.3;
 /** how far the upper tail coverts reach down the tail (of its length); the under ones reach 0.9 of it */
 export const COVERT_REACH = 0.32;
+
+/**
+ * How far a feathered tail fan droops off straight back (its fall over its run): by the seed, 0.2–0.44
+ * — but an UPRIGHT body's (a hawk's) hangs on down the line of its back. (Carried at a level bird's
+ * droop from a trunk that rises 36° to the shoulders, a hawk's tail stood out of its rump at a right
+ * angle to the body, a flat banded wafer; in flight, the body pitched level, it pointed up.)
+ */
+export function tailFanDroop(p: Phenotype): number {
+  const seeded = 0.2 + (p.genomeRef.seed % 5) * 0.06;
+  const { rise, upright } = trunkRise(p);
+  return seeded + upright * Math.max(0, Math.tan(rise) - seeded);
+}
 
 /** where a tail fan's root sits on its body: the rump node's centre (relative to the tail node) and girth */
 export interface TailRump {

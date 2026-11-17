@@ -28,7 +28,7 @@ import { makeCreatureMaterial } from './creatureMaterial';
 import { bareOf, clawedHandGeometry, footPlanOf, hoofGeometry, isHindFoot, isTheropod, lastLinkOf, ratLike, shaggyPlumage, skinPartWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, shellScutes, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, shortWingLie, WING_BONE_SHADE, MEMBRANE_SHADE, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, foldedSpan, restingFold, type FinBuild, type TailRump, type TailPart } from './wings';
+import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, shortWingLie, WING_BONE_SHADE, MEMBRANE_SHADE, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, foldedSpan, restingFold, tailFanDroop, type FinBuild, type TailRump, type TailPart } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
 import { ommatidiaMaps } from './ommatidia';
@@ -2150,7 +2150,8 @@ function tailFanSpec(phenotype: Phenotype) {
     S: Math.max(len * 0.68, girth * 1.8),
     plumage: coatMain(g.palette),
     accent: coatPattern(g.palette),
-    droop: 0.2 + (g.seed % 5) * 0.06,
+    // (an upright body's hangs down the line of its back: see tailFanDroop)
+    droop: tailFanDroop(phenotype),
     barred: g.covering.pattern === 'bands',
     rump,
   };
