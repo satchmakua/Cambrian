@@ -159,6 +159,9 @@ const ANTENNA_ELBOW = 2.3;
  *  the hand hanging at the chest's underside: from the side and the front a second, shrivelled pair of legs.) */
 export const THEROPOD_SHOULDER = 0.6;
 export const THEROPOD_ELBOW = 2.0;
+/** …on a SHORT arm alone: its length × the trunk's girth, below which it folds fully and above which not at
+ *  all (a theropod's 0.39–0.51; an ape's 1.3–1.5) */
+const THEROPOD_ARM: readonly [number, number] = [0.8, 1.1];
 
 /** Minimum grown radius for an eye bulb (bu) — the face must always read (M19/M24). */
 const EYE_R_MIN = 0.06;
@@ -1191,8 +1194,14 @@ export function grow(genome: Genome): Phenotype {
     // were inverted: every hind knee pointed backward like a bird's heel, under every quadruped.)
     const fore = app.kind === 'leg' && !arch && legPairsHere === 2 && app.attachT > 0.5 && dev.symmetry !== 'radial';
     const elbow = app.kind === 'antenna' ? Math.sign(app.curl[0]) * Math.max(0, Math.abs(app.curl[0]) - ANTENNA_ELBOW_FROM) * ANTENNA_ELBOW : 0;
-    const folded = app.kind === 'arm' && app.terminal === 'hand' && app.curl[0] < 0 && dev.symmetry === 'bilateral' && knuckleArm(app, base) === 0;
-    let pitch = folded ? -app.curl[0] * THEROPOD_SHOULDER : app.kind !== 'leg' ? app.curl[0] + elbow : fore ? 0.18 + 0.5 * Math.abs(app.curl[0]) : -app.curl[0];
+    // (a theropod's fold, by degrees: as the trunk rears up an ape's knuckle-walking arm takes over, and only
+    // a SHORT arm folds at all — switched on at one trunk pitch, a hand jumped a third of its reach, and an
+    // ape mutated to a level back swept its long arms back under it)
+    const fold = app.kind === 'arm' && app.terminal === 'hand' && app.curl[0] < 0 && dev.symmetry === 'bilateral'
+      ? (1 - knuckleArm(app, base)) * (1 - smooth01((app.length / Math.max((dev.body.size[0] + dev.body.size[1]) / 2, 1e-3) - THEROPOD_ARM[0]) / (THEROPOD_ARM[1] - THEROPOD_ARM[0])))
+      : 0;
+    const folded = fold > 0;
+    let pitch = folded ? lerp(app.curl[0], -app.curl[0] * THEROPOD_SHOULDER, fold) : app.kind !== 'leg' ? app.curl[0] + elbow : fore ? 0.18 + 0.5 * Math.abs(app.curl[0]) : -app.curl[0];
     // (a hooved hind leg's links grow as much longer as its deeper fold costs it height — see HOOF_GASKIN — so it
     // stands as tall as it did on a paw's angles, and the body no lower)
     const hoofHind = app.kind === 'leg' && !arch && !fore && app.terminal === 'hoof' && app.segments >= 4 && dev.symmetry !== 'radial';
@@ -1269,7 +1278,11 @@ export function grow(genome: Genome): Phenotype {
       // a real jointed leg: thigh forward → (knee folds the shin sharply back under the body) → (hock
       // swings the foot forward) — a clear Z stance, not one gentle curved sweep; a foreleg's mirror
       // fold (see `fore`). Other limbs keep their curl.
-      if (folded && j === 0) pitch = app.curl[0] * THEROPOD_ELBOW; // (a theropod's elbow: see THEROPOD_ELBOW)
+      // (a theropod's elbow: see THEROPOD_ELBOW — at the one joint, the forearm running on straight past it to the
+      // hand: held at the elbow's bend, or even the arm's own, each link of a long bred arm folded again, coiling
+      // back through its chest)
+      if (folded && j === 0) pitch = lerp(app.curl[0], app.curl[0] * THEROPOD_ELBOW, fold);
+      else if (folded && j === 1) pitch = 0;
       if (app.kind === 'leg') {
         // knee — a clear backward fold, but softened: at ×3.0 the leg folded so far back under the
         // body that added segment length turned into more fold instead of more standing height,

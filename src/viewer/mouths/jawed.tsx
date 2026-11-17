@@ -691,9 +691,12 @@ export function JawedMouth({
   quality?: SkinQuality; // …and the quality it is drawn at (a crocodile's seam is laid on it: see layOnDrawn)
   fur?: readonly THREE.Material[]; // the coat's fur shells (close-up views): a cat's whisker pads wear them
 }) {
+  // (only a seam laid on the drawn skin reads its quality: every other mouth keeps one build across the World's
+  // switches between a near and a far skin, not a rebuild in render at each)
+  const q = surface !== 'kit' && (hullBody(phenotype) || isTheropod(phenotype)) ? quality : undefined;
   const built = useMemo(
-    () => buildJawed(phenotype, f.idx, carves, recessed, variant, surface, quality),
-    [phenotype, f.idx, carves, recessed, variant, surface, quality],
+    () => buildJawed(phenotype, f.idx, carves, recessed, variant, surface, q),
+    [phenotype, f.idx, carves, recessed, variant, surface, q],
   );
   const pal = phenotype.genomeRef.palette;
   const coat = useMemo(() => coatMain(pal).getHex(), [pal]);

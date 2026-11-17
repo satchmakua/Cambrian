@@ -93,14 +93,26 @@ const BEAST_FEET: ReadonlySet<string> = new Set(['paw', 'hoof', 'hand']);
 export function podomeres(p: Phenotype, full: FieldPrims): Uint8Array | null {
   if (p.genomeRef.covering.type !== 'chitin') return null;
   // (a leg that stands on a paw, a hoof or a hand is a beast's, whatever its hide: a chitin-coated chimera's,
-  // pinched in and darkened at its knee and its wrist, was a jointed doll's, a stack of capsules on padded paws)
-  if (p.nodes.some((n) => n.part?.kind === 'leg' && BEAST_FEET.has(n.terminal ?? ''))) return null;
+  // pinched in and darkened at its knee and its wrist, was a jointed doll's, a stack of capsules on padded paws.
+  // Leg by leg: one pair of hooves bred onto an arthropod left its other legs jointed)
+  const kids = new Map<number, number[]>();
+  for (const [a, b] of p.edges) kids.set(a, [...(kids.get(a) ?? []), b]);
+  const tipOf = new Map<number, string>();
+  const tip = (i: number): string => {
+    const known = tipOf.get(i);
+    if (known !== undefined) return known;
+    const down = (kids.get(i) ?? []).filter((k) => p.nodes[k].part?.kind === 'leg');
+    const t = down.length ? tip(down[0]) : p.nodes[i].terminal ?? 'none';
+    tipOf.set(i, t);
+    return t;
+  };
   const out = new Uint8Array(full.nc);
   let any = false;
   for (let m = 0; m < full.nc; m++) {
     if (full.ia[m] === full.ib[m] || full.an[m]) continue;
     const a = p.nodes[full.ia[m]], b = p.nodes[full.ib[m]];
     if (a.kind === 'spine' || b.kind === 'spine' || a.part?.kind !== 'leg' || b.part?.kind !== 'leg') continue;
+    if (BEAST_FEET.has(tip(full.ib[m]))) continue;
     out[m] = 1;
     any = true;
   }
