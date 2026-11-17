@@ -110,12 +110,43 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
   - *Buried eyes, balloon claws, black cones* (crab): a rim stalk of at least three nodes stands clear of
     the shell (`RIM_STALK*`), with compound eyes. The arm's skin ends inside the flat palm (`CLAW_WRIST`).
     The fingers are toothed (`CLAW_TEETH`).
-- Known: the dog's longer body gets a coarser skin grid, which hands its lower leg links to the exact
-  tubes; their joint shows a seam, like the deer's knee ring before its fix (which covers hooved legs
-  only).
+- **A second round from its list:**
+  - *A sock-top ring where a leg hands on to its tube* (every plan, first seen on the longer dog): a
+    crease, not a step. The field's tucked cone faced down the leg under a bright ball and tube. Every
+    hand-over now sweeps a collar a hair proud of the field's girth up the limb from the joint
+    (`limbTubes HAND_PROUD`, `HAND_RUN`, `HAND_HOLD`), generalising the deer's knob collar. The seam's lean
+    error drops from 0.22–0.47 to 0.03–0.11 (the weasel's from 1.37 to 0.17).
+  - *Push-up posts* (lizard, and the crocodile with it): a walking sprawler's upper limb reaches out clear
+    of the flank, its shin is short and near plumb, and its foot lies along the ground, the shin's length
+    solved to land the foot under the belly (`grow SPRAWL_*`). The belly drops from up to 0.45 to 0.22 of
+    the trunk's depth.
+  - *A ball head on the shell, grape-cluster feet, a loaf* (tortoise): four slimmer neck links at full
+    stride; an elephant's foot (`feet stumpFootGeometry`); a horn shell crowned over the back
+    (`DOME_GAIN`), with its marginal scutes a band round the rim.
+  - *A vent grille, needle fins* (shark): slits are flat dark lenses on the skin (`gills gillSlits`), and
+    its pectorals are pitched foils (`SHARK_PECTORAL`).
+  - *A wire hoop past the snout* (crocodile): its seam was traced on the exact field, but the skin is that
+    field on a grid as deep as its snout. `polygonize drawnField` reads the skin as drawn, and the seam is
+    laid on it (`jawed layOnDrawn`).
+  - *A card of a bill, spikes in the flanks* (ostrich): a horn spoon of 17 rings packed toward the tip, on
+    a deeper base. The spikes were a songbird's splayed toes; a flightless bird stands on three short ones
+    (`RATITE_TOES`).
+  - *A muppet's lip ring, arms to the knee* (theropod): its seam lies on the drawn skin with no fold
+    while its blades show, which hang from the groove. Its arms fold under its chest (`THEROPOD_SHOULDER`,
+    `THEROPOD_ELBOW`, amplified in grow).
+  - *Spectacles, a ragged web* (octopus): its own fine eye-spot scale (`patternScale` [7, 10]), many small
+    rings; a thicker, narrower web drawn whole by the grid (`WEB_THICK`, `WEB_SINK`, `WEB_OUT`).
+  - *A dagger under the eye, a wafer tail* (hawk): the hooked bill pitched up off the face before it hooks
+    (`HOOKED_PITCH`), broad at its root. An upright body's tail fan hangs down the line of its back
+    (`tailFanDroop`).
+- Left: a tail's or tentacle's spline hand-overs (the field's chain blend stands 2–6% proud of the
+  collar); the other reptiles' seams laid on the field, not the drawn skin, by a smaller gap; a
+  tortoise's beak that still hooks like a parrot's; a slug's sole; the mouse's neckless wedge head; a
+  weasel's slit eyes.
 - **Tests:** `reviewRound2.test.ts` (no fish jaw on non-fish, a long crab's closed shell, a plate on every
   ring), `definingParts.test.ts` (200 seeds of each plan grow their defining parts), `felidLook`, `canidCarriage`,
-  `ungulateLook`, `songbirdLook`, `chimeraFace`, `slugFace`, `fishFace`, `dragonLook`, `crabStalksClaws`.
+  `ungulateLook`, `songbirdLook`, `chimeraFace`, `slugFace`, `fishFace`, `dragonLook`, `crabStalksClaws`; `handoverSeam`, `lizardSprawl`,
+  `chelonianLook`, `sharkLook`, `crocSeam`, `ratiteLook`, `bipedLook`, `cephalopodLook`, `raptorLook`.
 
 ## M99 — What the thirteenth look left: a deer, a bear's nose, an octopus's eye, a crystal of stones · 2026-11-15
 

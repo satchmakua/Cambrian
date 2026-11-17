@@ -913,15 +913,17 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   - From its list: a cat's pads, ears and back; a dog's head and muzzle; a deer's knees, hocks, hooves and
     nose; a songbird's bill, head and wing; a chimera's eyes and legs; a slug's face and mantle; a fish's
     pectoral and jaw; a dragon's chest, head, fangs and wings; a crab's stalks and claws.
+  - A second round: smooth hand-overs from skin to tube on every limb; a lizard's sprawl; a tortoise's neck,
+    feet and dome; a shark's slits and foils; a crocodile's seam on its drawn skin; an ostrich's spoon bill
+    and three toes; a theropod's seam and folded arms; an octopus's small rings and whole web; a hawk's
+    hooked bill and hanging tail.
   **Tests:** see PROGRESS M100.
 
 ### Next up (unchecked — pick from here)
 
-- [ ] **What the fourteenth look left.** The seam where a field limb hands on to an exact tube (a longer
-  dog's legs); a lizard's stick legs held high; a tortoise's ball head on the shell and grape-cluster feet; a
-  crocodile's wire mouth loop; a shark's gill slabs; an ostrich's slab bill; a hawk's dagger beak; a
-  theropod's muppet mouth; an octopus's ring spectacles; a weasel's slit eyes; the mouse's neckless wedge
-  head.
+- [ ] **What the fourteenth look left.** A tail's or tentacle's spline hand-over (the chain blend stands
+  proud of the collar); the other reptiles' seams on the drawn skin; a tortoise's parrot beak; a mouse's
+  neckless wedge head; a weasel's slit eyes; a slug's sole; a songbird's pear shape from the front.
 
 - [ ] **What the thirteenth look left.** A songbird's pear shape from the front (a dark breast band over a
   pale belly); a crocodile's teeth still unseen at studio scale.
