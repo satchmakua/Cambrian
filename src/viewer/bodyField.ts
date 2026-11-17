@@ -678,12 +678,16 @@ const CHAIN_BLEND = 0.15;
 // --- webs ----------------------------------------------------------------------------------------
 
 /** a web panel's thickness, as a share of its arms' radius where it meets them (the arms stand on it
- *  as ridges), and how far into each arm its sides reach (×that radius), so the two blend */
-const WEB_THICK = 0.45;
-const WEB_SINK = 0.35;
+ *  as ridges), and how far into each arm its sides reach (×that radius), so the two blend. (At 0.45 a
+ *  panel was 1.3–1.9 cells of an octopus's skin grid thick — the grid spans its sprawled arms — and its
+ *  rim, thinning to nothing, under one: drawn 7–74% as thick as it is, the web's margin broke into a
+ *  ragged, lumpy shelf of beads and holes round the mantle's base.) */
+const WEB_THICK = 0.6;
+const WEB_SINK = 0.5;
 /** how far out a panel runs toward its arms' web points (it stops short of their chord, so between
- *  two arms the web's margin falls back toward the body) */
-const WEB_OUT = 0.85;
+ *  two arms the web's margin falls back toward the body; at 0.85 it stood out to 2.3 mantle
+ *  half-widths, a skirt) */
+const WEB_OUT = 0.75;
 
 /** a point `s` of the way along a chain of nodes (by length), and the chain's radius there */
 function alongChain(p: Phenotype, chain: number[], s: number): { at: Vec3; r: number } {
