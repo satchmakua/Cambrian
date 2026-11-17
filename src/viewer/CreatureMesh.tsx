@@ -1615,13 +1615,15 @@ function ToedFoot({ f, plan, skin, phenotype }: { f: MeshFeature; plan: FootPlan
   const link = useMemo(() => lastLinkOf(phenotype, f.idx), [phenotype, f.idx]);
   // (a frog's hind feet are webbed; its hands are not)
   const webbed = useMemo(() => plan === 'frog' && isHindFoot(phenotype, f.idx), [plan, phenotype, f.idx]);
+  // (a flightless bird — an ostrich, an emu — runs on three short thick toes, no hind one)
+  const flightless = useMemo(() => plan === 'bird' && shaggyPlumage(phenotype), [plan, phenotype]);
   const geo = useMemo(() => {
-    const g = toedFootGeometry(plan, r, link, f.style >= TALONED, webbed);
+    const g = toedFootGeometry(plan, r, link, f.style >= TALONED, webbed, flightless);
     const toes = bakeSkin(g.toes, origin);
     // the toes are all leg (a bird's are bare keratin to the claw)
     toes.setAttribute('aLeg', new THREE.BufferAttribute(new Float32Array(toes.getAttribute('position').count).fill(1), 1));
     return { toes, claws: g.claws };
-  }, [plan, r, link, origin, f.style, webbed]);
+  }, [plan, r, link, origin, f.style, webbed, flightless]);
   useEffect(() => () => {
     geo.toes.dispose();
     geo.claws.dispose();

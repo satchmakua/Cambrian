@@ -308,7 +308,19 @@ function toeWebGeometry(a: THREE.Vector3[], b: THREE.Vector3[], r0: number): THR
 /** A leg part's style gene at or over this ends a bird's leg in a bird of prey's foot. */
 export const TALONED = 0.6;
 
-function toesOf(plan: FootPlan, r: number, link: number, taloned = false, webbed = false): ToeSpec[] {
+function toesOf(plan: FootPlan, r: number, link: number, taloned = false, webbed = false, flightless = false): ToeSpec[] {
+  if (plan === 'bird' && flightless) {
+    // a running bird's foot (an emu's, a rhea's): three short thick toes close together under the leg, the
+    // middle one longest, and no hind toe. (A perching bird's four long thin toes, the outer two splayed half
+    // a radian, reached out past the flanks: from above, two pale spikes through the plumage.)
+    const L = Math.max(r * 3.4, link * RATITE_TOES.len);
+    const t = Math.max(r * 0.45, L * RATITE_TOES.thick);
+    return [
+      { az: -RATITE_TOES.spread, len: L * RATITE_TOES.side, r0: t * 0.92 },
+      { az: 0, len: L, r0: t },
+      { az: RATITE_TOES.spread, len: L * RATITE_TOES.side, r0: t * 0.92 },
+    ];
+  }
   if (plan === 'bird' && taloned) {
     // a bird of prey's foot is its weapon: thick, widely spread toes, the hind one nearly as long as
     // the front three (it closes the grip). (On a songbird's thin perching toes a hawk stood on wire.)
@@ -410,9 +422,14 @@ export const TALON_DROP = (Math.cos(TALON_RISE - TALON_CURL) - Math.cos(TALON_RI
 const TALON_LEN = 3.6;
 const TALON_ROOT = 0.72;
 
+/** A running bird's toes (see toesOf): their length (× the shank's), thickness (× their length), the outer
+ *  two's bearing off the middle one (rad) and their length (× its). */
+export const RATITE_TOES = { len: 0.42, thick: 0.11, spread: 0.36, side: 0.74 } as const;
+
 /** The toes (skin) and claws (dark keratin) of one foot, in the body frame about the foot node.
- *  `taloned` is the cut of a bird of prey's foot (a bird's only): stout toes ending in long hooks. */
-export function toedFootGeometry(plan: FootPlan, r: number, link: number, taloned = false, webbed = false): { toes: THREE.BufferGeometry; claws: THREE.BufferGeometry } {
+ *  `taloned` is the cut of a bird of prey's foot (a bird's only): stout toes ending in long hooks.
+ *  `flightless`, a running bird's (an emu's): three thick toes, no hind one. */
+export function toedFootGeometry(plan: FootPlan, r: number, link: number, taloned = false, webbed = false, flightless = false): { toes: THREE.BufferGeometry; claws: THREE.BufferGeometry } {
   if (plan === 'stump') return stumpFootGeometry(r);
   const hooked = taloned && plan === 'bird';
   // each toe's centre line, for the webs between them (a frog's hind foot)
@@ -428,7 +445,7 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number, talone
   const sole = 1.08;
   pad.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(0, floor + r * 0.62, 0), new THREE.Quaternion(), new THREE.Vector3(r * sole, r * 0.72, r * sole)));
   toes.push(pad);
-  for (const t of toesOf(plan, r, link, hooked, webbed && plan === 'frog')) {
+  for (const t of toesOf(plan, r, link, hooked, webbed && plan === 'frog', flightless && plan === 'bird' && !hooked)) {
     const dir = new THREE.Vector3(Math.sin(t.az), 0, Math.cos(t.az));
     // two phalanges: up over a knuckle and down to the claw, so the toe grips rather than lies flat
     const y0 = floor + t.r0 * 1.1;
