@@ -921,6 +921,48 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
 
 ### Next up (unchecked — pick from here)
 
+#### The front door (before anything else)
+
+- [ ] **A menu that always opens.** On the main menu the page froze for seconds at a time: the backdrop
+  creature is drawn at full quality every frame (18 shader programs, 880 KB of shader source, the largest
+  120 KB; about 70 draw calls and 209,000 triangles a frame). With no GPU acceleration that is 5 s a frame.
+  - The menu's buttons must work before, and whatever, the 3D stage does.
+  - Detect a software renderer or slow first frames and drop to low graphics automatically; say so.
+  - Draw the backdrop on demand at low cost (no fur shells, capped pixel ratio).
+  - Cut shader compile cost: fewer programs, smaller sources.
+
+#### The simulation: making it a game (agreed 2026-11-17)
+
+Principle: the player changes the pressures, never the animals directly. The breeder is the one place for
+artificial selection.
+
+- [ ] **1. Evolution you can see.** Works on any map, so it comes first.
+  - Trait-over-time charts for a species (size, speed, coat, diet).
+  - Species cards: where it lives, what it eats, what eats it, how it differs from its founder.
+  - Causes of death, per species and over time.
+  - The lineage film: a species' body over the generations as a strip of portraits.
+  - Adopt a lineage: follow "your" species and be told when it splits or dies out.
+- [ ] **2. A planet with climate zones.** Built together, so terrain is rewritten once.
+  - A small sphere you can rotate, with no map edge. Distant animals as simple markers, full bodies when
+    zoomed in.
+  - Climate by latitude: ice caps, temperate belts, desert, tropics.
+  - Oceans and islands that isolate populations, so species split by geography.
+  - Costs to plan for: terrain, movement, the grass grid, the camera, plant rendering and saves all assume
+    a flat square today; the 165-creature cap is a rendering budget; old saves will not carry over.
+- [ ] **3. Selection that is real.** Traits matter differently by place.
+  - Camouflage: coat colour against the local ground changes how easily a hunter spots prey.
+  - Mate choice: crests and bright colours attract mates and hunters alike.
+  - Fur or bare skin against temperature; body size against cold.
+  - Replace the per-species and per-guild quotas with ecological limits where the food web can carry it.
+- [ ] **4. Levers on the environment.**
+  - Shape it: sea level, temperature, rainfall, forests, a land bridge or a strait.
+  - Events: an ice age, a volcano, a meteor, a plague, then watch what radiates into the gaps.
+  - Introductions: release a bred design as an invader and see whether it lasts.
+- [ ] **5. Scenarios.** Goals that give a run a point: "get something to colonise the ice cap", "keep three
+  levels of the food chain alive for 100 years".
+
+#### Creature looks (on hold while the simulation is worked on)
+
 - [ ] **What the fourteenth look left.** A tail's or tentacle's spline hand-over (the chain blend stands
   proud of the collar); the other reptiles' seams on the drawn skin; a tortoise's parrot beak; a mouse's
   neckless wedge head; a weasel's slit eyes; a slug's sole; a songbird's pear shape from the front.
@@ -956,7 +998,6 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
 - [ ] **What the fifth look left.** A weasel end on is a ball behind a small head (its shoulder joints
   set the width); a dog's and a bear's muzzle is a tube ending in a bulb (the dog's test holds its
   girth to the nose on purpose: it needs a better shape, not a re-taper).
-- [ ] **A lineage film.** A wild species' body changes over the generations, as a strip of portraits.
 - [ ] **More headroom.** Skin builds off the main thread (a worker for the marching tetrahedra); the
   flowers as cells like the grass; level-of-detail crowns for far trees.
 
