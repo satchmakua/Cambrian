@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_SETTINGS, PRESETS, dprOf, presetOf, qualityOf, sanitize, useSettings } from '../../src/ui/settings';
+import { DEFAULT_SETTINGS, PRESETS, SAFE_GRAPHICS, createSettingsStore, dprOf, isHarnessUrl, lowerOf, presetOf, qualityOf, sanitize, useSettings } from '../../src/ui/settings';
 
 describe('settings', () => {
   it('whatever was stored comes back as valid options: missing fields default, numbers clamp to a choice', () => {
@@ -132,6 +132,40 @@ describe('settings', () => {
     expect(S.autoLower('slow')).toBe(true);
     expect(useSettings.getState().notice).toEqual({ lowered: 'slow', seen: false });
     S.resetDefaults();
+  });
+
+  it('lowering never raises an option: what was already under Low stays there', () => {
+    expect(lowerOf(PRESETS.high, PRESETS.low)).toEqual(PRESETS.low);
+    expect(lowerOf(SAFE_GRAPHICS, PRESETS.low)).toEqual(SAFE_GRAPHICS);
+    expect(lowerOf({ ...PRESETS.medium, renderScale: 0.75 }, PRESETS.low)).toEqual({ ...PRESETS.low, renderScale: 0.75 });
+    const S = createSettingsStore();
+    // (options set by hand below Low, then "adjust automatically" switched back on)
+    S.getState().setGraphics({ ...PRESETS.low, renderScale: 0.75, weather: 0.25 });
+    S.getState().setAuto(true);
+    const before = S.getState().graphics;
+    expect(S.getState().autoLower('software')).toBe(false);
+    expect(S.getState().graphics).toEqual(before);
+    expect(S.getState().notice.lowered).toBe(null);
+    // one option above Low: that one comes down, the rest stay where they were
+    S.getState().setGraphics({ shadows: true });
+    S.getState().setAuto(true);
+    expect(S.getState().autoLower('slow')).toBe(true);
+    expect(S.getState().graphics).toEqual({ preset: 'custom', ...PRESETS.low, renderScale: 0.75, weather: 0.25, auto: true });
+    expect(S.getState().notice).toEqual({ lowered: 'slow', seen: false });
+    expect(S.getState().autoLower('slow')).toBe(false);
+  });
+
+  it('a capture harness\'s page is drawn at the kept quality: the game lowers nothing there', () => {
+    for (const q of ['?seed=3&morph=felid&skin=hybrid&bare=1&spin=0', '?studio=1', '?bestiary=1', '?world=1', '?g=CAM2:abc', '?morph=ursid']) expect(isHarnessUrl(q), q).toBe(true);
+    for (const q of ['', '?safe=1', '?menu=1&forcestage=1', '?menu=1&screen=settings']) expect(isHarnessUrl(q), q).toBe(false);
+    const S = createSettingsStore(false, false);
+    expect(S.getState().autoLower('software')).toBe(false);
+    expect(S.getState().autoLower('slow')).toBe(false);
+    expect(S.getState().graphics).toEqual(DEFAULT_SETTINGS.graphics);
+    expect(S.getState().notice.lowered).toBe(null);
+    // (the options themselves still answer)
+    S.getState().setPreset('medium');
+    expect(S.getState().quality).toEqual(qualityOf(PRESETS.medium));
   });
 
   it("a player's own choice — a level, or one option — ends the game's adjusting", () => {

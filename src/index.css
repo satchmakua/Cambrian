@@ -47,6 +47,32 @@ body,
   display: block;
 }
 
+/* a line on the stage: it is not drawn yet, or it holds still because drawing is slow */
+.stage-says {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  margin: 0;
+  max-width: 80%;
+  padding: 5px 10px;
+  border-radius: 7px;
+  background: rgba(11, 13, 18, 0.7);
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* (the notice that the game lowered the graphics, under the breeder's own controls) */
+.hud .mm-notice {
+  max-width: 300px;
+}
+
+.hud .view-tabs button small {
+  color: var(--muted);
+}
+
 .hud {
   position: absolute;
   top: 0;
@@ -241,6 +267,17 @@ body,
 .thumb:hover {
   border-color: var(--accent);
   transform: translateY(-2px);
+}
+
+/* (a slot nothing has been drawn into yet: on a slow machine that can be seconds) */
+.thumb:not([data-drawn])::after {
+  content: 'Preparing…';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 10px;
 }
 
 
@@ -1780,6 +1817,10 @@ body,
   display: flex;
   flex-direction: column;
   padding: 7vh 40px 22px;
+  /* (a short window: the list, a notice under it and the footer are all still reached) */
+  overflow: hidden auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
 }
 
 .mm-panel.wide {

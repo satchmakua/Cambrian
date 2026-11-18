@@ -5,7 +5,12 @@
  * switched off) the browser still offers WebGL, drawn by a software renderer on the processor — and a
  * furred creature then takes seconds a frame, each of them holding the page. The game asks once, before
  * its first canvas, so it can go without the menu's backdrop and start at the lowest quality instead.
+ *
+ * Asking makes a WebGL context, which can itself be slow — so it is whatever is about to mount a
+ * canvas that asks (the menu, after its first paint; the game's screens, when their code arrives),
+ * never the page's start-up: the menu's buttons do not wait for it. In safe mode nothing is asked.
  */
+import { SAFE, useSettings } from './settings';
 
 export interface GpuInfo {
   /** the renderer's own name ('' when it cannot be read) */
@@ -46,4 +51,22 @@ export function gpuInfo(): GpuInfo {
   }
   cached = { renderer, webgl, software: !webgl || isSoftwareRenderer(renderer) };
   return cached;
+}
+
+/** Is 3D to be spared on this visit: safe mode (WebGL is not even asked), or a browser that draws in
+ *  software? */
+export function noGpu(): boolean {
+  return SAFE || gpuInfo().software;
+}
+
+/**
+ * Before a first canvas, and after the options are reset: where the browser draws without a graphics
+ * card the game goes to the Low quality (if the player lets it adjust: see settings). Lowering the
+ * options under a canvas that is already up would compile every shader a second time. Returns `noGpu()`.
+ */
+export function settleGraphics(): boolean {
+  if (SAFE) return true;
+  const { software } = gpuInfo();
+  if (software) useSettings.getState().autoLower('software');
+  return software;
 }

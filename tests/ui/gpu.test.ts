@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { gpuInfo, isSoftwareRenderer } from '../../src/ui/gpu';
+import { gpuInfo, isSoftwareRenderer, noGpu, settleGraphics } from '../../src/ui/gpu';
+import { DEFAULT_SETTINGS, PRESETS, useSettings } from '../../src/ui/settings';
 
 describe('what draws the browser\'s WebGL', () => {
   it('knows a software renderer by its name', () => {
@@ -34,5 +35,26 @@ describe('what draws the browser\'s WebGL', () => {
     const info = gpuInfo();
     expect(info).toEqual({ renderer: '', webgl: false, software: true });
     expect(gpuInfo()).toBe(info);
+  });
+
+  it('without a graphics card the game settles at Low before a first canvas — and again after a reset to the defaults', () => {
+    const S = useSettings.getState();
+    S.resetDefaults();
+    expect(noGpu()).toBe(true);
+    expect(settleGraphics()).toBe(true);
+    expect(useSettings.getState().graphics).toEqual({ preset: 'low', ...PRESETS.low, auto: true });
+    expect(useSettings.getState().notice).toEqual({ lowered: 'software', seen: false });
+    // (what the Settings panel's button does: the defaults are High, which this browser cannot draw)
+    S.dismissNotice();
+    S.resetDefaults();
+    expect(useSettings.getState().graphics).toEqual(DEFAULT_SETTINGS.graphics);
+    settleGraphics();
+    expect(useSettings.getState().graphics.preset).toBe('low');
+    expect(useSettings.getState().notice).toEqual({ lowered: 'software', seen: false });
+    // a player's own level is left alone
+    S.setPreset('high');
+    settleGraphics();
+    expect(useSettings.getState().graphics.preset).toBe('high');
+    S.resetDefaults();
   });
 });

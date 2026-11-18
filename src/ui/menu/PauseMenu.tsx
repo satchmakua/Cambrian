@@ -14,10 +14,11 @@ import { ControlsPanel, SavesPanel, SettingsPanel } from './panels';
 type Screen = 'home' | 'save' | 'load' | 'settings' | 'controls';
 const TITLES: Record<Exclude<Screen, 'home'>, string> = { save: 'Save game', load: 'Load game', settings: 'Settings', controls: 'Controls' };
 
-export function PauseMenu({ onClose }: { onClose: () => void }) {
+/** `start`: the screen it opens on (the notice that the graphics were lowered leads to Settings). */
+export function PauseMenu({ onClose, start = 'home' }: { onClose: () => void; start?: 'home' | 'settings' }) {
   const [screen, setScreen] = useState<Screen>(() => {
     const q = import.meta.env.DEV && typeof location !== 'undefined' ? new URLSearchParams(location.search).get('screen') : null;
-    return q === 'save' || q === 'load' || q === 'settings' || q === 'controls' ? q : 'home';
+    return q === 'save' || q === 'load' || q === 'settings' || q === 'controls' ? q : start;
   });
   const game = useStore((s) => s.game);
   const view = useStore((s) => s.view);

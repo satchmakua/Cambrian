@@ -923,13 +923,22 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
 
 #### The front door (before anything else)
 
-- [ ] **A menu that always opens.** On the main menu the page froze for seconds at a time: the backdrop
-  creature is drawn at full quality every frame (18 shader programs, 880 KB of shader source, the largest
-  120 KB; about 70 draw calls and 209,000 triangles a frame). With no GPU acceleration that is 5 s a frame.
-  - The menu's buttons must work before, and whatever, the 3D stage does.
-  - Detect a software renderer or slow first frames and drop to low graphics automatically; say so.
-  - Draw the backdrop on demand at low cost (no fur shells, capped pixel ratio).
-  - Cut shader compile cost: fewer programs, smaller sources.
+- [x] **A menu that always opens.** On the main menu the page froze for seconds at a time: the backdrop
+  creature was drawn at full quality in an always-on loop (about 70 draw calls and 209,000 triangles a
+  frame, 12 fur shells being 90% of it), 3.5-9 s a frame with no GPU acceleration. Measured in a
+  software-GL browser, a click on Settings now takes 7-10 ms (3-7 s before). Not yet measured on a hardware
+  GPU.
+  - The menu's stage is lazy, never mounted on a software renderer or in safe mode, starts still and
+    without fur, and turns (with its fur) only once a frame is proven fast.
+  - Graphics lower themselves to Low on a software renderer or slow first frames, with one line saying
+    why; `?safe=1` starts with the lowest graphics and no backdrop.
+  - The page shows a static shell before any JavaScript runs; the entry chunk is 107 KB gzipped (461 KB
+    before).
+- [ ] **What the front door left.**
+  - The first entry to the breeder on a software renderer still holds the page for some seconds.
+  - The valley is still too heavy for a software renderer: it warns, but is not lighter.
+  - The creature shader compiles all eight coverings for every creature; compile only its own.
+  - Confirm on the owner's laptop (`scripts/diag-frontdoor.mjs`).
 
 #### The simulation: making it a game (agreed 2026-11-17)
 

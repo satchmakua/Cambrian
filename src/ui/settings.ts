@@ -10,8 +10,9 @@
  *
  * The game may also lower the graphics itself, once, on a machine that cannot draw them (`autoLower`:
  * no graphics card, or frames measured slow) — it says so (`notice`), and never again overrides an
- * option the player has set by hand. And a page opened with ?safe=1 is in SAFE MODE: the lowest
- * graphics for that visit only, and nothing changed during it is written to the browser.
+ * option the player has set by hand, nor raises one that was lower. And a page opened with ?safe=1 is
+ * in SAFE MODE: the lowest graphics for that visit only, and nothing changed during it is written to
+ * the browser.
  *
  * Everything here but the store itself is pure (sanitising a stored blob, naming the preset a set of
  * options matches, deriving the budgets), and tested headlessly.
@@ -107,6 +108,32 @@ export function isSafeUrl(search: string): boolean {
 
 /** Safe mode, for this visit: asked for by the address alone, and never kept. */
 export const SAFE = typeof location !== 'undefined' && isSafeUrl(location.search);
+
+/**
+ * Dev/headless: does this address ask for an exact creature or screen (the capture harness: see
+ * scripts/shoot.mjs)? Such a page is drawn at the kept quality as it is — the game lowers nothing
+ * itself — or every capture taken without a graphics card would be of the Low creature: no fur pile,
+ * no shadow.
+ */
+export function isHarnessUrl(search: string): boolean {
+  const q = new URLSearchParams(search);
+  return ['seed', 'morph', 'g', 'studio', 'bestiary', 'world', 'bare'].some((k) => q.has(k));
+}
+
+/** A capture harness's page (dev only). */
+export const HARNESS = import.meta.env.DEV && typeof location !== 'undefined' && isHarnessUrl(location.search);
+
+/** The lower of two sets of options, option by option. */
+export function lowerOf(a: GraphicsOptions, b: GraphicsOptions): GraphicsOptions {
+  const detail: CreatureDetail[] = ['low', 'medium', 'high'];
+  return {
+    renderScale: Math.min(a.renderScale, b.renderScale),
+    shadows: a.shadows && b.shadows,
+    vegetation: Math.min(a.vegetation, b.vegetation),
+    weather: Math.min(a.weather, b.weather),
+    creatureDetail: detail[Math.min(detail.indexOf(a.creatureDetail), detail.indexOf(b.creatureDetail))],
+  };
+}
 
 /** Which named level these options are, or 'custom'. */
 export function presetOf(g: GraphicsOptions): QualityPreset | 'custom' {
@@ -249,9 +276,9 @@ interface SettingsStore extends Settings {
   /** let the game adjust the quality itself on a slow machine, or not */
   setAuto: (on: boolean) => void;
   /**
-   * The game lowers the quality itself: to the Low level, with a notice saying why. Only while `auto`
-   * is on and the level is not Low already — so it happens once, and never over a player's own choice.
-   * Returns whether anything changed.
+   * The game lowers the quality itself: to the Low level — or below it, where an option already was —
+   * with a notice saying why. Only while `auto` is on and something is above Low: so it happens once,
+   * never over a player's own choice, and never raises an option. Returns whether anything changed.
    */
   autoLower: (reason: LoweredReason) => boolean;
   /** the player has read the notice */
@@ -264,8 +291,9 @@ interface SettingsStore extends Settings {
 /**
  * The settings store. In safe mode it starts from the lowest graphics whatever is kept, the game
  * adjusts nothing itself, and nothing is written: the visit leaves the kept options as it found them.
+ * `adjusts: false` (a capture harness's page) only stops the game lowering the quality itself.
  */
-export function createSettingsStore(safe = false) {
+export function createSettingsStore(safe = false, adjusts = true) {
   return create<SettingsStore>((set, get) => {
     const apply = (next: Settings) => {
       const clean = sanitize(next);
@@ -285,8 +313,10 @@ export function createSettingsStore(safe = false) {
       setAuto: (on) => apply({ ...current(), graphics: { ...get().graphics, auto: on } }),
       autoLower: (reason) => {
         const g = get().graphics;
-        if (safe || !g.auto || g.preset === 'low') return false;
-        apply({ ...current(), graphics: { preset: 'low', ...PRESETS.low, auto: true }, notice: { lowered: reason, seen: false } });
+        if (safe || !adjusts || !g.auto) return false;
+        const low = lowerOf(g, PRESETS.low);
+        if ((Object.keys(low) as (keyof GraphicsOptions)[]).every((k) => low[k] === g[k])) return false;
+        apply({ ...current(), graphics: { preset: presetOf(low), ...low, auto: true }, notice: { lowered: reason, seen: false } });
         return true;
       },
       dismissNotice: () => apply({ ...current(), notice: { ...get().notice, seen: true } }),
@@ -297,7 +327,7 @@ export function createSettingsStore(safe = false) {
   });
 }
 
-export const useSettings = createSettingsStore(SAFE);
+export const useSettings = createSettingsStore(SAFE, !HARNESS);
 
 /** The render budgets, for a component (re-renders when an option changes). */
 export function useQuality(): RenderQuality {

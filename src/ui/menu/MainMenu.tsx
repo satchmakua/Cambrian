@@ -11,10 +11,14 @@
  *   Controls      what the mouse and the keys do
  *   Quit          keeps the game and closes the window where a page may; else says it is safe to
  *
- * The buttons work before the stage does, and whatever it does: the stage's code (the 3D library, the
- * creature renderer) is fetched after the menu is up, it is not mounted at all where the browser
- * draws without a graphics card or the page was opened in safe mode (?safe=1) — the dark panel is
- * the menu then — and it holds still under every panel that does not show a creature on it.
+ * The buttons work before the stage does, and whatever it does. Nothing of WebGL is touched until the
+ * menu has been painted; the stage's code (the 3D library, the creature renderer) is fetched after
+ * that, and the stage itself is mounted only once the menu has been up for a moment on a screen that
+ * shows a creature — so a first click is never behind the stage's first frame. It is not mounted at
+ * all where the browser draws without a graphics card or the page was opened in safe mode (?safe=1),
+ * and it is taken down again if its frames are measured slow — for good, if the game lowered the
+ * graphics for it (until the options are reset): the dark panel is the menu then. It holds still
+ * under every panel that does not show a creature on it.
  */
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import type { Genome } from '../../engine/genome';
@@ -22,10 +26,10 @@ import { grow } from '../../engine/grow';
 import { coherence } from '../../engine/morphospace';
 import { PartBoundary, fetching } from '../ScreenBoundary';
 import { continueGame, quitGame, startNewGame } from '../game';
-import { gpuInfo } from '../gpu';
+import { settleGraphics } from '../gpu';
 import { SAFE, useSettings } from '../settings';
 import { useStore } from '../store';
-import { ControlsPanel, NewGamePanel, SavesPanel, SettingsPanel } from './panels';
+import { ControlsPanel, LoweredNotice, NewGamePanel, SavesPanel, SettingsPanel } from './panels';
 import pkg from '../../../package.json';
 
 type Screen = 'home' | 'new' | 'load' | 'settings' | 'controls' | 'bye';
@@ -35,12 +39,12 @@ const TITLES: Record<Exclude<Screen, 'home' | 'bye'>, string> = { new: 'New game
 /** The menu's backdrop: one creature on the turntable — fetched once the menu is up. */
 const Stage = lazy(fetching(() => import('./MenuStage')));
 
+/** How long the menu is up, on a screen that shows a creature, before the stage is mounted (ms). */
+const STAGE_AFTER_MS = 1000;
+
 // Dev/headless: ?menu=1&forcestage=1 mounts the backdrop even where the browser draws in software, to
 // see what the stage's own frame pacing makes of it.
 const DEV_STAGE = import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('forcestage') === '1';
-
-/** Why the game lowered the graphics itself, as the menu says it. */
-const LOWERED = { software: 'this browser is drawing without a graphics card', slow: 'the first frames were slow' } as const;
 
 export function MainMenu() {
   const [screen, setScreen] = useState<Screen>(() => {
@@ -53,10 +57,39 @@ export function MainMenu() {
   const current = useStore((s) => s.nodes[s.currentId]);
   const skinMode = useStore((s) => s.skinMode);
   const [preview, setPreview] = useState<Genome | null>(null);
-  const notice = useSettings((s) => s.notice);
-  const dismissNotice = useSettings((s) => s.dismissNotice);
-  // (a stage drawn by the processor would hold the page for seconds a frame: the menu goes without)
-  const backdrop = (!SAFE && !gpuInfo().software) || DEV_STAGE;
+  // What draws this browser's 3D is asked once the menu has been painted (null: not yet) — asking
+  // makes a WebGL context, and the buttons do not wait for that. In safe mode it is never asked.
+  const [noGpu, setNoGpu] = useState<boolean | null>(SAFE ? true : null);
+  useEffect(() => {
+    if (SAFE) return;
+    let timer = 0;
+    const raf = requestAnimationFrame(() => {
+      timer = window.setTimeout(() => {
+        const none = settleGraphics();
+        setNoGpu(none);
+        // (the stage's code, meanwhile; a fetch that fails is tried again when the stage is mounted)
+        if (!none || DEV_STAGE) void import('./MenuStage').catch(() => undefined);
+      }, 0);
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
+  }, []);
+  // (a stage drawn by the processor would hold the page for seconds a frame: the menu goes without —
+  // as it does once a stage has been measured slow, and on later visits to a machine whose graphics
+  // the game lowered for that: finding it out again would hold the page again, each time)
+  const [dropped, setDropped] = useState(false);
+  const foundSlow = useSettings((s) => s.notice.lowered === 'slow');
+  const backdrop = !SAFE && !dropped && ((noGpu === false && !foundSlow) || (DEV_STAGE && noGpu !== null));
+  const showsCreature = screen === 'home' || screen === 'new';
+  const [staged, setStaged] = useState(false);
+  useEffect(() => {
+    if (staged || !backdrop || !showsCreature) return;
+    const t = setTimeout(() => setStaged(true), STAGE_AFTER_MS);
+    return () => clearTimeout(t);
+  }, [staged, backdrop, showsCreature]);
+  const onSlow = useCallback(() => setDropped(true), []);
   const onPreview = useCallback((g: Genome) => setPreview(g), []);
   // the stage: the founder being chosen, else the creature of the game in progress
   const shown = screen === 'new' && preview ? preview : current.genome;
@@ -99,10 +132,10 @@ export function MainMenu() {
         {/* (a stage that cannot be fetched, grown or drawn is left dark; another creature — a founder
             being chosen, a game loaded — is tried afresh. It holds still under the panels that show
             no creature on it: they have the machine to themselves) */}
-        {backdrop && (
+        {backdrop && staged && (
           <PartBoundary resetKey={shown}>
             <Suspense fallback={null}>
-              <Stage genome={shown} skinMode={skinMode} paused={screen !== 'home' && screen !== 'new'} />
+              <Stage genome={shown} skinMode={skinMode} paused={!showsCreature} onSlow={onSlow} />
             </Suspense>
           </PartBoundary>
         )}
@@ -134,7 +167,7 @@ export function MainMenu() {
               <h2>{TITLES[screen]}</h2>
             </div>
             <div className="mm-sub-body">
-              {screen === 'new' && <NewGamePanel onPreview={onPreview} onStart={startNewGame} />}
+              {screen === 'new' && <NewGamePanel onPreview={onPreview} onStart={startNewGame} staged={backdrop} slow={noGpu === true || dropped} />}
               {screen === 'load' && <SavesPanel mode="load" />}
               {screen === 'settings' && <SettingsPanel />}
               {screen === 'controls' && <ControlsPanel />}
@@ -143,21 +176,7 @@ export function MainMenu() {
         )}
         {/* (the game lowered the graphics itself: said once, under the buttons so none of them moves
             when it is dismissed) */}
-        {screen === 'home' && !SAFE && notice.lowered && !notice.seen && (
-          <div className="mm-notice" role="status">
-            <span>Graphics were set to Low because {LOWERED[notice.lowered]}.</span>
-            <button
-              className="plain"
-              onClick={() => {
-                dismissNotice();
-                setScreen('settings');
-              }}
-            >
-              Settings
-            </button>
-            <button className="plain" onClick={dismissNotice}>OK</button>
-          </div>
-        )}
+        {screen === 'home' && <LoweredNotice onSettings={() => setScreen('settings')} />}
         <footer className="mm-foot">
           v{pkg.version} · your game is kept in this browser as you play ·{' '}
           {SAFE ? (

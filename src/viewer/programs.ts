@@ -66,6 +66,20 @@ export function programsReady(gl: Pick<THREE.WebGLRenderer, 'properties'>, waiti
   return waiting.size === 0;
 }
 
+/** Does the scene hold a material that is not among these (a creature swapped for another since
+ *  they were compiled)? */
+export function holdsUncompiled(scene: Pick<THREE.Object3D, 'traverse'>, compiled: ReadonlySet<THREE.Material>): boolean {
+  let found = false;
+  scene.traverse((o) => {
+    // (the objects three compiles for, and no others)
+    const drawn = o as Partial<Record<'isMesh' | 'isPoints' | 'isLine' | 'isSprite', boolean>>;
+    const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+    if (found || !m || !(drawn.isMesh || drawn.isPoints || drawn.isLine || drawn.isSprite)) return;
+    found = Array.isArray(m) ? m.some((x) => !compiled.has(x)) : !compiled.has(m);
+  });
+  return found;
+}
+
 /**
  * Compile every material in the scene before its first visible frame: mount the scene with the
  * canvas's frameloop paused, and this reports `onReady` once three has built them all. Where the
@@ -75,7 +89,10 @@ export function programsReady(gl: Pick<THREE.WebGLRenderer, 'properties'>, waiti
  * timeout guarantees the scene is shown whatever happens.
  *
  * (The wait is three's `compileAsync`, done here: three's own throws if a material is disposed while
- * it waits — a creature swapped for another during the compile — and then never reports at all.)
+ * it waits — a creature swapped for another during the compile — and then never reports at all. Here
+ * the programs are pinned as soon as they are asked for, so the swap does not throw the compile away
+ * — the creature that replaces it finds them — and whatever the swap brought is compiled and waited
+ * for too.)
  */
 export function WarmShaders({ onReady, timeoutMs = 6000 }: { onReady: () => void; timeoutMs?: number }): null {
   const gl = useThree((s) => s.gl);
@@ -90,20 +107,34 @@ export function WarmShaders({ onReady, timeoutMs = 6000 }: { onReady: () => void
     };
     const t = setTimeout(finish, timeoutMs);
     let poll: ReturnType<typeof setTimeout> | undefined;
-    // (after this commit and the browser's next frame: the scene graph is assembled)
-    const raf = requestAnimationFrame(() => {
+    const start = () => {
+      if (done) return;
       try {
-        const waiting = gl.compile(scene, camera);
+        const compiled = new Set<THREE.Material>();
+        const waiting = new Set<THREE.Material>();
+        const compile = () => {
+          for (const m of gl.compile(scene, camera)) {
+            compiled.add(m);
+            waiting.add(m);
+          }
+          pinPrograms(gl);
+        };
         const check = () => {
           if (done) return;
+          if (holdsUncompiled(scene, compiled)) compile();
           if (programsReady(gl, waiting)) finish();
           else poll = setTimeout(check, 10);
         };
+        compile();
         check();
       } catch {
         finish();
       }
-    });
+    };
+    // (after this commit has been painted — what is on the page around the canvas, a "Preparing"
+    // line, is seen before a compile that holds the page where the browser has only one thread for
+    // it — and the scene graph is assembled by then)
+    const raf = requestAnimationFrame(() => (poll = setTimeout(start, 0)));
     return () => {
       done = true;
       clearTimeout(t);

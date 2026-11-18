@@ -458,9 +458,17 @@ export function CreatureMesh({
   const dir = useMemo(() => new THREE.Vector3(), []);
   const q = useMemo(() => new THREE.Quaternion(), []);
 
-  useFrame((st) => {
+  // how far into the recorded gait the playback is, s (−1: not begun). Kept here, not read off the
+  // canvas's clock: that starts again from zero whenever the stage changes between looping and
+  // holding still, and the gait would start over with it.
+  const gaitAt = useRef(-1);
+  useEffect(() => {
+    gaitAt.current = -1;
+  }, [trajectory]);
+  useFrame((_, dt) => {
     if (!playing || !trajectory) return; // no gait recorded → the creature simply stands still
-    const anim = sampleTrajectory(trajectory, st.clock.elapsedTime, animScratch);
+    gaitAt.current = gaitAt.current < 0 ? 0 : gaitAt.current + dt;
+    const anim = sampleTrajectory(trajectory, gaitAt.current, animScratch);
     const { bodySpheres, edges, features } = data;
 
     if (import.meta.env.DEV) {

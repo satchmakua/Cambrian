@@ -26,8 +26,14 @@ const Studio = lazy(fetching(() => import('../viewer/Studio').then((m) => ({ def
 import { useStore } from './store';
 import { useWorldUi } from '../world/worldStore';
 import { fetching } from './ScreenBoundary';
+import { noGpu, settleGraphics } from './gpu';
 import { typingIn } from './keys';
 import { PauseMenu } from './menu/PauseMenu';
+import { LoweredNotice, VALLEY_SLOW, useSlowMachine } from './menu/panels';
+
+// Before any of these screens mounts a canvas: a browser drawing without a graphics card starts at
+// the Low quality. (Here — run once, when this code arrives — and not at the page's start: see gpu.ts.)
+settleGraphics();
 
 // Dev/headless: ?bare=1 renders just the creature full-bleed (no UI chrome) for clean face shots.
 const BARE = import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('bare') === '1';
@@ -76,8 +82,28 @@ export function Game() {
   // the in-game menu: Esc (or a screen's ☰) opens it over whichever screen is up
   // (dev: ?pause=1 opens it, for inspection captures)
   const [paused, setPaused] = useState(() => import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('pause') === '1');
-  const openMenu = useCallback(() => setPaused(true), []);
+  const [menuAt, setMenuAt] = useState<'home' | 'settings'>('home'); // the screen the menu opens on
+  const openMenu = useCallback(() => {
+    setMenuAt('home');
+    setPaused(true);
+  }, []);
+  const openSettings = useCallback(() => {
+    setMenuAt('settings');
+    setPaused(true);
+  }, []);
   const closeMenu = useCallback(() => setPaused(false), []);
+  const slowMachine = useSlowMachine();
+  // Where the browser draws without a graphics card every first frame holds the page for seconds:
+  // the creature is drawn first, and the litter only after it — a click gets in between the two.
+  // (and not under the open menu, which should have the machine to itself)
+  const [litterOn, setLitterOn] = useState(() => !noGpu());
+  const [heroShown, setHeroShown] = useState(false);
+  const onHeroShown = useCallback(() => setHeroShown(true), []);
+  useEffect(() => {
+    if (litterOn || !heroShown || paused) return;
+    const t = setTimeout(() => setLitterOn(true), 300);
+    return () => clearTimeout(t);
+  }, [litterOn, heroShown, paused]);
   // (the screens read this to stop drawing while the menu is over them — and it is taken down with
   // the game's screens when the player leaves for the main menu, whose own stage reads it too)
   const setMenuOpen = useStore((s) => s.setMenuOpen);
@@ -89,12 +115,12 @@ export function Game() {
     const key = (e: KeyboardEvent) => {
       // (the open menu handles its own Esc; a key held down opens it once, not on every repeat)
       if (e.key !== 'Escape' || e.repeat || paused || typingIn(e.target)) return;
-      setPaused(true);
+      openMenu();
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
-  }, [paused]);
-  const pause = paused ? <PauseMenu onClose={closeMenu} /> : null;
+  }, [paused, openMenu]);
+  const pause = paused ? <PauseMenu onClose={closeMenu} start={menuAt} /> : null;
 
   if (BARE) {
     return (
@@ -136,14 +162,16 @@ export function Game() {
     <div className="app">
       <div className="top">
         <main className="stage-wrap">
-          <CreatureViewer phenotype={phenotype} skinMode={skinMode} trajectory={activeGait} />
+          <CreatureViewer phenotype={phenotype} skinMode={skinMode} trajectory={activeGait} onShown={onHeroShown} />
           <header className="hud">
             <div className="title-row">
               <h1>Cambrian</h1>
               <nav className="view-tabs">
                 <button className="active">Breed</button>
                 <button onClick={() => setView('studio')} title="inspect this creature from every angle">Studio</button>
-                <button onClick={() => setView('world')} title="release creatures into a living ecosystem">World</button>
+                <button onClick={() => setView('world')} title={slowMachine ? VALLEY_SLOW : 'release creatures into a living ecosystem'}>
+                  World{slowMachine && <small> · slow here</small>}
+                </button>
                 <button className="menu-btn" onClick={openMenu} title="menu: save, load, settings, exit (Esc)" aria-label="Menu">☰</button>
               </nav>
             </div>
@@ -201,11 +229,13 @@ export function Game() {
                 </button>
               ))}
             </div>
+            {/* (the game lowered the graphics itself — perhaps a moment ago, on this very stage) */}
+            <LoweredNotice onSettings={openSettings} />
           </header>
         </main>
 
         <aside className="gallery">
-          <OffspringGallery offspring={offspring} generation={generation} onPick={promote} onReroll={reroll} />
+          {litterOn ? <OffspringGallery offspring={offspring} generation={generation} onPick={promote} onReroll={reroll} /> : <p className="gallery-hint">Preparing the litter…</p>}
           <PressurePanel
             pressure={pressure}
             onChange={setPressure}

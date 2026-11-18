@@ -67,8 +67,9 @@ card and its way back to the menu.
 
 If the page is slow to answer, open it with `?safe=1` (there is a link at the foot of the main menu):
 safe mode draws the lowest graphics and no 3D backdrop for that visit, and keeps nothing it changes.
-The menu also goes without its backdrop on its own where the browser draws without a graphics card
-(`?menu=1&forcestage=1`, dev only, mounts it there anyway — to watch the stage measure itself and stop).
+The menu also goes without its backdrop on its own where the browser draws without a graphics card,
+or where the backdrop's first frames are measured slow
+(`?menu=1&forcestage=1`, dev only, mounts it there anyway — to watch the stage measure itself and be taken down).
 
 ## Layout
 

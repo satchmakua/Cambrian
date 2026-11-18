@@ -2,8 +2,6 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './ui/App';
 import { ScreenBoundary } from './ui/ScreenBoundary';
-import { gpuInfo } from './ui/gpu';
-import { useSettings } from './ui/settings';
 import { useStore, type SkinMode } from './ui/store';
 import type { SymmetryMode } from './engine/random';
 import { decodeGenome } from './engine/share';
@@ -43,10 +41,7 @@ if (import.meta.env.DEV) {
   }
 }
 
-// Where the browser draws without a graphics card, the game starts at the Low quality (if the player
-// lets it adjust: see settings). Decided here, before the first canvas exists: lowering the options
-// under a canvas that is already up compiles every shader a second time.
-if (gpuInfo().software) useSettings.getState().autoLower('software');
+// (Nothing here asks what draws the browser's WebGL: the menu must be up first. See ui/gpu.ts.)
 
 const root = document.getElementById('app');
 if (!root) throw new Error('#app mount point not found');

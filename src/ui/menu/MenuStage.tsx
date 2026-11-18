@@ -11,8 +11,9 @@ import { grow } from '../../engine/grow';
 import { CreatureViewer } from '../../viewer/CreatureViewer';
 import type { SkinMode } from '../store';
 
-/** (Grown here, inside the menu's boundary.) `paused` holds it still under a panel. */
-export default function MenuStage({ genome, skinMode, paused }: { genome: Genome; skinMode: SkinMode; paused: boolean }) {
+/** (Grown here, inside the menu's boundary.) `paused` holds it still under a panel; `onSlow` says its
+ *  frames were measured slow — the menu then does without it. */
+export default function MenuStage({ genome, skinMode, paused, onSlow }: { genome: Genome; skinMode: SkinMode; paused: boolean; onSlow: () => void }) {
   const phenotype = useMemo(() => grow(genome), [genome]);
-  return <CreatureViewer phenotype={phenotype} skinMode={skinMode} backdrop paused={paused} />;
+  return <CreatureViewer phenotype={phenotype} skinMode={skinMode} backdrop paused={paused} onSlow={onSlow} />;
 }

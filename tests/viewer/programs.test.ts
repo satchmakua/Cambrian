@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type * as THREE from 'three';
-import { pinPrograms, programsReady } from '../../src/viewer/programs';
+import { holdsUncompiled, pinPrograms, programsReady } from '../../src/viewer/programs';
 
 describe('kept shader programs', () => {
   it('pins each program once, so disposing its last material no longer frees it', () => {
@@ -37,5 +37,18 @@ describe('kept shader programs', () => {
     building.ready = true;
     expect(programsReady(gl, waiting)).toBe(true);
     expect(programsReady(gl, new Set())).toBe(true);
+  });
+
+  it('sees a material that came into the scene after the compile (a creature swapped during warm-up)', () => {
+    const [body, fur, next] = [{}, {}, {}] as unknown as THREE.Material[];
+    const objects: unknown[] = [{ isMesh: true, material: body }, { isMesh: true, material: [body, fur] }, { isLight: true }, { isGroup: true, material: next }];
+    const scene = { traverse: (f: (o: THREE.Object3D) => void) => objects.forEach((o) => f(o as THREE.Object3D)) };
+    const compiled = new Set([body, fur]);
+    // (only what three compiles for is looked at: meshes, points, lines, sprites)
+    expect(holdsUncompiled(scene, compiled)).toBe(false);
+    objects.push({ isPoints: true, material: next });
+    expect(holdsUncompiled(scene, compiled)).toBe(true);
+    compiled.add(next);
+    expect(holdsUncompiled(scene, compiled)).toBe(false);
   });
 });
