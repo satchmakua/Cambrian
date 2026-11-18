@@ -9,10 +9,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Genome } from '../../engine/genome';
 import { MORPHOTYPE_IDS, type SymmetryMode } from '../../engine/random';
-import { usePortrait } from '../../viewer/portrait';
 import { exportSave, founderFor, importSave, loadGame, saveGame, type NewGameOptions } from '../game';
 import { cleanName, describeSave, nextGameName, saveStore, NAME_MAX, type Ecosystem, type SaveHeader } from '../saves';
-import { AUTOSAVE_MINUTES, DENSITIES, RENDER_SCALES, useSettings, type CreatureDetail, type QualityPreset } from '../settings';
+import { gpuInfo } from '../gpu';
+import { AUTOSAVE_MINUTES, DENSITIES, RENDER_SCALES, SAFE, useSettings, type CreatureDetail, type QualityPreset } from '../settings';
 import { useStore, type GameView } from '../store';
 
 // --- small controls --------------------------------------------------------------------------------
@@ -60,7 +60,7 @@ export function SettingsPanel() {
   const g = useSettings((s) => s.graphics);
   const a = useSettings((s) => s.audio);
   const p = useSettings((s) => s.gameplay);
-  const { setPreset, setGraphics, setAudio, setGameplay, resetDefaults } = useSettings.getState();
+  const { setPreset, setGraphics, setAuto, setAudio, setGameplay, resetDefaults } = useSettings.getState();
   const [full, setFull] = useState(() => typeof document !== 'undefined' && !!document.fullscreenElement);
   useEffect(() => {
     const on = () => setFull(!!document.fullscreenElement);
@@ -75,6 +75,11 @@ export function SettingsPanel() {
     <div className="settings">
       <section>
         <h3>Graphics</h3>
+        {SAFE && (
+          <p className="mm-warn" role="status">
+            Safe mode: these are the lowest graphics, for this visit only. Changes made on this screen are not kept — leave safe mode (on the main menu) to set the options the game starts with.
+          </p>
+        )}
         <Row label="Quality" hint={g.preset === 'custom' ? 'Custom — the options below were changed by hand.' : 'Sets every option below at once.'}>
           <Choice<QualityPreset | 'custom'>
             label="Quality"
@@ -82,6 +87,9 @@ export function SettingsPanel() {
             options={[{ v: 'low', label: 'Low' }, { v: 'medium', label: 'Medium' }, { v: 'high', label: 'High' }]}
             onChange={(v) => v !== 'custom' && setPreset(v)}
           />
+        </Row>
+        <Row label="Adjust automatically on slow machines" hint="The game sets the quality to Low itself, once, if this machine draws slowly. Choosing a quality or an option yourself turns this off.">
+          <Toggle label="Adjust automatically on slow machines" on={g.auto} onChange={setAuto} />
         </Row>
         <Row label="Resolution" hint="How finely the 3D views are drawn. Lower is faster on high-density screens.">
           <Choice label="Resolution" value={g.renderScale} options={RENDER_SCALES.map((v) => ({ v, label: SCALE_WORDS[v] }))} onChange={(v) => setGraphics({ renderScale: v })} />
@@ -95,7 +103,7 @@ export function SettingsPanel() {
         <Row label="Weather and insects" hint="Rain, snow, stars, midges and butterflies.">
           <Choice label="Weather and insects" value={g.weather} options={DENSITIES.map((v) => ({ v, label: DENSITY_WORDS[v] }))} onChange={(v) => setGraphics({ weather: v })} />
         </Row>
-        <Row label="Creature detail" hint="How far away creatures keep their features, and how fine their skin is up close.">
+        <Row label="Creature detail" hint="How far away creatures keep their features, how fine their skin is up close, and whether fur has its pile.">
           <Choice<CreatureDetail>
             label="Creature detail"
             value={g.creatureDetail}
@@ -150,8 +158,26 @@ function when(ms: number): string {
   return d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+/**
+ * A slot's creature, as a small picture once it is drawn. The portrait renderer is fetched when the
+ * first picture is wanted: with it come the 3D library and the creature renderer, which the menus do
+ * not wait for. In safe mode, and where the browser draws without a graphics card, a slot has no
+ * picture: drawing each would hold the page for seconds.
+ */
 function SlotPortrait({ genome }: { genome: Genome }) {
-  const url = usePortrait(genome);
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    setUrl(null);
+    if (SAFE || gpuInfo().software) return;
+    let live = true;
+    void import('../../viewer/portrait')
+      .then((m) => m.portraitOf(genome))
+      .then((u) => live && setUrl(u))
+      .catch(() => undefined); // (no picture: the slot is as usable without one)
+    return () => {
+      live = false;
+    };
+  }, [genome]);
   return <span className="slot-portrait">{url && <img src={url} alt="" />}</span>;
 }
 

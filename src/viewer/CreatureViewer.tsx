@@ -6,12 +6,18 @@
  * with a tail behind and legs below), so its bounding-box centre is far from the origin. We offset
  * the creature group by −centre so its centre sits at the origin, point OrbitControls' target at the
  * origin, and frame the camera by the creature's size — so it never lists off-screen as it rotates.
+ *
+ * The stage never holds the page. Nothing is drawn until its shaders are compiled (off the page's
+ * thread, where the browser can); it then starts still, and turns only once a frame has been
+ * measured cheap (FramePace). Where a frame is dear the creature stays a picture — redrawn on a drag
+ * or a change — and the graphics are lowered once, if the player lets the game adjust them.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, ContactShadows } from '@react-three/drei';
 import { StudioEnvironment } from './StudioEnvironment';
-import { KeepPrograms } from './programs';
+import { KeepPrograms, WarmShaders } from './programs';
+import { FramePace, type Pace } from './FramePace';
 
 // Dev/headless: a URL `view` param picks a canonical camera angle for reproducible face shots.
 // The creature faces +Z, so 'front' looks back along +Z at the head; 'side' from +X. `head=1`
@@ -72,10 +78,17 @@ export function CreatureViewer({
   phenotype,
   skinMode = 'capsules',
   trajectory = null,
+  backdrop = false,
+  paused = false,
 }: {
   phenotype: Phenotype;
   skinMode?: SkinMode;
   trajectory?: Trajectory | null;
+  /** the main menu's backdrop: drawn cheaply — the coat without its shells of fur, which are most of a
+   *  frame and are not what a menu is looked at for */
+  backdrop?: boolean;
+  /** hold still: something over the stage (a menu's panel) should have the machine to itself */
+  paused?: boolean;
 }) {
   if (DEV_FAIL) throw new Error('the stage failed to draw (dev: ?failstage=1)');
   const quality = useQuality();
@@ -89,6 +102,19 @@ export function CreatureViewer({
     (window as unknown as { __cambrianFreeze?: (v?: boolean) => void }).__cambrianFreeze = (v = true) =>
       setFrozen(!!v);
   }, []);
+
+  // nothing is drawn until the shaders are ready (WarmShaders); then the stage is measured before
+  // it is let loop (FramePace)
+  const [warm, setWarm] = useState(false);
+  const [pace, setPace] = useState<Pace>('probing');
+  const onPace = useCallback((p: Pace) => {
+    setPace(p);
+    // (too slow as it is: start lower, if the game may. The stage is still by now, so the options'
+    // change is drawn once, not in a loop)
+    if (p === 'still') useSettings.getState().autoLower('slow');
+  }, []);
+  const idle = frozen || menuOpen || paused;
+  const hold = idle || pace !== 'live';
 
   // Dev-only handle so a headless harness can read creature state behind the loop.
   useEffect(() => {
@@ -109,8 +135,9 @@ export function CreatureViewer({
       covering: phenotype.genomeRef.covering.type,
       skin: skinMode,
       gait: trajectory ? `playback(${trajectory.frameCount}f)` : 'static',
+      pace,
     };
-  }, [phenotype, skinMode, trajectory]);
+  }, [phenotype, skinMode, trajectory, pace]);
 
   // explicit framing from the creature's bounds
   const { center, size, groundY } = useMemo(() => {
@@ -144,13 +171,17 @@ export function CreatureViewer({
   return (
     <Canvas
       key="creature-canvas"
-      frameloop={frozen || menuOpen ? 'demand' : 'always'}
+      frameloop={!warm ? 'never' : hold ? 'demand' : 'always'}
       gl={{ preserveDrawingBuffer: import.meta.env.DEV }}
       shadows={quality.shadows}
       dpr={dprOf(quality, 2)}
       camera={{ position: [dist * 0.52, dist * 0.42, dist * 0.78], fov: 42 }}
     >
       <KeepPrograms />
+      {/* (a long wait: where the browser compiles off the page's thread the menu stays usable
+          meanwhile, and drawing any sooner would make the page wait for the compiler instead) */}
+      {!warm && <WarmShaders onReady={() => setWarm(true)} timeoutMs={20000} />}
+      <FramePace pace={pace} idle={idle || !warm} stage={JSON.stringify(quality)} onPace={onPace} />
       <color attach="background" args={['#0f1116']} />
       <hemisphereLight args={['#cfe0ff', '#2a2620', 0.55]} />
       <ambientLight intensity={0.22} />
@@ -166,7 +197,7 @@ export function CreatureViewer({
 
       {/* centre the creature at the origin so the auto-rotate orbits its middle, not its tail */}
       <group position={[-center[0], -center[1], -center[2]]}>
-        <IdleCreature phenotype={phenotype} skinMode={skinMode} trajectory={trajectory} alive={!frozen && !trajectory && skinMode !== 'capsules'} best={quality.heroSkin} />
+        <IdleCreature phenotype={phenotype} skinMode={skinMode} trajectory={trajectory} alive={!frozen && !trajectory && skinMode !== 'capsules'} best={quality.heroSkin} fur={backdrop ? 0 : quality.furShells} />
       </group>
       {quality.contactShadow > 0 && (
         <ContactShadows key={quality.contactShadow} position={[0, groundY, 0]} scale={size * 2.4} blur={2.2} opacity={0.5} far={size} resolution={quality.contactShadow} />
@@ -175,11 +206,11 @@ export function CreatureViewer({
       <OrbitControls
         makeDefault
         target={[0, 0, 0]}
-        autoRotate={!frozen && spin && !menuOpen}
+        autoRotate={!hold && spin}
         autoRotateSpeed={0.8}
-        // (under the menu the turn stops dead: left to coast, its easing asks for frame after frame —
-        // on a slow machine, for many seconds — behind a menu that should have the machine to itself)
-        enableDamping={!menuOpen}
+        // (held, the turn stops dead: left to coast, its easing asks for frame after frame — on a slow
+        // machine, for many seconds — behind a menu that should have the machine to itself)
+        enableDamping={!hold}
         enablePan={false}
         minDistance={size * 0.7}
         maxDistance={size * 7}
@@ -192,7 +223,7 @@ export function CreatureViewer({
 /** The hero creature, alive at rest: on a smooth skin it is rigged and idles — breathes, shifts its
  *  weight, glances about, swishes its tail, blinks (the eyes blink on their own). Frozen headless
  *  captures and the capsule kit stay static. */
-function IdleCreature({ phenotype, skinMode, trajectory, alive, best }: { phenotype: Phenotype; skinMode: SkinMode; trajectory: Trajectory | null; alive: boolean; best: 'high' | 'low' }) {
+function IdleCreature({ phenotype, skinMode, trajectory, alive, best, fur }: { phenotype: Phenotype; skinMode: SkinMode; trajectory: Trajectory | null; alive: boolean; best: 'high' | 'low'; fur: number }) {
   const rig = useMemo(() => (alive ? createRig(phenotype) : null), [phenotype, alive]);
   const swim = useMemo(() => {
     const t = traitsOf(phenotype);
@@ -217,5 +248,5 @@ function IdleCreature({ phenotype, skinMode, trajectory, alive, best }: { phenot
     return () => clearTimeout(t);
   }, [phenotype, alive]);
   // (the full skin is a graphics option: at low creature detail the hero keeps the thumbnails' skin)
-  return <CreatureMesh phenotype={phenotype} skinMode={skinMode} trajectory={trajectory} rig={rig} carved={!rig} quality={full ? best : 'low'} fur />;
+  return <CreatureMesh phenotype={phenotype} skinMode={skinMode} trajectory={trajectory} rig={rig} carved={!rig} quality={full ? best : 'low'} fur={fur} />;
 }

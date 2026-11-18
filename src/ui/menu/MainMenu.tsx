@@ -10,15 +10,21 @@
  *   Settings      graphics, sound, game
  *   Controls      what the mouse and the keys do
  *   Quit          keeps the game and closes the window where a page may; else says it is safe to
+ *
+ * The buttons work before the stage does, and whatever it does: the stage's code (the 3D library, the
+ * creature renderer) is fetched after the menu is up, it is not mounted at all where the browser
+ * draws without a graphics card or the page was opened in safe mode (?safe=1) — the dark panel is
+ * the menu then — and it holds still under every panel that does not show a creature on it.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import type { Genome } from '../../engine/genome';
 import { grow } from '../../engine/grow';
 import { coherence } from '../../engine/morphospace';
-import { CreatureViewer } from '../../viewer/CreatureViewer';
-import { PartBoundary } from '../ScreenBoundary';
+import { PartBoundary, fetching } from '../ScreenBoundary';
 import { continueGame, quitGame, startNewGame } from '../game';
-import { useStore, type SkinMode } from '../store';
+import { gpuInfo } from '../gpu';
+import { SAFE, useSettings } from '../settings';
+import { useStore } from '../store';
 import { ControlsPanel, NewGamePanel, SavesPanel, SettingsPanel } from './panels';
 import pkg from '../../../package.json';
 
@@ -26,11 +32,15 @@ type Screen = 'home' | 'new' | 'load' | 'settings' | 'controls' | 'bye';
 
 const TITLES: Record<Exclude<Screen, 'home' | 'bye'>, string> = { new: 'New game', load: 'Load game', settings: 'Settings', controls: 'Controls' };
 
-/** The menu's backdrop: one creature on the turntable. (Grown here, inside the menu's boundary.) */
-function Stage({ genome, skinMode }: { genome: Genome; skinMode: SkinMode }) {
-  const phenotype = useMemo(() => grow(genome), [genome]);
-  return <CreatureViewer phenotype={phenotype} skinMode={skinMode} />;
-}
+/** The menu's backdrop: one creature on the turntable — fetched once the menu is up. */
+const Stage = lazy(fetching(() => import('./MenuStage')));
+
+// Dev/headless: ?menu=1&forcestage=1 mounts the backdrop even where the browser draws in software, to
+// see what the stage's own frame pacing makes of it.
+const DEV_STAGE = import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('forcestage') === '1';
+
+/** Why the game lowered the graphics itself, as the menu says it. */
+const LOWERED = { software: 'this browser is drawing without a graphics card', slow: 'the first frames were slow' } as const;
 
 export function MainMenu() {
   const [screen, setScreen] = useState<Screen>(() => {
@@ -43,6 +53,10 @@ export function MainMenu() {
   const current = useStore((s) => s.nodes[s.currentId]);
   const skinMode = useStore((s) => s.skinMode);
   const [preview, setPreview] = useState<Genome | null>(null);
+  const notice = useSettings((s) => s.notice);
+  const dismissNotice = useSettings((s) => s.dismissNotice);
+  // (a stage drawn by the processor would hold the page for seconds a frame: the menu goes without)
+  const backdrop = (!SAFE && !gpuInfo().software) || DEV_STAGE;
   const onPreview = useCallback((g: Genome) => setPreview(g), []);
   // the stage: the founder being chosen, else the creature of the game in progress
   const shown = screen === 'new' && preview ? preview : current.genome;
@@ -82,11 +96,16 @@ export function MainMenu() {
   return (
     <div className={`mainmenu${screen === 'home' ? '' : ' sub'}`}>
       <div className="mm-stage">
-        {/* (a stage that cannot be grown or drawn is left dark; another creature — a founder being
-            chosen, a game loaded — is tried afresh) */}
-        <PartBoundary resetKey={shown}>
-          <Stage genome={shown} skinMode={skinMode} />
-        </PartBoundary>
+        {/* (a stage that cannot be fetched, grown or drawn is left dark; another creature — a founder
+            being chosen, a game loaded — is tried afresh. It holds still under the panels that show
+            no creature on it: they have the machine to themselves) */}
+        {backdrop && (
+          <PartBoundary resetKey={shown}>
+            <Suspense fallback={null}>
+              <Stage genome={shown} skinMode={skinMode} paused={screen !== 'home' && screen !== 'new'} />
+            </Suspense>
+          </PartBoundary>
+        )}
       </div>
       <div className="mm-shade" />
       <div className={`mm-panel${screen === 'home' ? '' : ' wide'}`}>
@@ -122,7 +141,33 @@ export function MainMenu() {
             </div>
           </div>
         )}
-        <footer className="mm-foot">v{pkg.version} · your game is kept in this browser as you play</footer>
+        {/* (the game lowered the graphics itself: said once, under the buttons so none of them moves
+            when it is dismissed) */}
+        {screen === 'home' && !SAFE && notice.lowered && !notice.seen && (
+          <div className="mm-notice" role="status">
+            <span>Graphics were set to Low because {LOWERED[notice.lowered]}.</span>
+            <button
+              className="plain"
+              onClick={() => {
+                dismissNotice();
+                setScreen('settings');
+              }}
+            >
+              Settings
+            </button>
+            <button className="plain" onClick={dismissNotice}>OK</button>
+          </div>
+        )}
+        <footer className="mm-foot">
+          v{pkg.version} · your game is kept in this browser as you play ·{' '}
+          {SAFE ? (
+            <>
+              safe mode: the lowest graphics and no backdrop, for this visit · <a href={location.pathname}>leave safe mode</a>
+            </>
+          ) : (
+            <a href="?safe=1" title="opens the game with the lowest graphics and no 3D backdrop, for one visit">safe mode</a>
+          )}
+        </footer>
       </div>
     </div>
   );

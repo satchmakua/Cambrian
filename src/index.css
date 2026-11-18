@@ -1908,6 +1908,34 @@ body,
   font-size: 11px;
 }
 
+.mm-foot a {
+  color: inherit;
+}
+
+.mm-foot a:hover {
+  color: var(--fg);
+}
+
+/* the game lowered the graphics itself: one line saying so, with the way to the options */
+.mm-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(20, 24, 33, 0.85);
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.mm-notice span {
+  flex: 1 1 100%;
+}
+
 .mainmenu.bye {
   display: grid;
   place-items: center;

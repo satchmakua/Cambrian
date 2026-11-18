@@ -1,0 +1,260 @@
+/**
+ * The game's screens — the breeder, and (each fetched when first opened) the Studio and the valley —
+ * with the in-game menu over them.
+ *
+ * They live apart from the app's root so the main menu can come up without them: this file brings
+ * the 3D library and the creature renderer with it, and is fetched when a game is entered.
+ */
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { grow } from '../engine/grow';
+import { coherence, describe } from '../engine/morphospace';
+import { CreatureViewer } from '../viewer/CreatureViewer';
+import { OffspringGallery } from '../viewer/OffspringGallery';
+import { PressurePanel } from '../viewer/PressurePanel';
+import { PhysicsPanel } from '../viewer/PhysicsPanel';
+import { ShareBar } from '../viewer/ShareBar';
+import { LineageTree } from '../viewer/LineageTree';
+import { Menagerie } from '../viewer/Menagerie';
+import { binKey, MENAGERIE_GRID } from '../viewer/archive';
+import { downloadCreatureGlb } from '../viewer/exportGltf';
+import { MORPHOTYPE_IDS } from '../engine/random';
+// The valley and the Studio are loaded when they are first opened: neither is needed to draw the
+// breeder.
+// (a fetch that fails is tried once more; one that keeps failing is shown by the screen boundary)
+const WorldView = lazy(fetching(() => import('../world/WorldView').then((m) => ({ default: m.WorldView }))));
+const Studio = lazy(fetching(() => import('../viewer/Studio').then((m) => ({ default: m.Studio }))));
+import { useStore } from './store';
+import { useWorldUi } from '../world/worldStore';
+import { fetching } from './ScreenBoundary';
+import { typingIn } from './keys';
+import { PauseMenu } from './menu/PauseMenu';
+
+// Dev/headless: ?bare=1 renders just the creature full-bleed (no UI chrome) for clean face shots.
+const BARE = import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('bare') === '1';
+
+/** The game being played: whichever of its screens is up. */
+export function Game() {
+  const nodes = useStore((s) => s.nodes);
+  const currentId = useStore((s) => s.currentId);
+  const offspring = useStore((s) => s.offspring);
+  const symmetryMode = useStore((s) => s.symmetryMode);
+  const pressure = useStore((s) => s.pressure);
+  const newCreature = useStore((s) => s.newCreature);
+  const promote = useStore((s) => s.promote);
+  const selectNode = useStore((s) => s.selectNode);
+  const reroll = useStore((s) => s.reroll);
+  const importString = useStore((s) => s.importString);
+  const setSymmetryMode = useStore((s) => s.setSymmetryMode);
+  const setPressure = useStore((s) => s.setPressure);
+  const setCoherence = useStore((s) => s.setCoherence);
+  const runDirected = useStore((s) => s.runDirected);
+  const menagerie = useStore((s) => s.menagerie);
+  const loadCell = useStore((s) => s.loadCell);
+  const skinMode = useStore((s) => s.skinMode);
+  const setSkinMode = useStore((s) => s.setSkinMode);
+  const morphoFilter = useStore((s) => s.morphoFilter);
+  const setMorphoFilter = useStore((s) => s.setMorphoFilter);
+  const physicsRunning = useStore((s) => s.physicsRunning);
+  const physicsDistance = useStore((s) => s.physicsDistance);
+  const runPhysics = useStore((s) => s.runPhysics);
+  const playback = useStore((s) => s.playback);
+  const playbackOn = useStore((s) => s.playbackOn);
+  const togglePlayback = useStore((s) => s.togglePlayback);
+  const view = useStore((s) => s.view);
+  const setView = useStore((s) => s.setView);
+  const worldEpoch = useWorldUi((s) => s.epoch);
+  const adopt = useStore((s) => s.adopt);
+
+  const current = nodes[currentId];
+  const genome = current.genome;
+  const generation = current.generation;
+  const phenotype = useMemo(() => grow(genome), [genome]);
+  // every hook runs before the screen-switching returns below (rules of hooks)
+  const vibe = useMemo(() => coherence(phenotype), [phenotype]);
+  const currentCell = useMemo(() => binKey(describe(phenotype)), [phenotype]);
+
+  // the in-game menu: Esc (or a screen's ☰) opens it over whichever screen is up
+  // (dev: ?pause=1 opens it, for inspection captures)
+  const [paused, setPaused] = useState(() => import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('pause') === '1');
+  const openMenu = useCallback(() => setPaused(true), []);
+  const closeMenu = useCallback(() => setPaused(false), []);
+  // (the screens read this to stop drawing while the menu is over them — and it is taken down with
+  // the game's screens when the player leaves for the main menu, whose own stage reads it too)
+  const setMenuOpen = useStore((s) => s.setMenuOpen);
+  useEffect(() => {
+    setMenuOpen(paused);
+    return () => setMenuOpen(false);
+  }, [paused, setMenuOpen]);
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      // (the open menu handles its own Esc; a key held down opens it once, not on every repeat)
+      if (e.key !== 'Escape' || e.repeat || paused || typingIn(e.target)) return;
+      setPaused(true);
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [paused]);
+  const pause = paused ? <PauseMenu onClose={closeMenu} /> : null;
+
+  if (BARE) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: '#0f1116' }}>
+        <CreatureViewer phenotype={phenotype} skinMode={skinMode} />
+      </div>
+    );
+  }
+  if (view === 'world') {
+    return (
+      <Suspense fallback={<ScreenLoading />}>
+        <WorldView
+          key={worldEpoch}
+          founder={genome}
+          onExit={() => setView('breed')}
+          onMenu={openMenu}
+          onAdopt={(g) => {
+            adopt(g);
+            setView('breed');
+          }}
+        />
+        {pause}
+      </Suspense>
+    );
+  }
+  if (view === 'studio') {
+    return (
+      <Suspense fallback={<ScreenLoading />}>
+        <Studio genome={genome} skinMode={skinMode} onSkinMode={setSkinMode} onAdopt={adopt} onExit={() => setView('breed')} onMenu={openMenu} />
+        {pause}
+      </Suspense>
+    );
+  }
+  const menagerieCount = Object.keys(menagerie).length;
+  // play the recorded gait only while it belongs to the creature on screen
+  const activeGait = playbackOn && playback && playback.seed === genome.seed ? playback : null;
+
+  return (
+    <div className="app">
+      <div className="top">
+        <main className="stage-wrap">
+          <CreatureViewer phenotype={phenotype} skinMode={skinMode} trajectory={activeGait} />
+          <header className="hud">
+            <div className="title-row">
+              <h1>Cambrian</h1>
+              <nav className="view-tabs">
+                <button className="active">Breed</button>
+                <button onClick={() => setView('studio')} title="inspect this creature from every angle">Studio</button>
+                <button onClick={() => setView('world')} title="release creatures into a living ecosystem">World</button>
+                <button className="menu-btn" onClick={openMenu} title="menu: save, load, settings, exit (Esc)" aria-label="Menu">☰</button>
+              </nav>
+            </div>
+            <p className="tag">
+              {vibe.score > 0.55 ? '≈ ' : '~ valley near '}
+              {vibe.nearest} · {Math.round(vibe.score * 100)}%
+            </p>
+            <dl className="stats">
+              <div>
+                <dt>generation</dt>
+                <dd>{generation}</dd>
+              </div>
+              <div>
+                <dt>seed</dt>
+                <dd>{hex(genome.seed)}</dd>
+              </div>
+              <div>
+                <dt>nodes</dt>
+                <dd>{phenotype.nodes.length}</dd>
+              </div>
+            </dl>
+            <div className="roll-row">
+              <button onClick={newCreature}>New random creature</button>
+              <select
+                className="morpho-filter"
+                value={morphoFilter ?? ''}
+                onChange={(e) => setMorphoFilter(e.target.value || null)}
+                title="Bias new rolls to one morphotype"
+              >
+                <option value="">any kind</option>
+                {MORPHOTYPE_IDS.map((id) => (
+                  <option key={id} value={id}>
+                    {id}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="modes">
+              <span>symmetry</span>
+              {(['auto', 'bilateral', 'radial'] as const).map((m) => (
+                <button
+                  key={m}
+                  className={symmetryMode === m ? 'active' : ''}
+                  onClick={() => setSymmetryMode(m)}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            <div className="modes">
+              <span>skin</span>
+              {(['capsules', 'smooth', 'hybrid'] as const).map((m) => (
+                <button key={m} className={skinMode === m ? 'active' : ''} onClick={() => setSkinMode(m)}>
+                  {m}
+                </button>
+              ))}
+            </div>
+          </header>
+        </main>
+
+        <aside className="gallery">
+          <OffspringGallery offspring={offspring} generation={generation} onPick={promote} onReroll={reroll} />
+          <PressurePanel
+            pressure={pressure}
+            onChange={setPressure}
+            onRun={runDirected}
+            coherence={genome.coherence ?? 1}
+            onCoherence={setCoherence}
+          />
+          <PhysicsPanel
+            running={physicsRunning}
+            distance={physicsDistance}
+            onRun={runPhysics}
+            canReplay={!!(playback && playback.seed === genome.seed)}
+            replaying={!!activeGait}
+            onToggleReplay={togglePlayback}
+          />
+          <ShareBar
+          genome={genome}
+          onImport={importString}
+          onExport={() => downloadCreatureGlb(phenotype, skinMode !== 'capsules', `cambrian-${hex(genome.seed)}.glb`)}
+        />
+        </aside>
+      </div>
+
+      <section className="bottom">
+        <div className="lineage">
+          <div className="lineage-head">Lineage — click a creature to revisit or branch a new line</div>
+          <div className="lineage-scroll">
+            <LineageTree nodes={nodes} currentId={currentId} onSelect={selectNode} />
+          </div>
+        </div>
+        <div className="menagerie">
+          <div className="lineage-head">
+            Menagerie — {menagerieCount} / {MENAGERIE_GRID * MENAGERIE_GRID}
+          </div>
+          <div className="menagerie-scroll">
+            <Menagerie entries={menagerie} currentKey={currentCell} onLoad={loadCell} />
+          </div>
+        </div>
+      </section>
+      {pause}
+    </div>
+  );
+}
+
+/** Shown for the moment a screen's code is fetched, the first time it is opened. */
+function ScreenLoading() {
+  return <div className="screen-loading">Loading…</div>;
+}
+
+function hex(n: number): string {
+  return '0x' + (n >>> 0).toString(16).padStart(8, '0');
+}

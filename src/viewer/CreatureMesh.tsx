@@ -221,8 +221,9 @@ export function CreatureMesh({
   /** carve the mouth cavity into the smooth skin (the rest pose). An articulated jaw (World) wants
    *  intact skin: the static cavity would show beneath a mouth that closes. */
   carved?: boolean;
-  /** shell fur over a furred coat (close-up views: a dozen extra passes of the body) */
-  fur?: boolean;
+  /** shell fur over a furred coat (close-up views: a dozen extra passes of the body): how many
+   *  shells — `true` for the full pile, 0 or `false` for the painted coat alone */
+  fur?: boolean | number;
   /** draw the carapace shell only if one is already built, never build it in this render (the World's
    *  stand-in kit: the scheduler builds the shell with the skin the body is waiting for) */
   lazyShell?: boolean;
@@ -250,11 +251,12 @@ export function CreatureMesh({
   // shell fur: FUR_SHELLS layers of the body out to a pile scaled to the creature — and a flightless bird's
   // shaggy plumes, longer and coarser (drawn on the skin alone, its plumage was a smooth suede)
   const furMats = useMemo(() => {
-    if (!fur || (cov.type !== 'fur' && !shaggy) || skinMode === 'capsules') return [];
+    const shells = fur === true ? FUR_SHELLS : Math.max(0, Math.round(Number(fur) || 0));
+    if (!shells || (cov.type !== 'fur' && !shaggy) || skinMode === 'capsules') return [];
     const len = pileLength(phenotype) * (shaggy ? PLUME_LEN : 1);
     const bare = bareOf(phenotype)?.bare ?? null;
     const eyes = eyeClearings(phenotype, data.features);
-    return Array.from({ length: FUR_SHELLS }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / FUR_SHELLS, len, density: 3.2 / len, eyes }, face, 0, headMask, false, shaggy, null, dapple));
+    return Array.from({ length: shells }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / shells, len, density: 3.2 / len, eyes }, face, 0, headMask, false, shaggy, null, dapple));
   }, [fur, cov, skinMode, phenotype, pal, seed, data, face, headMask, shaggy, dapple]);
   useEffect(() => () => furMats.forEach((m) => m.dispose()), [furMats]);
 

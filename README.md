@@ -65,6 +65,11 @@ shows it (`&screen=new|load|settings|controls`), `?pause=1` the in-game one; `?j
 youngster on the Studio bench, and `?failstage=1` makes the stage fail to draw, to see the failure
 card and its way back to the menu.
 
+If the page is slow to answer, open it with `?safe=1` (there is a link at the foot of the main menu):
+safe mode draws the lowest graphics and no 3D backdrop for that visit, and keeps nothing it changes.
+The menu also goes without its backdrop on its own where the browser draws without a graphics card
+(`?menu=1&forcestage=1`, dev only, mounts it there anyway — to watch the stage measure itself and stop).
+
 ## Layout
 
 ```

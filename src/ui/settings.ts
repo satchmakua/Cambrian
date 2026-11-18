@@ -8,6 +8,11 @@
  * else, so a new optimisation is one more field there and one reader; the three presets are just
  * rows of the same table.
  *
+ * The game may also lower the graphics itself, once, on a machine that cannot draw them (`autoLower`:
+ * no graphics card, or frames measured slow) — it says so (`notice`), and never again overrides an
+ * option the player has set by hand. And a page opened with ?safe=1 is in SAFE MODE: the lowest
+ * graphics for that visit only, and nothing changed during it is written to the browser.
+ *
  * Everything here but the store itself is pure (sanitising a stored blob, naming the preset a set of
  * options matches, deriving the budgets), and tested headlessly.
  */
@@ -29,7 +34,13 @@ export interface GraphicsSettings {
   /** how much of the rain, the snow and the insects is drawn: 0.25 … 1 */
   weather: number;
   creatureDetail: CreatureDetail;
+  /** the game may lower the quality itself on a machine that draws slowly — until the player sets a
+   *  graphics option by hand, which it then leaves alone */
+  auto: boolean;
 }
+
+/** The graphics options a level sets (everything but its name and the `auto` switch). */
+export type GraphicsOptions = Omit<GraphicsSettings, 'preset' | 'auto'>;
 
 export interface AudioSettings {
   /** the World's ambience and calls (starts on a click — browsers require one) */
@@ -51,10 +62,21 @@ export interface GameplaySettings {
   spin: boolean;
 }
 
+/** Why the game lowered the graphics itself: the browser draws without a graphics card, or the first
+ *  frames were measured slow. */
+export type LoweredReason = 'software' | 'slow';
+
+/** What the game did to the graphics on its own, and whether the player has been told. */
+export interface GraphicsNotice {
+  lowered: LoweredReason | null;
+  seen: boolean;
+}
+
 export interface Settings {
   graphics: GraphicsSettings;
   audio: AudioSettings;
   gameplay: GameplaySettings;
+  notice: GraphicsNotice;
 }
 
 export const RENDER_SCALES = [0.75, 1, 1.5, 2] as const;
@@ -62,20 +84,32 @@ export const DENSITIES = [0.25, 0.5, 0.75, 1] as const;
 export const AUTOSAVE_MINUTES = [0, 1, 5, 10] as const;
 
 /** The three named levels. `high` is the game as it was before there were settings. */
-export const PRESETS: Record<QualityPreset, Omit<GraphicsSettings, 'preset'>> = {
+export const PRESETS: Record<QualityPreset, GraphicsOptions> = {
   low: { renderScale: 1, shadows: false, vegetation: 0.25, weather: 0.5, creatureDetail: 'low' },
   medium: { renderScale: 1.5, shadows: true, vegetation: 0.75, weather: 0.75, creatureDetail: 'medium' },
   high: { renderScale: 2, shadows: true, vegetation: 1, weather: 1, creatureDetail: 'high' },
 };
 
 export const DEFAULT_SETTINGS: Settings = {
-  graphics: { preset: 'high', ...PRESETS.high },
+  graphics: { preset: 'high', ...PRESETS.high, auto: true },
   audio: { sound: false, volume: 0.7, narration: false },
   gameplay: { autosaveMinutes: 1, moods: true, hints: true, spin: true },
+  notice: { lowered: null, seen: false },
 };
 
+/** Safe mode's graphics: the least of everything. */
+export const SAFE_GRAPHICS: GraphicsOptions = { ...PRESETS.low, renderScale: 0.75, weather: 0.25 };
+
+/** Does this page address (its query string) ask for safe mode? */
+export function isSafeUrl(search: string): boolean {
+  return new URLSearchParams(search).get('safe') === '1';
+}
+
+/** Safe mode, for this visit: asked for by the address alone, and never kept. */
+export const SAFE = typeof location !== 'undefined' && isSafeUrl(location.search);
+
 /** Which named level these options are, or 'custom'. */
-export function presetOf(g: Omit<GraphicsSettings, 'preset'>): QualityPreset | 'custom' {
+export function presetOf(g: GraphicsOptions): QualityPreset | 'custom' {
   for (const name of ['low', 'medium', 'high'] as const) {
     const p = PRESETS[name];
     if (p.renderScale === g.renderScale && p.shadows === g.shadows && p.vegetation === g.vegetation && p.weather === g.weather && p.creatureDetail === g.creatureDetail) return name;
@@ -94,10 +128,11 @@ const nearest = (v: number, choices: readonly number[]): number => choices.reduc
  */
 export function sanitize(raw: unknown): Settings {
   const D = DEFAULT_SETTINGS;
-  const r = (raw && typeof raw === 'object' ? raw : {}) as { graphics?: Record<string, unknown>; audio?: Record<string, unknown>; gameplay?: Record<string, unknown> };
+  const r = (raw && typeof raw === 'object' ? raw : {}) as { graphics?: Record<string, unknown>; audio?: Record<string, unknown>; gameplay?: Record<string, unknown>; notice?: Record<string, unknown> };
   const g = r.graphics ?? {};
   const a = r.audio ?? {};
   const p = r.gameplay ?? {};
+  const n = r.notice ?? {};
   const detail = g.creatureDetail === 'low' || g.creatureDetail === 'medium' || g.creatureDetail === 'high' ? g.creatureDetail : D.graphics.creatureDetail;
   const graphics = {
     renderScale: nearest(num(g.renderScale, 0.5, 3, D.graphics.renderScale), RENDER_SCALES),
@@ -106,8 +141,11 @@ export function sanitize(raw: unknown): Settings {
     weather: nearest(num(g.weather, 0, 1, D.graphics.weather), DENSITIES),
     creatureDetail: detail,
   };
+  const preset = presetOf(graphics);
   return {
-    graphics: { preset: presetOf(graphics), ...graphics },
+    // (options kept before there was an `auto`: the game may adjust them only if they are still the
+    // defaults — anything else is a choice the player made, and stays as it is)
+    graphics: { preset, ...graphics, auto: bool(g.auto, preset === D.graphics.preset) },
     audio: { sound: bool(a.sound, D.audio.sound), volume: num(a.volume, 0, 1, D.audio.volume), narration: bool(a.narration, D.audio.narration) },
     gameplay: {
       autosaveMinutes: nearest(num(p.autosaveMinutes, 0, 60, D.gameplay.autosaveMinutes), AUTOSAVE_MINUTES),
@@ -115,6 +153,7 @@ export function sanitize(raw: unknown): Settings {
       hints: bool(p.hints, D.gameplay.hints),
       spin: bool(p.spin, D.gameplay.spin),
     },
+    notice: { lowered: n.lowered === 'software' || n.lowered === 'slow' ? n.lowered : null, seen: bool(n.seen, D.notice.seen) },
   };
 }
 
@@ -147,11 +186,14 @@ export interface RenderQuality {
   /** a coat's relief (scales, plates, feathers) is lit from its slope measured at every pixel — clean
    *  edges, at three times the relief's cost — rather than once per 2x2 block of pixels */
   fineRelief: boolean;
+  /** layers of shell fur over a furred coat in the close-up views (0: none — the painted coat alone).
+   *  Each is one more pass of the whole body: on a slow machine, most of a frame */
+  furShells: number;
 }
 
 const FULL = { grass: 17000, flowers: 900, precipitation: 9000, stars: 2500 };
 
-export function qualityOf(g: Omit<GraphicsSettings, 'preset'>): RenderQuality {
+export function qualityOf(g: GraphicsOptions): RenderQuality {
   const detail = g.creatureDetail;
   return {
     dprMax: g.renderScale,
@@ -167,6 +209,7 @@ export function qualityOf(g: Omit<GraphicsSettings, 'preset'>): RenderQuality {
     heroSkin: detail === 'low' ? 'low' : 'high',
     contactShadow: g.shadows ? (g.renderScale >= 1.5 ? 512 : 256) : 0,
     fineRelief: detail !== 'low',
+    furShells: detail === 'low' ? 0 : 12,
   };
 }
 
@@ -191,7 +234,7 @@ function load(): Settings {
 
 function keep(s: Settings): void {
   try {
-    if (typeof localStorage !== 'undefined') localStorage.setItem(SETTINGS_KEY, JSON.stringify({ graphics: s.graphics, audio: s.audio, gameplay: s.gameplay }));
+    if (typeof localStorage !== 'undefined') localStorage.setItem(SETTINGS_KEY, JSON.stringify({ graphics: s.graphics, audio: s.audio, gameplay: s.gameplay, notice: s.notice }));
   } catch {
     /* storage full or blocked: the options last until the page closes */
   }
@@ -202,30 +245,59 @@ interface SettingsStore extends Settings {
   /** apply a named level (all the graphics options at once) */
   setPreset: (p: QualityPreset) => void;
   /** change some graphics options by hand (the preset becomes whatever they now match) */
-  setGraphics: (patch: Partial<Omit<GraphicsSettings, 'preset'>>) => void;
+  setGraphics: (patch: Partial<GraphicsOptions>) => void;
+  /** let the game adjust the quality itself on a slow machine, or not */
+  setAuto: (on: boolean) => void;
+  /**
+   * The game lowers the quality itself: to the Low level, with a notice saying why. Only while `auto`
+   * is on and the level is not Low already — so it happens once, and never over a player's own choice.
+   * Returns whether anything changed.
+   */
+  autoLower: (reason: LoweredReason) => boolean;
+  /** the player has read the notice */
+  dismissNotice: () => void;
   setAudio: (patch: Partial<AudioSettings>) => void;
   setGameplay: (patch: Partial<GameplaySettings>) => void;
   resetDefaults: () => void;
 }
 
-export const useSettings = create<SettingsStore>((set, get) => {
-  const apply = (next: Settings) => {
-    const clean = sanitize(next);
-    keep(clean);
-    set({ ...clean, quality: qualityOf(clean.graphics) });
-  };
-  const current = (): Settings => ({ graphics: get().graphics, audio: get().audio, gameplay: get().gameplay });
-  const initial = load();
-  return {
-    ...initial,
-    quality: qualityOf(initial.graphics),
-    setPreset: (p) => apply({ ...current(), graphics: { preset: p, ...PRESETS[p] } }),
-    setGraphics: (patch) => apply({ ...current(), graphics: { ...get().graphics, ...patch } }),
-    setAudio: (patch) => apply({ ...current(), audio: { ...get().audio, ...patch } }),
-    setGameplay: (patch) => apply({ ...current(), gameplay: { ...get().gameplay, ...patch } }),
-    resetDefaults: () => apply(DEFAULT_SETTINGS),
-  };
-});
+/**
+ * The settings store. In safe mode it starts from the lowest graphics whatever is kept, the game
+ * adjusts nothing itself, and nothing is written: the visit leaves the kept options as it found them.
+ */
+export function createSettingsStore(safe = false) {
+  return create<SettingsStore>((set, get) => {
+    const apply = (next: Settings) => {
+      const clean = sanitize(next);
+      if (!safe) keep(clean);
+      set({ ...clean, quality: qualityOf(clean.graphics) });
+    };
+    const current = (): Settings => ({ graphics: get().graphics, audio: get().audio, gameplay: get().gameplay, notice: get().notice });
+    const kept = load();
+    const initial: Settings = safe ? { ...kept, graphics: { preset: presetOf(SAFE_GRAPHICS), ...SAFE_GRAPHICS, auto: false } } : kept;
+    return {
+      ...initial,
+      quality: qualityOf(initial.graphics),
+      // (a level or an option set by hand is the player's choice: the game stops adjusting — and
+      // its notice of what it had set is out of date, so it is not shown after)
+      setPreset: (p) => apply({ ...current(), graphics: { preset: p, ...PRESETS[p], auto: false }, notice: { ...get().notice, seen: true } }),
+      setGraphics: (patch) => apply({ ...current(), graphics: { ...get().graphics, ...patch, auto: false }, notice: { ...get().notice, seen: true } }),
+      setAuto: (on) => apply({ ...current(), graphics: { ...get().graphics, auto: on } }),
+      autoLower: (reason) => {
+        const g = get().graphics;
+        if (safe || !g.auto || g.preset === 'low') return false;
+        apply({ ...current(), graphics: { preset: 'low', ...PRESETS.low, auto: true }, notice: { lowered: reason, seen: false } });
+        return true;
+      },
+      dismissNotice: () => apply({ ...current(), notice: { ...get().notice, seen: true } }),
+      setAudio: (patch) => apply({ ...current(), audio: { ...get().audio, ...patch } }),
+      setGameplay: (patch) => apply({ ...current(), gameplay: { ...get().gameplay, ...patch } }),
+      resetDefaults: () => apply(DEFAULT_SETTINGS),
+    };
+  });
+}
+
+export const useSettings = createSettingsStore(SAFE);
 
 /** The render budgets, for a component (re-renders when an option changes). */
 export function useQuality(): RenderQuality {

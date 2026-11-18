@@ -20,6 +20,7 @@ import { StudioEnvironment } from './StudioEnvironment';
 import { KeepPrograms } from './programs';
 import { framingOf } from './framing';
 import { LidContext } from './eyelids';
+import { getQuality } from '../ui/settings';
 
 /** eyes open, no blink: a still must not catch the lids half shut */
 const AWAKE = { shut: 0, blink: false };
@@ -56,7 +57,8 @@ function Scene({ phenotype, onReady }: { phenotype: Phenotype; onReady: (draw: (
       <directionalLight position={[f.size, f.size * 1.6, f.size]} intensity={1.15} />
       <group position={[-c[0], -c[1], -c[2]]}>
         <LidContext.Provider value={AWAKE}>
-          <CreatureMesh phenotype={phenotype} skinMode="hybrid" quality="low" fur />
+          {/* (the shells of fur are a graphics option here as on the stage: none at low creature detail) */}
+          <CreatureMesh phenotype={phenotype} skinMode="hybrid" quality="low" fur={getQuality().furShells} />
         </LidContext.Provider>
       </group>
     </>

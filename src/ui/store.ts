@@ -47,7 +47,8 @@ function initialView(): AppView {
       if (q.get('menu') === '1') return 'menu';
       if (q.get('studio') === '1' || q.get('bestiary') === '1') return 'studio';
       if (q.get('world') === '1') return 'world';
-      if (import.meta.env.DEV && location.search.length > 1) return 'breed';
+      // (safe mode asks for no screen: ?safe=1 opens the menu here as it does in production)
+      if (import.meta.env.DEV && [...q.keys()].some((k) => k !== 'safe')) return 'breed';
     }
   } catch {
     /* ignore */

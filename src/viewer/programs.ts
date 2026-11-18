@@ -55,12 +55,27 @@ export function KeepPrograms(): null {
 }
 
 /**
+ * Are these materials' programs all built? Each that is — or that has none left to wait for, its
+ * material disposed since — is dropped from the set.
+ */
+export function programsReady(gl: Pick<THREE.WebGLRenderer, 'properties'>, waiting: Set<THREE.Material>): boolean {
+  for (const m of [...waiting]) {
+    const program = (gl.properties.get(m) as { currentProgram?: { isReady(): boolean } }).currentProgram;
+    if (!program || program.isReady()) waiting.delete(m);
+  }
+  return waiting.size === 0;
+}
+
+/**
  * Compile every material in the scene before its first visible frame: mount the scene with the
- * canvas's frameloop paused, and this reports `onReady` once three's `compileAsync` has them all. Where
- * the browser offers KHR_parallel_shader_compile the programs build on the GPU process's own threads,
+ * canvas's frameloop paused, and this reports `onReady` once three has built them all. Where the
+ * browser offers KHR_parallel_shader_compile the programs build on the GPU process's own threads,
  * in parallel, and the page stays responsive (the World's ~35 programs, linked one by one on its first
  * frame, were most of its load); without it three compiles as before and the first frame pays. A
  * timeout guarantees the scene is shown whatever happens.
+ *
+ * (The wait is three's `compileAsync`, done here: three's own throws if a material is disposed while
+ * it waits — a creature swapped for another during the compile — and then never reports at all.)
  */
 export function WarmShaders({ onReady, timeoutMs = 6000 }: { onReady: () => void; timeoutMs?: number }): null {
   const gl = useThree((s) => s.gl);
@@ -74,10 +89,17 @@ export function WarmShaders({ onReady, timeoutMs = 6000 }: { onReady: () => void
       onReady();
     };
     const t = setTimeout(finish, timeoutMs);
+    let poll: ReturnType<typeof setTimeout> | undefined;
     // (after this commit and the browser's next frame: the scene graph is assembled)
     const raf = requestAnimationFrame(() => {
       try {
-        gl.compileAsync(scene, camera).then(finish, finish);
+        const waiting = gl.compile(scene, camera);
+        const check = () => {
+          if (done) return;
+          if (programsReady(gl, waiting)) finish();
+          else poll = setTimeout(check, 10);
+        };
+        check();
       } catch {
         finish();
       }
@@ -85,6 +107,7 @@ export function WarmShaders({ onReady, timeoutMs = 6000 }: { onReady: () => void
     return () => {
       done = true;
       clearTimeout(t);
+      clearTimeout(poll);
       cancelAnimationFrame(raf);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
