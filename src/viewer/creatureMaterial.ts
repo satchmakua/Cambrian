@@ -199,6 +199,14 @@ export function makeCreatureMaterial(
     mat.roughness = Math.max(mat.roughness, CUT_ROUGH);
   }
 
+  // Each covering's relief is compiled only into the programs that wear it (three keys its programs on a
+  // material's defines). (One program carried all eight, at each of the four places the relief is read: on
+  // Windows, where Chrome compiles through Direct3D, that one fragment shader took 52 s to build, and the
+  // page was locked for as long.)
+  mat.defines = { ...mat.defines, COVER: COVERING_INDEX[cov.type] };
+  if (bare) mat.defines.BARE_LEGS = '';
+  if (scutes) mat.defines.USE_SCUTES = '';
+
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uMain = { value: main };
     shader.uniforms.uBack = { value: back };
@@ -345,7 +353,10 @@ export function makeCreatureMaterial(
           if ((uPType == 2 || (uPType == 3 && uDapple > 0.5)) && uHeadA.w > 0.0) {
             vec3 hab = uHeadB - uHeadA.xyz;
             float ht = clamp(dot(vBodyPos - uHeadA.xyz, hab) / max(dot(hab, hab), 1e-6), 0.0, 1.0);
-            pat *= smoothstep(uHeadA.w * 1.1, uHeadA.w * 1.5, length(vBodyPos - uHeadA.xyz - hab * ht));
+            // (on plumage the marking comes back by degrees down the neck: let back within half a head's
+            // width, a band's edge ran round the throat from the bill's root to the nape, under a pale
+            // chin — a jowl and a smile)
+            pat *= smoothstep(uHeadA.w * 1.1, uHeadA.w * (uCover == 3 ? FEATHER_HOOD : 1.5), length(vBodyPos - uHeadA.xyz - hab * ht));
           }
           skin = mix(skin, uPattern, clamp(pat * uMarkW, 0.0, 1.0)); // (see markWeight)
           // a deeper accent in the cores of strong markings (rosette rings, ocelli) → richness
@@ -370,6 +381,7 @@ export function makeCreatureMaterial(
           // bare legs: the plumage ends in a soft cuff and the shank below is keratin scutes
           // (only on the legs themselves — vLeg — not a low belly or tail under the same height)
           float bare = vLeg * (1.0 - smoothstep(uBareY - uBareBand, uBareY + uBareBand, vBodyPos.y));
+#ifdef BARE_LEGS
           if (bare > 0.0) {
             float hb = gHb;
             // the scutes are sampled 2.6x finer: their anti-aliasing must see the footprint in that
@@ -385,6 +397,7 @@ export function makeCreatureMaterial(
             gFine *= 1.0 - bare;
             skin = mix(skin, uBareCol * (0.72 + 0.36 * hs), bare);
           }
+#endif
           // gentle sub-surface musculature shading (creases a touch darker → taut, not a balloon)
           skin *= mix(0.78, 1.0, smoothstep(-0.24, 0.2, gM));
           // grime in the recesses (scale seams, plate grooves, fur partings)
@@ -531,7 +544,9 @@ export function makeCreatureMaterial(
           // a crystal holds light: a glow of its own colour from within, brightest at its edges
           // (a cut skin's faces glow alike, and its edges brightest: lit from within face by face at its
           // own random strength, the stone was a patchwork of pale and dark)
-          if (uCover == 7) totalEmissiveRadiance += uMain * ((0.1 + 0.3 * pow(1.0 - ndv, 2.0)) * (uCut > 0.5 ? 0.85 + 0.3 * gFacet : 0.55 + 0.9 * gFacet) + (uCut > 0.5 ? 0.12 : 0.1) * gSeam) * noMouth;
+          // (…and dims in a cut in shadow — the mouth's, its faces' aAO: lit from within at full strength the
+          // cut glowed as bright as the faces round it and closed up)
+          if (uCover == 7) totalEmissiveRadiance += uMain * ((0.1 + 0.3 * pow(1.0 - ndv, 2.0)) * (uCut > 0.5 ? 0.85 + 0.3 * gFacet : 0.55 + 0.9 * gFacet) + (uCut > 0.5 ? 0.12 : 0.1) * gSeam) * noMouth * mix(0.3, 1.0, vAO);
         }`,
       );
   };
@@ -565,9 +580,15 @@ uniform float uDapple;
 // (body units) they give out
 const float DAPPLE_LOW = -0.2;
 const float DAPPLE_MID = 0.045;
+#ifdef USE_SCUTES
 uniform vec3 uScutes[${MAX_SCUTES}]; uniform int uScuteN;
+#endif
 // a flightless bird's plumes on its head: their length there (× the body's)
 const float SHAG_HEAD_DOWN = 0.22;
+// a flier's feather edges: the skin normal's y (body space) below which they give out — up the back alone
+const float FEATHER_EDGE_Y = 0.25;
+// a feathered head's plain hood: how far (× the head's radius) its marking takes to come back down the neck
+const float FEATHER_HOOD = 2.2;
 
 // Per-fragment globals, primed at the top of the colour stage and reused by the roughness + normal
 // stages (so the expensive relief is evaluated once per pixel, not three times).
@@ -594,6 +615,7 @@ float aaW(float freq) { return 1.0 - smoothstep(0.12, 0.42, freq * gFw); }
 
 // A TORTOISE's shell: the distances from q (body space) to the nearest two scute centres (uScutes) — the
 // seams lie where they are equal. (Seamed by a random net, the shell was crazy paving.)
+#ifdef USE_SCUTES
 vec2 scuteF(vec3 q) {
   float f1 = 1e3; float f2 = 1e3;
   for (int i = 0; i < ${MAX_SCUTES}; i++) {
@@ -603,6 +625,7 @@ vec2 scuteF(vec3 q) {
   }
   return vec2(f1, f2);
 }
+#endif
 
 float hash13(vec3 p) {
   p = fract(p * 0.1031);
@@ -679,23 +702,6 @@ vec2 voronoi(vec3 p) {
   return vec2(sqrt(f1), sqrt(f2));
 }
 
-// the nearest 3-D cell to p: xyz = p − its jittered centre (cell units), w = F1; f2 = F2
-vec4 cellNear(vec3 p, out float f2) {
-  vec3 b = floor(p); vec3 f = fract(p);
-  float f1 = 8.0; f2 = 8.0;
-  vec3 best = vec3(0.0);
-  for (int k = -1; k <= 1; k++)
-  for (int j = -1; j <= 1; j++)
-  for (int i = -1; i <= 1; i++) {
-    vec3 g = vec3(float(i), float(j), float(k));
-    vec3 r = g + hash33(b + g) - f;
-    float d = dot(r, r);
-    if (d < f1) { f2 = f1; f1 = d; best = r; } else if (d < f2) { f2 = d; }
-  }
-  f2 = sqrt(f2);
-  return vec4(-best, sqrt(f1));
-}
-
 // a reticulate net's cells (× the pattern's scale: under 0.5, bigger patches) and its rims' half-width
 // (in the cells' edge distance)
 const float RETIC_CELL = 0.38;
@@ -716,6 +722,7 @@ const float RETIC_RIM = 0.06;
 // crisp up close and blur gracefully — rather than shimmer — when the creature is small on screen.
 float patternField(vec3 p0, int type, float scale) {
   // a tortoise's shell: its dark seams between the scutes, and faint growth rings parallel to them
+#ifdef USE_SCUTES
   if (uScuteN > 0) {
     vec2 F = scuteF(p0 - uOff);
     float e = F.y - F.x;
@@ -723,6 +730,7 @@ float patternField(vec3 p0, int type, float scale) {
     float ring = (0.5 + 0.5 * cos(e * SCUTE_RINGS)) * aaW(SCUTE_RINGS * 0.16) * smoothstep(SCUTE_SEAM * 2.0, 0.08, e);
     return max(seam, ring * 0.22);
   }
+#endif
   if (type == 0) return 0.0;                                    // plain
   vec3 p = warp(p0, 0.5);                                       // a flowing coordinate
   if (type == 1) {                                              // stripes — wavy transverse (tiger/zebra)
@@ -802,6 +810,7 @@ float patternField(vec3 p0, int type, float scale) {
 // The grid is sheared: each layer along z stands half a cell across from the last, in x and in y, so
 // the scallops fall in a quincunx on the back and on a flank alike. fw is a pixel's width in cells.
 // Returns the coat's height at q, 0..1, and how near q is to the midline of the scallop that shows.
+#if COVER == 1 || COVER == 3 || defined(BARE_LEGS)
 float scallops(vec3 q, vec3 lay, vec3 nrm, float fw, out float shaft) {
   vec3 qs = vec3(q.x + 0.5 * q.z, q.y + 0.5 * q.z, q.z);
   vec3 ip = floor(qs);
@@ -831,6 +840,7 @@ float scallops(vec3 q, vec3 lay, vec3 nrm, float fw, out float shaft) {
   shaft = 1.0 - smoothstep(0.015, 0.06 + fw, length(side));
   return clamp(top, 0.0, 1.0);
 }
+#endif
 
 // --- a cut stone's faces -------------------------------------------------------
 // Space divided into tetrahedra (a simplex grid): every corner of the grid takes a height of its own,
@@ -839,6 +849,7 @@ float scallops(vec3 q, vec3 lay, vec3 nrm, float fw, out float shaft) {
 // one plane), CONTINUOUS everywhere (no step for a bump to draw as a line) and creased where faces
 // meet. Also gives the tetrahedron's own shade (id, 0..1) and how near the point is to its nearest
 // wall (0 on the wall; in the tetrahedron's barycentric units).
+#if COVER == 7
 float facets(vec3 q, out float id, out float wall) {
   vec3 qs = q + dot(q, vec3(1.0 / 3.0));                        // (skewed: the grid's cubes)
   vec3 s = floor(qs);
@@ -854,6 +865,7 @@ float facets(vec3 q, out float id, out float wall) {
   wall = min(min(wt.x, wt.y), min(wt.z, wt.w));
   return dot(wt, vec4(hash13(s), hash13(s + i1), hash13(s + i2), hash13(s + 1.0)));
 }
+#endif
 
 // --- surface relief per covering (MORPHOLOGY §7.2) ----------------------------
 // Returns the relief normalized to [0,1] (grime + roughness read it) and writes gHb, the same relief
@@ -865,6 +877,7 @@ float facets(vec3 q, out float id, out float wall) {
 // bump is a crisp scale/plate/feather read up close and a clean surface at a distance.
 float surfaceHeight(vec3 p, int cover) {
   // a tortoise's shell: each scute a low dome rising from its grooved seams, ridged with growth rings
+#ifdef USE_SCUTES
   if (uScuteN > 0) {
     vec2 F = scuteF(p - uOff);
     float e = F.y - F.x;
@@ -874,6 +887,8 @@ float surfaceHeight(vec3 p, int cover) {
     gHb = groove * 0.008 + dome * 0.014 + ring * 0.0015;
     return clamp(0.85 - groove * 0.45 - dome * 0.1, 0.0, 1.0);
   }
+#endif
+#if COVER == 1 || defined(BARE_LEGS)
   if (cover == 1) {                                             // scales — imbricated, laid back
     // A fish's scales, a snake's, a lizard's: small round-edged scallops shingled toward the tail, each
     // lying on the roots of the ones behind (see scallops). (A cell per scale with straight borders
@@ -883,6 +898,8 @@ float surfaceHeight(vec3 p, int cover) {
     gHb = lay * 0.006;
     return clamp(0.8 - lay * 0.55, 0.0, 1.0);
   }
+#endif
+#if COVER == 2
   if (cover == 2) {                                             // fur — clumped pile, locks laid along its lay
     // Locks of hair laid along the coat's lay (gLay: back along the body, down a flank and a chest), and
     // the strands within them: the grain that still reads once the strands are smaller than a pixel (the
@@ -897,6 +914,8 @@ float surfaceHeight(vec3 p, int cover) {
     gHb = clumps * 0.016 + locks * 0.011 + streak * 0.006;
     return clumps * 0.22 + locks * 0.38 + streak * 0.4;
   }
+#endif
+#if COVER == 3
   if (cover == 3) {                                             // feathers — imbricated, laid back
     // Contour feathers: overlapping scallops laid along the body (see scallops), each a little under
     // a tenth of a body unit long — a bird's head wears a dozen across, not five polygons — and down
@@ -912,7 +931,12 @@ float surfaceHeight(vec3 p, int cover) {
       float ht = clamp(dot(vBodyPos - uHeadA.xyz, hab) / max(dot(hab, hab), 1e-6), 0.0, 1.0);
       plain = max(plain, 1.0 - smoothstep(uHeadA.w * 1.0, uHeadA.w * 1.6, length(vBodyPos - uHeadA.xyz - hab * ht)));
     }
-    lay = mix(lay, 0.66, plain * 0.85);
+    // …and a FLIER's breast, flanks and neck are smooth too: its feathers' edges show along its back alone
+    // (the mantle between its folded wings, its rump), giving out as the skin turns to the side or forward.
+    // (Kept off the belly and the head alone, the edges ran in rows of dark-rimmed arcs over the breast and
+    // up the neck to the chin, one tile to a feather: fish scales.)
+    if (uShag < 0.5) plain = max(plain, 1.0 - smoothstep(FEATHER_EDGE_Y, FEATHER_EDGE_Y + 0.45, gNb.y) * (1.0 - smoothstep(0.2, 0.6, gNb.z)));
+    lay = mix(lay, 0.66, plain * (uShag > 0.5 ? 0.85 : 0.95));
     shaft *= aaW(50.0) * (1.0 - plain);
     // A FLIGHTLESS bird (an ostrich's, an emu's) wears loose plumes, hair-like, hanging along the lay: no
     // feather's edge to be seen. (Scalloped like a flier's contour feathers, its neck, body and thighs
@@ -934,6 +958,8 @@ float surfaceHeight(vec3 p, int cover) {
     // one in front is where the shadow sits; its tip is clean — a soft shadow, not an outline)
     return clamp(0.82 - lay * 0.42 + (barbs - 0.5) * 0.05 - shaft * 0.18, 0.0, 1.0);
   }
+#endif
+#if COVER == 4
   if (cover == 4) {                                             // chitin — a smooth lacquered cuticle
     // Hard and glossy: a faint undulation and fine punctures, no seam network. (Voronoi grooves drew a
     // tortoiseshell over every beetle and spider; an arthropod's plates are its body SEGMENTS, which
@@ -944,6 +970,8 @@ float surfaceHeight(vec3 p, int cover) {
     gHb = swell * 0.006 - smoothstep(0.62, 0.8, pits) * 0.0012 * aaW(26.0);
     return h;
   }
+#endif
+#if COVER == 5
   if (cover == 5) {                                             // slime — soft papillae under a wet ripple
     // Soft round papillae and wrinkles — smooth blobs of noise, laid long along the body — dull and a shade
     // darker between them, under a faint wet ripple: a slug's back, an octopus's warts. (The ripple alone
@@ -955,6 +983,8 @@ float surfaceHeight(vec3 p, int cover) {
     gHb = bump * SLIME_TUBERCLE + ripple * 0.01;
     return clamp(0.62 - bump * 0.3 + ripple * 0.1, 0.0, 1.0);
   }
+#endif
+#if COVER == 6
   if (cover == 6) {                                             // plates — domed scutes (osteoderms, ossicles)
     // A dragon's armour, a sea star's ossicles: each plate a low dome rising from a narrow groove to its
     // middle, the grooves a shade darker. (Flat-topped cells half a body unit across between dark seams
@@ -965,6 +995,8 @@ float surfaceHeight(vec3 p, int cover) {
     gHb = dome * PLATE_DOME;
     return clamp(0.72 - dome * 0.42, 0.0, 1.0);
   }
+#endif
+#if COVER == 7
   if (cover == 7 && uCut > 0.5) {                               // crystal, its skin already cut
     // the geometry's own flat faces carry the cut; cut again here, at other places, the two sets of
     // faces showed through each other — torn patches, two skins flickering. Each face takes a shade
@@ -988,6 +1020,8 @@ float surfaceHeight(vec3 p, int cover) {
     gHb = 0.0;
     return 0.3;
   }
+#endif
+#if COVER == 7
   if (cover == 7) {                                             // crystal — cut facets
     // A cut stone: flat faces, each tilted its own way, meeting in sharp edges — see facets(). One
     // grid alone is a regular net of triangles (a wire mesh drawn over the body); so the stone is cut
@@ -1010,10 +1044,16 @@ float surfaceHeight(vec3 p, int cover) {
     gHb = max(hA, hB) * 0.11 * w;
     return 0.3;                                                 // (no grime: a crystal has no recesses)
   }
+#endif
+#if COVER == 0
   // skin — fine wrinkle-and-pore relief
   float pores = fbmA(p * 6.0, 6.0);
   float wrinkle = ridgedA(p * vec3(3.0, 9.0, 3.0), 9.0);
   gHb = pores * 0.008 + wrinkle * 0.006;
   return pores * 0.22 + wrinkle * 0.12;
+#else
+  gHb = 0.0;
+  return 0.5;
+#endif
 }
 `;

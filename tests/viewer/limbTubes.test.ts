@@ -3,7 +3,7 @@ import { grow, type Phenotype } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
 import { buildSmoothGeometry, type SkinQuality } from '../../src/viewer/smoothSkin';
 import { buildFieldPrims, roundConeDist, type FieldPrims } from '../../src/viewer/bodyField';
-import { TUBE_THIN, PODO_WAIST, PODO_EASE, TIP_POINT, HOOF_KNOB, bareTips, podomeres, splitThin } from '../../src/viewer/limbTubes';
+import { TUBE_THIN, PODO_WAIST, PODO_EASE, TIP_POINT, HOOF_KNOB, HAND_PROUD, bareTips, podomeres, splitThin } from '../../src/viewer/limbTubes';
 
 type Geo = ReturnType<typeof buildSmoothGeometry>;
 
@@ -157,11 +157,20 @@ describe('thin limbs drawn exact', () => {
       // a bare tail or tentacle runs on past its last node to a point, past the link by design)
       const knees = podoJoints(p, f);
       const points = bareTipPoints(p, f);
+      // (a hand-over's collar runs on up the field's limb above its joint, a hair proud of it: see HAND_PROUD)
+      const thinSet = new Set(thin);
+      const limbField: number[] = [];
+      for (let m = 0; m < f.nc; m++) {
+        if (thinSet.has(m) || f.ia[m] === f.ib[m] || f.an[m] || p.nodes[f.ia[m]].kind === 'spine' || p.nodes[f.ib[m]].kind === 'spine') continue;
+        limbField.push(m);
+      }
+      const onCollar = (x: number, y: number, z: number) =>
+        limbField.some((m) => Math.abs(coneDist(f, m, x, y, z)) <= (HAND_PROUD + 0.01) * Math.max(f.ra[m], f.rb[m]));
       let on = 0;
       let off = 0;
       let pinched = 0;
       for (let v = from; v < pos.count; v++) {
-        if (onPoint(points, pos.getX(v), pos.getY(v), pos.getZ(v))) {
+        if (onPoint(points, pos.getX(v), pos.getY(v), pos.getZ(v)) || onCollar(pos.getX(v), pos.getY(v), pos.getZ(v))) {
           pinched++;
           continue;
         }

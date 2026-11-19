@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { buildFin, buildMembraneWing, buildFoldedMembraneWing, buildFeatheredWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, MEMBRANE_FOLD, tailBandAt, TAIL_SPREAD, wingOpenSpan, wingShoulder } from '../../src/viewer/wings';
 import { dorsalSpikeGeometry, DORSAL_SPIKE, TAIL_STING } from '../../src/viewer/scutes';
+import { tailCovertsGeometry } from '../../src/viewer/CreatureMesh';
 import { grow } from '../../src/engine/grow';
 import { genomeOfMorphotype } from '../../src/engine/random';
 
@@ -472,10 +473,50 @@ describe('plumage sheets (one continuous surface, painted in feather tiers)', ()
     let domed = 0;
     for (let i = 0; i < pos.count; i++) {
       const d = sphere(pos.getX(i) + 0.5, pos.getY(i), pos.getZ(i));
-      expect(d).toBeGreaterThan(0.015);
+      // (its leading edge and front end tuck under the coat — a negative lift: see FOLD_TUCK)
+      expect(d).toBeGreaterThan(0.015 + Math.min(0, w.lift![i]));
       if (w.lift![i] > 0.05 && d > 0.02 + w.lift![i] * 0.9) domed++;
     }
     expect(domed).toBeGreaterThan(0);
   });
 });
 
+describe("a tail's coverts on a rig", () => {
+  it("ride the rump's bone at their root and the fan's at their end, stretched between", () => {
+    // (riding the fan's bone with the feathers, their root swung off the rump as the tail rose to display: a
+    // flap a quarter of a unit over the back)
+    for (const id of ['raptor', 'bird']) {
+      for (const seed of [1, 5, 29]) {
+        const p = grow(genomeOfMorphotype(seed, id));
+        const g = tailCovertsGeometry(p);
+        if (!g) continue;
+        const fan = p.nodes.findIndex((n) => n.kind === 'terminal' && n.part?.kind === 'tail');
+        const pos = g.getAttribute('position'), si = g.getAttribute('skinIndex'), sw = g.getAttribute('skinWeight');
+        let root = 0, end = 0;
+        for (let v = 0; v < pos.count; v++) {
+          expect(sw.getX(v) + sw.getY(v), `${id} #${seed}`).toBeCloseTo(1, 6);
+          expect(si.getX(v) - 1, `${id} #${seed}`).toBe(fan);
+          const rump = p.nodes[si.getY(v) - 1];
+          expect(rump.kind, `${id} #${seed}`).toBe('spine');
+          // inside the rump's ball: on its bone; past the fan's node down the tail: on the fan's
+          const dR = Math.hypot(pos.getX(v) - rump.pos[0], pos.getY(v) - rump.pos[1], pos.getZ(v) - rump.pos[2]);
+          if (dR < rump.radius * 0.9) {
+            root++;
+            expect(sw.getY(v), `${id} #${seed} root`).toBeGreaterThan(0.99);
+          }
+          const F = p.nodes[fan].pos;
+          const ab = [F[0] - rump.pos[0], F[1] - rump.pos[1], F[2] - rump.pos[2]];
+          const L = Math.hypot(ab[0], ab[1], ab[2]);
+          const along = ((pos.getX(v) - rump.pos[0]) * ab[0] + (pos.getY(v) - rump.pos[1]) * ab[1] + (pos.getZ(v) - rump.pos[2]) * ab[2]) / L;
+          if (along > L) {
+            end++;
+            expect(sw.getX(v), `${id} #${seed} end`).toBeGreaterThan(0.99);
+          }
+        }
+        expect(root, `${id} #${seed}`).toBeGreaterThan(0);
+        expect(end, `${id} #${seed}`).toBeGreaterThan(0);
+        g.dispose();
+      }
+    }
+  });
+});

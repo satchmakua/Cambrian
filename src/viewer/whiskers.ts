@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Vec3 } from '../engine/genome';
+import type { Phenotype } from '../engine/grow';
 import { sweepTube } from './sweep';
 
 /** each whisker of a pad: how far it swings forward (+) or back (rad, off square to the side), how far
@@ -23,6 +24,25 @@ export const WHISKER_FAN: readonly (readonly [number, number, number])[] = [
   [-0.05, -0.13, 3.2],
   [-0.34, -0.06, 2.7],
 ];
+/** WHISKER_FAN's mean length (× the pad's radius) */
+const FAN_MEAN = WHISKER_FAN.reduce((t, w) => t + w[2], 0) / WHISKER_FAN.length;
+/** A whisker's mean length against the half-width of the skull it grows on: a cat's reach out past its cheeks.
+ *  (At WHISKER_FAN's lengths on a pad's radius alone — a fifth of a unit on a cat's skull a unit wide — they ended
+ *  inside its cheeks' outline: a short white scribble at the corner of the jaw.) */
+export const WHISKER_REACH = 1.0;
+/** …and never more than this many times the lengths the pad alone gives them */
+const WHISKER_STRETCH_MAX = 4;
+
+/** How far a pad's whiskers are stretched past WHISKER_FAN's lengths (≥ 1), from the skull the pad's muzzle hangs on. */
+export function whiskerStretch(p: Phenotype, idx: number, r: number): number {
+  const parent = p.edges.find(([, b]) => b === idx)?.[0];
+  const seg = parent === undefined ? undefined : p.nodes[parent].segment;
+  const skull = seg === undefined ? undefined : p.nodes.find((n) => n.kind === 'spine' && n.segment === seg);
+  if (!skull) return 1;
+  const half = skull.radius * (skull.scale?.[0] ?? 1);
+  return Math.min(WHISKER_STRETCH_MAX, Math.max(1, (WHISKER_REACH * half) / (FAN_MEAN * r)));
+}
+
 /** how far a whisker's tip droops below its line (× its length) */
 const WHISKER_DROOP = 0.12;
 
@@ -42,10 +62,10 @@ const unit = (v: readonly number[]): Vec3 => {
 
 /**
  * One pad's whiskers, in the part's own frame (`quat`: its orientation in the body; the body's up is +Y
- * and its front +Z), from a pad of radius `r`. Returns the merged filaments and their directions (body
+ * and its front +Z), from a pad of radius `r`, each whisker `stretch` × its WHISKER_FAN length. Returns the merged filaments and their directions (body
  * frame, for tests).
  */
-export function whiskerFan(quat: readonly number[], r: number): { geometry: THREE.BufferGeometry; dirs: Vec3[] } {
+export function whiskerFan(quat: readonly number[], r: number, stretch = 1): { geometry: THREE.BufferGeometry; dirs: Vec3[] } {
   // the body's up and front, and this pad's side, in the part's frame
   const up = rotConj(quat, [0, 1, 0]);
   const fwd0 = rotConj(quat, [0, 0, 1]);
@@ -65,7 +85,7 @@ export function whiskerFan(quat: readonly number[], r: number): { geometry: THRE
       (side[1] * ca + fwd[1] * sa) * ce + up[1] * se,
       (side[2] * ca + fwd[2] * sa) * ce + up[2] * se,
     ];
-    const L = len * r;
+    const L = len * r * stretch;
     // rooted in rows on the pad: higher whiskers a little higher, the forward ones a little forward
     const root: Vec3 = [
       up[0] * e * r * 0.9 + fwd[0] * a * r * 0.35 - side[0] * r * 0.1,

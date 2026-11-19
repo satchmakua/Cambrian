@@ -229,6 +229,50 @@ export function polygonize(field: ScalarField, min: number[], max: number[], opt
   return { positions: pos, normals, indices: new Uint32Array(indices), ao, cell, aoAt };
 }
 
+/**
+ * The surface `polygonize` draws for this field and grid, as a field of its own: the field's values at the
+ * grid's corners, read between them linearly within the same six tets (its zero is the drawn mesh, exactly).
+ * A part thinner than a cell is drawn short or not at all, a curved one a little inside its field — so a thing
+ * meant to lie ON the drawn skin (a mouth's seam) is laid onto this, not onto the field. Corners are evaluated
+ * as they are first read.
+ */
+export function drawnField(field: ScalarField, min: number[], max: number[], res: number, cap?: number): ScalarField {
+  const { nx, ny, nz, dx, dy, dz } = gridCells(min, max, res, cap);
+  const sx = nx + 1, sy = ny + 1;
+  const seen = new Map<number, number>();
+  const at = (i: number, j: number, l: number): number => {
+    const key = (l * sy + j) * sx + i;
+    let v = seen.get(key);
+    if (v === undefined) {
+      v = field(min[0] + i * dx, min[1] + j * dy, min[2] + l * dz);
+      seen.set(key, v);
+    }
+    return v;
+  };
+  const u = [0, 0, 0];
+  const c = [0, 0, 0];
+  return (x, y, z) => {
+    const fx = clampf((x - min[0]) / dx, 0, nx), fy = clampf((y - min[1]) / dy, 0, ny), fz = clampf((z - min[2]) / dz, 0, nz);
+    c[0] = Math.min(Math.floor(fx), nx - 1);
+    c[1] = Math.min(Math.floor(fy), ny - 1);
+    c[2] = Math.min(Math.floor(fz), nz - 1);
+    u[0] = fx - c[0];
+    u[1] = fy - c[1];
+    u[2] = fz - c[2];
+    // the tet the point is in: its corners walk v0 → v6 one axis at a time, the largest offset's first
+    const a0 = u[0] >= u[1] ? (u[0] >= u[2] ? 0 : 2) : u[1] >= u[2] ? 1 : 2;
+    const a2 = u[0] < u[1] ? (u[0] < u[2] ? 0 : 2) : u[1] < u[2] ? 1 : 2;
+    const a1 = 3 - a0 - a2;
+    let v = (1 - u[a0]) * at(c[0], c[1], c[2]);
+    c[a0]++;
+    v += (u[a0] - u[a1]) * at(c[0], c[1], c[2]);
+    c[a1]++;
+    v += (u[a1] - u[a2]) * at(c[0], c[1], c[2]);
+    c[a2]++;
+    return v + u[a2] * at(c[0], c[1], c[2]);
+  };
+}
+
 type VertexOn = (ga: number, gb: number, va: number, vb: number) => number;
 
 function marchTet(

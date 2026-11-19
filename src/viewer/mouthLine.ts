@@ -14,7 +14,7 @@
  * smooth-skin field, so the curve, the carve, and the teeth all agree on one geometry. Everything
  * is deterministic from the phenotype (seeded via the engine's unitHash — no Math.random).
  */
-import type { Phenotype, BodyNode } from '../engine/grow';
+import { isBonyFish, type Phenotype, type BodyNode } from '../engine/grow';
 import type { Vec3 } from '../engine/genome';
 import { unitHash } from '../engine/rng';
 import {
@@ -588,6 +588,15 @@ export function reptileSeam(p: Phenotype, s: MouthSpec): boolean {
   return legs || !fins;
 }
 
+/** …and a BONY FISH's (a finned, legless body in scales: not a shark's bare skin): its gape runs back from
+ *  the point of its snout to a corner under the front of its eye, FISH_GAPE × the eye's radius ahead of the
+ *  eye's centre. (Drawn round the snout's tip alone, it was a short line across the front of a round head:
+ *  a puppet's grin, from the side no jaw at all.) */
+export const FISH_GAPE = 0.25;
+export function fishSeam(p: Phenotype, s: MouthSpec): boolean {
+  return !s.muzzled && JAWED.has(s.variant) && p.genomeRef.covering.type === 'scales' && isBonyFish(p);
+}
+
 /**
  * A REPTILE's shut mouth is a seam along its jaw, a third of the way up the side of its head, from the
  * tip of its snout back to the hinge under or behind its eye: a crocodile's grin the length of its
@@ -599,7 +608,8 @@ export function reptileSeam(p: Phenotype, s: MouthSpec): boolean {
  * evenly by length (a tooth row reads them as uniform in `t`).
  */
 export function runSeamBack(p: Phenotype, s: MouthSpec, line: MouthLine, surface: SkinSurface = 'kit'): MouthLine {
-  if (!reptileSeam(p, s)) return line;
+  const fish = fishSeam(p, s);
+  if (!reptileSeam(p, s) && !fish) return line;
   const f = surfacePrims(p, surface);
   const headUp = norm3(qRotateV(s.anchor.quat, [0, 1, 0]));
   const fwd = qRotateV(s.anchor.quat, [0, 0, 1]);
@@ -636,7 +646,7 @@ export function runSeamBack(p: Phenotype, s: MouthSpec, line: MouthLine, surface
   let hinge = 0;
   for (const [a, b] of p.edges) {
     const n = p.nodes[b];
-    if (n.terminal === 'eye' && p.nodes[a].kind === 'spine' && p.nodes[a].segment === s.anchor.segment) hinge = Math.max(hinge, back(n.pos) + HINGE_PAST_EYE * n.radius);
+    if (n.terminal === 'eye' && p.nodes[a].kind === 'spine' && p.nodes[a].segment === s.anchor.segment) hinge = Math.max(hinge, back(n.pos) + (fish ? -FISH_GAPE : HINGE_PAST_EYE) * n.radius);
   }
   // the fan's rays leave from inside the tip, held within its depth (from outside, a ray finds the skin
   // going in)

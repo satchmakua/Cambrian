@@ -4,6 +4,9 @@
  * drops contexts past ~16). Each is lit by the same procedural studio environment as the hero view
  * and wears the same hybrid skin — but the skins are built staggered (slot i upgrades from the capsule
  * kit after a short delay), so a fresh litter never stalls a frame building nine surfaces at once.
+ * Where the browser draws without a graphics card the delays mean nothing — each skin's frame takes
+ * longer than all of them together, and the nine would land in one frame of seconds — so there the
+ * skins take turns: one is built and drawn, the page is left to itself for a moment, then the next.
  *
  * The thumbnail's scene lives in the gallery canvas (a portal into its own THREE.Scene) and draws
  * itself, scissored, into the rectangle of its button — measured against the canvas's own rectangle
@@ -22,6 +25,47 @@ import { framingOf } from './framing';
 import { scissorRect } from './scissor';
 import { restPosed } from './rig';
 import type { Genome } from '../engine/genome';
+import { noGpu } from '../ui/gpu';
+
+// The turns: jobs run one at a time, each followed by the frame it asked for and a pause in which
+// the page answers whatever was clicked meanwhile.
+const TURN_GAP_MS = 120;
+const turns: (() => void)[] = [];
+let turning = false;
+function nextTurn(): void {
+  const job = turns.shift();
+  if (!job) {
+    turning = false;
+    return;
+  }
+  job();
+  afterFrame(nextTurn);
+}
+/** (once two of the page's frames have come close together — the slow one just asked for is behind
+ *  them — and then the pause) */
+function afterFrame(then: () => void): void {
+  let last = 0;
+  const tick = (t: number) => {
+    if (last > 0 && t - last < 50) setTimeout(then, TURN_GAP_MS);
+    else {
+      last = t;
+      requestAnimationFrame(tick);
+    }
+  };
+  requestAnimationFrame(tick);
+}
+/** Run `job` when its turn comes; returns a way to withdraw it. */
+function takeTurn(job: () => void): () => void {
+  turns.push(job);
+  if (!turning) {
+    turning = true;
+    afterFrame(nextTurn);
+  }
+  return () => {
+    const i = turns.indexOf(job);
+    if (i >= 0) turns.splice(i, 1);
+  };
+}
 
 export function OffspringThumb({ genome, slot, track }: { genome: Genome; slot: number; track: MutableRefObject<(HTMLElement | null)[]> }) {
   // (a snake lies in its resting S, as it does on the main stage — no rig here to pose it)
@@ -30,6 +74,7 @@ export function OffspringThumb({ genome, slot, track }: { genome: Genome; slot: 
   const [smooth, setSmooth] = useState(false);
   useEffect(() => {
     setSmooth(false);
+    if (noGpu()) return takeTurn(() => setSmooth(true));
     // (one ~20–50 ms build per slot, spaced so input still gets in between them)
     const t = setTimeout(() => setSmooth(true), 40 + slot * 55);
     return () => clearTimeout(t);

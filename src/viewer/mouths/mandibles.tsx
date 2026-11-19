@@ -15,7 +15,7 @@
  */
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
-import type { Phenotype } from '../../engine/grow';
+import { pointedLegs, type Phenotype } from '../../engine/grow';
 import type { Vec3 } from '../../engine/genome';
 import { basisToQuat, cross3, dot3, norm3, type Carve } from '../bodyField';
 import type { MeshFeature } from '../meshData';
@@ -66,8 +66,14 @@ export function buildMandibles(
 
   // blade arc: forward reach + tip clearance — seeded once, shared by both sides (M18). Reach
   // stays under the 1.3r protrusion cap (1.2r centerline + the 0.025r tip radius).
-  const reach = r * (0.95 + 0.25 * hash01(seed, idx + 41));
-  const droop = r * (0.12 + 0.12 * hash01(seed, idx + 59));
+  // (a CRAB's mouthparts are folded flat under the front of its shell, between its claws: reached out
+  // like an ant's jaws, the pair stood out ahead of the shell's rim as a loop — a handle from above)
+  const folded = shellMouth(phenotype, idx);
+  // (a MYRIAPOD's forcipules close level under the front of its head, a pincer: drooped as an ant's jaws, a
+  // centipede's hung below its face, a walrus's tusks)
+  const forcipule = !folded && pointedLegs(phenotype.genomeRef);
+  const reach = r * (folded ? FOLDED_REACH : 0.95 + 0.25 * hash01(seed, idx + 41));
+  const droop = r * (folded ? FOLDED_DROOP : forcipule ? FORCIPULE_DROOP : 0.12 + 0.12 * hash01(seed, idx + 59));
   const gap = r * (0.12 + 0.2 * spec.gape); // tip-to-tip clearance — nearly meeting, never touching
   const latMax = Math.max(0, (line.width - gap) / 2);
 
@@ -154,6 +160,25 @@ export function buildMandibles(
 
 /** the share of the opening hidden at each end, behind the blades' roots */
 const OPENING_FROM = 0.28;
+
+/** a myriapod's forcipules: how far they droop (×the mouth's radius), and their cuticle — near black, lacquered,
+ *  not glassy (a mid-dark green at roughness 0.35 caught the sky along its curve and read pale: bone tusks) */
+export const FORCIPULE_DROOP = 0.03;
+export const FORCIPULE_TONE = { toward: 0x0c0907, by: 0.8, rough: 0.55 } as const;
+
+/** a crab's folded mouthparts: how far they reach on ahead of their hinges, and droop (×the mouth's radius) */
+export const FOLDED_REACH = 0.3;
+export const FOLDED_DROOP = 0.3;
+
+/** Whether this mouth is a CRAB's: on a trunk that wears the shell itself, with claws — its mouthparts
+ *  fold under the shell's front (see FOLDED_REACH). An insect's or a spider's is on a head. */
+export function shellMouth(p: Phenotype, idx: number): boolean {
+  const parent = new Int32Array(p.nodes.length).fill(-1);
+  for (const [a, b] of p.edges) parent[b] = a;
+  const s = parent[idx];
+  if (s < 0 || p.nodes[s].kind !== 'spine' || (p.nodes[s].segment ?? 0) !== 0) return false;
+  return p.nodes.some((n, i) => n.terminal === 'carapace' && parent[i] === s) && p.nodes.some((n) => n.terminal === 'pincer');
+}
 
 /**
  * A SPIDER's mouth: its mandibled face sits on the leg-bearing cephalothorax (it has no separate
@@ -292,12 +317,13 @@ function InsectMandibles({
 
   const fang = useMemo(() => fangGeometry(), []);
   const mats = useMemo(() => {
-    const chitin = new THREE.Color(dark).lerp(new THREE.Color(0x241d18), 0.55);
+    const myriapod = pointedLegs(phenotype.genomeRef);
+    const chitin = new THREE.Color(dark).lerp(new THREE.Color(myriapod ? FORCIPULE_TONE.toward : 0x241d18), myriapod ? FORCIPULE_TONE.by : 0.55);
     return {
-      chitin: new THREE.MeshStandardMaterial({ color: chitin, roughness: 0.35, metalness: 0.12 }),
+      chitin: new THREE.MeshStandardMaterial({ color: chitin, roughness: myriapod ? FORCIPULE_TONE.rough : 0.35, metalness: 0.12 }),
       teeth: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42 }),
     };
-  }, [dark]);
+  }, [dark, phenotype]);
 
   // dispose per lifetime: the per-creature geometries turn over with `built`, but the shared fang
   // and the materials must NOT be disposed on every phenotype swap while still in use

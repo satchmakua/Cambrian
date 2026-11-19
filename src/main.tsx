@@ -41,9 +41,12 @@ if (import.meta.env.DEV) {
   }
 }
 
+// (Nothing here asks what draws the browser's WebGL: the menu must be up first. See ui/gpu.ts.)
+
 const root = document.getElementById('app');
 if (!root) throw new Error('#app mount point not found');
 
+// (the page's static shell — the name and "Loading" — is replaced by this first render)
 createRoot(root).render(
   <StrictMode>
     <ScreenBoundary>

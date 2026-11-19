@@ -23,8 +23,8 @@
  */
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
-import { buildFieldPrims, fieldAt, fieldAtCarved, carveDist, type Carve, type FieldPrims } from './bodyField';
-import { polygonize, gridCells } from './polygonize';
+import { buildFieldPrims, fieldAt, fieldAtCarved, carveDist, qRotateV, type Carve, type FieldPrims } from './bodyField';
+import { polygonize, gridCells, drawnField } from './polygonize';
 import { splitThin, limbTubes, type Tubes } from './limbTubes';
 
 // Grid resolution, in cells along the creature's longest padded extent. The grid is sampled as a
@@ -91,12 +91,9 @@ function toGeometry(
   return geo;
 }
 
-export function buildSmoothGeometry(
-  p: Phenotype,
-  full = false,
-  carves: readonly Carve[] = [],
-  quality: SkinQuality = 'high',
-): THREE.BufferGeometry {
+/** The skin's field as it is polygonized — its prims (thin limb links split off, the rest floored to the grid),
+ *  its carves (their rims softened to the grid) — and the grid: what buildSmoothGeometry draws, and drawnSkin reads. */
+function skinField(p: Phenotype, full: boolean, carves: readonly Carve[], quality: SkinQuality) {
   // the shared body field as flat typed arrays — `full` (hybrid) meshes every part for full
   // definition; otherwise just the locomotor body (see bodyField for the filters + fallbacks).
   const whole = buildFieldPrims(p, full ? 'hybrid' : 'body');
@@ -121,6 +118,26 @@ export function buildSmoothGeometry(
   // a carve rim thinner than a grid cell aliases into stair-steps — soften it to the cell size
   const carved: Carve[] =
     carves.length === 0 ? [] : carves.map((c) => (c.blend >= cell * 0.8 ? c : { ...c, blend: cell * 0.8 }));
+  return { whole, split, prims, carved, meanR, min, max, res, cell };
+}
+
+/**
+ * The skin as it is DRAWN, as a field (polygonize's drawnField over the skin's own grid), and its grid's cell:
+ * a part thinner than a cell is drawn short (a crocodile's snout, its tip a cell deep, ended up to most of a
+ * cell short of its field), a curved one a little inside its field.
+ */
+export function drawnSkin(p: Phenotype, full: boolean, carves: readonly Carve[] = [], quality: SkinQuality = 'high'): { field: (x: number, y: number, z: number) => number; cell: number } {
+  const s = skinField(p, full, carves, quality);
+  return { field: drawnField((x, y, z) => fieldAtCarved(s.prims, s.carved, x, y, z), s.min, s.max, s.res), cell: s.cell };
+}
+
+export function buildSmoothGeometry(
+  p: Phenotype,
+  full = false,
+  carves: readonly Carve[] = [],
+  quality: SkinQuality = 'high',
+): THREE.BufferGeometry {
+  const { whole, split, prims, carved, meanR, min, max, res, cell } = skinField(p, full, carves, quality);
 
   const poly = polygonize((x, y, z) => fieldAtCarved(prims, carved, x, y, z), min, max, {
     res,
@@ -153,6 +170,23 @@ export function buildSmoothGeometry(
 /** how far a horn shell swells out over a leg's root (×the root's radius), and over how wide a patch */
 const HIP_COVER = 1.15;
 const HIP_COVER_REACH = 2.4;
+/** A horn shell's dome is highest over the middle of the back and falls away to its rim every way round:
+ *  its crown's extra thickness × DOME_GAIN at the centre, easing to ×1 (its flanks as they were, over the
+ *  legs) as DOME_SPREAD × the squared distance out (in the trunk's half-width and half-length) reaches 1. (Laid on evenly by height, the trunk's flat back and straight
+ *  flanks showed through: a flat-topped loaf with upright walls, its marginal scutes run up them as ribs.) */
+export const DOME_GAIN = 2.6;
+export const DOME_SPREAD = 1;
+
+/** A CRAB's carapace (a thin shell on a one-node trunk that bears claws) has a front rim: its
+ *  anterolateral margin, from beside the eyes round toward its widest point, is cut into CRAB_TEETH teeth
+ *  CRAB_TOOTH (×the trunk's radius) proud, on a ledge CRAB_LEDGE proud standing just above the shell's
+ *  lower edge. (Inflated evenly from the body's ellipsoid, it was a smooth glossy bread roll: no rim,
+ *  no teeth, the outline an egg from above.) The margin runs between these bearings (rad from dead
+ *  ahead, about the vertical). */
+export const CRAB_TEETH = 4;
+export const CRAB_TOOTH = 0.045;
+export const CRAB_LEDGE = 0.03;
+export const CRAB_MARGIN: readonly [number, number] = [0.4, 1.2];
 
 /**
  * A carapace that CONFORMS to the body: the trunk's own field inflated by a shell thickness (more on
@@ -217,10 +251,17 @@ function shellField(p: Phenotype): ShellField | null {
   for (const n of trunk) {
     rMax = Math.max(rMax, n.radius);
     ySum += n.pos[1];
-    zMin = Math.min(zMin, n.pos[2] - n.radius);
-    zMax = Math.max(zMax, n.pos[2] + n.radius);
+    // (its own length: a crab grown longer than round reached past a box cut to its radius alone, and the
+    // crab's tight pad no longer hid that, so its shell was sliced open front and back)
+    const rz = n.radius * Math.max(1, n.scale?.[2] ?? 1);
+    zMin = Math.min(zMin, n.pos[2] - rz);
+    zMax = Math.max(zMax, n.pos[2] + rz);
   }
   const yMid = ySum / trunk.length;
+  // (the crown's centre and reach over the ground plan: see DOME_GAIN)
+  const zc = (zMin + zMax) / 2, hz = Math.max((zMax - zMin) / 2, 1e-3);
+  let hx = 1e-3;
+  for (const n of trunk) hx = Math.max(hx, Math.abs(n.pos[0]) + n.radius * (n.scale?.[0] ?? 1));
   prims.k = 0.4 * rMax;
   // the shell's size gene: the carapace part's thickness (relative to the trunk) sets how proud it sits
   const prominence = Math.min(1.6, Math.max(0.6, shellNode.radius / Math.max(rMax, 1e-3)));
@@ -256,6 +297,26 @@ function shellField(p: Phenotype): ShellField | null {
       for (const [a, b] of p.edges) if (a === i && p.nodes[b].part?.kind === 'leg') roots.add(b);
     });
   const hips = [...roots].map((i) => p.nodes[i]);
+  // (a crab's: see CRAB_TEETH)
+  const crab = thin && trunk.length === 1 && p.nodes.some((n) => n.terminal === 'pincer') ? trunk[0] : null;
+  const cq = crab ? [-crab.quat[0], -crab.quat[1], -crab.quat[2], crab.quat[3]] : null;
+  const ce = crab ? (crab.scale ?? [1, 1, 1]).map((k) => k * crab.radius) : null;
+  const margin = (x: number, y: number, z: number): number => {
+    if (!crab || !cq || !ce) return 0;
+    const l = qRotateV(cq, [x - crab.pos[0], y - crab.pos[1], z - crab.pos[2]]);
+    // a band round the shell just above its lower edge (the node's widest line)
+    const v = (l[1] / ce[1] - 0.12) / 0.3;
+    const band = Math.exp(-v * v);
+    if (band < 1e-3) return 0;
+    // the bearing about the vertical, 0 dead ahead: the margin's teeth from beside the eyes to the widest point
+    const th = Math.atan2(Math.abs(l[0]) / ce[0], l[2] / ce[2]);
+    const u = (th - CRAB_MARGIN[0]) / (CRAB_MARGIN[1] - CRAB_MARGIN[0]);
+    if (u <= 0 || u >= 1) return 0;
+    const ph = u * CRAB_TEETH;
+    const tri = 1 - Math.abs(2 * (ph - Math.floor(ph)) - 1); // a point at each tooth's middle
+    const fade = Math.sin(Math.PI * u); // the ledge eases in beside the eyes and out at the widest point
+    return crab.radius * band * (CRAB_LEDGE * Math.sqrt(fade) + CRAB_TOOTH * tri * Math.min(1, fade * 2.5));
+  };
 
   const field = (x: number, y: number, z: number): number => {
     const up = Math.min(1, Math.max(0, (y - yCut) / (rMax * 1.4)));
@@ -266,12 +327,14 @@ function shellField(p: Phenotype): ShellField | null {
       const d = Math.hypot(x - h.pos[0], y - h.pos[1], z - h.pos[2]) / (HIP_COVER_REACH * h.radius);
       if (d < 1) over = Math.max(over, h.radius * HIP_COVER * (1 - d) * (1 - d));
     }
-    const t = t0 + dome * up * up + flare * rim + over;
+    const crown = thin ? 1 : 1 + (DOME_GAIN - 1) * Math.max(0, 1 - DOME_SPREAD * ((x / hx) ** 2 + ((z - zc) / hz) ** 2));
+    const t = t0 + dome * up * up * crown + flare * rim + over + margin(x, y, z);
     const body = fieldAt(prims, x, y, z) - t;
     const cut = yCut - y; // > 0 below the skirt → outside
     return body > cut ? body : cut;
   };
-  const pad = rMax * 0.9 + 0.1;
+  // (a crab's thin shell stands barely proud of its body: a tighter box gives its teeth a finer grid)
+  const pad = crab ? rMax * (CRAB_TOOTH + 0.3) + 0.05 : rMax * 0.9 + 0.1;
   let xMin = Infinity, xMax = -Infinity, yMax = -Infinity;
   for (const n of trunk) {
     xMin = Math.min(xMin, n.pos[0] - n.radius * (n.scale?.[0] ?? 1));
@@ -279,7 +342,8 @@ function shellField(p: Phenotype): ShellField | null {
     yMax = Math.max(yMax, n.pos[1] + n.radius * (n.scale?.[1] ?? 1));
   }
   const min = [xMin - pad, yCut - rMax * 0.1, zMin - pad];
-  const max = [xMax + pad, yMax + pad, zMax + pad];
+  // (a horn shell's crown stands higher than its flanks by the dome's gain: room for it over the back)
+  const max = [xMax + pad, yMax + pad + (thin ? 0 : dome * DOME_GAIN), zMax + pad];
   return { field, min, max, rMax, yCut, thin };
 }
 
@@ -290,6 +354,8 @@ function shellField(p: Phenotype): ShellField | null {
  *  thin shell (a crab's carapace, a beetle's wing-cases) or none. (Seamed by a random net, a tortoise's
  *  shell was crazy paving.) */
 export const SHELL_SCUTES = { vertebral: 5, costal: 4, marginal: 24 } as const;
+/** how far out the costal scutes sit, ×the shell's half-width at the skirt */
+export const COSTAL_OUT = 0.74;
 export function shellScutes(p: Phenotype): Float32Array | null {
   const sf = shellField(p);
   if (!sf || sf.thin) return null;
@@ -332,10 +398,12 @@ export function shellScutes(p: Phenotype): Float32Array | null {
   for (let j = 0; j < SHELL_SCUTES.costal; j++) {
     const z = back + L * (0.23 + (0.54 * j) / (SHELL_SCUTES.costal - 1));
     const w = reach(0, z, 1, 0, yLow);
-    for (const side of [1, -1]) seat(side * 0.52 * w, z);
+    // (out on the flank, down the dome's side: seated on its crown, at half the width, they left the marginals
+    // the whole wall below them, and its seams ran up it as ribs)
+    for (const side of [1, -1]) seat(side * COSTAL_OUT * w, z);
   }
   // the marginals: round the rim, from over the neck, a little in from its edge and up off the skirt
-  const yRim = yCut + (max[1] - yCut) * 0.12;
+  const yRim = yCut + (max[1] - yCut) * 0.06;
   for (let k = 0; k < SHELL_SCUTES.marginal; k++) {
     const a = (2 * Math.PI * k) / SHELL_SCUTES.marginal;
     const dx = Math.sin(a), dz = Math.cos(a);

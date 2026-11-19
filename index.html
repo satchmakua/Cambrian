@@ -4,9 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Cambrian — evolve an alien</title>
+    <!-- What is on screen before any script has run: the menu's dark panel with the game's name and
+         a word that it is loading. The app replaces it when it mounts. -->
+    <style>
+      html, body { margin: 0; height: 100%; background: #0f1116; color: #e8e6df; font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; }
+      .shell { position: fixed; top: 0; bottom: 0; left: 0; box-sizing: border-box; width: 420px; max-width: 100vw; padding: 7vh 40px 22px; }
+      .shell h1 { margin: 0; font-size: 46px; font-weight: 600; letter-spacing: 0.14em; }
+      .shell p { margin: 8px 0 0; color: #8b8f9a; font-size: 14px; }
+      .shell .shell-wait { margin-top: 34px; letter-spacing: 0.06em; }
+      /* (as the menu's panel on a narrow screen, so the name stays where it is) */
+      @media (max-width: 760px) { .shell { width: 100vw; padding: 5vh 22px 16px; } }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <div class="shell">
+        <h1>Cambrian</h1>
+        <p>Breed creatures. Release them. Watch what becomes of them.</p>
+        <p class="shell-wait">Loading…</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

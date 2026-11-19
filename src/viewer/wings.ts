@@ -21,6 +21,7 @@ import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
 import { projectToSurface } from './bodyField';
 import { surfacePrims, type SkinSurface } from './mouthLine';
+import { trunkRise } from './rig';
 
 export type WingKind = 'feathered' | 'membrane';
 
@@ -133,6 +134,12 @@ export function buildMembraneWing(side: number, S: number, raise = 0.6): WingBui
   return { surface, bones, wrist: W };
 }
 
+/** a membrane wing's bones are drawn in its colour ×this, its web ×MEMBRANE_SHADE: the frame a shade
+ *  deeper than the skin it holds (at 0.7 against 0.85 it did not show: a folded wing was a flat sheet
+ *  of the skin's colour with no arm or fingers in it) */
+export const WING_BONE_SHADE = 0.5;
+export const MEMBRANE_SHADE = 0.85;
+
 /** how far each finger tip of a folded membrane wing stands out from the flank (+) or in toward it (−),
  *  × the span: the gathered skin's pleats */
 export const FOLD_PLEAT = [0.05, -0.02, 0.045, -0.01] as const;
@@ -209,8 +216,8 @@ export function foldedSpan(p: Phenotype, tipRadius: number): number {
 
 /** a folded membrane wing's lowest point and its furthest reach back from the shoulder, × its span (the
  *  fold buildFoldedMembraneWing lays down: its last finger's tip, its first's) */
-export const FOLD_DROP = 0.284;
-export const FOLD_BACK = 0.481;
+export const FOLD_DROP = 0.268;
+export const FOLD_BACK = 0.55;
 /** how far down its legs a four-legged body's folded skin may hang, × the belly's height off the ground */
 export const FOLD_HANG = 0.2;
 
@@ -247,11 +254,13 @@ export function buildFoldedMembraneWing(side: number, S: number): WingBuild {
   // down over the flank, so the folded skin hangs from the wrist like a cape, its top edge falling from
   // the wrist. (Run back nearly level — the first at 0.22 rad and 0.7 of the span long — the top finger
   // was a straight rod from the wrist to past the rump, the skin a flag hung from it.)
+  // (…and long: the first finger runs back over the hips to the rump. Raked down from a span of 0.56, the
+  // fold ended mid-back, shorter than the trunk under it: a dorsal fin's triangle, not a folded wing)
   const fingers: [number, number][] = [
-    [0.42, 0.56],
-    [0.66, 0.52],
-    [0.9, 0.47],
-    [1.12, 0.42],
+    [0.36, 0.62],
+    [0.58, 0.56],
+    [0.8, 0.5],
+    [1.0, 0.43],
   ];
   const back = v3(0, 0, -1), down = v3(0, -1, 0);
   const roots = fingers.map((_, i) => W.clone().add(v3(0, -0.012 * i * S, -0.018 * i * S)));
@@ -261,7 +270,7 @@ export function buildFoldedMembraneWing(side: number, S: number): WingBuild {
     roots[i].clone().add(back.clone().multiplyScalar(Math.cos(th) * L * S)).add(down.clone().multiplyScalar(Math.sin(th) * L * S)).add(out.clone().multiplyScalar(FOLD_PLEAT[i] * S)),
   );
   // the hind panel meets the flank behind the elbow, low on it
-  const B = v3(0.03 * s * S, -0.26 * S, -0.42 * S);
+  const B = v3(0.03 * s * S, -0.25 * S, -0.48 * S);
 
   const pos: number[] = [];
   const idx: number[] = [];
@@ -307,9 +316,11 @@ export function buildFoldedMembraneWing(side: number, S: number): WingBuild {
   const bones: WingBone[] = [
     // (the upper arm of a folded wing lies in the shoulder's own flesh: drawn, lifted off the skin with
     // the rest, it stood out of the shoulder as a round-ended dowel)
-    { a: P0, b: E, r0: 0.009 * S, r1: 0.008 * S, buried: true }, // humerus
-    { a: E, b: W, r0: 0.008 * S, r1: 0.007 * S }, // forearm
-    ...tips.map((t, i) => ({ a: roots[i], b: t, r0: 0.01 * S * (1 - i * 0.12), r1: 0.003 * S })),
+    { a: P0, b: E, r0: 0.0115 * S, r1: 0.011 * S, buried: true }, // humerus
+    // (the forearm and the fingers are the folded wing's frame: at 0.008 and 0.01 of the span, in the skin's
+    // own colour, they did not show — a flat green triangle with no arm in it)
+    { a: E, b: W, r0: 0.011 * S, r1: 0.009 * S }, // forearm
+    ...tips.map((t, i) => ({ a: roots[i], b: t, r0: 0.011 * S * (1 - i * 0.12), r1: 0.004 * S })),
   ];
   return { surface, bones, wrist: W };
 }
@@ -472,7 +483,8 @@ export function buildFeatheredWing(side: number, S: number, base: THREE.Color, a
   const L = S * 1.05;
   const H = S * 0.3;
   const HAND = 0.5;
-  const t = tiersOf(base, accent);
+  // (in the tone of the back and upper flank it lies on, not the raw coat: see FOLD_TONE)
+  const t = tiersOf(base.clone().multiplyScalar(FOLD_TONE), accent);
   const { geo, lift } = sheet(
     72, 20,
     (a, b, p) => {
@@ -483,17 +495,36 @@ export function buildFeatheredWing(side: number, S: number, base: THREE.Color, a
       const top = -0.04 * S + 0.05 * S * a;
       const h = H * depth * (1 - notch * b * b);
       // domed away from the flank; the stacked coverts make the shoulder end thickest
-      const dome = 0.045 * S * Math.sin(Math.PI * b) * (1 - 0.6 * a);
+      // (…rising out of the breast's coat over its first tenth: domed to its front end, that end was a cut
+      // edge standing off the breast, the mouth of a pocket)
+      const dome = 0.045 * S * Math.sin(Math.PI * b) * (1 - 0.6 * a) * (0.2 + 0.8 * sstep(0, 0.1, a));
       p.copy(back).multiplyScalar(a * L).addScaledVector(down, top + b * h).addScaledVector(normal, dome);
-      return dome;
+      // its leading edge and its front end tuck under the coat of the back and the breast (see FOLD_TUCK)
+      const tuck = Math.max(1 - sstep(0, 0.14, b), 1 - sstep(0, 0.08, a));
+      return dome - FOLD_TUCK * S * tuck;
     },
     (a, b, c) => plumageAt(t, a, b, HAND, 7, 9, 7, c),
   );
   return { surface: geo, bones: [], wrist: null, lift };
 }
 
+/** A folded wing's coverts against the coat (× coatMain): the tone of the back and upper flank it lies on,
+ *  which the coat's countershading, recesses and creases darken to ~0.6-0.8 of coatMain. (At the raw coat
+ *  the folded wing was a paler flat pad stuck on the flank — a pocket, a lifejacket.) */
+export const FOLD_TONE = 0.8;
+/** how far (× the wing's length) a folded wing's leading edge and front end sink under the skin past the
+ *  margin it is wrapped at: the coat of the back and the breast lies over them. (Riding the margin proud
+ *  of the skin all round, its edge was a hard step.) */
+export const FOLD_TUCK = 0.018;
+
 /** A wing part's style gene at or over this is the LONG cut of folded wing: a bird of prey's. */
 export const LONG_WING = 0.6;
+
+/** Where a songbird's short folded wing roots on the trunk node nearest its shoulder: out at its side (× the
+ *  node's half-width), up (× its radius) and forward (× its radius) — high on the flank, where a hawk's roots
+ *  (longWingFold), its leading edge along the edge of the back. (Rooted at 0.28 of the radius up, a quarter of
+ *  the way up the side, the leaf hung mid-flank under a bare upper flank: a shield strapped to an egg.) */
+export const SHORT_WING_SEAT = { out: 0.8, up: 0.5, fwd: 0.35 } as const;
 
 export interface WingFold {
   anchor: [number, number, number]; // the shoulder, body space
@@ -529,7 +560,7 @@ export function longWingFold(p: Phenotype, side: number): WingFold | null {
   const fan = p.nodes.find((n) => n.kind === 'terminal' && n.part?.kind === 'tail');
   const tip = v3(s * rump.radius * 0.32, 0, 0);
   if (fan) {
-    const droop = 0.2 + (p.genomeRef.seed % 5) * 0.06;
+    const droop = tailFanDroop(p);
     const reach = 0.3 * Math.max((z1 - z0) * 0.55, girth * 1.6);
     const back = v3(0, -droop, -1).normalize();
     tip.y = fan.pos[1] + back.y * reach + rump.radius * 0.12;
@@ -542,6 +573,21 @@ export function longWingFold(p: Phenotype, side: number): WingFold | null {
   const len = axis.length();
   if (len < 1e-4) return null;
   return { anchor, axis: axis.divideScalar(len), S: len / 1.05 };
+}
+
+/**
+ * Where a songbird's SHORT folded leaf lies: from its own `anchor` on the upper flank to where a hawk's
+ * wing tips lie (longWingFold: on the tail, a third of the way down its fan), no longer than `S`. (Laid
+ * level along a trunk that falls to its rump, the leaf ran on a third of the body's length past the rump,
+ * its dark primaries two blades standing off over a drooping tail.) Null when there is no trunk.
+ */
+export function shortWingLie(p: Phenotype, side: number, anchor: readonly number[], S: number): { axis: THREE.Vector3; S: number } | null {
+  const lf = longWingFold(p, side);
+  if (!lf) return null;
+  const axis = v3(lf.anchor[0], lf.anchor[1], lf.anchor[2]).addScaledVector(lf.axis, lf.S * 1.05).sub(v3(anchor[0], anchor[1], anchor[2]));
+  const len = axis.length();
+  if (len < 1e-4) return null;
+  return { axis: axis.divideScalar(len), S: Math.min(S, len / 1.05) };
 }
 
 /**
@@ -621,6 +667,18 @@ const TAIL_TROUGH = 0.3;
 /** how far the upper tail coverts reach down the tail (of its length); the under ones reach 0.9 of it */
 export const COVERT_REACH = 0.32;
 
+/**
+ * How far a feathered tail fan droops off straight back (its fall over its run): by the seed, 0.2–0.44
+ * — but an UPRIGHT body's (a hawk's) hangs on down the line of its back. (Carried at a level bird's
+ * droop from a trunk that rises 36° to the shoulders, a hawk's tail stood out of its rump at a right
+ * angle to the body, a flat banded wafer; in flight, the body pitched level, it pointed up.)
+ */
+export function tailFanDroop(p: Phenotype): number {
+  const seeded = 0.2 + (p.genomeRef.seed % 5) * 0.06;
+  const { rise, upright } = trunkRise(p);
+  return seeded + upright * Math.max(0, Math.tan(rise) - seeded);
+}
+
 /** where a tail fan's root sits on its body: the rump node's centre (relative to the tail node) and girth */
 export interface TailRump {
   at: THREE.Vector3;
@@ -642,7 +700,11 @@ export function tailBandAt(t: number, tail: THREE.Color, bar: THREE.Color, pale:
   return tail.clone().lerp(bar, 0.45 * sstep(0.45, 0.9, t));
 }
 
-export function buildTailFan(S: number, base: THREE.Color, accent: THREE.Color, droop = 0.25, barred = false, rump?: TailRump): THREE.BufferGeometry {
+/** which of a tail's pieces to build: all of it, its feathers alone, or its coverts alone (on a rig the
+ *  coverts are skinned apart, from the rump's bone to the tail's: see CreatureMesh) */
+export type TailPart = 'all' | 'fan' | 'coverts';
+
+export function buildTailFan(S: number, base: THREE.Color, accent: THREE.Color, droop = 0.25, barred = false, rump?: TailRump, part: TailPart = 'all'): THREE.BufferGeometry {
   const pos: number[] = [];
   const col: number[] = [];
   const idx: number[] = [];
@@ -653,7 +715,7 @@ export function buildTailFan(S: number, base: THREE.Color, accent: THREE.Color, 
   const bar = accent.clone().lerp(base, 0.2).multiplyScalar(0.42);
   const pale = base.clone().lerp(new THREE.Color(0.95, 0.92, 0.84), 0.6);
   const colourAt = (t: number) => tailBandAt(t, tail, bar, pale, barred);
-  for (let i = 0; i < N; i++) {
+  for (let i = 0; i < (part === 'coverts' ? 0 : N); i++) {
     const t = i / (N - 1);
     const ang = (t - 0.5) * 2 * TAIL_SPREAD;
     // …in a shallow trough, the outer feathers lifted to either side as a resting tail's layers lie:
@@ -720,8 +782,10 @@ export function buildTailFan(S: number, base: THREE.Color, accent: THREE.Color, 
       }
     }
   };
-  hood(1, COVERT_REACH, 0.16, base.clone().multiplyScalar(0.96), 0.04);
-  hood(-1, COVERT_REACH * 0.9, 0.13, base.clone().lerp(pale, 0.15), -0.005);
+  if (part !== 'fan') {
+    hood(1, COVERT_REACH, 0.16, base.clone().multiplyScalar(0.96), 0.04);
+    hood(-1, COVERT_REACH * 0.9, 0.13, base.clone().lerp(pale, 0.15), -0.005);
+  }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
@@ -785,6 +849,13 @@ export const FISH_TAIL: readonly [number, number] = [0.16, 0.66];
  */
 export type FinCut = 'plain' | 'fish' | 'shark';
 
+/** A BONY FISH's pectoral roots on a short line up its flank behind the gill cover, and its paddle fans
+ *  back from it along the fin's aim, standing off the flank by the aim's outward lean. (Its chord run back
+ *  along the body like a shark's, squared against an aim that is itself laid back 45-60 degrees — the
+ *  fish row's pectoralEl — turned in and up into the body: the paddle lay as a shelf facing the sky, half
+ *  of it under the skin, the half that showed lit white by the key light — a paper tag on the flank.) */
+export const FISH_PECTORAL_ROOT = new THREE.Vector3(0, 1, 0);
+
 export function finCutOf(style: number): FinCut {
   return style < 0.3 ? 'plain' : style < 0.6 ? 'fish' : 'shark';
 }
@@ -812,9 +883,10 @@ export function finKindOf(aim: THREE.Vector3, partKind: string | undefined): Fin
 }
 
 /** The direction a fin's chord runs: back along the body, squared off against the fin's aim (a
- *  caudal fin's chord stands vertical). */
-export function finChord(kind: FinKind, aim: THREE.Vector3): THREE.Vector3 {
-  let chord = kind === 'caudal' ? v3(0, 1, 0) : v3(0, 0, -1);
+ *  caudal fin's chord stands vertical). A bony fish's pectoral roots on a line up its flank instead
+ *  (see FISH_PECTORAL_ROOT). */
+export function finChord(kind: FinKind, aim: THREE.Vector3, cut: FinCut = 'plain'): THREE.Vector3 {
+  let chord = kind === 'caudal' ? v3(0, 1, 0) : kind === 'pectoral' && cut === 'fish' ? FISH_PECTORAL_ROOT.clone() : v3(0, 0, -1);
   chord.addScaledVector(aim, -chord.dot(aim));
   if (chord.lengthSq() < 1e-6) chord = v3(0, 1, 0).addScaledVector(aim, -aim.y);
   return chord.normalize();
@@ -827,10 +899,26 @@ export function finChord(kind: FinKind, aim: THREE.Vector3): THREE.Vector3 {
  * fan, never the old billboards whose chord inherited an arbitrary axis from the growth quaternion.
  * Origin at the fin root (on the skin); the root edge tucks a little into the body.
  */
+/**
+ * A SHARK's pectoral is a hydrofoil, not a sheet: it meets the water nose up — its chord pitched SHARK_PECTORAL
+ * .pitch (rad) about its span, the trailing edge down — and it is thick at the root, SHARK_PECTORAL.thick × the
+ * girth either side of its mid-plane at the root, thinning to SHARK_PECTORAL.tip of that at the tip. (A flat
+ * sheet edge-on to the front, from ahead it was two needles a fiftieth of a girth thick stuck in a ball.)
+ */
+export const SHARK_PECTORAL = { pitch: 0.2, thick: 0.08, tip: 0.25 } as const;
+
 export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 1, cut: FinCut = 'plain', root?: (along: number) => number): FinBuild {
   const aim = aimIn.clone().normalize();
-  const chord = finChord(kind, aim);
+  const chord = finChord(kind, aim, cut);
+  const foil = cut === 'shark' && kind === 'pectoral';
+  if (foil) {
+    // pitched nose up: the chord (running back) turned about the span toward the side under the fin
+    const under = new THREE.Vector3().crossVectors(aim, chord).normalize();
+    if (under.y > 0) under.negate();
+    chord.multiplyScalar(Math.cos(SHARK_PECTORAL.pitch)).addScaledVector(under, Math.sin(SHARK_PECTORAL.pitch)).normalize();
+  }
   const normal = new THREE.Vector3().crossVectors(aim, chord).normalize();
+  if (foil && normal.y < 0) normal.negate(); // (a foil's camber bows up, on either side)
   const k = Math.min(1.5, Math.max(0.6, gene));
   // [span, chord, sweep (how far back the tip rakes, ×chord)] per kind, × girth
   const PLAIN: Record<FinKind, [number, number, number]> = {
@@ -993,6 +1081,24 @@ export function buildFin(kind: FinKind, aimIn: THREE.Vector3, g: number, gene = 
   for (let i = 0; i < outline.length - 1; i++) {
     const mi = base + i, mj = base + i + 1, oi = 1 + i, oj = 2 + i;
     idx.push(0, mi, mj, mi, oi, oj, mi, oj, mj);
+  }
+  if (foil) {
+    // a foil: the camber ring raised by the fin's thickness over its mid-plane, and a second ring as far
+    // under it, both thinning out toward the tip; the outline is the edge where the two skins meet
+    const T = SHARK_PECTORAL.thick * g;
+    const lower = base + outline.length;
+    outline.forEach((o, i) => {
+      const t = T * (1 - (1 - SHARK_PECTORAL.tip) * Math.min(1, Math.max(0, o.dot(aim) / H)));
+      pos[(base + i) * 3] += normal.x * t;
+      pos[(base + i) * 3 + 1] += normal.y * t;
+      pos[(base + i) * 3 + 2] += normal.z * t;
+      const m = hub.clone().lerp(o, 0.55).addScaledVector(normal, -t);
+      pos.push(m.x, m.y, m.z);
+    });
+    for (let i = 0; i < outline.length - 1; i++) {
+      const mi = lower + i, mj = lower + i + 1, oi = 1 + i, oj = 2 + i;
+      idx.push(0, mj, mi, mi, oj, oi, mi, mj, oj);
+    }
   }
   const membrane = new THREE.BufferGeometry();
   membrane.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));

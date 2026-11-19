@@ -17,9 +17,10 @@ import { grow, type Phenotype } from '../engine/grow';
 import { encodeGenome } from '../engine/share';
 import { CreatureMesh } from './CreatureMesh';
 import { StudioEnvironment } from './StudioEnvironment';
-import { KeepPrograms } from './programs';
+import { KeepPrograms, shadersSettled } from './programs';
 import { framingOf } from './framing';
 import { LidContext } from './eyelids';
+import { getQuality } from '../ui/settings';
 
 /** eyes open, no blink: a still must not catch the lids half shut */
 const AWAKE = { shut: 0, blink: false };
@@ -29,16 +30,23 @@ const H = 132;
 let root: ReturnType<typeof createRoot> | null = null;
 let canvas: HTMLCanvasElement | null = null;
 
-function Scene({ phenotype, onReady }: { phenotype: Phenotype; onReady: (draw: () => void) => void }) {
+function Scene({ phenotype, onReady }: { phenotype: Phenotype; onReady: (draw: () => Promise<void>) => void }) {
   const f = framingOf(phenotype);
   const d = f.size * 1.7;
   const c = f.center;
   const advance = useThree((s) => s.advance);
+  const gl = useThree((s) => s.gl);
   useEffect(() => {
     // the skin is built synchronously during render; give effects a tick to land, then draw
-    const t = setTimeout(() => onReady(() => advance(performance.now())), 30);
+    // (…and where a program the creature needs is still being built, the draw leaves it out — see
+    // guardDraws — so the portrait is drawn again once it is)
+    const draw = async () => {
+      advance(performance.now());
+      if (await shadersSettled(gl)) advance(performance.now());
+    };
+    const t = setTimeout(() => onReady(draw), 30);
     return () => clearTimeout(t);
-  }, [onReady, advance]);
+  }, [onReady, advance, gl]);
   return (
     <>
       <PerspectiveCamera
@@ -56,7 +64,8 @@ function Scene({ phenotype, onReady }: { phenotype: Phenotype; onReady: (draw: (
       <directionalLight position={[f.size, f.size * 1.6, f.size]} intensity={1.15} />
       <group position={[-c[0], -c[1], -c[2]]}>
         <LidContext.Provider value={AWAKE}>
-          <CreatureMesh phenotype={phenotype} skinMode="hybrid" quality="low" fur />
+          {/* (the shells of fur are a graphics option here as on the stage: none at low creature detail) */}
+          <CreatureMesh phenotype={phenotype} skinMode="hybrid" quality="low" fur={getQuality().furShells} />
         </LidContext.Provider>
       </group>
     </>
@@ -78,8 +87,8 @@ function render(phenotype: Phenotype): Promise<string> {
     });
   }
   return new Promise<string>((resolve) => {
-    const done = (draw: () => void) => {
-      draw();
+    const done = async (draw: () => Promise<void>) => {
+      await draw();
       // encoded off the main thread (toDataURL encodes the PNG synchronously, in the middle of
       // whatever the page is doing — a World's first seconds)
       canvas!.toBlob((b) => resolve(b ? URL.createObjectURL(b) : canvas!.toDataURL('image/png')), 'image/png');

@@ -15,6 +15,7 @@ import type { Phenotype } from '../../engine/grow';
 import type { Carve } from '../bodyField';
 import type { MeshFeature } from '../meshData';
 import type { SkinSurface } from '../mouthLine';
+import type { SkinQuality } from '../smoothSkin';
 import { mouthVariant } from '../partStyles';
 import { JawedMouth, type JawedVariant } from './jawed';
 import { RingMouth } from './ring';
@@ -30,22 +31,26 @@ export function Mouth({
   carves,
   recessed,
   surface = 'kit',
+  quality = 'high',
   skin,
+  fur,
 }: {
   f: MeshFeature;
   dark: number;
   skin?: THREE.Material; // the body's covering material (a mammal's jaw wears it)
+  fur?: readonly THREE.Material[]; // …and its fur shells (a cat's whisker pads wear them)
   phenotype: Phenotype;
   carves: readonly Carve[];
   recessed: boolean;
   surface?: SkinSurface;
+  quality?: SkinQuality; // the skin's (a crocodile's seam is laid on the skin as drawn at it)
 }) {
   const v = mouthVariant(f.style);
   const shared = { f, phenotype, carves, recessed, surface, dark } as const;
   if (v === 'herbivore' || v === 'maw' || v === 'fanged') {
     // the old fanged band split hinged (style < 0.22) vs underbite — kept as a parameter flip
     const variant: JawedVariant = v === 'fanged' && f.style >= 0.22 ? 'underbite' : v;
-    return <JawedMouth {...shared} variant={variant} skin={skin} />;
+    return <JawedMouth {...shared} variant={variant} skin={skin} fur={fur} quality={quality} />;
   }
   if (v === 'beak') return <BeakMouth {...shared} />;
   if (v === 'mandibles') return <MandiblesMouth {...shared} />;

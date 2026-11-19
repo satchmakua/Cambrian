@@ -22,6 +22,10 @@ const SEAT_MAX_SINK = 2.0;
 export const SEAT_DEPTH = 0.52;
 /** …and a frog's: its eyes bulge from the crown, half the ball proud */
 export const BULGE_DEPTH = 0.06;
+/** …and an octopus's (a radial body's slit eye): raised on the side of its head in a turret of its own
+ *  skin — its round lids — most of the ball proud. (Seated a third out like a mammal's, flush in the
+ *  mantle, it was a pale disc with a dark bar across it: a mouth.) */
+export const TURRET_DEPTH = 0.2;
 /** …and an insect's compound eye: a low dome on the side of its head, most of the ball under the
  *  cuticle. (Stood on its node unseated, riding proud of the head, it was a black marble bolted on.) */
 export const COMPOUND_DEPTH = 0.4;
@@ -122,7 +126,8 @@ export function eyeSeat(p: Phenotype, idx: number, quat0: readonly number[], r: 
   const ev = eyeVariant(p.nodes[idx].part?.style ?? 0.5);
   const ocellus = isOcellus(p, idx);
   const bulge = !ocellus && ev !== 'compound' && ev !== 'glowing' && bulgingEye(p, aim);
-  const depth = ocellus ? OCELLUS_DEPTH : ev === 'compound' || ev === 'glowing' ? COMPOUND_DEPTH : bulge ? BULGE_DEPTH : SEAT_DEPTH;
+  const turret = ev === 'slit' && p.genomeRef.symmetry === 'radial';
+  const depth = ocellus ? OCELLUS_DEPTH : ev === 'compound' || ev === 'glowing' ? COMPOUND_DEPTH : bulge ? BULGE_DEPTH : turret ? TURRET_DEPTH : SEAT_DEPTH;
   // Seated by the SKIN along its aim, not by the field's value: on a flattened section the field is no distance
   // (ellipticConeDist scales it by the section's smaller axis, so across the wide one it under-reads), and marched
   // to a field of −depth·r an eye on the side of a flat skull sank depth × its width-to-height: a snake's (1.85 : 1)

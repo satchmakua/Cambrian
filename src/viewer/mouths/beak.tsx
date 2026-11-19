@@ -115,9 +115,20 @@ export function buildBeak(
   // along the mouth aim itself (pitched ~40° down to seat the maw on the face front) the mandibles
   // pointed at the ground.
   const fwd = qRotateV(spec.anchor.quat, [0, 0, 1]);
-  const dir = norm3([fwd[0] * 0.86 + spec.aim[0] * 0.14, fwd[1] * 0.86 + spec.aim[1] * 0.14, fwd[2] * 0.86 + spec.aim[2] * 0.14]);
+  let dir = norm3([fwd[0] * 0.86 + spec.aim[0] * 0.14, fwd[1] * 0.86 + spec.aim[1] * 0.14, fwd[2] * 0.86 + spec.aim[2] * 0.14]);
   const ud = spec.up[0] * dir[0] + spec.up[1] * dir[1] + spec.up[2] * dir[2];
-  const bup = norm3([spec.up[0] - dir[0] * ud, spec.up[1] - dir[1] * ud, spec.up[2] - dir[2] * ud], [0, 1, 0]);
+  let bup = norm3([spec.up[0] - dir[0] * ud, spec.up[1] - dir[1] * ud, spec.up[2] - dir[2] * ud], [0, 1, 0]);
+  // A bird of prey's bill leaves its face with the culmen running out level, rising a little, and only
+  // then hooks down. (Laid along the head's forward and hooked by near its own length, it fell forty
+  // degrees from its root and hung its point under the chin: from in front, where its run out ahead is
+  // lost, a dark dagger hung below the eye.) A cephalopod's hooked beak keeps its line.
+  const raptorial = hooked && phenotype.genomeRef.covering.type === 'feathers';
+  if (raptorial) {
+    const c = Math.cos(HOOKED_PITCH), sn = Math.sin(HOOKED_PITCH);
+    const lifted = norm3([dir[0] * c + bup[0] * sn, dir[1] * c + bup[1] * sn, dir[2] * c + bup[2] * sn]);
+    bup = norm3([bup[0] * c - dir[0] * sn, bup[1] * c - dir[1] * sn, bup[2] * c - dir[2] * sn]);
+    dir = lifted;
+  }
 
   // both mandibles root behind the skin (the wide base emerges through the face), the upper above the
   // seat and the lower below it, so together they read as one closed cone. The whole bill rides UP the
@@ -130,7 +141,13 @@ export function buildBeak(
   const baseL: Vec3 = [c0.p[0] - bup[0] * (0.2 * r - lift) - dir[0] * back * 0.9, c0.p[1] - bup[1] * (0.2 * r - lift) - dir[1] * back * 0.9, c0.p[2] - bup[2] * (0.2 * r - lift) - dir[2] * back * 0.9];
   void cu;
   void cl;
-  const upperPathW = loftPath(baseU, dir, upperLen, bup, (u) => hook * Math.pow(u, hookCurve));
+  // A broad bill is a smooth horn spoon: rings sampled ever closer toward its end, so the round of its tip is
+  // drawn round, and more of them round its section. (Nine even rings and ten round each, its spoon's end was
+  // two straight cuts — a chamfered card — and the sides of its flat section a hard ridge.)
+  const rings = broad ? BROAD_BILL.rings : 9;
+  const radial = broad ? BROAD_BILL.radial : 10;
+  const warp = broad ? (s: number) => Math.sin((Math.PI / 2) * s) : (s: number) => s;
+  const upperPathW = loftPath(baseU, dir, upperLen, bup, (u) => hook * Math.pow(u, hookCurve), rings, warp);
   // the lower mandible rests closed under the upper (a hair of gape, so the bill reads as two parts)
   const phi = 0.07;
   const dirL = norm3([
@@ -150,9 +167,24 @@ export function buildBeak(
   const flatL = (u: number) => Math.min(0.9, BROAD_BILL.depth * 0.6 * (1 - BROAD_BILL.taper * u) * blunt(u));
   const k = lowerLen / upperLen;
   const sep = (u: number) => 0.85 * upperR0 * (spoon(u) * flatU(u) + 0.86 * spoon(u / k) * flatL(u / k));
-  const lowerPathW = broad
-    ? loftPath([baseU[0] - bup[0] * sep(0), baseU[1] - bup[1] * sep(0), baseU[2] - bup[2] * sep(0)], dir, lowerLen, bup, (u) => hook * Math.pow(u * k, hookCurve) + sep(u * k) - sep(0))
-    : loftPath(baseL, dirL, lowerLen, bup, () => 0);
+  // A songbird's slim bill is SHUT: the lower mandible runs from its root to the upper's underside, its
+  // tip tucked a hair inside the upper's (see SLIM_SHUT). (Pitched down on its own line, it parted from
+  // the upper two thirds of the way along and ended a third of the mouth's size below it: a gaping bill,
+  // a cracked one, a drooping lower lip.)
+  const slimShut = !shelled && !hooked && !broad && phenotype.genomeRef.covering.type === 'feathers';
+  let lowerPathW: Vec3[];
+  if (broad) {
+    lowerPathW = loftPath([baseU[0] - bup[0] * sep(0), baseU[1] - bup[1] * sep(0), baseU[2] - bup[2] * sep(0)], dir, lowerLen, bup, (u) => hook * Math.pow(u * k, hookCurve) + sep(u * k) - sep(0), rings, warp);
+  } else if (slimShut) {
+    // the upper's underside where the lower ends: its spine there, dropped by its radius and the lower's tip
+    const below = upperR0 * Math.pow(1 - k, 0.95) + r * (0.025 - SLIM_SHUT);
+    const hk = hook * Math.pow(k, hookCurve);
+    const T: Vec3 = [0, 1, 2].map((i) => baseU[i] + dir[i] * upperLen * k - bup[i] * (hk + below)) as Vec3;
+    const dL: Vec3 = [T[0] - baseL[0], T[1] - baseL[1], T[2] - baseL[2]];
+    lowerPathW = loftPath(baseL, norm3(dL), Math.hypot(dL[0], dL[1], dL[2]), bup, () => 0);
+  } else {
+    lowerPathW = loftPath(baseL, dirL, lowerLen, bup, () => 0);
+  }
 
   const rel = (v: Vec3): Vec3 => [v[0] - o[0], v[1] - o[1], v[2] - o[2]];
   const ring = ringW.map((s) => ({ ...s, p: rel(s.p) }));
@@ -169,6 +201,9 @@ export function buildBeak(
   // A TURTLE's is the other way about: a wide low sheath across the front of its jaws. (Stood on edge
   // like a bird's, and too short to read as a bill, it was a black slot down the middle of the face.)
   const flatN = shelled || broad ? bup : spec.right;
+  // (a hawk's bill is broad where it leaves the face, its gape wide under the eyes, and pressed into a
+  // blade only toward the hook: compressed all its length, from in front it was a dagger)
+  const hawkWidth = (u: number) => HOOKED_ROOT_WIDTH + (HOOKED_WIDTH - HOOKED_ROOT_WIDTH) * Math.min(1, u / 0.85);
   // (a broad bill keeps its width to near its tip and rounds off there, a spoon's end — see spoon above —
   // and thins as it goes: deep at its root, a flat spatula at its tip)
   const upper = sweepTube(
@@ -177,17 +212,19 @@ export function buildBeak(
     // left no depth for the hook to turn down from)
     // (a hooked bill is compressed but solid — over half as wide as it is deep: at a third, from the front
     // it was a needle, from the side a blade)
-    { radius: (u) => Math.max(r * 0.03, upperR0 * (hooked ? 1 - Math.pow(u, 1.5) : broad ? spoon(u) : Math.pow(1 - u, 0.95))), flatten: shelled ? 0.42 : hooked ? HOOKED_WIDTH : 0.3 + 0.2 * sPos, flattenAt: broad ? flatU : undefined, radialSegments: 10 },
+    // (a songbird's shut bill is a finch's cone, near as wide as it is deep: pressed to under half its depth,
+    // from in front it was a sliver and from three-quarters a flat cream card stuck on the face)
+    { radius: (u) => Math.max(r * 0.03, upperR0 * (hooked ? 1 - Math.pow(u, 1.5) : broad ? spoon(warp(u)) : Math.pow(1 - u, 0.95))), flatten: shelled ? 0.42 : hooked ? HOOKED_WIDTH : slimShut ? SLIM_WIDTH : 0.3 + 0.2 * sPos, flattenAt: broad ? (u) => flatU(warp(u)) : raptorial ? hawkWidth : undefined, evenTurn: broad, radialSegments: radial },
   );
   const lower = sweepTube(
     lowerPath.map((p) => ({ p, n: flatN })),
-    { radius: (u) => Math.max(r * 0.025, upperR0 * (broad ? 0.86 * spoon(u) : 0.72 * Math.pow(1 - u, 1.05))), flatten: shelled ? 0.42 : hooked ? HOOKED_WIDTH * 0.9 : 0.3, flattenAt: broad ? flatL : undefined, radialSegments: 10 },
+    { radius: (u) => Math.max(r * 0.025, upperR0 * (broad ? 0.86 * spoon(warp(u)) : 0.72 * Math.pow(1 - u, 1.05))), flatten: shelled ? 0.42 : hooked ? HOOKED_WIDTH * 0.9 : slimShut ? SLIM_WIDTH : 0.3, flattenAt: broad ? (u) => flatL(warp(u)) : raptorial ? (u) => 0.9 * hawkWidth(u) : undefined, evenTurn: broad, radialSegments: radial },
   );
   // the buried root stays buried: where a ring's spine point is still inside the head, any of its
   // vertices that poke out are drawn back under the skin. (A tall blade-bill rooted up the face stood
   // its root's top edge out above a sloping brow — a plate fixed upright on the forehead.)
-  sinkRoot(upper, upperPathW, o, f, carves, 10, r);
-  sinkRoot(lower, lowerPathW, o, f, carves, 10, r);
+  sinkRoot(upper, upperPathW, o, f, carves, radial, r);
+  sinkRoot(lower, lowerPathW, o, f, carves, radial, r);
   if (hooked) {
     // painted by how far along the bill a vertex lies: a band of bare yellow skin where the bill leaves
     // the face (a hawk's cere), then blue-grey horn darkening to the hook. (Painted from the bill's
@@ -213,19 +250,23 @@ export function buildBeak(
   // a hair proud (+0.012r..0.015r) otherwise so the dark backdrop never hides inside the body
   const w = Math.max(0.1 * r, ringR * 0.5);
   const h = Math.max(0.08 * r, 0.45 * Math.hypot(cu[0] - cl[0], cu[1] - cl[1], cu[2] - cl[2]));
-  // (a broad bill is shut, its gape a line down its side: its dark wedge stays under the skin)
-  const rimInset = recessed || broad ? -0.3 * r : 0.015 * r;
-  const centerInset = recessed || broad ? -0.65 * r : 0.012 * r;
+  // (a broad bill is shut, its gape a line down its side: its dark wedge stays under the skin — and so does
+  // a songbird's shut slim bill's: laid flat on the face under the bill's lifted root, its corners stood out
+  // of the cheek behind the bill, a black spike)
+  const shut = broad || slimShut;
+  const rimInset = recessed || shut ? -0.3 * r : 0.015 * r;
+  const centerInset = recessed || shut ? -0.65 * r : 0.012 * r;
   const interior = interiorWedge(seat.p, seat.n, spec.right, spec.up, w, h, rimInset, centerInset);
 
   return { spec, r, collar, upper, lower, interior, ring, seat, upperPath, lowerPath, upperLen, lowerLen, hook, hooked, dir, up: bup };
 }
 
-/** Loft spine: `len` forward along `dir` from `base`, pulled down along `up` by `drop(u)`. */
-function loftPath(base: Vec3, dir: Vec3, len: number, up: Vec3, drop: (u: number) => number, k = 9): Vec3[] {
+/** Loft spine: `len` forward along `dir` from `base`, pulled down along `up` by `drop(u)`; its `k` samples
+ *  lie at `warp(i / (k - 1))` of the way along (evenly, by default). */
+function loftPath(base: Vec3, dir: Vec3, len: number, up: Vec3, drop: (u: number) => number, k = 9, warp: (s: number) => number = (s) => s): Vec3[] {
   const pts: Vec3[] = [];
   for (let i = 0; i < k; i++) {
-    const u = i / (k - 1);
+    const u = warp(i / (k - 1));
     const d = drop(u);
     pts.push([
       base[0] + dir[0] * len * u - up[0] * d,
@@ -338,9 +379,19 @@ const BILL_GREY = new THREE.Color(0x4c535e);
 const BILL_TIP = new THREE.Color(0x1d1f23);
 /** a hooked bill's width against its depth */
 const HOOKED_WIDTH = 0.55;
+/** …and a bird's, where it leaves the face: near as wide as it is deep */
+export const HOOKED_ROOT_WIDTH = 0.9;
+/** how far a bird's hooked bill is pitched up off the head's forward before it hooks down (rad) */
+export const HOOKED_PITCH = 0.3;
+/** how far a shut slim bill's lower mandible tucks its tip inside the upper's underside (× the mouth's radius) */
+export const SLIM_SHUT = 0.04;
+/** a shut slim (songbird's) bill's width against its depth: a finch's cone, not a blade on edge */
+export const SLIM_WIDTH = 0.8;
 /** a flightless bird's broad flat bill: its root's half-width (× the mouth's radius), its depth (× its
- *  width) and how far its tip droops */
-export const BROAD_BILL = { root: 0.6, depth: 0.42, hook: 0.25, len: 2.25, taper: 0.4 };
+ *  width) and how much of that it loses by its tip, how far its tip droops, its length, and the rings along
+ *  it and round it. (At a depth of 0.42 its root was a fifth of the head's height: a card stuck on the face,
+ *  not a bill growing out of it; deep at its root and thin at its tip, it is an ostrich's.) */
+export const BROAD_BILL = { root: 0.6, depth: 0.62, hook: 0.25, len: 2.25, taper: 0.55, rings: 17, radial: 16 };
 
 function smooth(a: number, b: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));

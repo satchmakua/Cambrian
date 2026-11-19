@@ -125,12 +125,13 @@ describe('body field chains', () => {
       const p = grow(genomeOfMorphotype(seed, 'canid'));
       expect(bridgeOf(p), `canid #${seed}`).not.toBeNull();
       const j = jawOf(p)!;
-      const c = p.nodes[j.i0], t = p.nodes[j.i1];
+      const c = p.nodes[j.i0];
       const m = p.nodes[p.edges.find(([a, b]) => a === j.i0 && p.nodes[b].kind === 'spine')![1]];
       const prims = buildFieldPrims(p, 'hybrid');
-      // the top line where the stop was, under half-way from the braincase to the nose: the bridge lifts
-      // the skin there well over where it dipped without it (the bridge is the field's last cone)
-      const q = [0, 1, 2].map((k) => c.pos[k] + (t.pos[k] - c.pos[k]) * 0.45);
+      // the top line where the stop is, just ahead of the muzzle's first link: the bridge lifts the skin
+      // there well over where it dipped without it (the bridge is the field's last cone). (Sampled at a
+      // share of the way to the nose, it fell past the bridge's end once the muzzle ran its full length.)
+      const q = [0, 1, 2].map((k) => c.pos[k] + (m.pos[k] - c.pos[k]) * 1.1);
       const top = (f: typeof prims) => {
         let s = 0;
         while (s < 2 && fieldAt(f, q[0], q[1] + s, q[2]) < 0) s += 0.002;
@@ -161,7 +162,7 @@ describe('body field chains', () => {
     }
   });
 
-  it("a slug wears a mantle over the front of its back: proud of the back, its rim standing off the flanks", () => {
+  it("a slug wears a mantle over the front of its back: proud of the back, lapping down over its flanks", () => {
     // (with none, a slug was a glossy teardrop: an aubergine with feelers)
     for (let seed = 1; seed <= 8; seed++) {
       const p = grow(genomeOfMorphotype(seed, 'slime'));
@@ -195,7 +196,12 @@ describe('body field chains', () => {
         }
         return lo;
       };
-      expect(side(prims) - side(bare), `#${seed} its rim off the flank`).toBeGreaterThan(0.04 * m.r[0]);
+      // …down over the flank, but standing off it no further than it stands over the back: a saddle, not a
+      // brim (flatter and wider than the body, its rim stood out three times as far: two flaps from the front)
+      const off = side(prims) - side(bare);
+      const over = above(prims, 0, m.c[2]) - above(bare, 0, m.c[2]);
+      expect(off, `#${seed} over the flank`).toBeGreaterThan(0.005 * m.r[0]);
+      expect(off / over, `#${seed} no brim`).toBeLessThan(1.4);
     }
     // a slime body without feelers (an octopus) and anything else wears none
     expect(slugMantle(grow(genomeOfMorphotype(23, 'cephalopod')))).toBeNull();

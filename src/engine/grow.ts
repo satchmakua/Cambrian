@@ -59,6 +59,20 @@ const RING_CLEARANCE = 0.7;
  *  that far above the ground and the point — a hard spike the viewer draws — stands on it. */
 const RING_POINT = 0.5;
 
+/** A WALKING SPRAWLER's limb (a lizard's, a crocodile's): the upper limb runs out of the flank near level
+ *  — its elbow or knee a touch above the shoulder (rise per unit run) and SPRAWL_UPPER ×the gene's link
+ *  length out — the forearm or shin drops near plumb from it (its run per unit fall) just as far as
+ *  brings the foot to SPRAWL_FLOOR ×the trunk's mean radius under the lowest belly, and on a three-link
+ *  leg the foot runs on out along the ground (SPRAWL_FOOT: its length ×the link, its fall per unit run).
+ *  (Every link the gene's length, the forearm dropping as far as the upper arm reached, the shin and the
+ *  foot both falling: the elbow sat in the flank's swell, a two-link leg was stretched plumb to the
+ *  floor of a three-link one, and the body stood high on four posts — a push-up, not a sprawl.) */
+const SPRAWL_RISE = 0.12;
+const SPRAWL_UPPER = 1.4;
+const SPRAWL_SHIN_RUN = 0.2;
+const SPRAWL_FLOOR = 0.12;
+const SPRAWL_FOOT: readonly [number, number] = [0.6, 0.3];
+
 /** An eye stalk's links, ×the radius the eye's gene gives them. */
 const STALK_SLIM = 0.5;
 /** A claw-bearing arm's links (a crab's cheliped), ×the radius its gene gives them: the claw at its end
@@ -67,6 +81,20 @@ const STALK_SLIM = 0.5;
 export const CHELIPED_SLIM = 0.62;
 /** An eye stalk rises at least this steeply (the Y of its unit direction: about 51° above level). */
 const STALK_RISE = 0.78;
+
+/**
+ * A SLUG's FACE (a headless slime trunk whose eyes ride feelers: isSlug). Its feelers and its mouth root on
+ * its FRONT link whatever their slot says: on six links the slot's 0.85-0.98 rounded to the link behind the
+ * front for over a third of slugs (and their mouths for a third), their feelers standing up out of the middle
+ * of the mantle behind a blank dome.
+ * Under the feelers, on the front of its head, a shorter pair of LOWER TENTACLES grown from the feeler's own gene
+ * (no gene of their own, so no draw is added and nothing is bred for them): feelers without eyes, drawn as an
+ * antenna is (bodyField ANTENNA_SLIM: SLUG_FACE.thick × the feeler's girth comes out a little under its stalk's),
+ * SLUG_FACE.len × its link length on two links, aimed SLUG_FACE.el toward the front from the side and
+ * SLUG_FACE.az below it, bending SLUG_FACE.curl down. (Without them, and with its feelers behind the front, a
+ * slug's head end was a blank glossy dome: a bean.)
+ */
+export const SLUG_FACE = { len: 0.8, thick: 1.0, az: -0.15, el: 1.25, curl: 0.3 } as const;
 
 /** How far up the chest a fully raised neck roots (×the chest's half-depth above its axis). */
 const NECK_ROOT = 0.4;
@@ -94,6 +122,12 @@ const REARED_HIP_BACK = 0.34;
 
 /** How far on toward the trunk's end a hooved leg roots (×the trunk's radius there): see hoofSet. */
 const HOOF_SET = 0.55;
+/** …and a PAW-tipped leg of a runner's trunk under a dog's skull (see longStoppedSkull), its hips
+ *  and shoulders at the trunk's ends like a deer's — hung from the chain's end nodes' middles, the rump
+ *  stood out a quarter of the body behind the hocks and the chest as far ahead of the elbows */
+const PAW_SET = 0.55;
+/** (a dog's skull runs longer than this ×its girth, its muzzle included; a bear's is near 1) */
+const DOG_MUZZLE = 1.25;
 /** A GRAZER (a body on hooves: a deer, an antelope, a goat) carries its neck as one straight column from
  *  the top of its shoulders, lifted at its root by this many links' worth of the neck's bend, and grown
  *  straight from there (bent a little at every link, a neck of four or five rose from level out of the
@@ -105,6 +139,29 @@ const HEAD_BOW = 0.5;
 /** …and a hooved foreleg's cannon drops plumb from its knee: the wrist's forward fold (−0.32) is a paw's
  *  pastern, and on a leg whose third link is the cannon it slanted the whole lower leg 25° forward */
 const HOOF_KNEE = 0.12;
+/** …and a hooved HIND leg folds as a deer's does: its gaskin runs back from the stifle HOOF_GASKIN[0] rad off the
+ *  plumb, and HOOF_GASKIN[1] more per rad of its curl gene (the curl stays in its bound: this is grown, not
+ *  drawn), and its hock turns the cannon back to HOOF_CANNON rad forward of plumb. (On a paw's knee and hock —
+ *  ×2.15 and ×2.0 the curl — a deer's 0.12–0.28 curl ran its gaskin back 18–29° and the cannon on 6–13° forward:
+ *  a straight stilt bent a little, no hock to speak of.) */
+const HOOF_GASKIN: readonly [number, number] = [0.62, 0.6];
+const HOOF_CANNON = 0.05;
+/** An antenna's bend past ANTENNA_ELBOW_FROM (rad a link) is grown ANTENNA_ELBOW times over: the gene
+ *  stays within its curlPitch bound (0.6, which breeding, mutation and sharing clamp to), and an insect's
+ *  [0.55, 0.6] grows its elbowed feeler, 0.9–1.06 a link. Any |curl| under 0.4 (every random body's
+ *  feelers, an arthro-alien's) grows as it was. */
+const ANTENNA_ELBOW_FROM = 0.4;
+const ANTENNA_ELBOW = 2.3;
+/** A THEROPOD's small arm (a hand-tipped arm, not an ape's, its gene's curl NEGATIVE: bent up) folds at the elbow:
+ *  the upper arm swung down off its aim by THEROPOD_SHOULDER × the curl's size, the forearm brought back up by
+ *  THEROPOD_ELBOW × it — the upper arm down along the chest, the forearm held forward, the hand up under the chest.
+ *  (Bent alike at every joint, by a curl the gene's bound holds to 0.6, the arm was one gentle arc down and forward,
+ *  the hand hanging at the chest's underside: from the side and the front a second, shrivelled pair of legs.) */
+export const THEROPOD_SHOULDER = 0.6;
+export const THEROPOD_ELBOW = 2.0;
+/** …on a SHORT arm alone: its length × the trunk's girth, below which it folds fully and above which not at
+ *  all (a theropod's 0.39–0.51; an ape's 1.3–1.5) */
+const THEROPOD_ARM: readonly [number, number] = [0.8, 1.1];
 
 /** Minimum grown radius for an eye bulb (bu) — the face must always read (M19/M24). */
 const EYE_R_MIN = 0.06;
@@ -134,6 +191,35 @@ export const SCULL_STYLE = 0.8;
  *  deepest (three-fifths of the way down) */
 const SCULL_PINCH = 0.4;
 const SCULL_DEPTH = 0.35;
+/** A BONY FISH (a bilateral body with fins of a fish's cut — FISH_FIN of their style, see wings.finCutOf —
+ *  and no legs) has a snout that comes to a point: its head's last link is at most SNOUT_TIP of its first
+ *  link's radius, set forward by SNOUT_SLIDE of the girth it gives up, so the head keeps its length. (Three
+ *  links tapering at the gene's floor ended in a cap 0.36–0.49 of the head's depth: a round dome with a seam
+ *  across its front — a whale's, a dolphin's, a sock puppet's.) */
+export const SNOUT_TIP = 0.2;
+const SNOUT_SLIDE = 0.9;
+/** …and its tail stalk is flattened side to side toward the fin, PEDUNCLE_FLAT of its width at each link.
+ *  (Round to its end, the stalk's last link stood out either side of the fan's root as a knob.) */
+export const PEDUNCLE_FLAT: readonly [number, number] = [0.75, 0.45];
+const FISH_FIN: readonly [number, number] = [0.3, 0.6];
+/** does a body section (or one after it) carry a part of this kind (and, if given, a style in [lo, hi)) */
+function carries(seg: SegmentGene | undefined, kind: string, style?: readonly [number, number]): boolean {
+  for (let s = seg; s; s = s.child) if (s.appendages.some((a) => a.kind === kind && (!style || (a.style >= style[0] && a.style < style[1])))) return true;
+  return false;
+}
+/** whether a grown body is a BONY FISH's: bilateral, fins of a fish's cut, no legs (grow's own test of its
+ *  developed genome, read back off the nodes). The snout's point (grow), the lower jaw (bodyField fishJaw) and
+ *  the gape (mouthLine fishSeam) all key on it, so they come together: a lamprey, or a plated or chitin swimmer
+ *  whose fins are of another cut, gets none of them. */
+export function isBonyFish(p: Phenotype): boolean {
+  if (p.genomeRef.symmetry !== 'bilateral') return false;
+  let fins = false;
+  for (const n of p.nodes) {
+    if (n.part?.kind === 'leg') return false;
+    if (n.part?.kind === 'fin' && n.part.style >= FISH_FIN[0] && n.part.style < FISH_FIN[1]) fins = true;
+  }
+  return fins;
+}
 
 /** whether an appendage gene (or a grown node's part) is a sculling tail */
 export function isScullingTail(part: { kind: string; style: number } | undefined, terminal: Terminal | undefined): boolean {
@@ -176,6 +262,9 @@ export function muzzleShare(i: number, links: number, stop: number): number {
   return 1 - stop * (1 - STOP_MUZZLE * (1 - (1 - STOP_NOSE) * t));
 }
 const STOP_STRIDE = 0.62;
+/** the longest stride (×the head chain's girth) a stopped skull's muzzle links take — past the 1.4 every
+ *  other chain is held to (a muzzle's cones keep it whole: see growSegment) */
+const STOP_ELONG = 1.9;
 const STOP_LOW = 0.55;
 
 /** How much of a stop a head section has, `depth` sections out from the trunk: 0 a plain tapering
@@ -284,12 +373,17 @@ export function grow(genome: Genome): Phenotype {
   let ringedHere = false; // …and whether it is a myriapod's trunk of rings (see isRinged)
   let ringFloorHere = 0; // …and the ground its legs then reach down to
   let ringPoint = 0; // …and the length of the points they stand on (see RING_POINT)
+  let sprawlFloorHere = 0; // …and the ground a walking sprawler's feet reach down to (see SPRAWL_FLOOR)
   /** a body under a horn SHELL (a tortoise's: a carapace over a trunk not wearing an arthropod's chitin) */
   const shelled = dev.symmetry === 'bilateral' && genome.covering.type !== 'chitin' && dev.body.appendages.some((a) => a.terminal === 'carapace');
   /** a body that walks on its arms as well as its legs (an ape): its trunk carries a pair of hand-tipped arms */
   const armWalker = dev.symmetry === 'bilateral' && dev.body.appendages.some((a) => a.kind === 'arm' && a.terminal === 'hand' && a.pair);
   /** a body that stands on hooves (a deer): its neck is a straight column and its head bows (NECK_CARRY) */
   const grazer = dev.symmetry === 'bilateral' && dev.body.appendages.some((a) => a.kind === 'leg' && a.terminal === 'hoof');
+  /** a DOG's skull: a stop (see headStop) and a long muzzle — not a bear's short one (see PAW_SET) */
+  const dogSkull = dev.symmetry === 'bilateral' && longStoppedSkull(dev);
+  /** a bony fish: see SNOUT_TIP */
+  const bonyFish = dev.symmetry === 'bilateral' && carries(dev.body, 'fin', FISH_FIN) && !carries(dev.body, 'leg');
 
   growSegment(dev.body, [0, 0, 0], [0, 0, 0, 1], 0, -1, null);
 
@@ -330,7 +424,12 @@ export function grow(genome: Genome): Phenotype {
     // 1.4, and that excess was simply discarded, so every muzzle came out stubby. Recover it as a
     // z-stretch on the node ellipsoid: the stride — and so continuity — is untouched, but the segment
     // finally reads as long as the genome asked. Unclamped segments get 1 (no change).
-    const csz = Math.min(1.9, Math.max(0.7, rawElong / elong));
+    // (a head with a stop — see headStop — carries a long muzzle's length in the muzzle's own stride,
+    // up to STOP_ELONG: stretched instead, its braincase grew as long as its muzzle, the eye stayed half way
+    // down the head and the muzzle a stub ahead of it, however long the genes asked for it)
+    const stop = !seg.child && dev.symmetry === 'bilateral' ? headStop(seg, depth) : 0;
+    const muzzleElong = stop > 0 ? lerp(elong, Math.min(STOP_ELONG, Math.max(elong, rawElong)), stop) : elong;
+    const csz = Math.min(1.9, Math.max(0.7, rawElong / muzzleElong));
     const segScale: Vec3 | undefined =
       Math.abs(csx - 1) > 0.02 || Math.abs(csy - 1) > 0.02 || Math.abs(csz - 1) > 0.02
         ? [csx, csy, csz]
@@ -429,8 +528,7 @@ export function grow(genome: Genome): Phenotype {
       pos = [wPos[0] + fwd[0] * cAt, wPos[1] + fwd[1] * cAt, wPos[2] + fwd[2] * cAt];
     }
 
-    // (a head — the chain's last section — may have a stop: see headStop)
-    const stop = !seg.child && dev.symmetry === 'bilateral' ? headStop(seg, depth) : 0;
+    // (a head — the chain's last section — may have a stop: see headStop, above)
     // (…its muzzle broad at the stop and narrowing to the nose: see muzzleShare; a myriapod's rings draw
     // in to its rump: see isRinged)
     // (…and a slitherer's trunk draws in to its neck: see NECK_PINCH)
@@ -488,7 +586,7 @@ export function grow(genome: Genome): Phenotype {
       if (stop > 0) {
         // the muzzle's links stride by the chain's measure, not their own slimmer one (it keeps the
         // length its genes asked for); the first is drawn in against the braincase
-        step = i === 0 ? step * (1 - stop * (1 - STOP_STRIDE)) : girth * Math.pow(seg.taper, i) * elong;
+        step = i === 0 ? step * (1 - stop * (1 - STOP_STRIDE)) : girth * Math.pow(seg.taper, i) * muzzleElong;
       }
       if (ringed && (i + 1 < seg.repeat || seg.child) && !atCap()) {
         const fore = radius * RING_RIM[1];
@@ -511,6 +609,18 @@ export function grow(genome: Genome): Phenotype {
       }
     }
 
+    // (a bony fish's snout comes to a point: see SNOUT_TIP)
+    if (bonyFish && depth > 0 && !seg.child && spine.length >= 3) {
+      const t = nodes[spine[spine.length - 1]];
+      const cap = SNOUT_TIP * nodes[spine[0]].radius;
+      if (t.radius > cap) {
+        const fwd = qRotate([0, 0, 1], t.quat);
+        const slide = SNOUT_SLIDE * (t.radius - cap) * (t.scale?.[2] ?? 1);
+        t.pos = [t.pos[0] + fwd[0] * slide, t.pos[1] + fwd[1] * slide, t.pos[2] + fwd[2] * slide];
+        t.radius = cap;
+      }
+    }
+
     const haunched = new Set<number>();
     legGenesHere = seg.appendages.filter((a) => a.kind === 'leg');
     legPairsHere = legGenesHere.length;
@@ -530,10 +640,25 @@ export function grow(genome: Genome): Phenotype {
       }
       ringFloorHere = belly - RING_CLEARANCE * mean;
       ringPoint = RING_POINT * mean;
+    } else if (sprawlHere && !shelled) {
+      // a walking sprawler's feet all reach the same floor, just under its lowest belly — as it will be
+      // once its shoulders and hips have swollen (see the haunch, below)
+      const hips = new Set(legGenesHere.map((a) => spine[clampInt(Math.round(a.attachT * (spine.length - 1)), 0, spine.length - 1)]));
+      let belly = Infinity;
+      let mean = 0;
+      for (const i of spine) {
+        const n = nodes[i];
+        const swell = hips.has(i) ? Math.min(n.radius * 1.12, n.radius + 0.2) / n.radius : 1;
+        belly = Math.min(belly, n.pos[1] - nodeReach(n)[1] * swell);
+        mean += n.radius / spine.length;
+      }
+      sprawlFloorHere = belly - SPRAWL_FLOOR * mean;
     }
+    // (a slug's face is its front link's: see SLUG_FACE)
+    const slug = dev.symmetry === 'bilateral' && dev.covering.type === 'slime' && isSlug(seg, depth) ? slugFeeler(seg) : undefined;
     for (const app of seg.appendages) {
       if (atCap()) break;
-      const ai = clampInt(Math.round(app.attachT * (spine.length - 1)), 0, spine.length - 1);
+      const ai = slug && (app.terminal === 'eye' || app.terminal === 'mouth') ? spine.length - 1 : clampInt(Math.round(app.attachT * (spine.length - 1)), 0, spine.length - 1);
       // shoulder / haunch: legs thicken the spine node they attach to, giving the body muscular
       // structure instead of a uniform tube. Once per node: on a short trunk several leg pairs share
       // a node, and compounding ×1.22 per pair swelled a spider's 1–2 node body into a giant ball.
@@ -550,9 +675,11 @@ export function grow(genome: Genome): Phenotype {
       // Legs ride the CHAIN, not the nearest node: the slot is interpolated between neighbouring spine
       // nodes (and extrapolated past a 1-node trunk's ends), so a hexapod's or a spider's legs spread
       // fore-aft along the body instead of collapsing onto the same one or two nodes.
-      if (app.kind === 'leg' && dev.symmetry !== 'radial') growAppendage(app, spine[ai], hoofSet(app, chainBase(spine, app.attachT), spine));
+      if (app.kind === 'leg' && dev.symmetry !== 'radial') growAppendage(app, spine[ai], hoofSet(app, chainBase(spine, app.attachT), spine, runner && dogSkull));
       else growAppendage(app, spine[ai]);
     }
+    // …and below its feelers, its LOWER TENTACLES (see SLUG_FACE)
+    if (slug && !atCap()) growAppendage(lowerTentacle(slug), spine[spine.length - 1]);
 
     if (seg.child && depth + 1 < DEPTH_MAX && !atCap()) {
       growSegment(seg.child, pos, quat, depth + 1, prev, seg);
@@ -590,13 +717,14 @@ export function grow(genome: Genome): Phenotype {
    * quadruped shares, a deer stood with its legs bunched under its middle, a barrel of a body
    * overhanging them at both ends: a barrel balanced on a trestle.)
    */
-  function hoofSet(app: AppendageGene, base: BodyNode, spine: number[]): BodyNode {
-    if (app.terminal !== 'hoof' || spine.length < 2) return base;
+  function hoofSet(app: AppendageGene, base: BodyNode, spine: number[], runner = false): BodyNode {
+    const set = app.terminal === 'hoof' ? HOOF_SET : app.terminal === 'paw' && runner ? PAW_SET : 0;
+    if (set === 0 || spine.length < 2) return base;
     const t = clamp(app.attachT, [0, 1]);
     const a = nodes[spine[t < 0.5 ? 0 : spine.length - 1]].pos;
     const b = nodes[spine[t < 0.5 ? 1 : spine.length - 2]].pos;
     const axis = norm([a[0] - b[0], a[1] - b[1], a[2] - b[2]]);
-    const k = HOOF_SET * Math.abs(t - 0.5) * 2 * base.radius;
+    const k = set * Math.abs(t - 0.5) * 2 * base.radius;
     return { ...base, pos: [base.pos[0] + axis[0] * k, base.pos[1] + axis[1] * k, base.pos[2] + axis[2] * k] };
   }
 
@@ -635,7 +763,11 @@ export function grow(genome: Genome): Phenotype {
           app.kind === 'tentacle' && app.segments >= 3
             ? { ...app, curl: [app.curl[0] - ARM_LIFT * unitHash(dev.seed, 0x7e0 + k), app.curl[1] + ARM_SWAY * (unitHash(dev.seed, 0x7f0 + k) - 0.5)] as [number, number] }
             : app;
-        growLimb(own, base, up(az + (k * Math.PI * 2) / dev.radialCount), attachIdx);
+        // (an octopus's arm curls its tip back against its own lean: see ARM_TIP)
+        // (…by as much on four links as on five: a longer link curled as far swept its tip further)
+        const tipMag = ARM_TIP * Math.min(1, (app.segments - 1) / 5);
+        const tip = app.kind === 'tentacle' && app.web && app.segments >= 3 ? (own.curl[1] > 0 ? -tipMag : tipMag) : 0;
+        growLimb(own, base, up(az + (k * Math.PI * 2) / dev.radialCount), attachIdx, tip);
       }
       return;
     }
@@ -823,12 +955,13 @@ export function grow(genome: Genome): Phenotype {
     return rearedness(dev.body.curve[0]);
   }
 
-  function growLimb(app: AppendageGene, base: BodyNode, dir0: Vec3, parentIdx: number): void {
+  function growLimb(app: AppendageGene, base: BodyNode, dir0: Vec3, parentIdx: number, tipCurl = 0): void {
     let dir = dir0;
     let startPos: Vec3;
     let arch: Vec3[] | null = null; // an explicit leg polyline (segment directions): arthropod or sprawler
     let sprawl = false; // the polyline is a vertebrate sprawler's (thick, normal-length segments)
     let lizardLeg = false; // …a walking sprawler's (a lizard's, a crocodile's, a frog's arm): see below
+    let archLen: number[] | null = null; // …and, for a walking sprawler's, each link's length ×the gene's (see SPRAWL_UPPER)
     const brush = isBrushTail(app, app.terminal) && dev.symmetry === 'bilateral';
     if (app.kind === 'leg' && dev.symmetry !== 'radial') {
       // Legs attach at the shoulder/hip — the body's *side*, a touch above the belly — not the
@@ -961,7 +1094,25 @@ export function grow(genome: Genome): Phenotype {
           // down, under a haunch that swallowed the upper limb, each was a stub on a table leg: a
           // push-up stance with no elbow or knee to be seen.)
           lizardLeg = true;
-          for (let k = 0; k < n; k++) {
+          // (a frog's arms, beside its folded hind legs, keep their own stance: see the jumper)
+          const leaper = legPairsHere === 2 && legGenesHere.some((a) => a.attachT < 0.5 && a.length > 1.4 * fore.length);
+          if (!leaper) {
+            // out near level to an elbow or knee clear of the flank, the forearm or shin plumb to the floor
+            // (and on three links the foot on out along it): see SPRAWL_RISE
+            const upper = norm([sideX, SPRAWL_RISE, zf * 0.4]);
+            const L = app.length;
+            const hipY = base.pos[1] - base.radius * 0.12;
+            const footLinks = n >= 3 ? n - 2 : 0;
+            const foot = norm([sideX, -SPRAWL_FOOT[1], zf * 0.6]);
+            const drop = hipY + upper[1] * L * SPRAWL_UPPER + foot[1] * L * SPRAWL_FOOT[0] * footLinks - sprawlFloorHere;
+            const shin = norm([sideX * SPRAWL_SHIN_RUN, -1, zf * 0.25]);
+            archLen = [SPRAWL_UPPER, clamp(drop / (-shin[1] * L), [0.5, 2.2])];
+            arch.push(upper, shin);
+            for (let k = 2; k < n; k++) {
+              arch.push(foot);
+              archLen.push(SPRAWL_FOOT[0]);
+            }
+          } else for (let k = 0; k < n; k++) {
             if (k === 0) arch.push(norm([sideX, 0.32, zf * 0.4]));
             else if (k === n - 1) arch.push(norm([sideX * 0.42, -1, zf * 0.5]));
             else arch.push(norm([sideX * 0.48, -1, zf * 0.25]));
@@ -1042,7 +1193,23 @@ export function grow(genome: Genome): Phenotype {
     // shoulder, the forearm drops near-vertical, the pastern angles forward to the paw. (The signs
     // were inverted: every hind knee pointed backward like a bird's heel, under every quadruped.)
     const fore = app.kind === 'leg' && !arch && legPairsHere === 2 && app.attachT > 0.5 && dev.symmetry !== 'radial';
-    let pitch = app.kind !== 'leg' ? app.curl[0] : fore ? 0.18 + 0.5 * Math.abs(app.curl[0]) : -app.curl[0];
+    const elbow = app.kind === 'antenna' ? Math.sign(app.curl[0]) * Math.max(0, Math.abs(app.curl[0]) - ANTENNA_ELBOW_FROM) * ANTENNA_ELBOW : 0;
+    // (a theropod's fold, by degrees: as the trunk rears up an ape's knuckle-walking arm takes over, and only
+    // a SHORT arm folds at all — switched on at one trunk pitch, a hand jumped a third of its reach, and an
+    // ape mutated to a level back swept its long arms back under it)
+    const fold = app.kind === 'arm' && app.terminal === 'hand' && app.curl[0] < 0 && dev.symmetry === 'bilateral'
+      ? (1 - knuckleArm(app, base)) * (1 - smooth01((app.length / Math.max((dev.body.size[0] + dev.body.size[1]) / 2, 1e-3) - THEROPOD_ARM[0]) / (THEROPOD_ARM[1] - THEROPOD_ARM[0])))
+      : 0;
+    const folded = fold > 0;
+    let pitch = folded ? lerp(app.curl[0], -app.curl[0] * THEROPOD_SHOULDER, fold) : app.kind !== 'leg' ? app.curl[0] + elbow : fore ? 0.18 + 0.5 * Math.abs(app.curl[0]) : -app.curl[0];
+    // (a hooved hind leg's links grow as much longer as its deeper fold costs it height — see HOOF_GASKIN — so it
+    // stands as tall as it did on a paw's angles, and the body no lower)
+    const hoofHind = app.kind === 'leg' && !arch && !fore && app.terminal === 'hoof' && app.segments >= 4 && dev.symmetry !== 'radial';
+    const c0 = app.curl[0], ac0 = Math.abs(c0);
+    const linkLen = hoofHind
+      ? (app.length * (Math.cos(c0) + Math.cos(2.15 * ac0 + 0.2 - c0) + Math.cos(0.15 * ac0 - c0))) /
+        (Math.cos(c0) + Math.cos(HOOF_GASKIN[0] + HOOF_GASKIN[1] * ac0) + Math.cos(HOOF_CANNON))
+      : app.length;
     // An EAR is one node on the skull, whatever its gene says of links: the flap is drawn whole from
     // its root, and no stalk is meshed under it (see bodyField) — grown as a chain, a bred ear's flap
     // would hang in the air a link's length off the head.
@@ -1090,22 +1257,32 @@ export function grow(genome: Genome): Phenotype {
       if (j > 0 && segments > 1 && isScullingTail(app, app.terminal)) {
         const u = j / (segments - 1);
         nodes[idx].scale = [1 - SCULL_PINCH * u, 1 + SCULL_DEPTH * Math.sin(Math.PI * 0.8 * u), 1];
+      } else if (bonyFish && app.kind === 'tail' && app.terminal === 'fin') {
+        // (a bony fish's tail stalk: see PEDUNCLE_FLAT)
+        nodes[idx].scale = [PEDUNCLE_FLAT[Math.min(j, 1)], 1, 1];
       }
       edges.push([prev, idx]);
       prev = idx;
       if (arch) {
         const d = arch[Math.min(j, arch.length - 1)];
-        const L = app.length * (sprawl ? 1.0 : 1.2); // an arthropod's long spindly segments
+        const L = app.length * (sprawl ? (archLen?.[Math.min(j, archLen.length - 1)] ?? 1.0) : 1.2); // an arthropod's long spindly segments
         pos = [pos[0] + d[0] * L, pos[1] + d[1] * L, pos[2] + d[2] * L];
         continue;
       }
 
-      quat = qMul(quat, qFromEuler(pitch, app.curl[1]));
+      // (an octopus's arm curls at its tip — see ARM_TIP; zero for every other limb)
+      const tc = tipCurl !== 0 && segments > 2 ? (j >= segments - 2 ? 1 : j === segments - 3 ? 0.5 : 0) : 0;
+      quat = qMul(quat, qFromEuler(pitch, app.curl[1] + tipCurl * tc));
       dir = qRotate([0, 0, 1], quat);
-      pos = [pos[0] + dir[0] * app.length, pos[1] + dir[1] * app.length, pos[2] + dir[2] * app.length];
+      pos = [pos[0] + dir[0] * linkLen, pos[1] + dir[1] * linkLen, pos[2] + dir[2] * linkLen];
       // a real jointed leg: thigh forward → (knee folds the shin sharply back under the body) → (hock
       // swings the foot forward) — a clear Z stance, not one gentle curved sweep; a foreleg's mirror
       // fold (see `fore`). Other limbs keep their curl.
+      // (a theropod's elbow: see THEROPOD_ELBOW — at the one joint, the forearm running on straight past it to the
+      // hand: held at the elbow's bend, or even the arm's own, each link of a long bred arm folded again, coiling
+      // back through its chest)
+      if (folded && j === 0) pitch = lerp(app.curl[0], app.curl[0] * THEROPOD_ELBOW, fold);
+      else if (folded && j === 1) pitch = 0;
       if (app.kind === 'leg') {
         // knee — a clear backward fold, but softened: at ×3.0 the leg folded so far back under the
         // body that added segment length turned into more fold instead of more standing height,
@@ -1113,6 +1290,11 @@ export function grow(genome: Genome): Phenotype {
         if (fore) {
           if (j === 0) pitch = -(0.3 + 0.5 * Math.abs(app.curl[0])); // elbow — the forearm comes back to vertical
           else if (j === 1) pitch = app.terminal === 'hoof' && app.segments >= 4 ? HOOF_KNEE : -0.32; // wrist — the pastern angles forward to the paw (a hooved leg's knee: its cannon drops plumb)
+        } else if (hoofHind) {
+          // (a hooved hind leg: the gaskin back to HOOF_GASKIN off the plumb, the cannon back near plumb)
+          const gaskin = HOOF_GASKIN[0] + HOOF_GASKIN[1] * Math.abs(app.curl[0]);
+          if (j === 0) pitch = gaskin + app.curl[0]; // stifle — from the thigh's forward lean (−curl) to the gaskin's
+          else if (j === 1) pitch = -(gaskin + HOOF_CANNON); // hock
         } else if (j === 0) pitch = Math.abs(app.curl[0]) * 2.15 + 0.2; // knee — the shin folds back
         else if (j === 1) pitch = -(Math.abs(app.curl[0]) * 2.0 + 0.2); // hock — swing the foot forward
       }
@@ -1236,6 +1418,13 @@ const TENTACLE_ROOT = 1.2;
  *  up to this a link (rad; a negative pitch curls a sprawled arm up — none is bent down into the floor) */
 const ARM_SWAY = 0.24;
 const ARM_LIFT = 0.06;
+/** A WEBBED radial arm (an octopus's) curls at its tip: its last two joints bend aside by ARM_TIP and the
+ *  one before them by half that (a five-node arm's, on longer links, by four fifths as much), back against
+ *  the arm's own lean (rad). (Bent alike at every joint, by 0.1 rad, its
+ *  arms were eight straight spokes — a starfish, a splat; all to one side, a pinwheel. Bent more and more
+ *  toward the tip from the middle of the arm, to a side hashed per arm, one arm in twenty swept its tip
+ *  through the next arm's middle; bent 1.3 and more at its last joints, the tips folded back in hooks.) */
+const ARM_TIP = 1.1;
 
 function normalizeLegs(g: Genome, coh: number): void {
   // every leg-bearing section: the trunk, or an arthropod's thorax ahead of its abdomen
@@ -1298,6 +1487,26 @@ export function legBearer(g: Genome): SegmentGene {
 }
 
 /** The head = the front-most body section (the deepest `child`), or the trunk if there is none. */
+/** Is the head a skull with a stop (see headStop) and a muzzle longer than DOG_MUZZLE ×its girth — a dog's? */
+function longStoppedSkull(g: Genome): boolean {
+  let depth = 0;
+  for (let s = g.body; s.child; s = s.child) depth++;
+  const head = frontSegment(g);
+  return headStop(head, depth) > 0 && head.size[2] / Math.max((head.size[0] + head.size[1]) / 2, 1e-3) > DOG_MUZZLE;
+}
+
+/** Is this section a SLUG's trunk (on a bilateral slime body): the body's only section, its eyes on jointed stalks? */
+function isSlug(seg: SegmentGene, depth: number): boolean {
+  return depth === 0 && !seg.child && slugFeeler(seg) !== undefined;
+}
+function slugFeeler(seg: SegmentGene): AppendageGene | undefined {
+  return seg.appendages.find((a) => a.kind === 'eyestalk' && a.terminal === 'eye' && a.pair && a.segments >= 2);
+}
+/** a slug's lower tentacle, from its feeler's gene (see SLUG_FACE) */
+function lowerTentacle(f: AppendageGene): AppendageGene {
+  return { ...f, kind: 'antenna', terminal: 'none', pair: true, segments: 2, length: f.length * SLUG_FACE.len, thickness: f.thickness * SLUG_FACE.thick, taper: 0.9, attachAzimuth: SLUG_FACE.az, attachElevation: SLUG_FACE.el, roll: 0, curl: [SLUG_FACE.curl, 0] };
+}
+
 function frontSegment(g: Genome): SegmentGene {
   let s = g.body;
   while (s.child) s = s.child;
@@ -1314,14 +1523,22 @@ function ensureBilateralFace(g: Genome): void {
   const links = Math.max(0, head.repeat - 1);
   const frontR = girth * Math.pow(head.taper, links) * muzzleShare(links, links, stop);
   // (a head that carries legs is a spider's cephalothorax: its eyes are a cluster, see OCELLI)
-  ensureFace(head.appendages, girth, frontR, head.repeat > 1 && !!g.body.child, depth > 0 && head.appendages.some((a) => a.kind === 'leg'));
+  // (a face on a trunk with no head before it, carrying a shell or claws, is a crab's: its stalked eyes
+  // stand on the front rim of its shell, see ensureFace)
+  const shellFront = depth === 0 && head.appendages.some((a) => a.terminal === 'carapace' || a.terminal === 'pincer');
+  ensureFace(head.appendages, girth, frontR, head.repeat > 1 && !!g.body.child, depth > 0 && head.appendages.some((a) => a.kind === 'leg'), shellFront);
 }
 
 /** Guarantee a prominent eye-set + a mouth (M24/M19): synthesize them if mutation deleted them,
  *  and floor the sizes so they always read. The mouth is kept on the face front. */
 // a paired eye's azimuth stays at least this far (rad) off the vertical midline
 const EYE_AZ_MAX = 1.1;
-function ensureFace(apps: AppendageGene[], girth: number, frontR = girth, linkedHead = false, cephalothorax = false): void {
+/** A crab's eyestalk (rooted on its shell's front rim — see ensureFace): at least this many nodes (two links
+ *  and the eye), each link at least this × the trunk's girth long. */
+export const RIM_STALK_SEGS = 3;
+export const RIM_STALK = 0.62;
+export const RIM_STALK_BEND = -0.1;
+function ensureFace(apps: AppendageGene[], girth: number, frontR = girth, linkedHead = false, cephalothorax = false, shellFront = false): void {
   const eyes = apps.filter((p) => p.terminal === 'eye');
   if (eyes.length === 0) apps.push(faceEye(girth));
   else
@@ -1346,7 +1563,21 @@ function ensureFace(apps: AppendageGene[], girth: number, frontR = girth, linked
       // CRANIUM of a multi-link head (the muzzle runs on ahead, lower and narrower) may look forward,
       // a cat's or an ape's gaze; one on a plain head's front stays at 0.75 (~47° to the side)
       const cranium = linkedHead && e.attachT < 0.35;
-      e.attachElevation = clamp(Math.min(e.attachElevation, cranium ? 1.15 : 0.75), AP.attachElevation);
+      // …and so may a crab's STALKED eyes: they root on the front rim of its shell, close together over
+      // the mouth, and stand up from there (see STALK_RISE). (Held to 0.75 like a plain head's, they rose
+      // from the shell's shoulders, nearly half its width apart: two lollipops stuck in the dome.)
+      const rimStalk = shellFront && e.kind === 'eyestalk' && e.segments >= 2;
+      e.attachElevation = clamp(Math.min(e.attachElevation, cranium || rimStalk ? 1.15 : 0.75), AP.attachElevation);
+      // …on a stalk that stands the eye clear over the shell's crown: two links of RIM_STALK × the trunk's girth.
+      // (Half the crabs drew a stalk of one link, and every link was the length gene's floor, 0.2: the eye hung a
+      // link off the rim, the foot of its ball a sixth of a unit under the crown — an eye half-buried on the dome,
+      // a tenth of a unit of stalk to see.)
+      if (rimStalk) {
+        e.segments = Math.max(e.segments, RIM_STALK_SEGS);
+        e.length = clamp(Math.max(e.length, girth * RIM_STALK), AP.length);
+        // (and its upper link bends up, never forward: bent forward, it set the eye back down by the rim)
+        e.curl = [clamp(Math.min(e.curl[0], RIM_STALK_BEND), AP.curlPitch), e.curl[1]];
+      }
       // a PAIR aimed near straight up (or down) lands both eyes on the midline as one merged ball —
       // fold the azimuth off it so the mirrored eyes always clear each other
       if (e.pair && Math.abs(Math.cos(e.attachAzimuth)) < Math.cos(EYE_AZ_MAX)) {

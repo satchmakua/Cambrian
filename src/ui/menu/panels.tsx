@@ -9,10 +9,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Genome } from '../../engine/genome';
 import { MORPHOTYPE_IDS, type SymmetryMode } from '../../engine/random';
-import { usePortrait } from '../../viewer/portrait';
 import { exportSave, founderFor, importSave, loadGame, saveGame, type NewGameOptions } from '../game';
 import { cleanName, describeSave, nextGameName, saveStore, NAME_MAX, type Ecosystem, type SaveHeader } from '../saves';
-import { AUTOSAVE_MINUTES, DENSITIES, RENDER_SCALES, useSettings, type CreatureDetail, type QualityPreset } from '../settings';
+import { noGpu, settleGraphics } from '../gpu';
+import { AUTOSAVE_MINUTES, DENSITIES, RENDER_SCALES, SAFE, useSettings, type CreatureDetail, type QualityPreset } from '../settings';
 import { useStore, type GameView } from '../store';
 
 // --- small controls --------------------------------------------------------------------------------
@@ -60,7 +60,7 @@ export function SettingsPanel() {
   const g = useSettings((s) => s.graphics);
   const a = useSettings((s) => s.audio);
   const p = useSettings((s) => s.gameplay);
-  const { setPreset, setGraphics, setAudio, setGameplay, resetDefaults } = useSettings.getState();
+  const { setPreset, setGraphics, setAuto, setAudio, setGameplay, resetDefaults } = useSettings.getState();
   const [full, setFull] = useState(() => typeof document !== 'undefined' && !!document.fullscreenElement);
   useEffect(() => {
     const on = () => setFull(!!document.fullscreenElement);
@@ -75,6 +75,11 @@ export function SettingsPanel() {
     <div className="settings">
       <section>
         <h3>Graphics</h3>
+        {SAFE && (
+          <p className="mm-warn" role="status">
+            Safe mode: these are the lowest graphics, for this visit only. Changes made on this screen are not kept — leave safe mode (on the main menu) to set the options the game starts with.
+          </p>
+        )}
         <Row label="Quality" hint={g.preset === 'custom' ? 'Custom — the options below were changed by hand.' : 'Sets every option below at once.'}>
           <Choice<QualityPreset | 'custom'>
             label="Quality"
@@ -82,6 +87,9 @@ export function SettingsPanel() {
             options={[{ v: 'low', label: 'Low' }, { v: 'medium', label: 'Medium' }, { v: 'high', label: 'High' }]}
             onChange={(v) => v !== 'custom' && setPreset(v)}
           />
+        </Row>
+        <Row label="Adjust automatically on slow machines" hint="The game sets the quality to Low itself, once, if this machine draws slowly. Choosing a quality or an option yourself turns this off.">
+          <Toggle label="Adjust automatically on slow machines" on={g.auto} onChange={setAuto} />
         </Row>
         <Row label="Resolution" hint="How finely the 3D views are drawn. Lower is faster on high-density screens.">
           <Choice label="Resolution" value={g.renderScale} options={RENDER_SCALES.map((v) => ({ v, label: SCALE_WORDS[v] }))} onChange={(v) => setGraphics({ renderScale: v })} />
@@ -95,7 +103,7 @@ export function SettingsPanel() {
         <Row label="Weather and insects" hint="Rain, snow, stars, midges and butterflies.">
           <Choice label="Weather and insects" value={g.weather} options={DENSITIES.map((v) => ({ v, label: DENSITY_WORDS[v] }))} onChange={(v) => setGraphics({ weather: v })} />
         </Row>
-        <Row label="Creature detail" hint="How far away creatures keep their features, and how fine their skin is up close.">
+        <Row label="Creature detail" hint="How far away creatures keep their features, how fine their skin is up close, and whether fur has its pile.">
           <Choice<CreatureDetail>
             label="Creature detail"
             value={g.creatureDetail}
@@ -136,7 +144,17 @@ export function SettingsPanel() {
         </Row>
       </section>
       <div className="panel-foot">
-        <button className="plain" onClick={resetDefaults}>Reset to defaults</button>
+        {/* (the defaults are the High quality: a browser drawing without a graphics card goes straight
+            back to Low, as it did on its first visit, with the same notice saying so) */}
+        <button
+          className="plain"
+          onClick={() => {
+            resetDefaults();
+            settleGraphics();
+          }}
+        >
+          Reset to defaults
+        </button>
       </div>
     </div>
   );
@@ -150,8 +168,26 @@ function when(ms: number): string {
   return d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+/**
+ * A slot's creature, as a small picture once it is drawn. The portrait renderer is fetched when the
+ * first picture is wanted: with it come the 3D library and the creature renderer, which the menus do
+ * not wait for. In safe mode, and where the browser draws without a graphics card, a slot has no
+ * picture: drawing each would hold the page for seconds.
+ */
 function SlotPortrait({ genome }: { genome: Genome }) {
-  const url = usePortrait(genome);
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    setUrl(null);
+    if (noGpu()) return;
+    let live = true;
+    void import('../../viewer/portrait')
+      .then((m) => m.portraitOf(genome))
+      .then((u) => live && setUrl(u))
+      .catch(() => undefined); // (no picture: the slot is as usable without one)
+    return () => {
+      live = false;
+    };
+  }, [genome]);
   return <span className="slot-portrait">{url && <img src={url} alt="" />}</span>;
 }
 
@@ -284,6 +320,47 @@ export function SavesPanel({ mode, onLoaded, onSaved }: { mode: 'load' | 'save';
   );
 }
 
+// --- what the game did to the graphics itself -------------------------------------------------------
+
+/** Why the game lowered the graphics, as it says it. */
+const LOWERED = { software: 'this browser is drawing without a graphics card', slow: 'the first frames were slow' } as const;
+
+/** Said where the valley is offered, on a machine it would crawl on. */
+export const VALLEY_SLOW = 'The valley is the heaviest screen to draw: on this machine it may be very slow.';
+
+/** Is this a machine the game has reason to think draws slowly (safe mode, no graphics card, or
+ *  graphics it lowered itself)? */
+export function useSlowMachine(): boolean {
+  const lowered = useSettings((s) => s.notice.lowered);
+  return lowered !== null || noGpu();
+}
+
+/**
+ * The game lowered the graphics itself: one line saying so, until it is dismissed, with the way to
+ * the options (`onSettings`). Shown on the main menu, and in the breeder — where the lowering may
+ * have just happened under the player's eyes.
+ */
+export function LoweredNotice({ onSettings }: { onSettings: () => void }) {
+  const notice = useSettings((s) => s.notice);
+  const dismissNotice = useSettings((s) => s.dismissNotice);
+  if (SAFE || !notice.lowered || notice.seen) return null;
+  return (
+    <div className="mm-notice" role="status">
+      <span>Graphics were set to Low because {LOWERED[notice.lowered]}.</span>
+      <button
+        className="plain"
+        onClick={() => {
+          dismissNotice();
+          onSettings();
+        }}
+      >
+        Settings
+      </button>
+      <button className="plain" onClick={dismissNotice}>OK</button>
+    </div>
+  );
+}
+
 // --- new game --------------------------------------------------------------------------------------
 
 const ECO_WORDS: Record<Ecosystem, { label: string; hint: string }> = {
@@ -295,10 +372,12 @@ const ECO_WORDS: Record<Ecosystem, { label: string; hint: string }> = {
 const randomSeed = () => (Math.random() * 0xffffffff) >>> 0; // UI layer only; the engine's RNG is seeded
 
 /**
- * New-game set-up. The founder is shown on the stage behind the menu as it is chosen (`onPreview`),
- * and `onStart` receives the finished options.
+ * New-game set-up. The founder is shown on the stage behind the menu as it is chosen (`onPreview`) —
+ * where the menu has a stage (`staged`) — and `onStart` receives the finished options. `slow`: the
+ * menu knows this machine draws slowly (the valley is then offered with a warning).
  */
-export function NewGamePanel({ onPreview, onStart }: { onPreview: (g: Genome) => void; onStart: (o: NewGameOptions) => void }) {
+export function NewGamePanel({ onPreview, onStart, staged, slow }: { onPreview: (g: Genome) => void; onStart: (o: NewGameOptions) => void; staged: boolean; slow: boolean }) {
+  const lowered = useSettings((s) => s.notice.lowered);
   const store = useMemo(() => saveStore(), []);
   const hasGame = useStore((s) => s.hasGame);
   const current = useStore((s) => s.game);
@@ -331,14 +410,15 @@ export function NewGamePanel({ onPreview, onStart }: { onPreview: (g: Genome) =>
       </Row>
       <section>
         <h3>Your first creature</h3>
-        <Row label="Kind" hint="It is shown behind this menu.">
+        <Row label="Kind" hint={staged ? 'It is shown behind this menu.' : 'You will see it when the game starts.'}>
           <select value={kind} aria-label="Kind" onChange={(e) => setKind(e.target.value)}>
             <option value="">Any kind</option>
             {MORPHOTYPE_IDS.map((id) => (
               <option key={id} value={id}>{id}</option>
             ))}
           </select>
-          <button className="plain" onClick={() => setSeed(randomSeed())} title="another creature of this kind">↻ Another</button>
+          {/* (with no stage to show it on, another of the kind is nothing a player can tell apart) */}
+          {staged && <button className="plain" onClick={() => setSeed(randomSeed())} title="another creature of this kind">↻ Another</button>}
         </Row>
         {!kind && (
           <Row label="Symmetry">
@@ -356,7 +436,7 @@ export function NewGamePanel({ onPreview, onStart }: { onPreview: (g: Genome) =>
           <button className="plain" onClick={() => setWorldSeed(randomSeed() % 100000)} title="a random valley">↻ Random</button>
         </Row>
       </section>
-      <Row label="Begin in">
+      <Row label="Begin in" hint={slow || lowered !== null ? VALLEY_SLOW : undefined}>
         <Choice<GameView> label="Begin in" value={startIn} options={[{ v: 'breed', label: 'The breeder' }, { v: 'world', label: 'The valley' }]} onChange={setStartIn} />
       </Row>
       <div className="panel-foot">

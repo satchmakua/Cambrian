@@ -152,6 +152,8 @@ export function SpecimenContent({
 }) {
   // (dev: ?skinq=far|low|high shows a skin quality up close — the World's distant skin, say)
   const quality = DEV_SKINQ ?? asked;
+  // (the hero view's shells of fur are a graphics option: none at low creature detail)
+  const furShells = useQuality().furShells;
   const { center, size, groundY } = framing;
   const jaw = useMemo<JawControl>(() => ({ open: 1 }), []);
   const flight = useMemo<FlightControl>(() => ({ spread: 0, flap: 0 }), []);
@@ -172,7 +174,7 @@ export function SpecimenContent({
         <JawContext.Provider value={rig ? jaw : null}>
           <FlightContext.Provider value={rig ? flight : null}>
             <LidContext.Provider value={lids}>
-              <CreatureMesh phenotype={phenotype} skinMode={skinMode} quality={quality} rig={rig} carved={!rig} fur={quality === 'high'} />
+              <CreatureMesh phenotype={phenotype} skinMode={skinMode} quality={quality} rig={rig} carved={!rig} fur={quality === 'high' ? furShells : 0} />
             </LidContext.Provider>
           </FlightContext.Provider>
         </JawContext.Provider>

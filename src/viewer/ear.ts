@@ -11,6 +11,14 @@ import { earVariant } from './partStyles';
  *  seen edge-on in a three-quarter view, the far one was a thin horn.) */
 export const EAR_CUP: Record<ReturnType<typeof earVariant>, number> = { pointed: 0.9, round: 0.72, leaf: 0.78 };
 
+/** A POINTED ear's (a cat's, a dog's) outline narrows to its tip as (1 − t)^POINTED_EDGE: its sides bowed out and
+ *  its tip blunted, a rounded triangle. (At 0.85 its edges ran dead straight to a needle point: a card cut
+ *  out with scissors.) */
+export const POINTED_EDGE = 0.6;
+/** …and it rises EAR_UPRIGHT of the way from its seat's outward aim toward straight up. (Aimed along the skull's
+ *  normal at the corner it was set on, a cat's ear leaned out 40–54° from upright, a dog's 32–44°: two
+ *  cards splayed off the sides of the head.) */
+export const EAR_UPRIGHT = 0.35;
 /** A SMALL round ear — under LOW_EAR × the radius of the skull it stands on: a weasel's, a bear's — is a
  *  low rounded flap half hidden in the coat: LOW_EAR_H × a round ear's height, its root sunk to
  *  LOW_EAR_BASE (× its size), its hollow furred in the coat's own tone. (Drawn as a mouse's, a cup as
@@ -19,6 +27,14 @@ export const EAR_CUP: Record<ReturnType<typeof earVariant>, number> = { pointed:
 export const LOW_EAR = 0.36;
 export const LOW_EAR_H = 0.66;
 export const LOW_EAR_BASE = -0.8;
+/** A mouse's big BARE ear (feet.ts ratLike) is a thin leaf of pink skin, an open spoon: its hollow
+ *  BARE_EAR_CUP × a furred round cup's, its leaf BARE_EAR_THICK × as thick, and its pink hollow running
+ *  out to BARE_EAR_INNER (× the half-width across; from and to, up the ear) — a hair of coat at the rim.
+ *  (A furred cup, deep and thick, its hollow inset a third of its width: every mouse wore two satellite
+ *  dishes, a broad hard brown rim round a pink centre.) */
+export const BARE_EAR_CUP = 0.7;
+export const BARE_EAR_THICK = 0.35;
+export const BARE_EAR_INNER: readonly [number, number, number] = [0.9, 0.05, 0.92];
 export function lowEar(p: Phenotype, idx: number): boolean {
   const n = p.nodes[idx];
   if (n?.terminal !== 'ear' || earVariant(n.part?.style ?? 0.5) !== 'round') return false;
@@ -36,8 +52,10 @@ export function lowEar(p: Phenotype, idx: number): boolean {
  * sunk into the head. (A flat cone or a squashed sphere with a disc on its face read as cardboard.)
  *   pointed — a cat/fox triangle · round — a bear/mouse cup · leaf — a long rabbit/deer blade
  */
-export function earGeometry(v: ReturnType<typeof earVariant>, r: number, quat: readonly number[], low = false): { outer: THREE.BufferGeometry; inner: THREE.BufferGeometry } {
+export function earGeometry(v: ReturnType<typeof earVariant>, r: number, quat: readonly number[], low = false, bare = false): { outer: THREE.BufferGeometry; inner: THREE.BufferGeometry } {
   const out = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3])).normalize();
+  // a POINTED ear stands up off the corner of the skull (see EAR_UPRIGHT)
+  if (v === 'pointed' && out.y > 0) out.lerp(new THREE.Vector3(0, 1, 0), EAR_UPRIGHT).normalize();
   // the ear's face normal: forward and turned OUT to its own side (a cat's opens ~30° out, a bear's
   // or a mouse's round cup ~45°, a rabbit's or a deer's blade more) — made perpendicular to the
   // ear's rise. (Faced dead ahead, an ear was seen edge-on from the side: a thin dark horn. A round
@@ -56,7 +74,7 @@ export function earGeometry(v: ReturnType<typeof earVariant>, r: number, quat: r
   const H = (v === 'pointed' ? 1.95 : v === 'round' ? 1.75 : 3.5) * (low ? LOW_EAR_H : 1);
   const halfW = (t: number): number =>
     v === 'pointed'
-      ? 0.95 * Math.pow(1 - t, 0.85) * (0.82 + 0.18 * Math.min(1, t / 0.2))
+      ? 0.95 * Math.pow(1 - t, POINTED_EDGE) * (0.82 + 0.18 * Math.min(1, t / 0.2))
       : v === 'round'
         ? 1.08 * Math.sqrt(Math.max(0, 1 - ((t - 0.42) / 0.58) ** 2))
         : 0.8 * Math.pow(Math.sin(Math.PI * (0.08 + 0.92 * t)), 0.75);
@@ -64,14 +82,14 @@ export function earGeometry(v: ReturnType<typeof earVariant>, r: number, quat: r
   // the skin where the skull curves away beneath them, so no seam shows
   const base = low ? LOW_EAR_BASE : -0.5;
   const NU = 14, NV = 14;
-  const cupK = EAR_CUP[v];
+  const cupK = EAR_CUP[v] * (bare ? BARE_EAR_CUP : 1);
   // the ear's surfaces at (u across −1…1, t up 0…1): the front pushed back into a hollow (deepest low
   // in the ear), the back bowed out behind it, thick at the base and thin at the rim and the tip
   const at = (u: number, t: number, layer: 'front' | 'back' | 'inner'): [number, number, number] => {
     const w = Math.max(halfW(t), 0.015);
     const bulge = 1 - u * u;
     const cup = cupK * w * bulge * (1 - 0.55 * t);
-    const thick = (0.2 - 0.12 * t) * Math.sqrt(bulge);
+    const thick = (0.2 - 0.12 * t) * Math.sqrt(bulge) * (bare ? BARE_EAR_THICK : 1);
     const curl = (v === 'leaf' ? 0.35 : 0.18) * t * t * t; // the tip leans back a little
     // (the inner ear lies a hair in front of the hollow, a patch on it)
     const z = (layer === 'back' ? -cup - thick : layer === 'inner' ? -cup + 0.012 : -cup) - curl;
@@ -80,7 +98,8 @@ export function earGeometry(v: ReturnType<typeof earVariant>, r: number, quat: r
   const surface = (layer: 'front' | 'back' | 'inner'): THREE.BufferGeometry => {
     const pos: number[] = [];
     // the inner ear: an inset patch of the front, clear of the furred rim and short of the tip
-    const [u0, t0, t1] = layer === 'inner' ? [0.66, 0.12, v === 'round' ? 0.82 : 0.78] : [1, 0, 1];
+    // (a mouse's bare ear is pink out to a hair of its rim: see BARE_EAR_INNER)
+    const [u0, t0, t1] = layer !== 'inner' ? [1, 0, 1] : bare ? BARE_EAR_INNER : [0.66, 0.12, v === 'round' ? 0.82 : 0.78];
     for (let j = 0; j <= NV; j++) {
       const t = t0 + (t1 - t0) * (j / NV);
       for (let i = 0; i <= NU; i++) pos.push(...at(((i / NU) * 2 - 1) * u0, t, layer));

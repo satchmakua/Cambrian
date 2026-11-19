@@ -13,7 +13,8 @@
  * mode too. `Carve` ops subtract ellipsoidal cavities (mouth maws, lamprey funnels) with a soft
  * rim — a mouth becomes negative space cut into the head, not a lump glued in front of it.
  */
-import type { Phenotype, BodyNode } from '../engine/grow';
+import { pointedLegs, isScullingTail, isBonyFish, type Phenotype, type BodyNode } from '../engine/grow';
+import { mouthVariant } from './partStyles';
 import { quillNodes } from './quills';
 import type { Vec3 } from '../engine/genome';
 
@@ -120,7 +121,36 @@ const SMOOTH_LIMBS = new Set(['tail', 'tentacle']);
  *  a leg's tip — on an ant's or a centipede's small head, two pipes; drawn at its own fineness it is a
  *  feeler. */
 export const ANTENNA_SLIM = 0.4;
+
+/** A crab's CLAW (the `pincer` on a cheliped) draws its own side-flattened palm (claw.ts), so the arm's skin ends at
+ *  its node no thicker than this × the claw's radius — inside the palm, whose half-width is 0.46 of it. (Run on to
+ *  the claw node at the claw's own radius, like any other link, the skin hung a round ball as wide as the palm is
+ *  deep on the wrist — twice the palm's width — and the flat palm only poked out of its front: a balloon.) */
+export const CLAW_WRIST = 0.36;
 const slimOf = (n: BodyNode): number => (n.kind !== 'spine' && n.part?.kind === 'antenna' ? ANTENNA_SLIM : 1);
+
+/** A CROCODILE's body — one that sculls with its tail (grow's isScullingTail) — is one low hull from the
+ *  snout to the hips, flat throughout: its trunk, its neck and its head are skinned as ONE chain (blended
+ *  link to link by CHAIN_BLEND, as a trunk's own links are), its snout's tip is blended as that chain is,
+ *  and a leg's root sphere sits LEG_ROOT_SINK inside the flat flank it starts in. (Each section its own
+ *  chain, smooth-unioned to the next at the full blend where the two overlap whole, and a leg's root
+ *  sphere — the trunk's depth across — touching its back and its belly at the shoulder, every joint swelled
+ *  a ring round the body: from the front a stack of bands under the chin and the belly, an onion; and the
+ *  snout's last link, its ellipsoid swelled by the blend, ended in a knob a clown's nose.) */
+export const LEG_ROOT_SINK = 0.75;
+export function hullBody(p: Phenotype): boolean {
+  // (a walker's: a shark's tail links carry the same style, its last one a fin — see scutes.scullingTail)
+  let legs = false, scull = false;
+  for (const n of p.nodes) {
+    if (n.kind === 'spine') continue;
+    if (n.part?.kind === 'leg') legs = true;
+    else if (n.part?.kind === 'tail') {
+      if ((n.terminal ?? 'none') !== 'none') return false;
+      if (isScullingTail(n.part, n.terminal)) scull = true;
+    }
+  }
+  return legs && scull;
+}
 
 /** how far below a stopped skull's axis its jaw runs (×the braincase's and the nose's radii), and its
  *  girth there (the same) — the chin a little fuller against a nose that narrows to it */
@@ -191,6 +221,7 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   // an eyestalk's last link runs INTO the eyeball (which draws itself): mesh it as a thin cone ending
   // at the eye, or the eye hangs in the air above a stump
   const stalkTip = (a: BodyNode, b: BodyNode) => mode === 'hybrid' && b.terminal === 'eye' && a.kind === 'limb' && a.part?.kind === 'eyestalk';
+  const clawWrist = (a: BodyNode, b: BodyNode) => mode === 'hybrid' && b.terminal === 'pincer' && a.kind === 'limb' && a.part?.kind === 'arm';
   let bodyEdges = p.edges.filter(([a, b]) => include(p.nodes[a]) && (include(p.nodes[b]) || stalkTip(p.nodes[a], p.nodes[b])));
   // (a body with no limb of its own but its quills — an urchin without tube feet — falls back on every
   // link but those and the parts that draw themselves: on every link, its quills were skinned as beaded
@@ -209,6 +240,7 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   // radii): the same body, without the corners. (A leg's links stay straight: those are joints.)
   // (…and a radial body's arms: a sea star's, cut at its joints, were strings of sausages, banded across)
   const radial = p.genomeRef.symmetry === 'radial';
+  const hull = hullBody(p);
   const sameChain = (a: BodyNode, b: BodyNode): boolean =>
     a.kind === 'spine' && b.kind === 'spine'
       ? (a.segment ?? 0) === (b.segment ?? 0)
@@ -268,11 +300,14 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
       const ell = (bothSpine || bothLimb) && (a.scale || b.scale) ? a : null;
       const sa: [number, number] = ell ? [a.scale?.[0] ?? 1, a.scale?.[1] ?? 1] : [1, 1];
       const sb: [number, number] = ell ? [b.scale?.[0] ?? 1, b.scale?.[1] ?? 1] : [1, 1];
-      const rB = stalkTip(a, b) ? Math.min(a.radius * 0.8, b.radius * 0.45) : b.radius * slimOf(b);
+      // (…and a claw-arm's last link runs into its CLAW, which draws its own palm: it ends at the palm's wrist, no
+      // wider than the palm is thick — see CLAW_WRIST)
+      const rB = stalkTip(a, b) ? Math.min(a.radius * 0.8, b.radius * 0.45) : clawWrist(a, b) ? Math.min(a.radius, b.radius * CLAW_WRIST) : b.radius * slimOf(b);
       // a limb's root cone starts INSIDE a shaped body node: at the node's scalar radius its base
       // sphere stood proud of a flattened body — a crab's eight leg roots swelled its flat carapace
       // into a ball — so it starts at the node's narrowest cross-section instead
-      const rA = a.kind === 'spine' && b.kind !== 'spine' && a.scale ? a.radius * Math.min(a.scale[0], a.scale[1], 1) : a.radius * slimOf(a);
+      // (…and on a crocodile's flat hull a leg's starts deeper still: see LEG_ROOT_SINK)
+      const rA = a.kind === 'spine' && b.kind !== 'spine' && a.scale ? a.radius * Math.min(a.scale[0], a.scale[1], 1) * (hull && b.part?.kind === 'leg' ? LEG_ROOT_SINK : 1) : a.radius * slimOf(a);
       girth += (rA + rB) * 0.5;
       included.add(a);
       included.add(b);
@@ -315,6 +350,8 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
       const br = bridgeOf(p);
       if (br) cone(jaw.edge, jaw.i0, jaw.i1, br.a, br.b, br.ra, br.rb, null, [1, 1], [1, 1]);
     }
+    // …and a MYRIAPOD's tergites: a flat plate over each ring's back (see myriapodTergites), in its ring's frame
+    for (const t of myriapodTergites(p)) cone(-1, t.ring, t.ring, t.a, t.b, t.r, t.r, p.nodes[t.ring], t.s, t.s);
   } else {
     // (one ball per node — but not the parts that draw themselves, where there is anything else; and a
     // shaped node's ball no bigger than its narrowest girth, so the ellipsoid it carries gives the shape)
@@ -356,15 +393,17 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
   const mantle = edges ? slugMantle(p) : null;
   // …and an ape's skull and forearms (see apeSkull, apeForearms) — on the hybrid skin only: the capsule kit
   // draws none of them, and the mouth it traces must stay on the head it draws
-  const ape = edges && mode === 'hybrid' ? [...apeSkull(p), ...apeForearms(p)] : [];
+  const ape: { c: Vec3; q: [number, number, number, number]; r: Vec3; over: number; blend?: number }[] =
+    edges && mode === 'hybrid' ? [...apeSkull(p), ...apeForearms(p), ...fishJaw(p)] : [];
   const ne = shaped.length + webs.length + (mantle ? 1 : 0) + ape.length;
   // A swimmer's snout TIP — its chain's front end — keeps its ellipsoid only for the length it adds to the
   // cones' end cap: the two surfaces coincide round the tip, and smooth-unioned at the full k they swelled
   // it by k/4 (a shark's last link a third fatter than its own: a dolphin's bottle-nose). It blends as its
   // own chain does.
   const eb = new Float64Array(ne).fill(1);
+  // (…and a crocodile's: see LEG_ROOT_SINK)
   const swimmer = p.nodes.some((n) => n.part?.kind === 'fin') && !p.nodes.some((n) => n.part?.kind === 'leg');
-  if (swimmer) {
+  if (swimmer || hull) {
     shaped.forEach((n, i) => {
       const j = p.nodes.indexOf(n);
       if (up[j] >= 0 && down[j] === -1) eb[i] = CHAIN_BLEND;
@@ -402,6 +441,7 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     ec.set(a.c, i * 3);
     eq.set(a.q, i * 4);
     er.set(a.r, i * 3);
+    if (a.blend !== undefined) eb[i] = a.blend;
     excess = Math.max(excess, a.over);
   });
   const cx = new Float64Array(nc), cy = new Float64Array(nc), cz = new Float64Array(nc), hl = new Float64Array(nc);
@@ -433,7 +473,8 @@ export function buildFieldPrims(p: Phenotype, mode: 'body' | 'hybrid' = 'body'):
     for (let i = 0; i < nc; i++) {
       const b = ib[i];
       const nb = p.nodes[b];
-      ch[i] = nb.kind === 'spine' ? -1 - (nb.segment ?? 0) : rootOf(b);
+      // (a crocodile's sections are one chain: see LEG_ROOT_SINK)
+      ch[i] = nb.kind === 'spine' ? (hull ? -1 : -1 - (nb.segment ?? 0)) : rootOf(b);
     }
   } else {
     for (let i = 0; i < nc; i++) ch[i] = i;
@@ -637,12 +678,16 @@ const CHAIN_BLEND = 0.15;
 // --- webs ----------------------------------------------------------------------------------------
 
 /** a web panel's thickness, as a share of its arms' radius where it meets them (the arms stand on it
- *  as ridges), and how far into each arm its sides reach (×that radius), so the two blend */
-const WEB_THICK = 0.45;
-const WEB_SINK = 0.35;
+ *  as ridges), and how far into each arm its sides reach (×that radius), so the two blend. (At 0.45 a
+ *  panel was 1.3–1.9 cells of an octopus's skin grid thick — the grid spans its sprawled arms — and its
+ *  rim, thinning to nothing, under one: drawn 7–74% as thick as it is, the web's margin broke into a
+ *  ragged, lumpy shelf of beads and holes round the mantle's base.) */
+const WEB_THICK = 0.6;
+const WEB_SINK = 0.5;
 /** how far out a panel runs toward its arms' web points (it stops short of their chord, so between
- *  two arms the web's margin falls back toward the body) */
-const WEB_OUT = 0.85;
+ *  two arms the web's margin falls back toward the body; at 0.85 it stood out to 2.3 mantle
+ *  half-widths, a skirt) */
+const WEB_OUT = 0.75;
 
 /** a point `s` of the way along a chain of nodes (by length), and the chain's radius there */
 function alongChain(p: Phenotype, chain: number[], s: number): { at: Vec3; r: number } {
@@ -697,12 +742,15 @@ function quatOfBasis(X: Vec3, Y: Vec3, Z: Vec3): [number, number, number, number
  * A SLUG's MANTLE (a slime body whose eyes ride feelers — see eyeSeat feelerTip): the low shield over the
  * front of its back, behind its head, every slug's saddle. An ellipsoid from MANTLE.from to MANTLE.to of the
  * body's length, MANTLE.wide × the body's half-width there and MANTLE.high × its half-depth, its middle
- * MANTLE.lift × the half-depth above the body's axis — so it stands a little proud of the back and its rim
- * stands off the flanks — blended in at MANTLE.blend × the union's radius, a crease round its edge. (With
- * none, a slug was a glossy teardrop: an aubergine with feelers.) Null for anything else; `over` is how far
- * it reaches past its nodes' radii (the grid's padding).
+ * MANTLE.lift × the half-depth above the body's axis — so it stands a little proud of the back, as far over
+ * its flanks as over its top, its edge low on the flank — blended in at MANTLE.blend × the union's radius, a
+ * crease round its edge. (With none, a slug was a glossy teardrop: an aubergine with feelers. Flatter than
+ * the body and wider — 0.6 of its depth, 1.07 of its width, set half its depth up — its rim stood out from the
+ * flanks three times as far as its top stood over the back: from the front a brim, two flaps either side of
+ * the head, the slug a hamburger bun.) Null for anything else; `over` is how far it reaches past its nodes'
+ * radii (the grid's padding).
  */
-export const MANTLE = { from: 0.4, to: 0.84, wide: 1.07, high: 0.6, lift: 0.52, blend: 0.3 } as const;
+export const MANTLE = { from: 0.4, to: 0.84, wide: 1.0, high: 0.9, lift: 0.2, blend: 0.3 } as const;
 export function slugMantle(p: Phenotype): { c: Vec3; q: [number, number, number, number]; r: Vec3; over: number } | null {
   if (p.genomeRef.covering.type !== 'slime' || p.genomeRef.symmetry !== 'bilateral') return null;
   const feeler = p.nodes.some((n, i) => n.terminal === 'eye' && p.edges.some(([a, b]) => b === i && p.nodes[a].kind === 'limb' && p.nodes[a].part?.kind === 'eyestalk'));
@@ -723,6 +771,49 @@ export function slugMantle(p: Phenotype): { c: Vec3; q: [number, number, number,
   const hh = lerp(a.radius * (a.scale?.[1] ?? 1), b.radius * (b.scale?.[1] ?? 1));
   const r: Vec3 = [MANTLE.wide * hw, MANTLE.high * hh, (zb - za) / 2];
   return { c: [lerp(a.pos[0], b.pos[0]), lerp(a.pos[1], b.pos[1]) + MANTLE.lift * hh, zc], q: [0, 0, 0, 1], r, over: Math.max(r[0] - hw, MANTLE.lift * hh + r[1] - hh, 0) };
+}
+
+/**
+ * A MYRIAPOD's TERGITES (a chitin trunk of rings with a leg pair to each: grow's isRinged, pointedLegs). Each
+ * ring's back is armoured by a broad, low, flat plate — wider than the ring, its rim standing out over the leg
+ * roots, a groove between it and the next — so from above the trunk is a row of plates, not a string of beads.
+ * Each is an elliptical round cone in its ring's own frame: TERGITE.thick × the ring's half-depth thick, TERGITE.wide
+ * × its half-width across, its middle TERGITE.lift × the half-depth over the axis, TERGITE.long × the stride to the
+ * next ring from end to end, set TERGITE.back of the stride behind the ring's middle (each plate laps the joint
+ * behind it). It is one of the trunk's own cones, so it meets the ring in a crease, not a fillet. (Rings of round
+ * cones, each barely longer than it was deep and blended smooth, were a string of soft beads: a caterpillar.)
+ */
+export const TERGITE = { wide: 1.1, thick: 0.42, lift: 0.62, long: 0.84, back: 0.06 } as const;
+export function myriapodTergites(p: Phenotype): { ring: number; a: Vec3; b: Vec3; r: number; s: [number, number] }[] {
+  const g = p.genomeRef;
+  if (g.covering.type !== 'chitin' || !pointedLegs(g)) return [];
+  // every ring's centre — the trunk's nodes standing prouder than both their neighbours along it (its rims
+  // and the slim joints between rings are smaller) — legged or not: a mutant with more rings than leg pairs
+  // left a ring bare, and the legged ring before it measured its plate two rings long, over the next
+  const trunk = (i: number) => p.nodes[i].kind === 'spine' && (p.nodes[i].segment ?? 0) === 0;
+  const near = new Map<number, number[]>();
+  for (const [a, b] of p.edges) {
+    if (!trunk(a) || !trunk(b)) continue;
+    near.set(a, [...(near.get(a) ?? []), b]);
+    near.set(b, [...(near.get(b) ?? []), a]);
+  }
+  const rings = [...near.keys()].filter((i) => near.get(i)!.every((j) => p.nodes[j].radius < p.nodes[i].radius)).sort((i, j) => i - j); // (grown rump to shoulders)
+  if (rings.length < 2) return [];
+  return rings.map((i, k) => {
+    const n = p.nodes[i];
+    const o = p.nodes[rings[k + 1 < rings.length ? k + 1 : k - 1]];
+    const stride = Math.hypot(o.pos[0] - n.pos[0], o.pos[1] - n.pos[1], o.pos[2] - n.pos[2]);
+    const hw = n.radius * (n.scale?.[0] ?? 1);
+    const hh = n.radius * (n.scale?.[1] ?? 1);
+    const r = TERGITE.thick * hh;
+    // its two ends a radius in from the plate's (the round cone's caps reach them)
+    const half = Math.max(0, (TERGITE.long * stride) / 2 - r);
+    const at = (dz: number): Vec3 => {
+      const o3 = qRotateV(n.quat, [0, TERGITE.lift * hh, dz - TERGITE.back * stride]);
+      return [n.pos[0] + o3[0], n.pos[1] + o3[1], n.pos[2] + o3[2]];
+    };
+    return { ring: i, a: at(-half), b: at(half), r, s: [(TERGITE.wide * hw) / r, 1] as [number, number] };
+  });
 }
 
 /** An APE: a furred body that walks on its arms — face.ts isApe's test (face.ts imports this module, so it is
@@ -792,6 +883,49 @@ export function apeForearms(p: Phenotype): { c: Vec3; q: [number, number, number
     });
   }
   return out;
+}
+
+/**
+ * A BONY FISH's LOWER JAW (a swimmer in scales — fins, no legs; a shark's skin is left as it is). Its head is
+ * a cone of three links to the mouth at the snout's point, and with only a seam across that point it had no
+ * jaw at all: a bullet, a dolphin's or a sock puppet's head. The mandible is one ellipsoid on the midline,
+ * in the snout tip's frame: its chin FISH_JAW.ahead × the tip's radius past the mouth, its centre `drop` × the
+ * half-depth of the head's middle link below it, running back to under the eye; `wide` × that link's half-width
+ * across, `deep` × its half-depth deep (its top at the gape, its underside standing below the snout's cone over
+ * the front half of the gape); blended in at `blend` of the union's radius, so a crease runs where it meets the
+ * snout (the gape's line) and its chin stands a little under and ahead of the upper jaw.
+ */
+export const FISH_JAW = { ahead: 0.25, drop: 0.4, wide: 0.62, deep: 0.25, blend: 0.45 } as const;
+const FISH_JAWED: ReadonlySet<string> = new Set(['herbivore', 'maw', 'fanged']);
+export function fishJaw(p: Phenotype): { c: Vec3; q: [number, number, number, number]; r: Vec3; over: number; blend: number }[] {
+  // (the same body as the snout's point and the gape: a bony fish in scales with a jaw — a lamprey's funnel, a
+  // sucker, a proboscis or a plated swimmer's mandibles grew a fish's chin under them, with no gape to it)
+  if (!isBonyFish(p) || p.genomeRef.covering.type !== 'scales') return [];
+  const mouth = p.nodes.findIndex((n) => n.terminal === 'mouth');
+  if (mouth < 0 || !FISH_JAWED.has(mouthVariant(p.nodes[mouth].part?.style ?? 0))) return [];
+  const holder = p.edges.find(([, b]) => b === mouth)?.[0];
+  const seg = holder === undefined ? undefined : p.nodes[holder].segment;
+  if (!seg) return [];
+  const head = p.nodes.filter((n) => n.kind === 'spine' && n.segment === seg);
+  const eye = p.nodes.find((n, i) => n.terminal === 'eye' && p.edges.some(([a, b]) => b === i && p.nodes[a].kind === 'spine' && p.nodes[a].segment === seg));
+  if (head.length < 3 || !eye) return [];
+  const T = head[head.length - 1], M = p.nodes[mouth];
+  const fwd = qRotateV(T.quat, [0, 0, 1]);
+  const up = qRotateV(T.quat, [0, 1, 0]);
+  const along = (q: readonly number[]) => (q[0] - T.pos[0]) * fwd[0] + (q[1] - T.pos[1]) * fwd[1] + (q[2] - T.pos[2]) * fwd[2];
+  const H = head[Math.floor(head.length / 2)];
+  // (measured on the head's middle link, not on the snout's tip: grow's SNOUT_TIP caps the tip at a fifth of the
+  // head's girth, and a jaw sized to it was a pea inside the snout's cone — its chin 0.06 under the snout's point,
+  // nothing under the gape: the gape a dark line drawn on a blob)
+  const ry = H.radius * (H.scale?.[1] ?? 1);
+  const front = along(M.pos) + FISH_JAW.ahead * T.radius;
+  const back = along(eye.pos);
+  if (front - back < 1e-3) return [];
+  const mid = (front + back) / 2;
+  const lift = (M.pos[0] - T.pos[0]) * up[0] + (M.pos[1] - T.pos[1]) * up[1] + (M.pos[2] - T.pos[2]) * up[2] - FISH_JAW.drop * ry;
+  const c: Vec3 = [T.pos[0] + fwd[0] * mid + up[0] * lift, T.pos[1] + fwd[1] * mid + up[1] * lift, T.pos[2] + fwd[2] * mid + up[2] * lift];
+  const r: Vec3 = [FISH_JAW.wide * H.radius * (H.scale?.[0] ?? 1), FISH_JAW.deep * ry, (front - back) / 2];
+  return [{ c, q: [T.quat[0], T.quat[1], T.quat[2], T.quat[3]], r, over: FISH_JAW.ahead * T.radius, blend: FISH_JAW.blend }];
 }
 
 export function webPanels(p: Phenotype, include: (n: BodyNode) => boolean): { c: Vec3; q: [number, number, number, number]; r: Vec3 }[] {

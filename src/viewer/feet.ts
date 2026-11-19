@@ -308,7 +308,19 @@ function toeWebGeometry(a: THREE.Vector3[], b: THREE.Vector3[], r0: number): THR
 /** A leg part's style gene at or over this ends a bird's leg in a bird of prey's foot. */
 export const TALONED = 0.6;
 
-function toesOf(plan: FootPlan, r: number, link: number, taloned = false, webbed = false): ToeSpec[] {
+function toesOf(plan: FootPlan, r: number, link: number, taloned = false, webbed = false, flightless = false): ToeSpec[] {
+  if (plan === 'bird' && flightless) {
+    // a running bird's foot (an emu's, a rhea's): three short thick toes close together under the leg, the
+    // middle one longest, and no hind toe. (A perching bird's four long thin toes, the outer two splayed half
+    // a radian, reached out past the flanks: from above, two pale spikes through the plumage.)
+    const L = Math.max(r * 3.4, link * RATITE_TOES.len);
+    const t = Math.max(r * 0.45, L * RATITE_TOES.thick);
+    return [
+      { az: -RATITE_TOES.spread, len: L * RATITE_TOES.side, r0: t * 0.92 },
+      { az: 0, len: L, r0: t },
+      { az: RATITE_TOES.spread, len: L * RATITE_TOES.side, r0: t * 0.92 },
+    ];
+  }
   if (plan === 'bird' && taloned) {
     // a bird of prey's foot is its weapon: thick, widely spread toes, the hind one nearly as long as
     // the front three (it closes the grip). (On a songbird's thin perching toes a hawk stood on wire.)
@@ -410,9 +422,15 @@ export const TALON_DROP = (Math.cos(TALON_RISE - TALON_CURL) - Math.cos(TALON_RI
 const TALON_LEN = 3.6;
 const TALON_ROOT = 0.72;
 
+/** A running bird's toes (see toesOf): their length (× the shank's), thickness (× their length), the outer
+ *  two's bearing off the middle one (rad) and their length (× its). */
+export const RATITE_TOES = { len: 0.42, thick: 0.11, spread: 0.36, side: 0.74 } as const;
+
 /** The toes (skin) and claws (dark keratin) of one foot, in the body frame about the foot node.
- *  `taloned` is the cut of a bird of prey's foot (a bird's only): stout toes ending in long hooks. */
-export function toedFootGeometry(plan: FootPlan, r: number, link: number, taloned = false, webbed = false): { toes: THREE.BufferGeometry; claws: THREE.BufferGeometry } {
+ *  `taloned` is the cut of a bird of prey's foot (a bird's only): stout toes ending in long hooks.
+ *  `flightless`, a running bird's (an emu's): three thick toes, no hind one. */
+export function toedFootGeometry(plan: FootPlan, r: number, link: number, taloned = false, webbed = false, flightless = false): { toes: THREE.BufferGeometry; claws: THREE.BufferGeometry } {
+  if (plan === 'stump') return stumpFootGeometry(r);
   const hooked = taloned && plan === 'bird';
   // each toe's centre line, for the webs between them (a frog's hind foot)
   const lines: { pts: THREE.Vector3[]; r0: number }[] = [];
@@ -423,11 +441,11 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number, talone
   // a pad under the ankle joining the toes
   const pad = new THREE.SphereGeometry(1, 12, 8);
   // (tall enough to swallow the end of the leg tube above it)
-  // (a tortoise's sole is broad: the stump of its leg spread a little on the ground)
-  const sole = plan === 'stump' ? 1.35 : 1.08;
+  // (a tortoise's foot is its own: stumpFootGeometry, above)
+  const sole = 1.08;
   pad.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(0, floor + r * 0.62, 0), new THREE.Quaternion(), new THREE.Vector3(r * sole, r * 0.72, r * sole)));
   toes.push(pad);
-  for (const t of toesOf(plan, r, link, hooked, webbed && plan === 'frog')) {
+  for (const t of toesOf(plan, r, link, hooked, webbed && plan === 'frog', flightless && plan === 'bird' && !hooked)) {
     const dir = new THREE.Vector3(Math.sin(t.az), 0, Math.cos(t.az));
     // two phalanges: up over a knuckle and down to the claw, so the toe grips rather than lies flat
     const y0 = floor + t.r0 * 1.1;
@@ -462,7 +480,7 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number, talone
     }
     // the claw: a curved-down cone off the tip
     const cdir = dir.clone().setY(-0.55).normalize();
-    const cl = t.r0 * (plan === 'bird' ? 2.2 : plan === 'theropod' ? 2.3 : plan === 'stump' ? 1.1 : 1.9);
+    const cl = t.r0 * (plan === 'bird' ? 2.2 : plan === 'theropod' ? 2.3 : 1.9);
     const claw = new THREE.ConeGeometry(t.r0 * 0.5, cl, 6);
     claw.applyMatrix4(
       new THREE.Matrix4().compose(tip.clone().add(cdir.clone().multiplyScalar(cl * 0.45)), new THREE.Quaternion().setFromUnitVectors(up, cdir), new THREE.Vector3(1, 1, 1)),
@@ -480,6 +498,35 @@ export function toedFootGeometry(plan: FootPlan, r: number, link: number, talone
   };
   // (a frog's foot has no claws: an empty geometry keeps the mesh pair uniform)
   return { toes: merge(toes), claws: claws.length ? merge(claws) : new THREE.BufferGeometry() };
+}
+
+/** A TORTOISE's foot (an elephant's): the leg's column flaring a little to a flat round sole, STUMP_SOLE of the
+ *  leg's girth across, the toes inside it — only a few short blunt nails (STUMP_NAILS, their bearings from dead
+ *  ahead) showing out of the front of its rim, down to the ground. (Five toes of two knuckle-balls each round a
+ *  ball of a pad, every joint a sphere, was a pile of grapes under the shell, claw spikes poking out of it.) */
+export const STUMP_SOLE = 1.3;
+export const STUMP_NAILS: readonly number[] = [-0.8, -0.27, 0.27, 0.8];
+/** …the column's profile, [radius ×r, height ×r over the sole], from the sole's middle up into the leg */
+const STUMP_PROFILE: readonly (readonly [number, number])[] = [[0, 0], [STUMP_SOLE * 0.94, 0], [STUMP_SOLE, 0.08], [STUMP_SOLE * 0.98, 0.26], [1.12, 0.7], [1.0, 1.2], [0.96, 1.7]];
+function stumpFootGeometry(r: number): { toes: THREE.BufferGeometry; claws: THREE.BufferGeometry } {
+  const floor = -r; // the foot node's underside sits on the ground (levelFeet)
+  const lathe = new THREE.LatheGeometry(STUMP_PROFILE.map(([x, y]) => new THREE.Vector2(x * r, floor + y * r)), 20);
+  const foot = lathe.toNonIndexed();
+  lathe.dispose();
+  const up = new THREE.Vector3(0, 1, 0);
+  const nails = STUMP_NAILS.map((az) => {
+    // a blunt horn nail out of the rim of the sole, pointing out and down, its tip at the ground
+    const out = new THREE.Vector3(Math.sin(az), 0, Math.cos(az));
+    const dir = out.clone().setY(-0.7).normalize();
+    const len = r * 0.42;
+    const root = out.clone().multiplyScalar(r * STUMP_SOLE * 0.9).setY(floor + len * 0.62);
+    const nail = new THREE.ConeGeometry(r * 0.2, len, 6);
+    nail.applyMatrix4(new THREE.Matrix4().compose(root.addScaledVector(dir, len * 0.5), new THREE.Quaternion().setFromUnitVectors(up, dir), new THREE.Vector3(1, 1, 1)));
+    return nail.toNonIndexed();
+  });
+  const claws = mergeGeometries(nails, false) ?? nails[0];
+  for (const g of nails) if (g !== claws) g.dispose();
+  return { toes: foot, claws };
 }
 
 /**
@@ -531,4 +578,73 @@ export function clawedHandGeometry(r: number, quat: readonly number[]): { finger
     return m;
   };
   return { fingers: merge(fingers), claws: merge(claws) };
+}
+
+/**
+ * A HOOF: a keratin wedge, its sole flat on the ground and its toe ahead of the leg, its front wall sloping back
+ * up to a coronet a little wider than the cannon it caps, a dark cleft down the toe. In the body frame round the
+ * hoof node (+Y up, +Z forward), sized by the cannon's girth `r`. (A short round puck HOOF_H[0] of a girth tall —
+ * 1.35 of it, hardly wider than the cannon — was a black dot under every leg.)
+ */
+export const HOOF_H: readonly [number, number] = [1.25, -0.95];
+/** the coronet's and the sole's half-width, half-length and centre ahead of the leg (×r) */
+export const HOOF_TOP: readonly [number, number, number] = [1.1, 1.12, -0.06];
+export const HOOF_SOLE: readonly [number, number, number] = [1.3, 1.62, 0.45];
+export function hoofGeometry(r: number): { horn: THREE.BufferGeometry; cleft: THREE.BufferGeometry } {
+  const SEG = 20;
+  const RINGS = 6;
+  const pos: number[] = [];
+  const idx: number[] = [];
+  for (let i = 0; i <= RINGS; i++) {
+    const f = i / RINGS; // 0 the coronet, 1 the sole
+    // (the wall bellies out a little below the coronet: a hoof, not a frustum)
+    const k = Math.min(1, f + 0.18 * Math.sin(Math.PI * f));
+    const y = r * (HOOF_H[0] + (HOOF_H[1] - HOOF_H[0]) * f);
+    const ax = r * (HOOF_TOP[0] + (HOOF_SOLE[0] - HOOF_TOP[0]) * k);
+    const az = r * (HOOF_TOP[1] + (HOOF_SOLE[1] - HOOF_TOP[1]) * k);
+    const cz = r * (HOOF_TOP[2] + (HOOF_SOLE[2] - HOOF_TOP[2]) * k);
+    for (let j = 0; j < SEG; j++) {
+      const a = (2 * Math.PI * j) / SEG;
+      // (squarer at the toe than at the heel)
+      const sx = Math.sin(a), cz2 = Math.cos(a);
+      const toe = Math.max(0, cz2);
+      pos.push(ax * sx * (1 + 0.08 * toe), y, cz + az * cz2);
+    }
+  }
+  for (let i = 0; i < RINGS; i++) {
+    for (let j = 0; j < SEG; j++) {
+      const j1 = (j + 1) % SEG;
+      const a = i * SEG + j, b = i * SEG + j1, c = (i + 1) * SEG + j, d = (i + 1) * SEG + j1;
+      idx.push(a, c, b, b, c, d);
+    }
+  }
+  // the caps: the coronet's (inside the leg) and the sole
+  for (const [ring, up] of [[0, 1], [RINGS, -1]] as const) {
+    const c = pos.length / 3;
+    let sx = 0, sy = 0, sz = 0;
+    for (let j = 0; j < SEG; j++) {
+      sx += pos[(ring * SEG + j) * 3];
+      sy += pos[(ring * SEG + j) * 3 + 1];
+      sz += pos[(ring * SEG + j) * 3 + 2];
+    }
+    pos.push(sx / SEG, sy / SEG, sz / SEG);
+    for (let j = 0; j < SEG; j++) {
+      const j1 = (j + 1) % SEG;
+      if (up > 0) idx.push(c, ring * SEG + j, ring * SEG + j1);
+      else idx.push(c, ring * SEG + j1, ring * SEG + j);
+    }
+  }
+  const horn = new THREE.BufferGeometry();
+  horn.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  horn.setIndex(idx);
+  horn.computeVertexNormals();
+  // the cleft: a dark slit down the front of the toe, lying along its sloping wall
+  const yTop = r * (HOOF_H[0] + (HOOF_H[1] - HOOF_H[0]) * 0.35), yBot = r * HOOF_H[1];
+  const zTop = r * (HOOF_TOP[2] + HOOF_TOP[1] + (HOOF_SOLE[2] + HOOF_SOLE[1] - HOOF_TOP[2] - HOOF_TOP[1]) * 0.5);
+  const zBot = r * (HOOF_SOLE[2] + HOOF_SOLE[1]);
+  const len = Math.hypot(yTop - yBot, zTop - zBot);
+  const cleft = new THREE.BoxGeometry(0.1 * r, len, 0.5 * r);
+  cleft.rotateX(-Math.atan2(zBot - zTop, yTop - yBot));
+  cleft.translate(0, (yTop + yBot) / 2, (zTop + zBot) / 2 - 0.15 * r);
+  return { horn, cleft };
 }

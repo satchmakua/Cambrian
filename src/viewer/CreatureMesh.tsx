@@ -25,13 +25,14 @@ import { Mouth } from './mouths';
 import type { Carve } from './bodyField';
 import type { SkinSurface } from './mouthLine';
 import { makeCreatureMaterial } from './creatureMaterial';
-import { bareOf, clawedHandGeometry, footPlanOf, isHindFoot, isTheropod, lastLinkOf, ratLike, shaggyPlumage, skinPartWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
+import { bareOf, clawedHandGeometry, footPlanOf, hoofGeometry, isHindFoot, isTheropod, lastLinkOf, ratLike, shaggyPlumage, skinPartWeights, toedFootGeometry, TALONED, type FootPlan } from './feet';
 import { shankColor } from './keratin';
 import { buildSmoothGeometry, buildShellGeometry, shellScutes, type SkinQuality } from './smoothSkin';
-import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, foldedSpan, restingFold, type FinBuild, type TailRump } from './wings';
+import { buildFeatheredWing, buildFoldedMembraneWing, buildMembraneWing, buildSpreadFeatheredWing, buildTailFan, conformToSurface, shortWingLie, WING_BONE_SHADE, MEMBRANE_SHADE, buildFin, finChord, finCutOf, finGirth, finKindOf, finScaleOf, finSeat, longWingFold, trunkGirth, wingCarriage, wingOpenSpan, wingShoulder, LONG_WING, MEMBRANE_FOLD, foldedSpan, restingFold, tailFanDroop, type FinBuild, type TailRump, type TailPart } from './wings';
 import { ensureSkinWeights, flightLevel, type RigInstance } from './rig';
 import { fieldAt, projectToSurface, qRotateV } from './bodyField';
-import { BROW_TILT, bulgingEye, eyeClearings, eyeSeat, eyeTilt, FEELER_KNOB, FEELER_SPOT, feelerTip, isOcellus, isSwimmer } from './eyeSeat';
+import { ommatidiaMaps } from './ommatidia';
+import { BROW_TILT, bulgingEye, COMPOUND_DEPTH, eyeClearings, eyeSeat, eyeTilt, FEELER_KNOB, FEELER_SPOT, feelerTip, isOcellus, isSwimmer } from './eyeSeat';
 import { coatBelly, coatDark, coatFin, coatMain, coatPattern, srgbHSL } from './palette';
 import { browRidgeGeometry, dappled, faceMaskOf, headMaskOf, isApe } from './face';
 import { apeFootGeometry, fistGeometry } from './apeLimbs';
@@ -39,13 +40,14 @@ import { clawGeometry, wristQuat } from './claw';
 import { hornGeometry, HORN_LEN, type HornReach } from './horn';
 import type { Vec3 } from '../engine/genome';
 import { shardGeometry } from './shards';
-import { gemGeometry } from './facets';
+import { crystalStones, cullCovered, type Plane } from './facets';
 import { quillGeometry } from './quills';
-import { whiskerFan } from './whiskers';
+import { whiskerFan, whiskerStretch } from './whiskers';
 import { frillGeometry, frillPlan } from './frill';
 import { getGeometry, retainGeometry, releaseGeometry, hasGeometry } from './geometryCache';
 import { drawnMouths, mouthCarves, surfacePrims } from './mouthLine';
-import { gillCutOf, gillGeometry, gillMarks, gillRadiusOf } from './gills';
+import { SHORT_WING_SEAT } from './wings';
+import { gillCoverFlap, gillCutOf, gillGeometry, gillMarks, gillRadiusOf, gillSlits } from './gills';
 import { sampleTrajectory, type Trajectory } from '../physics/fitness';
 import type { SkinMode } from '../ui/store';
 
@@ -132,8 +134,14 @@ export const skinKey = (full: boolean, quality: SkinQuality, carved = true) => `
 
 function buildSkin(phenotype: Phenotype, full: boolean, carves: readonly Carve[], quality: SkinQuality): THREE.BufferGeometry {
   const g = buildSmoothGeometry(phenotype, full, carves, quality);
-  // a crystal trunk is one cut stone over its (uncut) skin, drawn beside it (facets.ts gemGeometry)
-  if (phenotype.genomeRef.covering.type === 'crystal') g.userData.gem = gemGeometry(phenotype, g);
+  // a crystal beast is cut stones — its trunk, its head (cut at its mouth), every link of its legs — drawn
+  // beside its skin (facets.ts crystalStones), and the skin they enclose is never drawn: unseen, and inside the
+  // head's stone it would fill the mouth's cut
+  if (phenotype.genomeRef.covering.type === 'crystal') {
+    const stones = crystalStones(phenotype, g);
+    g.userData.gem = stones;
+    if (stones) cullCovered(g, stones.userData.solids as Plane[][]);
+  }
   // smooth mesh is untransformed, so its local position *is* the body-space coord (M17)
   g.setAttribute('aBodyPos', (g.getAttribute('position') as THREE.BufferAttribute).clone());
   bakeLegs(g, phenotype);
@@ -172,6 +180,11 @@ function shellGeometry(phenotype: Phenotype, quality: SkinQuality): THREE.Buffer
 export function builtShell(phenotype: Phenotype, quality: SkinQuality): SkinQuality | null {
   return ([quality, 'far', 'low', 'high'] as const).find((q) => hasGeometry(phenotype, shellKey(q))) ?? null;
 }
+
+/** A creature is drawn whole or not at all: while one of its shader programs is still being built its
+ *  other parts wait with it (programs.ts guardDraws) — eyes and claws do not hang in the air where its
+ *  skin is about to be. */
+const DRAW_WHOLE = { drawWhole: true };
 
 /**
  * Build (and cache) everything a creature's smooth skin needs, ahead of mounting it — the World
@@ -213,8 +226,9 @@ export function CreatureMesh({
   /** carve the mouth cavity into the smooth skin (the rest pose). An articulated jaw (World) wants
    *  intact skin: the static cavity would show beneath a mouth that closes. */
   carved?: boolean;
-  /** shell fur over a furred coat (close-up views: a dozen extra passes of the body) */
-  fur?: boolean;
+  /** shell fur over a furred coat (close-up views: a dozen extra passes of the body): how many
+   *  shells — `true` for the full pile, 0 or `false` for the painted coat alone */
+  fur?: boolean | number;
   /** draw the carapace shell only if one is already built, never build it in this render (the World's
    *  stand-in kit: the scheduler builds the shell with the skin the body is waiting for) */
   lazyShell?: boolean;
@@ -242,11 +256,12 @@ export function CreatureMesh({
   // shell fur: FUR_SHELLS layers of the body out to a pile scaled to the creature — and a flightless bird's
   // shaggy plumes, longer and coarser (drawn on the skin alone, its plumage was a smooth suede)
   const furMats = useMemo(() => {
-    if (!fur || (cov.type !== 'fur' && !shaggy) || skinMode === 'capsules') return [];
+    const shells = fur === true ? FUR_SHELLS : Math.max(0, Math.round(Number(fur) || 0));
+    if (!shells || (cov.type !== 'fur' && !shaggy) || skinMode === 'capsules') return [];
     const len = pileLength(phenotype) * (shaggy ? PLUME_LEN : 1);
     const bare = bareOf(phenotype)?.bare ?? null;
     const eyes = eyeClearings(phenotype, data.features);
-    return Array.from({ length: FUR_SHELLS }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / FUR_SHELLS, len, density: 3.2 / len, eyes }, face, 0, headMask, false, shaggy, null, dapple));
+    return Array.from({ length: shells }, (_, i) => makeCreatureMaterial(pal, cov, seed, bare, { h: (i + 1) / shells, len, density: 3.2 / len, eyes }, face, 0, headMask, false, shaggy, null, dapple));
   }, [fur, cov, skinMode, phenotype, pal, seed, data, face, headMask, shaggy, dapple]);
   useEffect(() => () => furMats.forEach((m) => m.dispose()), [furMats]);
 
@@ -448,9 +463,17 @@ export function CreatureMesh({
   const dir = useMemo(() => new THREE.Vector3(), []);
   const q = useMemo(() => new THREE.Quaternion(), []);
 
-  useFrame((st) => {
+  // how far into the recorded gait the playback is, s (−1: not begun). Kept here, not read off the
+  // canvas's clock: that starts again from zero whenever the stage changes between looping and
+  // holding still, and the gait would start over with it.
+  const gaitAt = useRef(-1);
+  useEffect(() => {
+    gaitAt.current = -1;
+  }, [trajectory]);
+  useFrame((_, dt) => {
     if (!playing || !trajectory) return; // no gait recorded → the creature simply stands still
-    const anim = sampleTrajectory(trajectory, st.clock.elapsedTime, animScratch);
+    gaitAt.current = gaitAt.current < 0 ? 0 : gaitAt.current + dt;
+    const anim = sampleTrajectory(trajectory, gaitAt.current, animScratch);
     const { bodySpheres, edges, features } = data;
 
     if (import.meta.env.DEV) {
@@ -490,6 +513,19 @@ export function CreatureMesh({
   // rigged (World): the shared smooth surface gains skin weights once, and each creature binds its own
   // skeleton to it. Bones are children of the skinned mesh ('attached' bind mode follows the actor).
   const rigged = !!rig && showSmooth && !!smoothGeo;
+  // a feathered tail fan's coverts, on a rig (see tailCovertsGeometry)
+  const coverts = useMemo(() => {
+    if (!rigged) return null;
+    const geo = tailCovertsGeometry(phenotype);
+    return geo ? { geo, mat: new THREE.MeshPhysicalMaterial(TAIL_FAN_MAT) } : null;
+  }, [rigged, phenotype]);
+  useEffect(
+    () => () => {
+      coverts?.geo.dispose();
+      coverts?.mat.dispose();
+    },
+    [coverts],
+  );
   const skinned = useMemo(() => {
     if (!rigged || !rig || !smoothGeo) return null;
     ensureSkinWeights(smoothGeo, phenotype);
@@ -505,8 +541,25 @@ export function CreatureMesh({
       sh.bind(rig.skeleton, new THREE.Matrix4());
       sm.add(sh);
     }
+    // a crystal's stones ride the same skeleton, each rigidly on its own bone (facets.ts crystalStones: the
+    // trunk's on its middle bone, the head's on the bone its eyes hang from, a leg link's on its upper joint's)
+    const stones = smoothGeo.userData.gem as THREE.BufferGeometry | null | undefined;
+    if (stones) {
+      const st = new THREE.SkinnedMesh(stones, skinMat);
+      st.castShadow = true;
+      st.receiveShadow = true;
+      st.bind(rig.skeleton, new THREE.Matrix4());
+      sm.add(st);
+    }
+    // …and so do a tail fan's coverts, stretched from the rump's bone to the fan's (see tailCovertsGeometry)
+    if (coverts) {
+      const cv = new THREE.SkinnedMesh(coverts.geo, coverts.mat);
+      cv.castShadow = true;
+      cv.bind(rig.skeleton, new THREE.Matrix4());
+      sm.add(cv);
+    }
     return sm;
-  }, [rigged, rig, smoothGeo, skinMat, phenotype, furMats]);
+  }, [rigged, rig, smoothGeo, skinMat, phenotype, furMats, coverts]);
   useEffect(
     () => () => {
       if (skinned && rig) skinned.remove(rig.root);
@@ -523,15 +576,8 @@ export function CreatureMesh({
     return { bone: par >= 0 ? rig.bones[par] : rig.root, at };
   }, [rig, shellGeo, phenotype]);
 
-  // a crystal's cut stone rides the trunk's middle bone, as a turtle's shell rides its own (rigid: the
-  // trunk bends little, and the stone stands a tenth of a unit and more off the skin it covers)
+  // a crystal's cut stones (rigged, they ride the skeleton with the skin: see `skinned`)
   const gemGeo = showSmooth ? ((smoothGeo?.userData.gem ?? null) as THREE.BufferGeometry | null) : null;
-  const gemMount = useMemo(() => {
-    if (!rig || !gemGeo) return null;
-    const trunk = phenotype.nodes.map((n, i) => (n.kind === 'spine' && (n.segment ?? 0) === 0 ? i : -1)).filter((i) => i >= 0);
-    const mid = trunk[Math.floor(trunk.length / 2)];
-    return { bone: rig.bones[mid] ?? rig.root, at: phenotype.nodes[mid].pos };
-  }, [rig, gemGeo, phenotype]);
 
   // an urchin's quills, one smooth cone each, root to point — all of them one mesh, kept at every
   // distance (they are its outline: without them it was a bare ball), riding the trunk
@@ -588,8 +634,10 @@ export function CreatureMesh({
         carves={showSmooth ? carves : NO_CARVES}
         recessed={showSmooth && carves.length > 0}
         surface={showSmooth ? (full ? 'hybrid' : 'smooth') : 'kit'}
+        quality={quality}
         lite={detail !== 'full'}
         fur={furMats}
+        rigged={rigged}
       />
     );
     // rigged: the feature sits at its bone's origin (= its node at rest) and moves with it
@@ -609,17 +657,12 @@ export function CreatureMesh({
 
   if (skinned && rig) {
     return (
-      <group>
+      <group userData={DRAW_WHOLE}>
         <primitive object={skinned} />
         {shellGeo && shellMat && shellMount &&
           createPortal(
             <mesh geometry={shellGeo} material={shellMat} position={[-shellMount.at[0], -shellMount.at[1], -shellMount.at[2]]} castShadow />,
             shellMount.bone,
-          )}
-        {gemGeo && gemMount &&
-          createPortal(
-            <mesh geometry={gemGeo} material={skinMat} position={[-gemMount.at[0], -gemMount.at[1], -gemMount.at[2]]} castShadow receiveShadow />,
-            gemMount.bone,
           )}
         {featureNodes}
         {scuteNodes}
@@ -629,7 +672,7 @@ export function CreatureMesh({
   }
 
   return (
-    <group>
+    <group userData={DRAW_WHOLE}>
       {showSmooth && smoothGeo ? (
         // M15: a single welded organic surface replaces the capsule kit
         <>
@@ -742,8 +785,10 @@ function Feature({
   carves,
   recessed,
   surface,
+  quality = 'high',
   lite = false,
   fur = NO_FUR,
+  rigged = false,
 }: {
   f: MeshFeature;
   footColor: number;
@@ -754,8 +799,10 @@ function Feature({
   carves: readonly Carve[];
   recessed: boolean;
   surface: SkinSurface;
+  quality?: SkinQuality; // the skin's quality (a reptile's seam is laid on the skin as drawn at it)
   lite?: boolean; // reduced detail: structural spars (fin rays, wing bones) are dropped
   fur?: readonly THREE.Material[]; // the coat's fur shells, for the parts the coat runs onto (a paw)
+  rigged?: boolean; // on a skeleton: a tail fan's coverts are skinned apart (see tailCovertsGeometry)
 }) {
   switch (f.type) {
     case 'eye':
@@ -764,7 +811,7 @@ function Feature({
       // (one of a radial body's copies of its central maw: see drawnMouths)
       if (!drawnMouths(phenotype).has(f.idx)) return null;
       return (
-        <Mouth f={f} dark={footColor} skin={skin} phenotype={phenotype} carves={carves} recessed={recessed} surface={surface} />
+        <Mouth f={f} dark={footColor} skin={skin} fur={fur} phenotype={phenotype} carves={carves} recessed={recessed} surface={surface} quality={quality} />
       );
     case 'pincer':
       return <Pincer f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} />;
@@ -772,7 +819,7 @@ function Feature({
       return f.kind === 'wing' ? (
         <Wing f={f} color={finColor} phenotype={phenotype} lite={lite} />
       ) : f.kind === 'tail' && phenotype.genomeRef.covering.type === 'feathers' ? (
-        <TailFan phenotype={phenotype} />
+        <TailFan phenotype={phenotype} part={rigged ? 'fan' : 'all'} />
       ) : f.kind === 'frill' ? (
         <Frill f={f} color={finColor} phenotype={phenotype} />
       ) : (
@@ -803,15 +850,15 @@ function Feature({
     case 'barb':
       return <Barb f={f} color={footColor} />;
     case 'ear':
-      return <Ear f={f} color={footColor} belly={coatBelly(phenotype.genomeRef.palette).getHex()} skin={skin} origin={phenotype.nodes[f.idx].pos} bare={ratLike(phenotype)} low={lowEar(phenotype, f.idx)} coat={coatMain(phenotype.genomeRef.palette).getHex()} />;
+      return <Ear f={f} color={footColor} belly={coatBelly(phenotype.genomeRef.palette).getHex()} skin={skin} origin={phenotype.nodes[f.idx].pos} bare={ratLike(phenotype)} low={lowEar(phenotype, f.idx)} coat={coatMain(phenotype.genomeRef.palette).getHex()} fur={isApe(phenotype) ? NO_FUR : fur} />;
     case 'gill':
-      return <Gill f={f} color={footColor} phenotype={phenotype} surface={surface} />;
+      return <Gill f={f} color={footColor} phenotype={phenotype} surface={surface} skin={skin} />;
     case 'crest':
       return <Crest f={f} color={finColor} feathered={phenotype.genomeRef.covering.type === 'feathers'} />;
     case 'carapace':
       return null; // the conforming shell is drawn by CreatureMesh from the trunk field
     case 'whisker':
-      return <Whisker f={f} color={footColor} />;
+      return <Whisker f={f} color={footColor} stretch={whiskerStretch(phenotype, f.idx, Math.max(f.radius, 0.06))} />;
     case 'paw':
       return <Paw f={f} color={footColor} skin={skin} origin={phenotype.nodes[f.idx].pos} leg={f.kind === 'leg'} fur={fur} bare={f.kind === 'leg' && ratLike(phenotype)} />;
     case 'hoof':
@@ -898,6 +945,10 @@ const FISH_IRIS = [0xc9cdd2, 0xb9bfc4, 0xd2b062, 0xbf9a4a, 0xa9b49c];
 const SHARK_IRIS = [0x2c3336, 0x283330, 0x34383a];
 /** a frog's iris: gold, bronze, copper, an olive gold */
 const FROG_IRIS = [0xc9a23a, 0xb8862e, 0xb06a2a, 0xa6a04a];
+/** an octopus's iris: gold, amber, a pale straw, bronze — never a reptile's olive or stone (an olive iris
+ *  on a pink mantle was lime: one in four octopuses, seed 29's among them) */
+export const OCTOPUS_IRIS = [0xd0a83c, 0xc4882c, 0xd8c486, 0xb07432];
+export const octopusIrisOf = (seed: number): number => OCTOPUS_IRIS[Math.floor(unitHash(seed, 0x0c7) * OCTOPUS_IRIS.length)];
 /** the least sRGB distance an eye's iris keeps from its coat and its markings */
 export const IRIS_APART = 0.12;
 /** A slit eye's iris: a reptile's (or, in fur, a cat's) hashed from the seed — stepped on to the next of its
@@ -1000,10 +1051,18 @@ function rimGeometry(r: number, quat: readonly number[], origin: readonly number
   return g;
 }
 
-/** an insect's compound eye: dark bronze, rust, bottle green, slate */
-const COMPOUND = [0x3a2614, 0x4a1a12, 0x1e3420, 0x23252e];
+/** an insect's compound eye: near-black, a deep maroon, a dark bottle green, slate — under its facets'
+ *  walls (ommatidia.ts). (A dark bronze, 0x3a2614, under one glossy highlight was a chocolate.) */
+const COMPOUND = [0x16130f, 0x2e1210, 0x122218, 0x1a1c24];
+/** A MYRIAPOD's eye (a ringed trunk on pointed legs: grow pointedLegs) is a cluster of OCELLI: four small glossy
+ *  lenses in a lozenge — their places in the eye's seat (× its radius) and each one's radius. (One compound dome
+ *  0.28 of its head's radius, glossy, was a cartoon's eye: a friendly caterpillar.) */
+export const OCELLI_CLUSTER: readonly (readonly [number, number])[] = [[-0.42, 0], [0.42, 0], [0, 0.36], [0, -0.36]];
+export const OCELLI_BEAD = 0.28;
 /** a glowing eye's light: a sickly teal, a bile green, an amber, a violet */
 const GLOW = [0x3fd8a8, 0x9fd84a, 0xe0a030, 0xb070e8];
+/** a crystal beast's eye: its stone's own hue, deep and saturated (sRGB HSL), and how brightly it glows */
+const GEM_EYE = { sat: 0.95, light: 0.42, glow: 1.1 } as const;
 /** an eye that stands no further out than it should is not pressed */
 const IDENTITY = new THREE.Matrix4();
 
@@ -1021,6 +1080,8 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   // iris, at its own size — the small ones are beads, under the floor a face eye keeps. (Drawn as a mammal's
   // lidded eye, three or four a side a hair apart, each side's ran together into one blot cut by its lids.)
   const ocellus = useMemo(() => onFace && !!phenotype && isOcellus(phenotype, f.idx), [onFace, phenotype, f.idx]);
+  // …and a MYRIAPOD's, its compound or glowing eye drawn as a cluster of ocelli (OCELLI_CLUSTER)
+  const cluster = useMemo(() => onFace && !ocellus && !!phenotype && pointedLegs(phenotype.genomeRef) && (v === 'compound' || v === 'glowing'), [onFace, ocellus, phenotype, v]);
   const r = ocellus ? f.radius : Math.max(f.radius, 0.06);
   // a dark bony orbit tone
   const socketDark = useMemo(() => new THREE.Color(socket).multiplyScalar(0.5).getHex(), [socket]);
@@ -1038,6 +1099,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
   // (a dark iris round a round pupil, in green lids, was a marble in an egg-cup: goggles)
   const frogEye = useMemo(() => (v === 'round' || v === 'beady') && onFace && !!phenotype && bulgingEye(phenotype, qRotateV(f.quat, [0, 0, 1])), [v, onFace, phenotype, f.quat]);
   const frogIris = useMemo(() => FROG_IRIS[Math.floor(unitHash(seed, 0xf20) * FROG_IRIS.length)], [seed]);
+  const octoIris = useMemo(() => octopusIrisOf(seed), [seed]);
   const fishIris = useMemo(() => (sharkEye ? SHARK_IRIS : FISH_IRIS)[Math.floor(unitHash(seed, 0xf15) * (sharkEye ? SHARK_IRIS : FISH_IRIS).length)], [seed, sharkEye]);
   // Every eye on the face is seated (eyeSeat) — an insect's compound eye and an alien's glowing one as low
   // domes in the head (COMPOUND_DEPTH): on its grown node, more than half the ball stood out of the head, a
@@ -1084,13 +1146,18 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
     return browGeometry(r, sink, seat.quat, origin, press);
   }, [lidded, onFace, skin, origin, phenotype, f.quat, r, sink, seat.quat, press]);
   useEffect(() => () => browGeo?.dispose(), [browGeo]);
-  // a glowing eye sits in a rim of the hide; an insect's compound eye needs none
-  const rim = useMemo(() => (v === 'glowing' && skin && origin ? rimGeometry(r, seat.quat, origin) : null), [v, skin, origin, r, seat.quat]);
+  // A crystal beast's eye is a cut gem set in a face of its own of the head's stone (facets.ts crystalStones):
+  // a low faceted dome, a deep glowing shade of its stone. (Drawn as an alien's glowing eye — a dark wet ball
+  // whose rim showed round the iris as a black ring, an iris in the stone's own pale tone, a slit, a ring of
+  // hide round it, all pressed flat into the head — it was a washer lying on a ball.)
+  const gemEye = v === 'glowing' && phenotype?.genomeRef.covering.type === 'crystal';
+  // a glowing eye sits in a rim of the hide; an insect's compound eye needs none, nor a crystal's gem
+  const rim = useMemo(() => (v === 'glowing' && !gemEye && skin && origin ? rimGeometry(r, seat.quat, origin) : null), [v, gemEye, skin, origin, r, seat.quat]);
   useEffect(() => () => rim?.dispose(), [rim]);
   // (a crystal's eyes are its own stone, deeper, lit from within: a cartoon violet iris in a blue stone was
   // a toy's, and paled toward white it was a pair of googly eyes)
   const glow = useMemo(
-    () => (phenotype?.genomeRef.covering.type === 'crystal' ? coatMain(phenotype.genomeRef.palette).multiplyScalar(0.7).getHex() : GLOW[Math.floor(unitHash(seed, 0x61c) * GLOW.length)]),
+    () => (phenotype?.genomeRef.covering.type === 'crystal' ? srgbHSL(phenotype.genomeRef.palette.hueA, GEM_EYE.sat, GEM_EYE.light).getHex() : GLOW[Math.floor(unitHash(seed, 0x61c) * GLOW.length)]),
     [seed, phenotype],
   );
   // an ape's brow ridge over the eye (face.ts) — skin, in the body frame (it does not turn with the ball)
@@ -1162,7 +1229,7 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
       {/* (a lidded eye needs no ring: its coat-covered lids set it into the face) */}
       {/* (only a glowing eye wears a rim, and in the hide's own covering: see rimGeometry; an insect's
           compound eye is a bare dome on the head — ringed in dark, it was a pair of goggles) */}
-      {v === 'glowing' && (rim && skin ? (
+      {v === 'glowing' && !gemEye && !cluster && (rim && skin ? (
         <mesh geometry={rim} material={skin} />
       ) : (
         <mesh position={[0, 0, -r * 0.12]}>
@@ -1181,6 +1248,21 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
             <sphereGeometry args={[r * 0.07, 8, 8]} />
             <meshBasicMaterial color={0xdce4f0} />
           </mesh>
+        </>
+      ) : cluster ? (
+        // a myriapod's ocelli: four lenses in a lozenge, each about half out of the head (its skin lies
+        // COMPOUND_DEPTH × r out along the seat's gaze) — black, or lit on an alien's glowing eye
+        <>
+          {OCELLI_CLUSTER.map(([x, y], i) => (
+            <mesh key={i} position={[x * r, y * r, r * (COMPOUND_DEPTH - 0.04)]}>
+              <sphereGeometry args={[r * OCELLI_BEAD, 14, 10]} />
+              {v === 'glowing' ? (
+                <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.6} roughness={0.15} />
+              ) : (
+                <meshStandardMaterial color={0x040405} roughness={0.07} envMapIntensity={EYE_ENV} />
+              )}
+            </mesh>
+          ))}
         </>
       ) : fishEye ? (
         // a fish's eye: a flattened dark ball flush in the head, a broad metallic iris ring (silver,
@@ -1242,8 +1324,10 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
             )}
           </mesh>
           {radialEye && (
-            <mesh position={[0, 0, -r * 0.02]} scale={r * 0.9 * 1.008} geometry={capGeometry(0.86, true)}>
-              <meshStandardMaterial color={slitIris} vertexColors roughness={0.42} polygonOffset polygonOffsetFactor={-1} />
+            // (the iris 40° about the bar, the dark wet ball round it out to the lids: a dark ring, as an
+            // octopus's eye has; at 49° the iris filled the whole opening, a pale disc)
+            <mesh position={[0, 0, -r * 0.02]} scale={r * 0.9 * 1.008} geometry={capGeometry(0.7, true)}>
+              <meshStandardMaterial color={octoIris} vertexColors roughness={0.42} polygonOffset polygonOffsetFactor={-1} />
             </mesh>
           )}
           <mesh
@@ -1260,11 +1344,24 @@ function Eye({ f, socket, iris, lid, seed, skin, phenotype }: { f: MeshFeature; 
           </mesh>
         </>
       ) : v === 'compound' ? (
-        // compound — an insect's: a big glossy dome of fine facets, dark with a tint of bronze, rust or
-        // bottle green (coarse facets were a disco ball; jet black, a marble)
+        // compound — an insect's: a dark dome of fine facets, each a glint between dark walls (ommatidia.ts),
+        // matte between the glints. (Coarse facets were a disco ball; jet black, a marble; an icosahedron's
+        // flat faces under one glossy highlight, a chocolate truffle.)
         <mesh>
-          <icosahedronGeometry args={[r * 0.98, 3]} />
-          <meshStandardMaterial color={COMPOUND[Math.floor(unitHash(seed, 0xc0e) * COMPOUND.length)]} roughness={0.3} metalness={0.45} flatShading />
+          <sphereGeometry args={[r * 0.98, 48, 32]} />
+          <meshStandardMaterial
+            color={COMPOUND[Math.floor(unitHash(seed, 0xc0e) * COMPOUND.length)]}
+            map={ommatidiaMaps().shade}
+            roughnessMap={ommatidiaMaps().rough}
+            roughness={1}
+            metalness={0.2}
+          />
+        </mesh>
+      ) : gemEye ? (
+        // a crystal's: a cut gem, a few broad facets catching the light, glowing from within
+        <mesh position={[0, 0, r * 0.02]}>
+          <icosahedronGeometry args={[r * 0.9, 0]} />
+          <meshPhysicalMaterial color={glow} emissive={glow} emissiveIntensity={GEM_EYE.glow} roughness={0.08} clearcoat={1} clearcoatRoughness={0.04} flatShading />
         </mesh>
       ) : (
         // glowing — an alien eye: a dark wet ball, a lit iris (darkening to its rim, fibred like any
@@ -1421,17 +1518,21 @@ function Paw({ f, color, skin, origin, leg = false, fur = NO_FUR, bare = false }
 }
 
 // A hoof: a big solid keratin block, flat on the ground, with a cleft (ungulate).
+// (a wedge, its toe ahead of the leg: see feet.ts hoofGeometry)
 function Hoof({ f, color }: { f: MeshFeature; color: number }) {
   const r = Math.max(f.radius, 0.06);
   const horn = useMemo(() => new THREE.Color(color).multiplyScalar(0.4).getHex(), [color]);
+  const geo = useMemo(() => hoofGeometry(r), [r]);
+  useEffect(() => () => {
+    geo.horn.dispose();
+    geo.cleft.dispose();
+  }, [geo]);
   return (
     <group>
-      <mesh position={[0, -r * 0.2, r * 0.05]} scale={[r * 1.45, r * 1.35, r * 1.6]} castShadow>
-        <cylinderGeometry args={[0.78, 1.0, 1, 12]} />
+      <mesh geometry={geo.horn} castShadow>
         <meshStandardMaterial color={horn} roughness={0.42} metalness={0.06} />
       </mesh>
-      <mesh position={[0, -r * 0.85, r * 0.4]} scale={[r * 0.1, r * 0.7, r * 1.3]}>
-        <boxGeometry args={[1, 1, 1]} />
+      <mesh geometry={geo.cleft}>
         <meshStandardMaterial color={0x0e0a07} roughness={0.6} />
       </mesh>
     </group>
@@ -1529,13 +1630,15 @@ function ToedFoot({ f, plan, skin, phenotype }: { f: MeshFeature; plan: FootPlan
   const link = useMemo(() => lastLinkOf(phenotype, f.idx), [phenotype, f.idx]);
   // (a frog's hind feet are webbed; its hands are not)
   const webbed = useMemo(() => plan === 'frog' && isHindFoot(phenotype, f.idx), [plan, phenotype, f.idx]);
+  // (a flightless bird — an ostrich, an emu — runs on three short thick toes, no hind one)
+  const flightless = useMemo(() => plan === 'bird' && shaggyPlumage(phenotype), [plan, phenotype]);
   const geo = useMemo(() => {
-    const g = toedFootGeometry(plan, r, link, f.style >= TALONED, webbed);
+    const g = toedFootGeometry(plan, r, link, f.style >= TALONED, webbed, flightless);
     const toes = bakeSkin(g.toes, origin);
     // the toes are all leg (a bird's are bare keratin to the claw)
     toes.setAttribute('aLeg', new THREE.BufferAttribute(new Float32Array(toes.getAttribute('position').count).fill(1), 1));
     return { toes, claws: g.claws };
-  }, [plan, r, link, origin, f.style, webbed]);
+  }, [plan, r, link, origin, f.style, webbed, flightless]);
   useEffect(() => () => {
     geo.toes.dispose();
     geo.claws.dispose();
@@ -1866,19 +1969,6 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
     // a feathered wing on a four-legged body is held up and half open, to the span a membrane wing
     // on the same body would have (wings.ts wingCarriage)
     // (a membrane wing folds along the flank at rest, as a bat's or a dragon's does, and opens to fly)
-    const w = raised
-      ? buildSpreadFeatheredWing(side, openS, plumage, accent, 0.62 + 0.2 * (g.seed % 7) / 7)
-      : feathered
-        ? buildFeatheredWing(side, foldS, plumage, accent, long?.axis)
-        : // (at rest the fold is laid to the body it hangs on: see restingFold)
-          buildFoldedMembraneWing(side, restingFold(phenotype, foldedSpan(phenotype, f.radius), wingShoulder(phenotype, side) ?? shoulder));
-    // the flight posture: the same plumage opened out — a wing reaches further spread than folded
-    const spread = feathered ? buildSpreadFeatheredWing(side, raised ? openS * 1.1 : foldS * 1.35, plumage, accent).surface : null;
-    const open = feathered ? null : buildMembraneWing(side, foldedSpan(phenotype, f.radius) / MEMBRANE_FOLD, 0.55 + 0.3 * (g.seed % 7) / 7);
-    // (an upright body pitches forward to fly: its spread wings are built tilted back by as much, so
-    // they come out level — see flightLevel)
-    const level = spread ? flightLevel(phenotype) : 0;
-    if (spread && level > 0) spread.rotateX(-level);
     // a folded wing tucks against the UPPER FLANK (a bird's wing lies along its side, not on its
     // spine): anchor it on the trunk node nearest the shoulder, out at its side and a little above
     // the midline, slightly forward — rather than at the dorsal attach point the gene aimed for.
@@ -1891,10 +1981,25 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
       // body — from the dorsal attach point it stuck out of the spine like a broom handle)
       // (…at the shoulders: see wingShoulder)
       anchor = feathered && !raised
-        ? [near.pos[0] + side * rx * 0.86, near.pos[1] + near.radius * 0.28, near.pos[2] + near.radius * 0.35]
+        ? [near.pos[0] + side * rx * SHORT_WING_SEAT.out, near.pos[1] + near.radius * SHORT_WING_SEAT.up, near.pos[2] + near.radius * SHORT_WING_SEAT.fwd]
         : (wingShoulder(phenotype, side) ?? [near.pos[0] + side * rx * 0.55, near.pos[1] + near.radius * 0.5, near.pos[2] + near.radius * 0.2]);
     }
     if (long) anchor = long.anchor;
+    // (a songbird's short leaf runs down the slope of its back onto its tail: see shortWingLie)
+    const lie = feathered && !raised && !long ? shortWingLie(phenotype, side, anchor, foldS) : null;
+    const w = raised
+      ? buildSpreadFeatheredWing(side, openS, plumage, accent, 0.62 + 0.2 * (g.seed % 7) / 7)
+      : feathered
+        ? buildFeatheredWing(side, lie ? lie.S : foldS, plumage, accent, long?.axis ?? lie?.axis)
+        : // (at rest the fold is laid to the body it hangs on: see restingFold)
+          buildFoldedMembraneWing(side, restingFold(phenotype, foldedSpan(phenotype, f.radius), wingShoulder(phenotype, side) ?? shoulder));
+    // the flight posture: the same plumage opened out — a wing reaches further spread than folded
+    const spread = feathered ? buildSpreadFeatheredWing(side, raised ? openS * 1.1 : foldS * 1.35, plumage, accent).surface : null;
+    const open = feathered ? null : buildMembraneWing(side, foldedSpan(phenotype, f.radius) / MEMBRANE_FOLD, 0.55 + 0.3 * (g.seed % 7) / 7);
+    // (an upright body pitches forward to fly: its spread wings are built tilted back by as much, so
+    // they come out level — see flightLevel)
+    const level = spread ? flightLevel(phenotype) : 0;
+    if (spread && level > 0) spread.rotateX(-level);
     const off: [number, number, number] = [anchor[0] - tip[0], anchor[1] - tip[1], anchor[2] - tip[2]];
     if (!raised) {
       // wrap the folded wing around the flank (the same field the hybrid skin is meshed from) — and a
@@ -1949,10 +2054,11 @@ function Wing({ f, color, phenotype, lite = false }: { f: MeshFeature; color: nu
       o.scale.setScalar(opening);
     }
   });
-  // the arm and finger bones wear the wing's own skin, a shade deeper (a flat dark cylinder read as a
-  // stick laid on the membrane)
-  const bone = useMemo(() => new THREE.Color(color).multiplyScalar(0.7).getHex(), [color]);
-  const skin = useMemo(() => new THREE.Color(color).multiplyScalar(0.85).getHex(), [color]);
+  // the arm and finger bones wear the wing's own skin, deeper (a flat dark cylinder read as a stick laid
+  // on the membrane; at 0.7 of the skin's colour against the web's 0.85 the frame did not show, and a
+  // folded wing was a flat green triangle with no arm in it)
+  const bone = useMemo(() => new THREE.Color(color).multiplyScalar(WING_BONE_SHADE).getHex(), [color]);
+  const skin = useMemo(() => new THREE.Color(color).multiplyScalar(MEMBRANE_SHADE).getHex(), [color]);
   return (
     <group position={build.off}>
      <group ref={flapRef}>
@@ -2022,39 +2128,97 @@ function MembraneWing({ surface, bones, wrist, skin, bone, lite }: { surface: TH
 }
 
 // A feathered tail: a fan of long rectrices spread behind the tail tip (wings.ts), sized to the trunk.
-function TailFan({ phenotype }: { phenotype: Phenotype }) {
+/** A feathered tail's fan, as buildTailFan takes it: the fan's node (its terminal tail part), the trunk node
+ *  its coverts come out of (the nearest to the fan's root), its length and droop and colours. Null for none. */
+function tailFanSpec(phenotype: Phenotype) {
   const g = phenotype.genomeRef;
+  const fanIdx = phenotype.nodes.findIndex((n) => n.kind === 'terminal' && n.part?.kind === 'tail');
+  if (fanIdx < 0) return null;
+  const fan = phenotype.nodes[fanIdx];
+  const trunkIdx = phenotype.nodes.map((n, i) => (n.kind === 'spine' && (n.segment ?? 0) === 0 ? i : -1)).filter((i) => i >= 0);
+  let girth = 0.3;
+  let z0 = Infinity, z1 = -Infinity;
+  for (const i of trunkIdx) {
+    const n = phenotype.nodes[i];
+    girth = Math.max(girth, n.radius);
+    z0 = Math.min(z0, n.pos[2] - n.radius);
+    z1 = Math.max(z1, n.pos[2] + n.radius);
+  }
+  const len = Number.isFinite(z1 - z0) ? z1 - z0 : 1;
+  // its coverts come out of the rump: the trunk node nearest the tail's root, from the fan's root
+  let nearIdx = -1;
+  let rump: TailRump | undefined;
+  if (trunkIdx.length) {
+    const gap = (i: number) => {
+      const n = phenotype.nodes[i];
+      return Math.hypot(n.pos[0] - fan.pos[0], n.pos[1] - fan.pos[1], n.pos[2] - fan.pos[2]) - n.radius;
+    };
+    nearIdx = trunkIdx.reduce((a, b) => (gap(a) <= gap(b) ? a : b));
+    const near = phenotype.nodes[nearIdx];
+    rump = { at: new THREE.Vector3(near.pos[0] - fan.pos[0], near.pos[1] - fan.pos[1], near.pos[2] - fan.pos[2]), r: near.radius * Math.min(near.scale?.[0] ?? 1, near.scale?.[1] ?? 1) };
+  }
+  // (a little longer than it was: at a little over half the trunk, behind a hawk's wing tips it was a stub)
+  // a banded coat's tail is barred across
+  return {
+    fanIdx,
+    nearIdx,
+    S: Math.max(len * 0.68, girth * 1.8),
+    plumage: coatMain(g.palette),
+    accent: coatPattern(g.palette),
+    // (an upright body's hangs down the line of its back: see tailFanDroop)
+    droop: tailFanDroop(phenotype),
+    barred: g.covering.pattern === 'bands',
+    rump,
+  };
+}
+
+/** a tail fan's feathers (and their coverts) */
+const TAIL_FAN_MAT = { vertexColors: true, roughness: 0.72, sheen: 0.6, sheenRoughness: 0.4, side: THREE.DoubleSide } as const;
+
+function TailFan({ phenotype, part = 'all' }: { phenotype: Phenotype; part?: TailPart }) {
   const geo = useMemo(() => {
-    const trunk = phenotype.nodes.filter((n) => n.kind === 'spine' && (n.segment ?? 0) === 0);
-    let girth = 0.3;
-    let z0 = Infinity, z1 = -Infinity;
-    for (const n of trunk) {
-      girth = Math.max(girth, n.radius);
-      z0 = Math.min(z0, n.pos[2] - n.radius);
-      z1 = Math.max(z1, n.pos[2] + n.radius);
-    }
-    const len = Number.isFinite(z1 - z0) ? z1 - z0 : 1;
-    const pal = g.palette;
-    const plumage = coatMain(pal);
-    const accent = coatPattern(pal);
-    // its coverts come out of the rump: the trunk node nearest the tail's root, from the fan's root
-    const fan = phenotype.nodes.find((n) => n.kind === 'terminal' && n.part?.kind === 'tail');
-    let rump: TailRump | undefined;
-    if (fan && trunk.length) {
-      const gap = (n: (typeof trunk)[number]) => Math.hypot(n.pos[0] - fan.pos[0], n.pos[1] - fan.pos[1], n.pos[2] - fan.pos[2]) - n.radius;
-      const near = trunk.reduce((a, b) => (gap(a) <= gap(b) ? a : b));
-      rump = { at: new THREE.Vector3(near.pos[0] - fan.pos[0], near.pos[1] - fan.pos[1], near.pos[2] - fan.pos[2]), r: near.radius * Math.min(near.scale?.[0] ?? 1, near.scale?.[1] ?? 1) };
-    }
-    // (a little longer than it was: at a little over half the trunk, behind a hawk's wing tips it was a stub)
-    // a banded coat's tail is barred across
-    return buildTailFan(Math.max(len * 0.68, girth * 1.8), plumage, accent, 0.2 + (g.seed % 5) * 0.06, g.covering.pattern === 'bands', rump);
-  }, [phenotype, g]);
-  useEffect(() => () => geo.dispose(), [geo]);
+    const t = tailFanSpec(phenotype);
+    return t ? buildTailFan(t.S, t.plumage, t.accent, t.droop, t.barred, t.rump, part) : null;
+  }, [phenotype, part]);
+  useEffect(() => () => geo?.dispose(), [geo]);
+  if (!geo) return null;
   return (
     <mesh geometry={geo} castShadow>
-      <meshPhysicalMaterial vertexColors roughness={0.72} sheen={0.6} sheenRoughness={0.4} side={THREE.DoubleSide} />
+      <meshPhysicalMaterial {...TAIL_FAN_MAT} />
     </mesh>
   );
+}
+
+/**
+ * On a rig, a tail fan's COVERTS are skinned apart from its feathers: in body space, each vertex riding the
+ * rump's bone at its root and the fan's at its end, blended by where it lies between the two. (Riding the
+ * fan's bone with the feathers, their root, set in the rump's coat, swung off it as the tail rose to display:
+ * a flap a quarter of a unit over the back.) Null for a body with no feathered tail fan.
+ */
+export function tailCovertsGeometry(phenotype: Phenotype): THREE.BufferGeometry | null {
+  if (phenotype.genomeRef.covering.type !== 'feathers') return null;
+  const t = tailFanSpec(phenotype);
+  if (!t || t.nearIdx < 0) return null;
+  const g = buildTailFan(t.S, t.plumage, t.accent, t.droop, t.barred, t.rump, 'coverts');
+  const F = phenotype.nodes[t.fanIdx].pos, R = phenotype.nodes[t.nearIdx].pos;
+  g.translate(F[0], F[1], F[2]);
+  const pos = g.getAttribute('position');
+  const ab = [F[0] - R[0], F[1] - R[1], F[2] - R[2]];
+  const L = Math.max(Math.hypot(ab[0], ab[1], ab[2]), 1e-6);
+  // (on the rump's bone to its skin, the blend running from there to the fan's node)
+  const r0 = Math.min(t.rump?.r ?? 0, 0.9 * L);
+  const si = new Uint16Array(pos.count * 4), sw = new Float32Array(pos.count * 4);
+  for (let v = 0; v < pos.count; v++) {
+    const along = ((pos.getX(v) - R[0]) * ab[0] + (pos.getY(v) - R[1]) * ab[1] + (pos.getZ(v) - R[2]) * ab[2]) / L;
+    const u = Math.min(1, Math.max(0, (along - r0) / (L - r0)));
+    si[v * 4] = t.fanIdx + 1; // (bone k + 1 is node k's: see ensureSkinWeights)
+    sw[v * 4] = u;
+    si[v * 4 + 1] = t.nearIdx + 1;
+    sw[v * 4 + 1] = 1 - u;
+  }
+  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+  g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+  return g;
 }
 
 // A tail club: a knobbed mace with short spikes (ankylosaur / dragon).
@@ -2115,18 +2279,23 @@ function bakeSkin(g: THREE.BufferGeometry, origin: readonly number[]): THREE.Buf
   return g;
 }
 
+/** how much a mouse's thin bare ear glows with the light through it (an emissive share of its pink) */
+const BARE_EAR_GLOW = 0.15;
+/** the share of the coat's fur shells an ear wears (the inner ones: a pile that much of the body's long) */
+export const EAR_PILE = 0.5;
 /** the flesh an inner ear's pale fur lets show through */
 const EAR_FLESH = srgbHSL(0.01, 0.38, 0.62);
 
-function Ear({ f, color, belly, skin, origin, bare = false, low = false, coat }: { f: MeshFeature; color: number; belly: number; skin?: THREE.Material; origin: readonly number[]; bare?: boolean; low?: boolean; coat?: number }) {
+function Ear({ f, color, belly, skin, origin, bare = false, low = false, coat, fur = NO_FUR }: { f: MeshFeature; color: number; belly: number; skin?: THREE.Material; origin: readonly number[]; bare?: boolean; low?: boolean; coat?: number; fur?: readonly THREE.Material[] }) {
   // (a small round ear keeps its own small size: floored at 0.06, a weasel's grew past what its genes asked)
   const r = low ? f.radius : Math.max(f.radius, 0.06);
   const v = earVariant(f.style);
   const geo = useMemo(() => {
-    const g = earGeometry(v, r, f.quat, low);
+    // (a mouse's bare ear is a thin open leaf, pink to its rim — see ear.ts BARE_EAR_INNER)
+    const g = earGeometry(v, r, f.quat, low, bare && !low);
     bakeSkin(g.outer, origin);
     return g;
-  }, [v, r, f.quat, origin, low]);
+  }, [v, r, f.quat, origin, low, bare]);
   useEffect(() => () => {
     geo.outer.dispose();
     geo.inner.dispose();
@@ -2153,8 +2322,13 @@ function Ear({ f, color, belly, skin, origin, bare = false, low = false, coat }:
           <meshStandardMaterial color={color} roughness={0.7} />
         </mesh>
       )}
+      {/* the coat runs on up over the ear, its inner half of the shells — a short pile (see EAR_PILE): bare, a
+          cat's or a dog's ear was a smooth card with knife edges standing off a furred head (a mouse's thin
+          bare leaf wears none, nor an ape's ear of bare skin) */}
+      {skin && !bare && fur.slice(0, Math.ceil(fur.length * EAR_PILE)).map((m, i) => <mesh key={`earFur${i}`} geometry={geo.outer} material={m} />)}
       <mesh geometry={geo.inner}>
-        <meshStandardMaterial color={innerColor} roughness={0.75} />
+        {/* (a mouse's thin ear glows a little with the light through it) */}
+        <meshStandardMaterial color={innerColor} roughness={0.75} emissive={bare ? innerColor : 0x000000} emissiveIntensity={bare ? BARE_EAR_GLOW : 0} />
       </mesh>
     </group>
   );
@@ -2162,18 +2336,50 @@ function Ear({ f, color, belly, skin, origin, bare = false, low = false, coat }:
 
 // Gills on the side of the neck, by the part's style: a bony fish's gill COVER — one curved edge, the
 // rear rim of the plate over its gills; a rake of dark bars (what every gilled body had); or a
-// shark's SLITS — five thin creases. The cover and the slits lie IN the skin (standing proud as the
+// shark's SLITS — five thin cuts. The cover and the slits lie IN the skin (standing proud as the
 // bars do, they broke a fish's outline like vents): they are traced over the surface (gills.ts).
-function Gill({ f, color, phenotype, surface }: { f: MeshFeature; color: number; phenotype: Phenotype; surface: SkinSurface }) {
+function Gill({ f, color, phenotype, surface, skin }: { f: MeshFeature; color: number; phenotype: Phenotype; surface: SkinSurface; skin?: THREE.Material }) {
   const r = Math.max(f.radius, 0.06);
   const dark = useMemo(() => new THREE.Color(color).multiplyScalar(0.5).getHex(), [color]);
   const cut = gillCutOf(f.style);
-  const marks = useMemo(() => (cut === 'bars' ? null : gillGeometry(gillMarks(phenotype, f.idx, surface, cut, gillRadiusOf(phenotype, f.idx, cut, r)))), [cut, phenotype, f.idx, surface, r]);
+  // (a gill COVER is a plate in the body's own skin with a raised rear edge, its dark line in the step at
+  // the edge's foot: see gillCoverFlap)
+  const plate = useMemo(() => {
+    if (cut !== 'cover' || !skin) return null;
+    const g = gillCoverFlap(phenotype, f.idx, surface, gillRadiusOf(phenotype, f.idx, cut, r));
+    bakeSkin(g.flap, phenotype.nodes[f.idx].pos);
+    return g;
+  }, [cut, skin, phenotype, f.idx, surface, r]);
+  useEffect(() => () => {
+    plate?.flap.dispose();
+    plate?.crease.dispose();
+  }, [plate]);
+  // (a shark's slits are cuts: dark lenses flat in the skin — see gillSlits; a cover with no skin to wear, a cord)
+  const marks = useMemo(
+    () =>
+      cut === 'bars' || plate
+        ? null
+        : cut === 'slits'
+          ? gillSlits(phenotype, f.idx, surface, gillRadiusOf(phenotype, f.idx, cut, r))
+          : gillGeometry(gillMarks(phenotype, f.idx, surface, cut, gillRadiusOf(phenotype, f.idx, cut, r))),
+    [cut, plate, phenotype, f.idx, surface, r],
+  );
   useEffect(() => () => marks?.dispose(), [marks]);
+  if (plate && skin) {
+    return (
+      <group>
+        <mesh geometry={plate.flap} material={skin} castShadow receiveShadow />
+        <mesh geometry={plate.crease}>
+          <meshStandardMaterial color={dark} roughness={0.6} />
+        </mesh>
+      </group>
+    );
+  }
   if (marks) {
     return (
       <mesh geometry={marks}>
-        <meshStandardMaterial color={dark} roughness={0.6} />
+        {/* (a slit lies a hair over the skin: pulled forward in depth too, so the skin's facets never show through it) */}
+        <meshStandardMaterial color={dark} roughness={0.6} polygonOffset={cut === 'slits'} polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
       </mesh>
     );
   }
@@ -2248,10 +2454,10 @@ function Crest({ f, color, feathered }: { f: MeshFeature; color: number; feather
 const CREST_BLADES = 5;
 
 // Whiskers: a fan of fine pale filaments set out level from the pad (whiskers.ts).
-function Whisker({ f, color }: { f: MeshFeature; color: number }) {
+function Whisker({ f, color, stretch = 1 }: { f: MeshFeature; color: number; stretch?: number }) {
   const r = Math.max(f.radius, 0.06);
   const pale = useMemo(() => new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.45).getHex(), [color]);
-  const geo = useMemo(() => whiskerFan(f.quat, r).geometry, [f.quat, r]);
+  const geo = useMemo(() => whiskerFan(f.quat, r, stretch).geometry, [f.quat, r, stretch]);
   useEffect(() => () => geo.dispose(), [geo]);
   return (
     <group quaternion={f.quat}>

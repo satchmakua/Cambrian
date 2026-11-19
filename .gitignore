@@ -31,3 +31,7 @@ node_modules/
 
 # Other checkouts of this repository (git worktrees used by parallel sessions)
 .claude/worktrees/
+
+# front-door diagnostics (scripts/diag-frontdoor.mjs)
+diag-frontdoor-report.json
+diag-frontdoor-report.png

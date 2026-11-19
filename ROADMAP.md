@@ -889,13 +889,105 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   level tail, folded wing laid to its body, spines and horns apart.
   **Tests:** see PROGRESS M98.
 
+- [x] **M99 — What the thirteenth look left, diagnosed plan by plan.**
+  - deer: a grazer's straight neck carried forward, its head bowed, broad nose pad, dapples, knobbed knees.
+  - bear: a dark nose pad, never a cat's pink button.
+  - octopus: a raised gold eye and long arms curling at the tip.
+  - crystal: a beast of stones from head to toe.
+  - cat: its throat meets its jaw at an angle; whiskers fanned from the pads.
+  - fish: a pointed snout with a jaw and gape, a gill cover in relief, a narrowed tail stalk.
+  - mouse: bead eyes, thin pink ears, a plain coat.
+  - crab: eyes on the shell's front rim, a toothed broad front, folded mouthparts.
+  - insect: elbowed feelers, faceted eyes, a dark plain cuticle, tapering legs.
+  - chimera: a net, not a harness; paws; two fine fangs.
+  - bird: a smooth breast, the folded wing in the back's tone onto its tail, a shut bill.
+  - crocodile: one flat hull, no rings, a snout that narrows to its tip.
+  - arthro-alien: plated rings, a dark cuticle, lens clusters, forcipules under the head.
+  - Plus the fixes an independent review confirmed.
+  **Tests:** see PROGRESS M99.
+
+- [x] **M100 — A fourteenth look (3.68), and parts an animal is never without.**
+  - The review of round 2's commits: a fish's jaw only on a bony fish, a long crab's shell closed, every ring
+    plated.
+  - Tails, ears, wings and whiskers that define a plan are certain.
+  - From its list: a cat's pads, ears and back; a dog's head and muzzle; a deer's knees, hocks, hooves and
+    nose; a songbird's bill, head and wing; a chimera's eyes and legs; a slug's face and mantle; a fish's
+    pectoral and jaw; a dragon's chest, head, fangs and wings; a crab's stalks and claws.
+  - A second round: smooth hand-overs from skin to tube on every limb; a lizard's sprawl; a tortoise's neck,
+    feet and dome; a shark's slits and foils; a crocodile's seam on its drawn skin; an ostrich's spoon bill
+    and three toes; a theropod's seam and folded arms; an octopus's small rings and whole web; a hawk's
+    hooked bill and hanging tail.
+  **Tests:** see PROGRESS M100.
+
 ### Next up (unchecked — pick from here)
 
-- [ ] **What the thirteenth look left.** A deer's llama neck and dog nose; a bear's pig nose; the
-  crystal's smooth head and legs; the octopus's slit eye that reads as a mouth, its stiff splayed arms;
-  the fish's jawless whale head (its head taper is already at its gene's floor); a cat's throat hanging
-  as a dewlap (its last neck node sits well under its skull, nearly as thick); a chimera's red cross and
-  harness bands.
+#### The front door (before anything else)
+
+- [x] **A menu that always opens.** On the main menu the page froze for seconds at a time: the backdrop
+  creature was drawn at full quality in an always-on loop (about 70 draw calls and 209,000 triangles a
+  frame, 12 fur shells being 90% of it), 3.5-9 s a frame with no GPU acceleration. Measured in a
+  software-GL browser, a click on Settings now takes 7-10 ms (3-7 s before). Not yet measured on a hardware
+  GPU.
+  - The menu's stage is lazy, never mounted on a software renderer or in safe mode, starts still and
+    without fur, and turns (with its fur) only once a frame is proven fast.
+  - Graphics lower themselves to Low on a software renderer or slow first frames, with one line saying
+    why; `?safe=1` starts with the lowest graphics and no backdrop.
+  - The page shows a static shell before any JavaScript runs; the entry chunk is 107 KB gzipped (461 KB
+    before).
+- [x] **No draw waits for a shader.** The owner's laptop (Windows, Chrome on Direct3D, RTX 5070 Ti) showed
+  the real cause: the creature's shader took 52 s to build, and the first draw that used it held the page
+  until it was done (a 32 s block after a 20 s wait gave up; on `main`, the whole 52 s).
+  - `programs.ts guardDraws`: a draw whose program is still building is skipped and drawn when it is
+    ready; a creature is held back whole. Portraits and still canvases are drawn again once it is.
+  - The stage waits for its shaders however long they take (the page is free meanwhile).
+  - Each covering's relief is compiled only into the programs that wear it (`COVER`, `BARE_LEGS`,
+    `USE_SCUTES`): the creature's fragment shader is about a third of its size. Ten plans render
+    pixel-identical.
+- [ ] **What the front door left.**
+  - The first entry to the breeder on a software renderer still holds the page for some seconds.
+  - The valley is still too heavy for a software renderer: it warns, but is not lighter.
+  - Confirm on the owner's laptop that the 32 s freeze is gone and how long the creature now takes to
+    appear (`scripts/diag-frontdoor.mjs`).
+  - If the creature's shader still takes long to build there: one place that reads the relief, not four.
+
+#### The simulation: making it a game (agreed 2026-11-17)
+
+Principle: the player changes the pressures, never the animals directly. The breeder is the one place for
+artificial selection.
+
+- [ ] **1. Evolution you can see.** Works on any map, so it comes first.
+  - Trait-over-time charts for a species (size, speed, coat, diet).
+  - Species cards: where it lives, what it eats, what eats it, how it differs from its founder.
+  - Causes of death, per species and over time.
+  - The lineage film: a species' body over the generations as a strip of portraits.
+  - Adopt a lineage: follow "your" species and be told when it splits or dies out.
+- [ ] **2. A planet with climate zones.** Built together, so terrain is rewritten once.
+  - A small sphere you can rotate, with no map edge. Distant animals as simple markers, full bodies when
+    zoomed in.
+  - Climate by latitude: ice caps, temperate belts, desert, tropics.
+  - Oceans and islands that isolate populations, so species split by geography.
+  - Costs to plan for: terrain, movement, the grass grid, the camera, plant rendering and saves all assume
+    a flat square today; the 165-creature cap is a rendering budget; old saves will not carry over.
+- [ ] **3. Selection that is real.** Traits matter differently by place.
+  - Camouflage: coat colour against the local ground changes how easily a hunter spots prey.
+  - Mate choice: crests and bright colours attract mates and hunters alike.
+  - Fur or bare skin against temperature; body size against cold.
+  - Replace the per-species and per-guild quotas with ecological limits where the food web can carry it.
+- [ ] **4. Levers on the environment.**
+  - Shape it: sea level, temperature, rainfall, forests, a land bridge or a strait.
+  - Events: an ice age, a volcano, a meteor, a plague, then watch what radiates into the gaps.
+  - Introductions: release a bred design as an invader and see whether it lasts.
+- [ ] **5. Scenarios.** Goals that give a run a point: "get something to colonise the ice cap", "keep three
+  levels of the food chain alive for 100 years".
+
+#### Creature looks (on hold while the simulation is worked on)
+
+- [ ] **What the fourteenth look left.** A tail's or tentacle's spline hand-over (the chain blend stands
+  proud of the collar); the other reptiles' seams on the drawn skin; a tortoise's parrot beak; a mouse's
+  neckless wedge head; a weasel's slit eyes; a slug's sole; a songbird's pear shape from the front.
+
+- [ ] **What the thirteenth look left.** A songbird's pear shape from the front (a dark breast band over a
+  pale belly); a crocodile's teeth still unseen at studio scale.
 
 - [ ] **What the twelfth look left.** The crystal's smooth glass head on its cut stone; a slug's sole;
   the dragon's pale underwing web; a bear's paw still a step below its wrist.
@@ -925,7 +1017,6 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
 - [ ] **What the fifth look left.** A weasel end on is a ball behind a small head (its shoulder joints
   set the width); a dog's and a bear's muzzle is a tube ending in a bulb (the dog's test holds its
   girth to the nose on purpose: it needs a better shape, not a re-taper).
-- [ ] **A lineage film.** A wild species' body changes over the generations, as a strip of portraits.
 - [ ] **More headroom.** Skin builds off the main thread (a worker for the marching tetrahedra); the
   flowers as cells like the grass; level-of-detail crowns for far trees.
 

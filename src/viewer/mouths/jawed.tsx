@@ -26,10 +26,11 @@ import { armoured } from '../scutes';
 import { headStop, type Phenotype } from '../../engine/grow';
 import type { SegmentGene, Vec3 } from '../../engine/genome';
 import type { Carve } from '../bodyField';
-import { norm3 } from '../bodyField';
+import { hullBody, norm3 } from '../bodyField';
 import type { MeshFeature } from '../meshData';
-import { buildMouthLine, hash01, mouthSpec, runSeamBack, type MouthSample, type SkinSurface } from '../mouthLine';
+import { buildMouthLine, fishSeam, hash01, mouthSpec, runSeamBack, type MouthLine, type MouthSample, type SkinSurface } from '../mouthLine';
 import { isSwimmer } from '../eyeSeat';
+import { drawnSkin, type SkinQuality } from '../smoothSkin';
 import { sweepTube, type SweepPoint } from '../sweep';
 import { bluntGeometry, fangGeometry, setToothInstances, toothRow, type ToothProfile, type ToothXform } from '../teeth';
 import { INTERIOR, LIP } from './palette';
@@ -194,6 +195,8 @@ export interface JawedBuild {
   muzzled: boolean;
   /** a reptile's / amphibian's seam mouth (see sealedMouth) */
   sealed: boolean;
+  /** is the fold over the upper teeth's roots drawn? (not on a mammal's mouth, a toothless one, or a theropod's) */
+  fold: boolean;
 }
 
 /** Pure, node-relative jawed-mouth build — everything derived from the surface mouth line. */
@@ -204,6 +207,7 @@ export function buildJawed(
   recessed: boolean,
   variant: JawedVariant,
   surface: SkinSurface = 'kit',
+  quality: SkinQuality = 'high',
 ): JawedBuild | null {
   const spec = mouthSpec(phenotype, idx);
   if (!spec) return null;
@@ -239,9 +243,12 @@ export function buildJawed(
   const r = spec.r;
   const seed = phenotype.genomeRef.seed;
   const traced = buildMouthLine(phenotype, spec, carves, 17, surface);
-  // a long-headed reptile's seam runs back along its jaw to the hinge under its eye (a fish's and a
-  // slug's mouths are their own: see runSeamBack)
-  const line = sealed && !isSwimmer(phenotype) && phenotype.genomeRef.covering.type !== 'slime' ? runSeamBack(phenotype, spec, traced, surface) : traced;
+  // a long-headed reptile's seam runs back along its jaw to the hinge under its eye, a bony fish's gape to
+  // under the front of its eye (a shark's and a slug's mouths are their own: see runSeamBack, fishSeam)
+  const seam = sealed && (!isSwimmer(phenotype) || fishSeam(phenotype, spec)) && phenotype.genomeRef.covering.type !== 'slime' ? runSeamBack(phenotype, spec, traced, surface) : traced;
+  // (a crocodile's and a theropod's seam lies on its skin as the skin is drawn: see layOnDrawn — traced on the field,
+  // a theropod's stood a seventh of the mouth's size off its drawn jaw, and the teeth hung from it with it)
+  const line = seam !== traced && surface !== 'kit' && (hullBody(phenotype) || isTheropod(phenotype)) ? layOnDrawn(seam, drawnSkin(phenotype, surface === 'hybrid', carves, quality), spec.anchor.pos) : seam;
   // A shut reptile's teeth hang OUTSIDE its closed jaw — raked in toward the throat like an open mouth's,
   // every crown ran down from the seam into the shut lower jaw, under the skin, and the animal had no
   // teeth at all — and only the reptiles that show them show them (see shutTeeth): a crocodile's grin, its
@@ -252,8 +259,11 @@ export function buildJawed(
     const show = shutTeeth(phenotype);
     const more = seamLength(line.upper) / Math.max(seamLength(traced.upper), 1e-6);
     const grin = (t: ToothProfile | null): ToothProfile | null =>
-      t ? { ...t, curl: -TEETH_OUT, count: Math.min(RUN_TEETH_MAX, Math.round(t.count * more)), jitterLen: Math.max(t.jitterLen, GRIN_JITTER), len: (u: number) => t.len(u) * (1 + GRIN_BULGE * Math.exp(-(((u - 0.4) / 0.13) ** 2))) } : null;
-    params.upper = show === 'grin' ? grin(params.upper) : show === 'fangs' ? DRAGON_FANGS : show === 'blades' ? THEROPOD_TEETH : null;
+      t ? { ...t, curl: -TEETH_OUT, count: Math.min(RUN_TEETH_MAX, Math.round(t.count * more)), jitterLen: Math.max(t.jitterLen, GRIN_JITTER), sink: GRIN_SINK, len: (u: number) => t.len(u) * GRIN_LEN * (1 + GRIN_BULGE * Math.exp(-(((u - 0.4) / 0.13) ** 2))) } : null;
+    // (six fangs want a dragon's long jaw: along a blunt head's short seam they stood shoulder to shoulder
+    // across its face, a grin of square teeth — a short seam shows its two foremost)
+    const fangs = seamLength(line.upper) / r < FANG_RUN ? SHORT_FANGS : DRAGON_FANGS;
+    params.upper = show === 'grin' ? grin(params.upper) : show === 'fangs' ? fangs : show === 'blades' ? THEROPOD_TEETH : null;
     params.lower = show === 'grin' ? grin(params.lower) : null;
   }
   const o = spec.node.pos; // node-relative frame origin
@@ -397,9 +407,9 @@ export function buildJawed(
     for (const side of [-1, 1]) {
       const h = new THREE.SphereGeometry(1, 10, 6);
       const local = new THREE.Matrix4()
-        .makeTranslation(side * r * (ape ? 0.2 : grazer ? 0.25 : 0.13) * ns, -r * (ape ? 0.07 : grazer ? 0.02 : 0.035) * ns, r * (grazer ? 0.06 : 0.085) * ns)
-        .multiply(new THREE.Matrix4().makeRotationZ(side * (grazer ? 1.0 : 0.45)))
-        .multiply(new THREE.Matrix4().makeScale(r * (ape ? 0.09 : grazer ? 0.12 : 0.07) * ns, r * (ape ? 0.05 : grazer ? 0.04 : 0.036) * ns, r * (grazer ? 0.045 : 0.03) * ns));
+        .makeTranslation(side * r * (ape ? 0.2 : grazer ? GRAZER_NOSTRIL[0] : 0.13) * ns, -r * (ape ? 0.07 : grazer ? GRAZER_NOSTRIL[1] : 0.035) * ns, r * (grazer ? 0.06 : 0.085) * ns)
+        .multiply(new THREE.Matrix4().makeRotationZ(side * (grazer ? GRAZER_NOSTRIL[2] : 0.45)))
+        .multiply(new THREE.Matrix4().makeScale(r * (ape ? 0.09 : grazer ? 0.14 : 0.07) * ns, r * (ape ? 0.05 : grazer ? 0.05 : 0.036) * ns, r * (grazer ? 0.045 : 0.03) * ns));
       h.applyMatrix4(frame.clone().setPosition(at).multiply(local));
       holes.push(h);
     }
@@ -414,22 +424,72 @@ export function buildJawed(
       for (const side of [-1, 1]) {
         const lobe = new THREE.SphereGeometry(1, 16, 12);
         const local = new THREE.Matrix4()
-          .makeTranslation(side * r * PAD_SPREAD, -r * PAD_DROP, -r * 0.1)
-          .multiply(new THREE.Matrix4().makeScale(r * 0.32, r * 0.26, r * 0.24));
+          .makeTranslation(side * r * PAD_SPREAD, -r * PAD_DROP, -r * PAD_SINK)
+          .multiply(new THREE.Matrix4().makeScale(r * PAD_SIZE[0], r * PAD_SIZE[1], r * PAD_SIZE[2]));
         lobe.applyMatrix4(frame.clone().setPosition(at).multiply(local));
         lobes.push(lobe.toNonIndexed());
         lobe.dispose();
       }
       pads = mergeGeometries(lobes) ?? null;
       for (const l of lobes) l.dispose();
-      if (pads) {
-        pads.computeVertexNormals();
-        bakeBodySpace(pads, o);
-      }
+      // (the lobes keep the sphere's own normals, carried through the scale by applyMatrix4: recomputed on
+      // the unwelded triangles, every face got its own normal and the pads were two faceted eggs)
+      if (pads) bakeBodySpace(pads, o);
     }
   }
 
-  return { r, aim: spec.aim, upper, lower, muzzle, upperFold, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior, nose, nostrils, pads, muzzled, sealed };
+  // (a theropod's blades hang from the seam itself, with no fold over their roots: the fold every other toothed seam
+  // wears lay a seventh of the mouth's size BELOW the seam and stood a quarter of it proud of the drawn skin, the
+  // teeth's broad roots showing above it — from the front a raised lip ring round the snout, the teeth a fringe hung
+  // outside it: a muppet's mouth)
+  const fold = !muzzled && upperTeeth.length > 0 && !(line !== traced && params.upper === THEROPOD_TEETH);
+  return { r, aim: spec.aim, upper, lower, muzzle, upperFold, jawMass, upperLip, lowerLip, upperTeeth, lowerTeeth, interior, nose, nostrils, pads, muzzled, sealed, fold };
+}
+
+/**
+ * A seam laid onto the skin as it is DRAWN (smoothSkin's drawnSkin): each sample moved along its normal to the
+ * drawn surface, at most a cell either way — or, where the drawn skin is not there along its normal (past the
+ * drawn end of a snout), straight in toward `inner` (a point inside the head) to where it is. A crocodile's snout
+ * is only a cell or two deep, and its skin, read off a grid that coarse, lies inside its field — a tenth to
+ * two-fifths of the mouth's size along the jaw, and at the tip, where it narrows below a cell, short by up to
+ * most of a cell. Traced on the field, the seam (and the skin-toned fold over it) stood off the drawn snout all
+ * along the jaw and ran on round the end of it through the air: a wire hoop with teeth.
+ */
+export function layOnDrawn(line: MouthLine, drawn: { field: (x: number, y: number, z: number) => number; cell: number }, inner: Vec3): MouthLine {
+  // the crossing of the drawn surface along `dir` from `p`, within `reach` (null if there is none)
+  const cross = (p: Vec3, dir: Vec3, reach: number, both: boolean): Vec3 | null => {
+    const at = (t: number) => drawn.field(p[0] + dir[0] * t, p[1] + dir[1] * t, p[2] + dir[2] * t);
+    const inside = at(0) < 0;
+    // inside: walk out along `dir` (if `both`); outside: walk in, against it
+    if (inside && !both) return null;
+    const sgn = inside ? 1 : -1, step = drawn.cell / 16;
+    let a = 0, b = NaN;
+    for (let t = step; t <= reach + 1e-9; t += step) {
+      if (at(sgn * t) < 0 !== inside) {
+        b = sgn * t;
+        break;
+      }
+      a = sgn * t;
+    }
+    if (Number.isNaN(b)) return null;
+    for (let k = 0; k < 24; k++) {
+      const m = (a + b) / 2;
+      if (at(m) < 0 === inside) a = m;
+      else b = m;
+    }
+    const t = (a + b) / 2;
+    return [p[0] + dir[0] * t, p[1] + dir[1] * t, p[2] + dir[2] * t];
+  };
+  const lay = (sm: MouthSample): MouthSample => {
+    let q = cross(sm.p, sm.n, drawn.cell, true);
+    if (!q) {
+      const d: Vec3 = [sm.p[0] - inner[0], sm.p[1] - inner[1], sm.p[2] - inner[2]];
+      const L = Math.hypot(d[0], d[1], d[2]);
+      if (L > 1e-9) q = cross(sm.p, [d[0] / L, d[1] / L, d[2] / L], L, false);
+    }
+    return q ? { ...sm, p: q } : sm;
+  };
+  return { ...line, upper: line.upper.map(lay), lower: line.lower.map(lay) };
 }
 
 function dot(a: Vec3, b: Vec3): number {
@@ -454,14 +514,27 @@ export const SEAM_SINK = 0.2;
 /** A THEROPOD's upper teeth: ten blades along its jaw, most of each crown showing below the shut lip, the
  *  biggest a third of the way back, each its own length. (A crocodile's small pegs, sunk 0.42 of their
  *  length, stood a fiftieth of a unit off a theropod's skin — no teeth in its face — and an underbite's upper
- *  row was none; a dozen even blades, multiplied by the seam's length, were a row of stitching.) */
-export const THEROPOD_TEETH: ToothProfile = { count: 10, len: (u: number) => 0.34 + 0.26 * Math.sin(Math.PI * Math.min(1, (u + 0.1) / 0.95)), width: 0.24, curl: -TEETH_OUT, jitterLen: 0.15, jitterRock: 0.1, sink: 0.28, margin: 0.14, salt: 2 };
-/** A DRAGON's (a wyvern's) shut jaw shows a few long fangs at its front, the longest foremost. */
-export const DRAGON_FANGS: ToothProfile = { count: 6, len: (u: number) => 0.78 - 0.32 * u, width: 0.26, curl: -TEETH_OUT, jitterLen: 0.18, jitterRock: 0.1, sink: 0.3, margin: 0.42, salt: 3 };
+ *  row was none; a dozen even blades, multiplied by the seam's length, were a row of stitching.) They hang straight
+ *  from the seam, rooted in it — a twentieth of their length sunk, inside the seam's own width, and slimmer — with no
+ *  fold over them (see buildJawed's `fold`): sunk 0.28 of their length, their broad roots stood above the seam. */
+export const THEROPOD_TEETH: ToothProfile = { count: 10, len: (u: number) => 0.34 + 0.26 * Math.sin(Math.PI * Math.min(1, (u + 0.1) / 0.95)), width: 0.18, curl: -TEETH_OUT, jitterLen: 0.15, jitterRock: 0.1, sink: 0.05, margin: 0.14, salt: 2 };
+/** A DRAGON's (a wyvern's) shut jaw shows a pair of long fangs either side of its snout, just behind the
+ *  turn of its nose. (Six along the front third of the seam, the foremost pair stood on the front of the
+ *  snout over the chin: from the front a row of stitches across the face, from the side two whiskers.) */
+export const DRAGON_FANGS: ToothProfile = { count: 2, len: (u: number) => 0.95 - 0.32 * u, width: 0.26, curl: -TEETH_OUT, jitterLen: 0.18, jitterRock: 0.1, sink: 0.3, margin: 0.56, salt: 3 };
+/** …but a blunt head's shorter jaw (its seam under FANG_RUN mouth radii long: a dragon's and a wyvern's run 8.3–13,
+ *  a chimera's 1.6–5.8) shows only its two foremost, apart, short and fine (as long as a dragon's they hung from a blunt face as buck teeth) */
+export const FANG_RUN = 7;
+export const SHORT_FANGS: ToothProfile = { ...DRAGON_FANGS, count: 2, len: () => 0.4, width: 0.12, margin: 0.7 };
 /** A crocodile's grin: its teeth each their own length (± this share), and a band of bigger ones a little
  *  way back along the jaw (GRIN_BULGE more, at 0.4 of the way to the corner) */
 export const GRIN_JITTER = 0.32;
 export const GRIN_BULGE = 0.55;
+/** …each crown GRIN_LEN of the sealed row's, sunk GRIN_SINK of its length (the sealed row's 0.42 of a crown
+ *  0.2–0.46 of the mouth's size laid its tips along the shut lower jaw a hundredth of a unit off the skin:
+ *  from the side and in the face close-up, no teeth at all) */
+export const GRIN_LEN = 1.1;
+export const GRIN_SINK = 0.15;
 /** Which teeth a shut reptile's jaw shows (its seam run back along the jaw): a crocodile's grin (a
  *  sculling-tailed, armoured body — scutes.ts armoured), a theropod's blades, a winged reptile's fangs; a
  *  lizard's and a snake's none. */
@@ -490,9 +563,18 @@ export function snoutReach(p: Phenotype, mouthIdx: number): number {
 /** a muzzle reaching no further than this ahead of its braincase is a short one: a cat's */
 export const SNOUT_SHORT = 1.85;
 const SNOUT_LONG = 2.4;
+const NO_FUR: readonly THREE.Material[] = [];
 /** a whisker pad's offset from the nose, sideways and down (×the mouth's radius) */
 const PAD_SPREAD = 0.3;
-const PAD_DROP = 0.3;
+const PAD_DROP = 0.5;
+/** …its size (×the mouth's radius: across, down, out) and how far it is set back into the muzzle: a tall lobe
+ *  from under the nose down onto the upper lip. (Two round balls 0.26 tall under the nose stopped a third of the
+ *  mouth's radius short of the lip, a band of bare chin between: a teddy's muzzle over a drawn-on mouth.) */
+export const PAD_SIZE: readonly [number, number, number] = [0.3, 0.4, 0.2];
+/** (…sunk far enough that, furred in the coat's shells like the skin round them, they stand 0.4–0.75 of a pile
+ *  proud of the muzzle: at 0.14 the bare lobes stood a whole pile — a quarter of the mouth's radius — off it,
+ *  and furred they would be two puffballs) */
+export const PAD_SINK = 0.3;
 
 /** …and a long muzzle's nose pad against the mouth's size */
 const NOSE_LONG = 1.5;
@@ -515,6 +597,23 @@ export const APE_NOSE_FLARE = -0.3;
  *  dog's — its nostrils specks a seventieth of a unit across, black on black: none.) */
 export const GRAZER_NOSE = 1.25;
 export const GRAZER_NOSE_FLARE = 0.15;
+/** …its nostrils' place on the pad (across, down — ×the mouth's radius × GRAZER_NOSE) and their slant (rad): low on
+ *  its FACE, half-way out. (At 0.25 across and level with its middle, each lay on the pad's rim where it rounds
+ *  away: from three-quarters the far one was gone and the near one a dark nick in the edge — a pad with no
+ *  nostrils, the open end of a tube.) */
+export const GRAZER_NOSTRIL: readonly [number, number, number] = [0.16, 0.1, 0.8];
+/** …and the pad is a deer's charcoal, not black: its black nostrils show on it (black on black they were none) */
+export const GRAZER_PAD = 0x3a3032;
+/** A wet nose's colour: a grazer's charcoal, near-black, or on a small animal as often the dusky pink of a mouse's or a
+ *  kitten's; an ape's is its bare face's own skin, a shade darker. */
+export function noseColorOf(p: Phenotype, mouthIdx: number): number {
+  const ape = faceMaskOf(p);
+  if (ape) return new THREE.Color(ape.color).multiplyScalar(0.7).getHex();
+  if (pinkNose(p, mouthIdx)) return new THREE.Color().setHSL(0.98, 0.32, 0.42).getHex();
+  return isGrazer(p) ? GRAZER_PAD : 0x1c1416;
+}
+/** the nostrils' colour */
+export const NOSTRIL = 0x050405;
 /** Does this mouth wear a cat's whisker pads? A short muzzle on a skull with no stop, not an ape's. */
 export function whiskerPads(p: Phenotype, mouthIdx: number, muzzled: boolean): boolean {
   return muzzled && snoutReach(p, mouthIdx) < SNOUT_SHORT && stopOf(p, mouthIdx) < 0.5 && !isApe(p);
@@ -578,6 +677,8 @@ export function JawedMouth({
   dark,
   skin,
   surface = 'kit',
+  quality = 'high',
+  fur = NO_FUR,
 }: {
   f: MeshFeature;
   phenotype: Phenotype;
@@ -587,10 +688,15 @@ export function JawedMouth({
   dark: number;
   skin?: THREE.Material; // the body's covering material — a mammal's jaw wears it
   surface?: SkinSurface; // which rendered skin to trace lips onto (kit vs blended smooth/hybrid)
+  quality?: SkinQuality; // …and the quality it is drawn at (a crocodile's seam is laid on it: see layOnDrawn)
+  fur?: readonly THREE.Material[]; // the coat's fur shells (close-up views): a cat's whisker pads wear them
 }) {
+  // (only a seam laid on the drawn skin reads its quality: every other mouth keeps one build across the World's
+  // switches between a near and a far skin, not a rebuild in render at each)
+  const q = surface !== 'kit' && (hullBody(phenotype) || isTheropod(phenotype)) ? quality : undefined;
   const built = useMemo(
-    () => buildJawed(phenotype, f.idx, carves, recessed, variant, surface),
-    [phenotype, f.idx, carves, recessed, variant, surface],
+    () => buildJawed(phenotype, f.idx, carves, recessed, variant, surface, q),
+    [phenotype, f.idx, carves, recessed, variant, surface, q],
   );
   const pal = phenotype.genomeRef.palette;
   const coat = useMemo(() => coatMain(pal).getHex(), [pal]);
@@ -598,15 +704,10 @@ export function JawedMouth({
   // (a pink nose on a bear or a wolf made a giant rodent of it — the bigger the body, the rarer)
   // (an ape has no wet rhinarium: its nose is the bare face's own skin, a shade darker)
   const ape = useMemo(() => faceMaskOf(phenotype), [phenotype]);
-  const noseColor = useMemo(
-    () =>
-      ape
-        ? new THREE.Color(ape.color).multiplyScalar(0.7).getHex()
-        : pinkNose(phenotype, f.idx)
-          ? new THREE.Color().setHSL(0.98, 0.32, 0.42).getHex()
-          : 0x1c1416,
-    [phenotype, ape, f.idx],
-  );
+  const noseColor = useMemo(() => noseColorOf(phenotype, f.idx), [phenotype, f.idx]);
+  // (a grazer's muzzle is furred to its pad: the jaw's skirt, bare under the coat's shells, was a smooth pale rim
+  // round the dark pad — the lip of a hollow tube)
+  const furredSkirt = useMemo(() => isGrazer(phenotype), [phenotype]);
 
   const fang = useMemo(() => ((JAWED_PARAMS[variant] as JawedParams).blunt ? bluntGeometry() : fangGeometry()), [variant]);
   const muzzled = built?.muzzled ?? false;
@@ -625,7 +726,7 @@ export function JawedMouth({
       // mammal's wear its coat (the chin and the lip fold are fur)
       jaw: new THREE.MeshStandardMaterial({ color: muzzled ? coat : dark, roughness: muzzled ? 0.85 : 0.62 }),
       nose: new THREE.MeshPhysicalMaterial({ color: noseColor, roughness: ape ? 0.7 : 0.38, clearcoat: ape ? 0 : 0.6, clearcoatRoughness: 0.35 }),
-      nostril: new THREE.MeshStandardMaterial({ color: 0x050405, roughness: 0.9 }),
+      nostril: new THREE.MeshStandardMaterial({ color: NOSTRIL, roughness: 0.9 }),
       interior: new THREE.MeshStandardMaterial({ color: INTERIOR, roughness: 0.3, side: THREE.DoubleSide }),
       teeth: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42 }),
     };
@@ -675,6 +776,9 @@ export function JawedMouth({
   });
 
   if (!built) return null;
+  // (a crystal beast's mouth is the cut in its head's stone (facets.ts crystalStones): opened to eat, a jaw
+  // of skin and a throat would swing out from under the stone)
+  if (sealed && phenotype.genomeRef.covering.type === 'crystal') return null;
   const coatMat = skin ?? mats.jaw;
   return (
     <group>
@@ -685,13 +789,17 @@ export function JawedMouth({
           in the hide's own material it fought the skin for the same pixels, a dashed line along the mouth
           — a zipper. A seam's skull is its upper jaw.) */}
       {!sealed && <mesh geometry={built.muzzle} material={coatMat} castShadow />}
+      {!sealed && furredSkirt && skin && fur.map((m, i) => <mesh key={`skirtFur${i}`} geometry={built.muzzle} material={m} />)}
       {seamShown(phenotype, sealed) && <mesh geometry={built.upperLip} material={mats.lip} castShadow />}
       {/* (a mammal's mouth wears no fold: with only its canines/incisors there are no tooth roots to
           hide, and draped under the lip line in the coat it hung below the chin as a pale band; nor
           does a toothless seam — a frog's, a fish's — where it jutted ahead of the snout as a hook) */}
-      {!muzzled && built.upperTeeth.length > 0 && <mesh geometry={built.upperFold} material={shut ? coatMat : mats.lip} castShadow />}
+      {built.fold && <mesh geometry={built.upperFold} material={shut ? coatMat : mats.lip} castShadow />}
       {built.nose && <mesh geometry={built.nose} material={mats.nose} castShadow />}
       {built.pads && <mesh geometry={built.pads} material={coatMat} castShadow />}
+      {/* (…and the coat's shells over them, as over the muzzle round them: bare, they were two smooth suede
+          lobes poking out through the fur — pasted on) */}
+      {built.pads && skin && fur.map((m, i) => <mesh key={`padFur${i}`} geometry={built.pads!} material={m} />)}
       {built.nostrils && <mesh geometry={built.nostrils} material={mats.nostril} />}
       {built.upperTeeth.length > 0 && (
         <instancedMesh

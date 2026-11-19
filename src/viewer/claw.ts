@@ -22,7 +22,19 @@ export interface ClawPlan {
   /** finger radius at u ∈ [0, 1] along each */
   fixedR: (u: number) => number;
   dactylR: (u: number) => number;
+  /** the teeth on the fingers' cutting edges, claw frame: each one's root on its finger's edge, its point in the gape */
+  teeth: { root: Vec3; tip: Vec3; r: number }[];
 }
+
+/** A claw's TEETH: knobs on each finger's cutting edge, standing into the gape — where along the finger (u, as
+ *  its centreline is sampled), and their height and root radius (× the claw's radius). The fixed finger's and the
+ *  dactyl's alternate, so they mesh. (Smooth, each finger was a plain tube running to a black point: two cones.) */
+export const CLAW_TEETH: { fixed: readonly number[]; dactyl: readonly number[]; h: number; r: number } = {
+  fixed: [0.3, 0.46, 0.62],
+  dactyl: [0.38, 0.54],
+  h: 0.16,
+  r: 0.08,
+};
 
 const PTS = 9;
 
@@ -43,13 +55,24 @@ export function clawPlan(r: number): ClawPlan {
     // the dactyl hinges at the palm's upper front, arches over the gape and hooks down to meet it
     dactyl.push([0, r * (0.55 + 0.22 * u - 0.67 * u * u), r * (1.15 + 2.35 * u)]);
   }
+  const fixedR = (u: number) => r * (0.46 - 0.42 * Math.pow(u, 1.2));
+  const dactylR = (u: number) => r * (0.42 - 0.38 * Math.pow(u, 1.2));
+  // a tooth's root sits a hair inside its finger's edge, its point CLAW_TEETH.h out into the gape, leaning on ahead
+  const at = (path: Vec3[], R: (u: number) => number, u: number, up: number) => {
+    const k = Math.min(PTS - 2, Math.floor(u * (PTS - 1)));
+    const f = u * (PTS - 1) - k;
+    const c = [0, 1, 2].map((i) => path[k][i] + (path[k + 1][i] - path[k][i]) * f);
+    const y = c[1] + up * (R(u) - 0.03 * r);
+    return { root: [0, y, c[2]] as Vec3, tip: [0, y + up * CLAW_TEETH.h * r, c[2] + 0.04 * r] as Vec3, r: CLAW_TEETH.r * r };
+  };
   return {
     // (pressed flat side to side, as a crab's palm is: as wide as it was deep, it was a boxing glove)
     palm: { c: [0, 0, r * 0.5], r: [r * 0.46, r * 1.0, r * 1.2] },
     fixed,
     dactyl,
-    fixedR: (u) => r * (0.46 - 0.42 * Math.pow(u, 1.2)),
-    dactylR: (u) => r * (0.42 - 0.38 * Math.pow(u, 1.2)),
+    fixedR,
+    dactylR,
+    teeth: [...CLAW_TEETH.fixed.map((u) => at(fixed, fixedR, u, 1)), ...CLAW_TEETH.dactyl.map((u) => at(dactyl, dactylR, u, -1))],
   };
 }
 
@@ -111,7 +134,17 @@ export function clawGeometry(r: number, quat: readonly number[]): { shell: THREE
   const knuckle = new THREE.SphereGeometry(1, 12, 8).deleteAttribute('uv');
   knuckle.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(...plan.dactyl[0]), new THREE.Quaternion(), new THREE.Vector3(r * 0.36, r * 0.36, r * 0.42)));
   const shellParts = [palm, knuckle, tube(fb, plan.fixedR, 0, CUT), tube(db, plan.dactylR, 0, CUT)];
-  const tipParts = [tube(ft, plan.fixedR, CUT, 1), tube(dt, plan.dactylR, CUT, 1)];
+  // the teeth, horn like the points (see CLAW_TEETH)
+  const teeth = plan.teeth.map(({ root, tip, r: tr }) => {
+    const d = new THREE.Vector3(tip[0] - root[0], tip[1] - root[1], tip[2] - root[2]);
+    const h = d.length();
+    const cone = new THREE.ConeGeometry(tr, h, 6, 1, true).deleteAttribute('uv');
+    cone.translate(0, h / 2, 0);
+    cone.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()));
+    cone.translate(root[0], root[1], root[2]);
+    return cone;
+  });
+  const tipParts = [tube(ft, plan.fixedR, CUT, 1), tube(dt, plan.dactylR, CUT, 1), ...teeth];
   const merge = (parts: THREE.BufferGeometry[]) => {
     const loose = parts.map((p) => (p.index ? p.toNonIndexed() : p));
     const soup = mergeGeometries(loose, false) ?? loose[0];

@@ -5,7 +5,7 @@ this is the working memory between build sessions. The forward-looking plan and
 acceptance tests live in [ROADMAP.md](ROADMAP.md); this is the backward-looking
 "what got done and why" companion.
 
-**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M98: a thirteenth look — spiders' eyes, snakes' heads, hides that read; M97: a twelfth look, and legs with joints; M96: an eleventh look, and a deer named a deer; M95: thin limbs drawn exact, and a tenth look; M94: an eighth look, harder; M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
+**Current phase:** Phase 6 (Part 3 — the Studio and the World; see the top entries, M100: a fourteenth look (3.68), and parts an animal is never without; M99: what the thirteenth look left — a deer, a bear's nose, an octopus's eye, a crystal of stones, a cat's throat, a fish's jaw, a mouse, a crab's rim, an ant's feelers, a chimera's net, a songbird's wing, a crocodile's hull, an arthro-alien's armour; M98: a thirteenth look — spiders' eyes, snakes' heads, hides that read; M97: a twelfth look, and legs with joints; M96: an eleventh look, and a deer named a deer; M95: thin limbs drawn exact, and a tenth look; M94: an eighth look, harder; M93: what the seventh look left — tails, claws, paws and eyes; M92: a seventh look, the scores rise; M91: a sixth look — grins, a cat's face, a dragon's folded wing; M90: cut stone, a mouth of flesh, and hops that land; M89: a faster valley and an independent fifth look; M88: a fourth look, and breeding that stays coherent; M87: octopuses, webbed feet, bears; M86: a third look by eye, and bodies that keep their room; M83–M85: the valley by the square, the last of the parallel plans, a second wave of plans; M79–M82: a re-audit by eye, surfaces that read, and plans reworked in parallel; M76–M78: two reviews and the body plans one by one; M67–M75 and M60–M66 before them). Earlier: Phase 3 (the creature grammar). M0–M5 + **M8** (genome v2 + aim) + **M9**
 (part vocabulary) + **M10** (morphotype library) + **M11** (divergence engine — morphospace,
 coherence labels, niched litters) + **M12** (covering & texture — procedural patterns +
 per-covering in-shader bump) + **M13** (motion styles — 8 gaits picked from morphology) + **M14**
@@ -55,6 +55,212 @@ Rapier). **The entire roadmap (M0–M16) is now built.**
 | Saved games | `src/ui/saves.ts`, `game.ts`, `ScreenBoundary.tsx` | ✅ validated all-or-nothing loads, runaway numbering renumbered; a failed screen leads back to a menu that stands on its own |
 
 ---
+
+## M100 — A fourteenth look, and parts an animal is never without · 2026-11-16
+
+- **A review of the round-2 commits** (four finders, each followed by a skeptic) confirmed three defects:
+  - A fish's lower jaw grew on 18 of 3,000 random bodies that are no bony fish: under a lamprey's funnel, a
+    sucker, a proboscis or a plated swimmer's mandibles, with no gape and no pointed snout. `grow isBonyFish`
+    is now the one test the snout, the jaw (plus scales and a jawed mouth) and the gape all key on.
+  - A crab mutant grown longer than round had its shell sliced open front and back. The shell's box now
+    takes the trunk's length.
+  - A ringed mutant with more rings than leg pairs left a ring bare. `myriapodTergites` now plates every
+    ring centre.
+- **A fourteenth look** (seed 37; four family critics, each followed by a second viewer that confirmed or
+  rejected every defect and scored each plan itself) gave a mean of **3.68**. Its best plans were the bear,
+  the ape, the wyvern, the shark, the octopus and the horror; its worst were the lizard, the dog, the
+  chimera, the slug, the cat and the songbird.
+- *A stump of a rump, a bald dome of a head* (cat, dog, lizard, songbird; mouse) — four of its six worst plans
+  had lost their tails to one roll. Each tail was a chance of 0.85–0.97, drawn at the same place in every
+  plan's stream, so seed 37 took them all at once (and seeds 36–37 the mouse's ears). The parts that make
+  these animals what they are are now certain:
+  - tails for the cat, dog, lizard, songbird and wyvern;
+  - ears for the cat, mouse and deer;
+  - wings for the songbird;
+  - whiskers for the cat and mouse.
+  Only the seeds that used to lose a part change, and they gain its genes.
+- **From its list**, diagnosed plan by plan as before (each patch's tests fail on the old code; each was
+  rendered against the old build before it was taken):
+  - *Faceted eggs for whisker pads, cardboard ears, a hyena's slope* (cat): the pads keep the sphere's
+    normals, sit deeper and wear the coat's fur shells. A pointed ear's sides bow out to a blunt tip
+    (`POINTED_EDGE`), it stands up (`EAR_UPRIGHT`) and it wears a short pile of the coat (`EAR_PILE`). The
+    felid row's own `rear` keeps the back level.
+  - *A fawn* (dog): a fourth neck link, carried less steeply, lifts the head off the chest. A stopped
+    skull lays its muzzle out in its own stride (`grow STOP_ELONG`, canid `muzzleLong` 1.3). A runner's paws
+    root toward the trunk's ends (`PAW_SET`).
+  - *Pipes with ring seams on black dots* (deer): a knee knob swells smoothly into the links either side
+    (`limbTubes KNOB_EASE`, `KNOB_COLLAR`). A hooved hind leg folds at a hock (`HOOF_GASKIN`,
+    `HOOF_CANNON`). The hoof is a keratin wedge (`feet hoofGeometry`). The nostrils show, low on a
+    charcoal pad.
+  - *A cardboard beak, a thumb of a head, a shield of a wing* (songbird): the shut bill is a cone
+    (`SLIM_WIDTH`) with its gape wedge sunk. The head sits down (bird `neckLong` 1.0). The folded wing
+    roots at the hawk's height (`SHORT_WING_SEAT`).
+  - *Stacked black holes for eyes, doll's legs* (chimera): one eye pair (`eyePairs`: the second is still
+    drawn, not grown), a reptile's slit eye, and no podomeres on a leg that ends in a paw, hoof or hand.
+  - *A blank bean with pins in its back, a bun* (slug): its feelers and mouth root on the front node
+    (`grow isSlug`), with a shorter pair of lower tentacles from the feeler's own gene (`SLUG_FACE`). The
+    mantle follows the body's section, so it has no brim.
+  - *A paper tag of a fin, a wire smile on a dome* (fish): a fish-cut pectoral's root runs up the flank
+    (`FISH_PECTORAL_ROOT`), so it fans back off the skin. The lower jaw is sized on the head's middle link,
+    not the capped tip, so the gape runs between two jaws.
+  - *A pot belly, a frog's head, stitches for teeth, cardboard wings* (dragon): a narrower, keeled chest,
+    with what is drawn against girth scaled back up. A head 2.1–2.5 times as long as it is wide. One long
+    fang either side of the snout (`DRAGON_FANGS`). A folded wing that reaches the rump, its bones darker
+    than its web (`WING_BONE_SHADE`).
+  - *Buried eyes, balloon claws, black cones* (crab): a rim stalk of at least three nodes stands clear of
+    the shell (`RIM_STALK*`), with compound eyes. The arm's skin ends inside the flat palm (`CLAW_WRIST`).
+    The fingers are toothed (`CLAW_TEETH`).
+- **A second round from its list:**
+  - *A sock-top ring where a leg hands on to its tube* (every plan, first seen on the longer dog): a
+    crease, not a step. The field's tucked cone faced down the leg under a bright ball and tube. Every
+    hand-over now sweeps a collar a hair proud of the field's girth up the limb from the joint
+    (`limbTubes HAND_PROUD`, `HAND_RUN`, `HAND_HOLD`), generalising the deer's knob collar. The seam's lean
+    error drops from 0.22–0.47 to 0.03–0.11 (the weasel's from 1.37 to 0.17).
+  - *Push-up posts* (lizard, and the crocodile with it): a walking sprawler's upper limb reaches out clear
+    of the flank, its shin is short and near plumb, and its foot lies along the ground, the shin's length
+    solved to land the foot under the belly (`grow SPRAWL_*`). The belly drops from up to 0.45 to 0.22 of
+    the trunk's depth.
+  - *A ball head on the shell, grape-cluster feet, a loaf* (tortoise): four slimmer neck links at full
+    stride; an elephant's foot (`feet stumpFootGeometry`); a horn shell crowned over the back
+    (`DOME_GAIN`), with its marginal scutes a band round the rim.
+  - *A vent grille, needle fins* (shark): slits are flat dark lenses on the skin (`gills gillSlits`), and
+    its pectorals are pitched foils (`SHARK_PECTORAL`).
+  - *A wire hoop past the snout* (crocodile): its seam was traced on the exact field, but the skin is that
+    field on a grid as deep as its snout. `polygonize drawnField` reads the skin as drawn, and the seam is
+    laid on it (`jawed layOnDrawn`).
+  - *A card of a bill, spikes in the flanks* (ostrich): a horn spoon of 17 rings packed toward the tip, on
+    a deeper base. The spikes were a songbird's splayed toes; a flightless bird stands on three short ones
+    (`RATITE_TOES`).
+  - *A muppet's lip ring, arms to the knee* (theropod): its seam lies on the drawn skin with no fold
+    while its blades show, which hang from the groove. Its arms fold under its chest (`THEROPOD_SHOULDER`,
+    `THEROPOD_ELBOW`, amplified in grow).
+  - *Spectacles, a ragged web* (octopus): its own fine eye-spot scale (`patternScale` [7, 10]), many small
+    rings; a thicker, narrower web drawn whole by the grid (`WEB_THICK`, `WEB_SINK`, `WEB_OUT`).
+  - *A dagger under the eye, a wafer tail* (hawk): the hooked bill pitched up off the face before it hooks
+    (`HOOKED_PITCH`), broad at its root. An upright body's tail fan hangs down the line of its back
+    (`tailFanDroop`).
+- Left: a tail's or tentacle's spline hand-overs (the field's chain blend stands 2–6% proud of the
+  collar); the other reptiles' seams laid on the field, not the drawn skin, by a smaller gap; a
+  tortoise's beak that still hooks like a parrot's; a slug's sole; the mouse's neckless wedge head; a
+  weasel's slit eyes.
+- **Tests:** `reviewRound2.test.ts` (no fish jaw on non-fish, a long crab's closed shell, a plate on every
+  ring), `definingParts.test.ts` (200 seeds of each plan grow their defining parts), `felidLook`, `canidCarriage`,
+  `ungulateLook`, `songbirdLook`, `chimeraFace`, `slugFace`, `fishFace`, `dragonLook`, `crabStalksClaws`; `handoverSeam`, `lizardSprawl`,
+  `chelonianLook`, `sharkLook`, `crocSeam`, `ratiteLook`, `bipedLook`, `cephalopodLook`, `raptorLook`.
+
+## M99 — What the thirteenth look left: a deer, a bear's nose, an octopus's eye, a crystal of stones · 2026-11-15
+
+Each plan below was diagnosed alone by an independent agent on a fresh render of the current code at
+seed 29 (side and face views), with probes. Its patch was checked against the old code by its tests,
+then rendered against the old build before it was taken.
+
+- *A llama with goat horns* (deer) — a grazer (a body on hooves) lifts its neck once at its root
+  (`grow NECK_CARRY`), so the neck grows straight, deep at the shoulders and slim at the throat (Morpho
+  `neckTaper`). It hangs its head from the poll (`HEAD_BOW`), with its mouth aimed down. Its nose is a broad
+  moist pad (`jawed GRAZER_NOSE`). Its spots are a fawn's dapples: small, pale, laid solid, on the back and
+  upper flanks only (`face dappled`, `palette coatDapple`, `uDapple`). The cannon drops plumb
+  (`HOOF_KNEE`), the knee and hock are knobs (`limbTubes HOOF_KNOB`), and the horns have two links,
+  swept back.
+- *A pig's nose* (bear) — two cat-only rules keyed on a short snout's reach alone. A bear's short
+  muzzle fell under that reach, so it wore a cat's pink button. Now a skull with a stop is never pink
+  (`pinkNose`) and wears at least `NOSE_STOPPED` 1.3. A bear's ears stay low furred flaps, and its muzzle
+  is as long as it is wide.
+- *A slit eye that reads as a mouth; a starfish's stiff arms* (octopus) — the eye sits at the middle of
+  the head's sides, looking a little up. It is raised in a turret of its own lids (`eyeSeat
+  TURRET_DEPTH`), and its iris is gold to bronze (`OCTOPUS_IRIS`). The arms reach 1.4–1.9 of the mantle's
+  height and lie on the floor. Each curls its tip to its own side, the last two joints only (`ARM_TIP`).
+- *Smooth glossy balloons on a cut torso* (crystal) — the head and every leg link are stones too
+  (`facets crystalStones`): a head stone of 22 mirrored cuts, and a bevelled prism around each leg link.
+  Each stone rides its own bone in the World, and the skin they enclose is no longer drawn
+  (`cullCovered`). The head stone is cut at the mouth with a V under the eyes, and each eye is a gem in a
+  face of its own.
+- *An independent review of the day's commits* confirmed four defects and refuted a fifth:
+  - Octopus arm tips ran into the next arm; none of 1,000 founders touch now.
+  - The crystal head stone pivoted about the head; it now blends from the neck root's bone to the
+    head's front.
+  - A crystal insect's head stone held its thorax; it now keeps to the rig's side of `legSeg`.
+  - A bird's tail coverts rode the fan's bone; they are now skinned from the rump to the fan
+    (`tailCovertsGeometry`).
+- *A dewlap under the jaw; two cheek balls; a scribble of whiskers* (cat):
+  - The neck is slimmer, carried up more steeply and drawn in under the skull, so the throat meets the
+    jaw at an angle.
+  - The whiskers root beside the nose on the pads and reach past the cheeks (`whiskerStretch`,
+    `WHISKER_REACH`). This is the shared muzzle builder, so a mouse's and a weasel's whiskers moved too.
+  - The pads run down onto the upper lip (`PAD_DROP`, `PAD_SIZE`).
+  - The paws are as wide as the wrists.
+- *A jawless whale head* (fish):
+  - A body with fish-cut fins and no legs slides its snout tip forward and slims it (`grow SNOUT_TIP`).
+  - A lower jaw sits under the snout on the hybrid skin (`bodyField FISH_JAW`).
+  - The gape runs as a sunk seam from the snout's point to under the front of the eye (`mouthLine
+    FISH_GAPE`, `fishSeam`).
+  - The gill cover is a plate in the body's own material, its rear edge standing proud of the skin
+    (`gills gillCoverFlap`), where it was a painted arc.
+  - The tail stalk narrows side to side into the fin (`PEDUNCLE_FLAT`). The shark is untouched.
+- *A goat's eye, a satellite dish for an ear, burns on the coat* (mouse):
+  - The eyes are black beads (the rodent row's `eyeStyle` [0.22, 0.36]).
+  - The coat is plain.
+  - A rat-like body's ear is bare: a thin, shallow leaf, pink nearly to its rim, lit faintly through
+    (`ear BARE_EAR_CUP`, `BARE_EAR_THICK`, `BARE_EAR_INNER`, `BARE_EAR_GLOW`).
+- *Two lollipops on a bread roll* (crab):
+  - The eyestalks rise from the shell's front rim, a third of its width apart over the mouth (`grow
+    ensureFace`, `shellFront`).
+  - The shell is about a tenth broader at its front corners than at its back, with a ledge and four
+    anterolateral teeth along its front margin (`smoothSkin CRAB_MARGIN`, `CRAB_TOOTH`, `CRAB_TEETH`).
+  - Its mouthparts fold under the shell's front (`mandibles shellMouth`); seen from above they stood out
+    ahead of it as a handle.
+  - Its legs are a little shorter, so they no longer splay out like rays.
+- *A lime-green ant with cigarette butts for feelers* (insect):
+  - Two-link elbowed antennae, 2.6–4 head radii long. A curl past 0.4 rad a link is grown `ANTENNA_ELBOW`
+    times over, so the gene stays inside the `curlPitch` bound that breeding, mutation and sharing clamp to.
+  - Compound eyes are a smooth dome under a fine hex lattice of lenses (`ommatidia.ts`).
+  - Legs taper from a stout femur to a fine tarsus.
+  - The cuticle is darker and duller: plain, banded or spotted, never a reticulate camouflage.
+- *A red harness, a grin of square teeth, disc feet* (chimera):
+  - With no pattern scale of its own, the net's cells could be wider than the trunk, and their walls cut
+    the body as straps and a cross. It now has its own scale (`patternScale` [4.6, 7.2]).
+  - It stands on claws, paws or pincers.
+  - A blunt head's short jaw seam shows two fine fangs (`jawed SHORT_FANGS`, under `FANG_RUN` mouth
+    radii), not a dragon's six side by side.
+- *Fish scales on its breast, a pale pad of a wing, two blades behind, a cracked bill* (bird):
+  - A flier's feather edges show along its back alone (`FEATHER_EDGE_Y`).
+  - A band comes back by degrees down the neck (`FEATHER_HOOD`), with no edge round the throat.
+  - The folded wing wears the back's tone (`FOLD_TONE`) and tucks its front under the coat (`FOLD_TUCK`).
+  - A songbird's short wing lies onto its tail (`shortWingLie`).
+  - A slim bill is shut, its lower mandible lying under the upper to the tip (`SLIM_SHUT`).
+- *A frog's face, onion rings, a clown's nose* (crocodile):
+  - Its neck is as flat as its back and skull (`neckDeep` 0.8).
+  - The trunk, neck and head blend as one hull (`bodyField hullBody`), so their overlaps no longer swell
+    into rings.
+  - Its leg roots sink inside the trunk (`LEG_ROOT_SINK`).
+  - Its snout narrows to the tip.
+  - The nostril boss lies on the snout, its rim in the skin.
+  - Its grin's teeth clear the skin (`GRIN_LEN`, `GRIN_SINK`).
+- *A toy caterpillar in camouflage* (arthro-alien):
+  - Each legged ring wears a flat tergite (`bodyField myriapodTergites`); from above it was a string of
+    soft beads.
+  - Its cuticle is dark indigo to oxblood, plain or graded, with sober marks.
+  - Each eye is a lozenge of four small lenses (`OCELLI_CLUSTER`), not one friendly dome.
+  - Its feelers root clear of its eyes.
+  - Its forcipules close level under the head in a near-black lacquer (`FORCIPULE_DROOP`,
+    `FORCIPULE_TONE`).
+- All of these are range values, constants or work done after the draws, so no genome stream moved.
+- **Tests:**
+  - deer: `ungulate.test.ts` (neck, cannon, horns, coat), `nose.test.ts › a broad nose pad`, `face.test.ts ›
+    dapples`, `limbTubes.test.ts › knobs at the knee and hock`.
+  - bear: `nose.test.ts › a bear's nose never pink`, `ear.test.ts › low flaps`.
+  - octopus: `cephalopod.test.ts` (eyes, reach, tip curl, footing, no arm touches another),
+    `eyeSeat.test.ts › raised, gold`.
+  - crystal: `crystalStones.test.ts`.
+  - bird: `wings.test.ts › the coverts' weights`.
+  - cat: `felid.test.ts` (throat, paws, whiskers, pads).
+  - fish: `fishHead.test.ts` (pointed snout, chin, gape, gill plate, tail stalk).
+  - mouse: `rodentLook.test.ts` (bead eye, plain coat, bare ear).
+  - crab: `crabFront.test.ts` (eyes on the rim, toothed broad front, folded mouthparts, legs).
+  - insect: `insectoid.test.ts` (elbowed feelers, tapering legs, dark plain cuticle), `ommatidia.test.ts`.
+  - chimera: `chimeraMarks.test.ts` (cells under the trunk's width, paws, fangs apart).
+  - bird: `birdLook.test.ts` (shut bill, wing tone, tuck and lie, a smooth breast, the band's hood).
+  - arthro-alien: `arthroAlienLook.test.ts` (tergites, dark cuticle, feelers clear of the eyes, forcipules, lenses).
+  - crocodile: `crocHull.test.ts` (one hull, a flat neck, no rings, no knob, the nostril boss, teeth).
 
 ## M98 — A thirteenth look: spiders' eyes, snakes' heads, hides that read · 2026-11-14
 

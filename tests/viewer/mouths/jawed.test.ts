@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { grow, type Phenotype } from '../../../src/engine/grow';
 import { defaultGenome } from '../../../src/engine/genome';
 import { randomGenome, genomeOfMorphotype } from '../../../src/engine/random';
-import { buildFieldPrims, fieldAt, qRotateV, rayToSurface } from '../../../src/viewer/bodyField';
+import { buildFieldPrims, fieldAt, hullBody, qRotateV, rayToSurface } from '../../../src/viewer/bodyField';
+import { drawnSkin } from '../../../src/viewer/smoothSkin';
 import { buildJawed, jawDrawn, seamShown, teethDrawn, JAW_SHOWN, TEETH_SHOWN, JAWED_PARAMS, type JawedVariant, shutTeeth, DRAGON_FANGS, GRIN_BULGE, GRIN_JITTER, SEAM_SINK } from '../../../src/viewer/mouths/jawed';
 import { mouthCarves, mouthSpec, surfacePrims } from '../../../src/viewer/mouthLine';
 
@@ -346,11 +347,13 @@ describe('jawed mouth build (mouth overhaul)', () => {
         if (!spec || !['herbivore', 'maw', 'fanged', 'underbite'].includes(spec.variant)) continue;
         const b = buildJawed(p, idx, [], false, spec.variant as JawedVariant, 'hybrid')!;
         const f = surfacePrims(p, 'hybrid');
+        // (a crocodile's seam lies on its skin as DRAWN — see jawed's layOnDrawn — and is judged against it)
+        const at = hullBody(p) ? drawnSkin(p, true).field : (x: number, y: number, z: number) => fieldAt(f, x, y, z);
         const o = spec.node.pos;
         const pos = b.upperLip.getAttribute('position');
         let out = 0, top = 0;
         for (let v = 0; v < pos.count; v++) {
-          const d = fieldAt(f, pos.getX(v) + o[0], pos.getY(v) + o[1], pos.getZ(v) + o[2]);
+          const d = at(pos.getX(v) + o[0], pos.getY(v) + o[1], pos.getZ(v) + o[2]);
           if (d > 0) out++;
           top = Math.max(top, d);
         }
