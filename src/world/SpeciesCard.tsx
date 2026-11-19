@@ -50,8 +50,14 @@ function TrendRow({ row, trend, color }: { row: Row; trend: TrendSample[]; color
   const vs = trend.map((x) => x[row.key] as number);
   const first = vs[0], last = vs[vs.length - 1];
   let lo = row.share ? 0 : Math.min(...vs), hi = row.share ? 1 : Math.max(...vs);
-  // (a flat line sits in the middle, not on the floor)
-  if (hi - lo < 1e-6) [lo, hi] = [lo - 1, hi + 1];
+  // a small change is drawn small: the scale spans at least a fifth of the trait's mean (drift: a third
+  // of the way to a new species), centred on the line — a 2% wobble in size never fills the box
+  const mean = vs.reduce((a, b) => a + b, 0) / vs.length;
+  const least = row.key === 'drift' ? 0.1 : Math.max(1e-6, Math.abs(mean) * 0.2);
+  if (hi - lo < least) {
+    const mid = (hi + lo) / 2;
+    [lo, hi] = [mid - least / 2, mid + least / 2];
+  }
   const t0 = trend[0].t, t1 = trend[trend.length - 1].t;
   const d = vs
     .map((v, i) => {
