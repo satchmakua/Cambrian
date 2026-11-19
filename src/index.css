@@ -2649,3 +2649,248 @@ body,
   font-size: 12.5px !important;
   line-height: 1.45;
 }
+
+/* --- the species card: one species from the world's records ------------------------------------ */
+.species-card {
+  position: absolute;
+  z-index: 3;
+  top: 60px;
+  left: 318px;
+  width: 300px;
+  max-height: calc(100vh - 130px);
+  overflow-y: auto;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(16, 19, 26, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  font-size: 12px;
+  color: #b8c2d0;
+}
+
+.species-card h3 {
+  margin: 0 0 6px;
+  padding-left: 8px;
+  border-left: 3px solid;
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.species-card h4 {
+  margin: 12px 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.species-card p {
+  margin: 6px 0 0;
+  line-height: 1.4;
+}
+
+.species-card .doing {
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+
+.species-card .doing b {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.species-card .gone {
+  color: #d58a82;
+}
+
+.species-card .portraits {
+  display: flex;
+  gap: 6px;
+}
+
+.species-card figure {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.species-card figure img,
+.species-card figure .ph {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 6px;
+  background: radial-gradient(circle at 50% 40%, #2a3140, #151921);
+  object-fit: cover;
+}
+
+.species-card figcaption {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #8a96a6;
+  text-align: center;
+}
+
+.species-card .from {
+  color: #8a96a6;
+}
+
+.species-card button.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.species-card button.link.gone {
+  color: #8a96a6;
+  text-decoration: line-through;
+}
+
+.species-card .rel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.species-card .lbl {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8a96a6;
+}
+
+.species-card .rel .lbl {
+  width: 62px;
+}
+
+.species-card .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.species-card .chip b {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.species-card .chip span {
+  color: #8a96a6;
+}
+
+.species-card .trends {
+  display: grid;
+  gap: 1px;
+}
+
+.species-card .trend-span {
+  font-size: 10px;
+  color: #8a96a6;
+  text-align: right;
+}
+
+.species-card .trend-row {
+  display: grid;
+  grid-template-columns: 56px 132px 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.species-card .trend-row svg {
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 3px;
+}
+
+.species-card .trend-row .val {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.species-card .trend-row .val i {
+  margin-left: 4px;
+  font-style: normal;
+  font-size: 10px;
+}
+
+.species-card .trend-row .val i.up {
+  color: #7fcf8f;
+}
+
+.species-card .trend-row .val i.down {
+  color: #d58a82;
+}
+
+.species-card .deaths-total {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.species-card .deaths-key {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.species-card .deaths-key b {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 4px;
+  border-radius: 2px;
+}
+
+.species-card .deaths-time {
+  display: block;
+  margin-top: 6px;
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 4px;
+}
+
+.species-card .quiet {
+  color: #8a96a6;
+  font-style: italic;
+}
+
+.critter h3 button.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.critter h3 button.link:hover {
+  color: var(--accent);
+}
+
+@media (max-width: 900px) {
+  .species-card {
+    left: 14px;
+    width: calc(100vw - 28px);
+    max-width: 320px;
+  }
+}
+
+.census li.open .sp-name {
+  color: var(--accent);
+  font-weight: 600;
+}

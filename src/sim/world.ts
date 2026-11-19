@@ -66,7 +66,7 @@ function guildOf(c: { traits: Traits }): Guild {
   if (c.traits.habitat === 'water') return 'water';
   return c.traits.diet === 'carnivore' ? 'hunter' : 'grazer';
 }
-const SPECIATION_DIST = 0.32; // morphospace distance from the species founder that founds a new one
+export const SPECIATION_DIST = 0.32; // morphospace distance from the species founder that founds a new one
 const WORLD_MUTATION: MutationRates = { point: 0.22, pointSigma: 0.05, structural: 0.05, duplication: 0.02, macro: 0.0 };
 const MUTATION_CHANCE = 0.3; // per offspring
 const SPATIAL = 10; // spatial-hash cell (bu)
@@ -106,6 +106,47 @@ export interface Species {
   alive: number;
   born: number;
   deaths: number;
+  /** its dead by cause, since it was founded */
+  causes: DeathTally;
+  /** species id → how many of this species that species has killed */
+  killedBy: Record<number, number>;
+  /** species id → how many of that species this one has killed */
+  killed: Record<number, number>;
+  /** the species' living members, averaged every quarter day (thinned to every other sample as it
+   *  fills, so a long-lived species' whole history fits) */
+  trend: TrendSample[];
+  /** how many quarter days apart its trend samples now are (doubles each time the trend is thinned) */
+  trendStride: number;
+}
+
+export interface DeathTally {
+  starvation: number;
+  predation: number;
+  oldAge: number;
+}
+
+/** A species' living members averaged at one moment: what selection and drift are doing to it. */
+export interface TrendSample {
+  t: number;
+  /** how many were alive */
+  n: number;
+  mass: number;
+  /** sprint speed (bu/s) */
+  sprint: number;
+  vision: number;
+  attack: number;
+  /** fraction of damage shrugged off */
+  armour: number;
+  /** how far its body has drifted from its founder's, in morphospace (a new species branches at 0.32) */
+  drift: number;
+  /** the share of its members that hunt (carnivores and omnivores) */
+  hunters: number;
+  /** the share still wearing its founder's coat */
+  coat: number;
+  /** its dead so far, by cause */
+  starved: number;
+  eaten: number;
+  aged: number;
 }
 
 export interface Creature {
@@ -402,6 +443,11 @@ function speciesFor(w: World, genome: Genome, parent: number | null, label?: str
     alive: 0,
     born: 0,
     deaths: 0,
+    causes: { starvation: 0, predation: 0, oldAge: 0 },
+    killedBy: {},
+    killed: {},
+    trend: [],
+    trendStride: 1,
   };
   w.species.push(sp);
   return sp;
@@ -503,6 +549,8 @@ export function stepWorld(w: World, dt = STEP): void {
     const d = day + 1;
     if (d % YEAR_DAYS === 0 && droughtOf(w.seed, w.time) > 0) log(w, 'climate', droughtOf(w.seed, w.time) > 0.8 ? 'a hard drought: the rains have failed' : 'a dry year: the rains are failing');
   }
+  // the species' trends, every quarter day (before the step: a new species' first sample is its founders)
+  if (Math.floor(w.time / TREND_EVERY) !== Math.floor((w.time - dt) / TREND_EVERY)) sampleTrends(w);
   rebuildBuckets(w);
   for (const c of w.creatures) if (c.alive) live(w, c, dt);
   keepRoom(w, dt);
@@ -562,6 +610,66 @@ function sampleHistory(w: World): void {
   for (let k = 0; k < w.grass.length; k++) g += w.grass[k];
   w.history.push({ t: w.time, pops, grass: g });
   if (w.history.length > 720) w.history.splice(0, w.history.length - 720);
+}
+
+/** seconds between a species' trend samples (a quarter day) */
+export const TREND_EVERY = DAY_LENGTH / 4;
+/** a species' trend holds at most this many samples; past it every other one is dropped */
+export const TREND_MAX = 160;
+const DESCRIPTOR = new WeakMap<Genome, number[]>();
+function descriptorOf(g: Genome): number[] {
+  let d = DESCRIPTOR.get(g);
+  if (!d) DESCRIPTOR.set(g, (d = describeMorph(bodyOf(g).phenotype)));
+  return d;
+}
+const r3 = (v: number) => Math.round(v * 1000) / 1000;
+
+function sampleTrends(w: World): void {
+  const k = Math.floor(w.time / TREND_EVERY);
+  const sums = new Map<number, number[]>();
+  for (const c of w.creatures) {
+    if (!c.alive) continue;
+    const sp = speciesById(w, c.species);
+    if (!sp || k % sp.trendStride !== 0) continue;
+    let s = sums.get(sp.id);
+    if (!s) sums.set(sp.id, (s = [0, 0, 0, 0, 0, 0, 0, 0, 0]));
+    const t = c.traits;
+    s[0]++;
+    s[1] += t.mass;
+    s[2] += t.sprint;
+    s[3] += t.vision;
+    s[4] += t.attack;
+    s[5] += t.defense;
+    s[6] += morphDistance(descriptorOf(c.genome), sp.descriptor);
+    s[7] += t.diet === 'carnivore' || t.diet === 'omnivore' ? 1 : 0;
+    s[8] += c.genome.covering.type === sp.founder.covering.type ? 1 : 0;
+  }
+  for (const [id, s] of sums) {
+    const sp = speciesById(w, id)!;
+    const n = s[0];
+    sp.trend.push({
+      // (the quarter day itself: the clock is a sum of steps, a hair off the boundary it crossed)
+      t: k * TREND_EVERY,
+      n,
+      mass: r3(s[1] / n),
+      sprint: r3(s[2] / n),
+      vision: r3(s[3] / n),
+      attack: r3(s[4] / n),
+      armour: r3(s[5] / n),
+      drift: r3(s[6] / n),
+      hunters: r3(s[7] / n),
+      coat: r3(s[8] / n),
+      starved: sp.causes.starvation,
+      eaten: sp.causes.predation,
+      aged: sp.causes.oldAge,
+    });
+    if (sp.trend.length >= TREND_MAX) {
+      // thin it to half: keep its first sample (its founding) and those on the doubled stride, which the
+      // samples to come will fall on too
+      sp.trendStride *= 2;
+      sp.trend = sp.trend.filter((x, i) => i === 0 || Math.round(x.t / TREND_EVERY) % sp.trendStride === 0);
+    }
+  }
 }
 
 function rebuildBuckets(w: World): void {
@@ -685,6 +793,18 @@ function die(w: World, c: Creature, cause: DeathCause): void {
   if (sp) {
     sp.alive--;
     sp.deaths++;
+    if (cause === 'starvation') sp.causes.starvation++;
+    else if (cause === 'old age') sp.causes.oldAge++;
+    else {
+      sp.causes.predation++;
+      // (who did it: the last thing to bite it — wounds can kill a little after the bite)
+      const killer = c.attacker >= 0 ? w.creatures.find((x) => x.id === c.attacker) : undefined;
+      if (killer) {
+        sp.killedBy[killer.species] = (sp.killedBy[killer.species] ?? 0) + 1;
+        const ks = speciesById(w, killer.species);
+        if (ks) ks.killed[sp.id] = (ks.killed[sp.id] ?? 0) + 1;
+      }
+    }
     if (cause !== 'predation') log(w, 'death', `a ${sp.name} died of ${cause}`, sp.id, c.id);
   }
   if (cause === 'starvation') w.tally.starvation++;

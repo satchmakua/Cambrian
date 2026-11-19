@@ -13,6 +13,7 @@ import { Canvas } from '@react-three/fiber';
 import type { Genome } from '../engine/genome';
 import { WorldScene } from './WorldScene';
 import { TreeOfLife } from './TreeOfLife';
+import { SpeciesCard } from './SpeciesCard';
 import { useWorldUi, getWorld, populate, strangerGenome, bumpVersion, autosave, downloadWorld, type Snapshot } from './worldStore';
 import { DAY_LENGTH, YEAR_DAYS, dayNumber, speciesById, stepWorld, type HistorySample } from '../sim/world';
 import { howItDiffers } from '../sim/lineage';
@@ -155,26 +156,18 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
   const hints = useSettings((s) => s.gameplay.hints);
   const autosaveMinutes = useSettings((s) => s.gameplay.autosaveMinutes);
   const [warm, setWarm] = useState(false);
-  // For the loading screen: a frame drawn whole (no draw held back for a shader still building), then
-  // the frame rate measured — and, where it is under WORLD_SMOOTH_MS, the graphics lowered once, if the
-  // game may, and the frame rate measured again at the new ones.
-  const [whole, setWhole] = useState(false);
-  const [rate, setRate] = useState<{ tries: number; ms: number | null }>({ tries: 0, ms: null });
-  const [lowered, setLowered] = useState(false);
-  const onRate = (ms: number) => {
-    if (rate.tries === 0 && ms > WORLD_SMOOTH_MS && useSettings.getState().autoLower('slow')) {
-      setLowered(true);
-      setRate({ tries: 1, ms: null });
-    } else setRate({ tries: rate.tries + 1, ms });
+  // the species card open beside the census (null: none)
+  const [card, setCard] = useState<number | null>(null);
+  // (a new or loaded world numbers its species afresh: an open card would show a stranger)
+  const epoch = useWorldUi((s) => s.epoch);
+  useEffect(() => setCard(null), [epoch]);
+  const followOne = (id: number) => {
+    const c = getWorld().creatures.find((x) => x.species === id && x.alive);
+    if (c) {
+      select(c.id);
+      setFollow(true);
+    }
   };
-  const step: StageStatus['step'] = !warm || !whole ? 'shaders' : rate.ms === null ? 'measuring' : 'ready';
-  const slow = rate.ms !== null && rate.ms > WORLD_SMOOTH_MS;
-  const status = useMemo<StageStatus>(() => ({ step, still: false, lowered, slow }), [step, lowered, slow]);
-  const told = useRef(onStatus);
-  told.current = onStatus;
-  useEffect(() => {
-    told.current?.(status);
-  }, [status]);
   const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
     if (!notice) return;
@@ -394,16 +387,13 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
             {snap.species.slice(0, 14).map((s) => (
               <li
                 key={s.id}
-                className={s.extinct ? 'extinct' : ''}
                 onClick={() => {
-                  // follow a living member
-                  const c = getWorld().creatures.find((x) => x.species === s.id && x.alive);
-                  if (c) {
-                    select(c.id);
-                    setFollow(true);
-                  }
+                  // its card (a second click closes it), and the camera on a living member
+                  setCard(card === s.id ? null : s.id);
+                  followOne(s.id);
                 }}
-                title={s.extinct ? 'extinct' : 'follow one'}
+                className={`${s.extinct ? 'extinct' : ''}${card === s.id ? ' open' : ''}`}
+                title={s.extinct ? 'extinct: its record' : 'its record, and follow one'}
               >
                 <CensusIcon speciesId={s.id} hue={s.hue} />
                 <span className="sp-name">{s.name}</span>
@@ -425,7 +415,11 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
       {sel && (
         <aside className="critter">
           <div className="critter-head">
-            <h3>{sel.species}</h3>
+            <h3>
+              <button className="link" onClick={() => setCard(sel.speciesId)} title="its species' record">
+                {sel.species}
+              </button>
+            </h3>
             <button onClick={() => select(null)} title="deselect">✕</button>
           </div>
           <p className="doing">
@@ -467,14 +461,13 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
           now={snap.time}
           onClose={() => setShowTree(false)}
           onPick={(id) => {
-            const c = getWorld().creatures.find((x) => x.species === id && x.alive);
-            if (c) {
-              select(c.id);
-              setFollow(true);
-            }
+            setCard(id);
+            followOne(id);
           }}
         />
       )}
+
+      {snap && card !== null && <SpeciesCard id={card} at={snap.time} onClose={() => setCard(null)} onPick={setCard} onFollow={followOne} />}
 
       {snap && (
         <footer className="journal">

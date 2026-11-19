@@ -116,7 +116,16 @@ export function loadWorld(json: string): World {
   w.historyTimer = s.historyTimer;
   w.fieldTimer = s.fieldTimer;
   w.plants = s.plants.map((p) => ({ ...p }));
-  w.species = s.species.map(({ founder, ...rest }) => ({ ...rest, founder: genome(founder) }));
+  w.species = s.species.map(({ founder, ...rest }) => ({
+    ...rest,
+    // (a world saved before species kept their records starts them empty)
+    causes: rest.causes ? { ...rest.causes } : { starvation: 0, predation: 0, oldAge: 0 },
+    killedBy: { ...(rest.killedBy ?? {}) },
+    killed: { ...(rest.killed ?? {}) },
+    trend: (rest.trend ?? []).map((x) => ({ ...x })),
+    trendStride: rest.trendStride ?? 1,
+    founder: genome(founder),
+  }));
   w.creatures = s.creatures.map(({ genome: gi, ...rest }) => {
     const g = genome(gi);
     // (fields added after a save was written take their defaults)
