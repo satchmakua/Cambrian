@@ -5,7 +5,8 @@
  * `FramePace` feeds it the frames it sees and draws the frames it asks for.
  *
  *   probing   the stage is drawn when something changes, and no more. Its first frame is not judged
- *             (it compiles the shaders); then frames are drawn and timed. One cheap frame: 'live'.
+ *             (it compiles the shaders); then frames are drawn and timed. One smooth frame: 'live'.
+ *             Cheap but not smooth, twice: 'live' (and the game's stage lowers the graphics).
  *             Every one dear — or one so dear that a second opinion is not worth its seconds: 'still'.
  *   live      the loop runs. Frames arriving slowly, several running, send it back to be measured.
  *   still     a picture, redrawn on a drag or a change. It is measured again when what is drawn
@@ -19,9 +20,37 @@
 
 export type Pace = 'probing' | 'live' | 'still';
 
+/**
+ * What a screen's 3D is doing, for the loading screen in front of it (ui/LoadingGate): building its
+ * shaders (and drawing a first frame whole with them), measuring its frames — or ready to be seen.
+ * `still`: the stage will be a picture, not a turntable; `lowered`: the graphics were lowered for it;
+ * `slow`: its frames were measured slow at the options it opens with (nothing lower left to try).
+ */
+export interface StageStatus {
+  step: 'shaders' | 'measuring' | 'ready';
+  still: boolean;
+  lowered: boolean;
+  slow?: boolean;
+}
+
+/** The valley plays smoothly with its frames this far apart or less (ms, the median: 24 frames a
+ *  second). Slower, its loading screen lowers the graphics, if the game may, and measures again. */
+export const WORLD_SMOOTH_MS = 42;
+
+/** The median of these frame intervals (ms); 0 for none. */
+export function medianFrameMs(dts: readonly number[]): number {
+  if (dts.length === 0) return 0;
+  const s = [...dts].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
 export const PACE = {
   /** a timed frame at or under this (ms) is cheap enough to loop: ten frames a second */
   slowMs: 100,
+  /** …and at or under this (ms) the loop turns smoothly: thirty frames a second. Between the two the
+   *  stage loops, and the game's own stage lowers the graphics, if it may (CreatureViewer) */
+  smoothMs: 33,
   /** timed frames, at most: the stage goes still only if every one of them was slow */
   probes: 2,
   /** …but one over this (ms) is a verdict by itself: a frame of seconds needs no second one */
@@ -33,6 +62,10 @@ export const PACE = {
   /** the page is quiet when this many frames running came less than `calmMs` apart */
   calmRun: 5,
   calmMs: 50,
+  /** …and a frame is timed after this long (ms) whether or not it ever is: a page busy for good (the
+   *  graphics process building another canvas's shaders) would otherwise leave the stage unmeasured,
+   *  and the loading screen up, for as long as that lasts */
+  calmWaitMs: 3000,
   /** live: frames this far apart (ms), this many running, send the stage back to be measured */
   gapMs: 250,
   gapRun: 3,
@@ -43,13 +76,16 @@ export const PACE = {
   retryMaxMs: 300000,
 };
 
-/** What the timed frames so far say: cheap once is 'live'; slow `probes` times, or once beyond doubt,
- *  is 'still'; else time another ('probing'). */
+/** What the timed frames so far say: smooth once is 'live'; cheap but not smooth is 'live' once it has
+ *  been timed `probes` times (one dear frame may be something else in the way, and the verdict may
+ *  lower the graphics); slow `probes` times, or once beyond doubt, is 'still'; else time another
+ *  ('probing'). */
 export function judgePace(costs: readonly number[]): Pace {
   if (costs.length === 0) return 'probing';
   const best = Math.min(...costs);
-  if (best <= PACE.slowMs) return 'live';
-  return costs.length >= PACE.probes || best > PACE.sureMs ? 'still' : 'probing';
+  if (best <= PACE.smoothMs) return 'live';
+  if (costs.length < PACE.probes && best <= PACE.sureMs) return 'probing';
+  return best <= PACE.slowMs ? 'live' : 'still';
 }
 
 export interface PaceState {

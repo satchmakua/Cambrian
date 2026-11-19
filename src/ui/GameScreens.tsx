@@ -5,7 +5,7 @@
  * They live apart from the app's root so the main menu can come up without them: this file brings
  * the 3D library and the creature renderer with it, and is fetched when a game is entered.
  */
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { grow } from '../engine/grow';
 import { coherence, describe } from '../engine/morphospace';
 import { CreatureViewer } from '../viewer/CreatureViewer';
@@ -23,13 +23,17 @@ import { MORPHOTYPE_IDS } from '../engine/random';
 // (a fetch that fails is tried once more; one that keeps failing is shown by the screen boundary)
 const WorldView = lazy(fetching(() => import('../world/WorldView').then((m) => ({ default: m.WorldView }))));
 const Studio = lazy(fetching(() => import('../viewer/Studio').then((m) => ({ default: m.Studio }))));
-import { useStore } from './store';
+import { useStore, type GameView } from './store';
 import { useWorldUi } from '../world/worldStore';
 import { fetching } from './ScreenBoundary';
-import { noGpu, settleGraphics } from './gpu';
+import { noGpu, settleGraphics, slowGpuHint } from './gpu';
 import { typingIn } from './keys';
 import { PauseMenu } from './menu/PauseMenu';
 import { LoweredNotice, VALLEY_SLOW, useSlowMachine } from './menu/panels';
+import { HARNESS } from './settings';
+import { LoadingGate } from './LoadingGate';
+import { NO_REPORTS, foundSlow, gateSteps, type GateReports } from './gate';
+import type { StageStatus } from '../viewer/pace';
 
 // Before any of these screens mounts a canvas: a browser drawing without a graphics card starts at
 // the Low quality. (Here — run once, when this code arrives — and not at the page's start: see gpu.ts.)
@@ -37,6 +41,16 @@ settleGraphics();
 
 // Dev/headless: ?bare=1 renders just the creature full-bleed (no UI chrome) for clean face shots.
 const BARE = import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('bare') === '1';
+
+/** Each screen is shown from behind a loading screen, once it is ready to play (a capture harness's
+ *  page goes without: it shoots the screen as it comes). */
+const GATED = !BARE && !HARNESS;
+/** how long a screen must have been ready, without a break, before the loading screen lifts (ms): a
+ *  canvas can draw a first frame whole before what it shows has arrived in it */
+const READY_HOLD_MS = 300;
+/** …and where the drawing was found slow on built-in graphics, long enough to read the line saying
+ *  what draws it (ms) */
+const HINT_HOLD_MS = 4000;
 
 /** The game being played: whichever of its screens is up. */
 export function Game() {
@@ -111,15 +125,62 @@ export function Game() {
     setMenuOpen(paused);
     return () => setMenuOpen(false);
   }, [paused, setMenuOpen]);
+
+  // The loading screen (gate.ts, LoadingGate): a screen is mounted behind it and let in only once it is
+  // ready to play — its shaders built, its first frames drawn whole and measured (and the graphics
+  // lowered and measured again, where they were slow). What the screens report is kept for the screen
+  // being opened (a screen changed to, or a valley loaded, starts with nothing reported), and only
+  // until it is let in: after that a pick's new shaders are the stage's own business.
+  const gameView: GameView = view === 'menu' ? 'breed' : view;
+  const gateKey = gameView === 'world' ? `world:${worldEpoch}` : gameView;
+  const [reports, setReports] = useState<GateReports>(NO_REPORTS);
+  const [reportsFor, setReportsFor] = useState(gateKey);
+  if (reportsFor !== gateKey) {
+    setReportsFor(gateKey);
+    setReports(NO_REPORTS);
+  }
+  const [entered, setEntered] = useState<string | null>(null);
+  const gated = GATED && entered !== gateKey;
+  const { steps, ready } = gateSteps(gameView, reports);
+  const hint = foundSlow(reports) ? slowGpuHint() : null;
+  useEffect(() => {
+    if (!gated || !ready) return;
+    const t = setTimeout(() => setEntered(gateKey), hint ? HINT_HOLD_MS : READY_HOLD_MS);
+    return () => clearTimeout(t);
+  }, [gated, ready, gateKey, hint]);
+  const listening = useRef(gated);
+  listening.current = gated;
+  const onHeroStatus = useCallback((hero: StageStatus) => listening.current && setReports((r) => ({ ...r, hero })), []);
+  const onLitter = useCallback((drawn: number, total: number) => listening.current && setReports((r) => (r.litter.drawn === drawn && r.litter.total === total ? r : { ...r, litter: { drawn, total } })), []);
+  const onWorldStatus = useCallback((world: StageStatus) => listening.current && setReports((r) => ({ ...r, world })), []);
+  const onStudioStatus = useCallback((studio: StageStatus) => listening.current && setReports((r) => ({ ...r, studio })), []);
+  // (nothing behind it can be clicked, focused or pressed with a key while it is up)
+  const behind = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (behind.current) behind.current.inert = gated;
+  }, [gated]);
+  const gate = GATED ? (
+    <LoadingGate
+      key={gateKey}
+      screen={gameView}
+      steps={steps}
+      open={!gated}
+      hint={hint}
+      onMenu={() => setView('menu')}
+      onEnter={() => setEntered(gateKey)}
+    />
+  ) : null;
+
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      // (the open menu handles its own Esc; a key held down opens it once, not on every repeat)
-      if (e.key !== 'Escape' || e.repeat || paused || typingIn(e.target)) return;
+      // (the open menu handles its own Esc; a key held down opens it once, not on every repeat; and the
+      // loading screen has no menu behind it)
+      if (e.key !== 'Escape' || e.repeat || paused || gated || typingIn(e.target)) return;
       openMenu();
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
-  }, [paused, openMenu]);
+  }, [paused, gated, openMenu]);
   const pause = paused ? <PauseMenu onClose={closeMenu} start={menuAt} /> : null;
 
   if (BARE) {
@@ -129,8 +190,17 @@ export function Game() {
       </div>
     );
   }
+  const screen = (s: JSX.Element) => (
+    <>
+      <div ref={behind} className="screen-behind">
+        {s}
+      </div>
+      {pause}
+      {gate}
+    </>
+  );
   if (view === 'world') {
-    return (
+    return screen(
       <Suspense fallback={<ScreenLoading />}>
         <WorldView
           key={worldEpoch}
@@ -141,28 +211,27 @@ export function Game() {
             adopt(g);
             setView('breed');
           }}
+          onStatus={onWorldStatus}
         />
-        {pause}
-      </Suspense>
+      </Suspense>,
     );
   }
   if (view === 'studio') {
-    return (
+    return screen(
       <Suspense fallback={<ScreenLoading />}>
-        <Studio genome={genome} skinMode={skinMode} onSkinMode={setSkinMode} onAdopt={adopt} onExit={() => setView('breed')} onMenu={openMenu} />
-        {pause}
-      </Suspense>
+        <Studio genome={genome} skinMode={skinMode} onSkinMode={setSkinMode} onAdopt={adopt} onExit={() => setView('breed')} onMenu={openMenu} onStatus={onStudioStatus} />
+      </Suspense>,
     );
   }
   const menagerieCount = Object.keys(menagerie).length;
   // play the recorded gait only while it belongs to the creature on screen
   const activeGait = playbackOn && playback && playback.seed === genome.seed ? playback : null;
 
-  return (
+  return screen(
     <div className="app">
       <div className="top">
         <main className="stage-wrap">
-          <CreatureViewer phenotype={phenotype} skinMode={skinMode} trajectory={activeGait} onShown={onHeroShown} />
+          <CreatureViewer phenotype={phenotype} skinMode={skinMode} trajectory={activeGait} onShown={onHeroShown} onStatus={onHeroStatus} />
           <header className="hud">
             <div className="title-row">
               <h1>Cambrian</h1>
@@ -235,7 +304,7 @@ export function Game() {
         </main>
 
         <aside className="gallery">
-          {litterOn ? <OffspringGallery offspring={offspring} generation={generation} onPick={promote} onReroll={reroll} /> : <p className="gallery-hint">Preparing the litter…</p>}
+          {litterOn ? <OffspringGallery offspring={offspring} generation={generation} onPick={promote} onReroll={reroll} onProgress={onLitter} /> : <p className="gallery-hint">Preparing the litter…</p>}
           <PressurePanel
             pressure={pressure}
             onChange={setPressure}
@@ -275,12 +344,12 @@ export function Game() {
           </div>
         </div>
       </section>
-      {pause}
-    </div>
+    </div>,
   );
 }
 
-/** Shown for the moment a screen's code is fetched, the first time it is opened. */
+/** Shown for the moment a screen's code is fetched, the first time it is opened (behind the loading
+ *  screen, where there is one). */
 function ScreenLoading() {
   return <div className="screen-loading">Loading…</div>;
 }

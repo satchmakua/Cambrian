@@ -18,7 +18,9 @@ import { useWorldUi, getWorld, populate, strangerGenome, bumpVersion, autosave, 
 import { DAY_LENGTH, YEAR_DAYS, dayNumber, speciesById, stepWorld, type HistorySample } from '../sim/world';
 import { howItDiffers } from '../sim/lineage';
 import { usePortrait } from '../viewer/portrait';
-import { KeepPrograms, WarmShaders } from '../viewer/programs';
+import { DrawnWhole, KeepPrograms, WarmShaders } from '../viewer/programs';
+import { MeasureFrames } from '../viewer/FramePace';
+import { WORLD_SMOOTH_MS, type StageStatus } from '../viewer/pace';
 import { NARRATOR, sentence } from './narrator';
 import { droughtOf, spell, weatherAt } from '../sim/weather';
 import { dprOf, useQuality, useSettings } from '../ui/settings';
@@ -130,7 +132,7 @@ function Bar({ label, v, color }: { label: string; v: number; color: string }) {
   );
 }
 
-export function WorldView({ founder, onExit, onAdopt, onMenu }: { founder: Genome; onExit: () => void; onAdopt: (g: Genome) => void; onMenu?: () => void }) {
+export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { founder: Genome; onExit: () => void; onAdopt: (g: Genome) => void; onMenu?: () => void; onStatus?: (s: StageStatus) => void }) {
   const running = useWorldUi((s) => s.running);
   const speed = useWorldUi((s) => s.speed);
   const follow = useWorldUi((s) => s.follow);
@@ -283,7 +285,10 @@ export function WorldView({ founder, onExit, onAdopt, onMenu }: { founder: Genom
       {/* the scene mounts paused while its shaders compile (in parallel, where the browser can), then runs */}
       <Canvas className="world-canvas" frameloop={!warm ? 'never' : menuOpen ? 'demand' : 'always'} shadows={quality.shadows} dpr={dprOf(quality, 1.75)} camera={{ position: [40, 38, 70], fov: 45, near: 0.2, far: 1200 }} gl={{ preserveDrawingBuffer: import.meta.env.DEV }}>
         <KeepPrograms />
+        <DrawnWhole onChange={setWhole} />
         {!warm && <WarmShaders onReady={() => setWarm(true)} />}
+        {/* (a measurement of its own for each try: the one after a lowering starts from nothing) */}
+        <MeasureFrames key={rate.tries} run={warm && whole && rate.ms === null && !menuOpen} onDone={onRate} />
         <WorldScene />
       </Canvas>
       {!warm && <div className="world-loading">Waking the world…</div>}

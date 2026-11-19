@@ -71,6 +71,13 @@ The menu also goes without its backdrop on its own where the browser draws witho
 or where the backdrop's first frames are measured slow
 (`?menu=1&forcestage=1`, dev only, mounts it there anyway — to watch the stage measure itself and be taken down).
 
+Each game screen opens behind a loading screen, and is let in once its shaders are built, its creatures
+drawn and its frames measured; where those frames are slow it lowers the graphics first (if the game may
+adjust them) and measures again. The first visit takes longest, while the browser builds the creature
+shaders: on Windows, Chrome builds them through Direct3D, seconds each. On a laptop with two graphics
+chips, check which one the browser draws with: the loading screen names a computer's built-in graphics
+when it finds them slow. Capture pages (`?seed=`, `?world=1`, `?bare=1` and the like) go without it.
+
 ## Layout
 
 ```
@@ -89,7 +96,6 @@ tests/        # engine / sim / viewer: determinism, fuzz, anatomy, rig, ecosyste
 - [MORPHOLOGY.md](MORPHOLOGY.md) — the creature-variety system (genome v2: morphotypes →
   traits → parts → covering); drives Phase 3.
 - [ROADMAP.md](ROADMAP.md) — milestone checklist with Test steps.
-- [PROGRESS.md](PROGRESS.md) — build log.
 - [docs/adr/](docs/adr/) — architecture decision records.
 
 ## License

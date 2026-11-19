@@ -24,6 +24,7 @@ import { StudioEnvironment } from './StudioEnvironment';
 import { framingOf } from './framing';
 import { scissorRect } from './scissor';
 import { restPosed } from './rig';
+import { heldDraws, onProgramsBuilt } from './programs';
 import type { Genome } from '../engine/genome';
 import { noGpu } from '../ui/gpu';
 
@@ -67,7 +68,9 @@ function takeTurn(job: () => void): () => void {
   };
 }
 
-export function OffspringThumb({ genome, slot, track }: { genome: Genome; slot: number; track: MutableRefObject<(HTMLElement | null)[]> }) {
+/** `onDrawn` is told each time this slot has been drawn whole: its creature's seed, and whether that
+ *  was its smooth skin (the kit is drawn first, while the skin is built). */
+export function OffspringThumb({ genome, slot, track, onDrawn }: { genome: Genome; slot: number; track: MutableRefObject<(HTMLElement | null)[]>; onDrawn?: (slot: number, seed: number, skin: boolean) => void }) {
   // (a snake lies in its resting S, as it does on the main stage — no rig here to pose it)
   const phenotype = useMemo(() => restPosed(grow(genome)), [genome]);
   const framing = useMemo(() => framingOf(phenotype), [phenotype]);
@@ -94,8 +97,11 @@ export function OffspringThumb({ genome, slot, track }: { genome: Genome; slot: 
   // redraw all nine scenes, twice, for each of the nine upgrades. Ask for a frame whenever this
   // thumbnail's content changes (and once more shortly after, when a freshly built skin has landed).
   const invalidate = useThree((s) => s.invalidate);
+  const renderer = useThree((s) => s.gl);
   const dirty = useRef(true);
   const drawn = useRef({ left: NaN, bottom: NaN, width: NaN, height: NaN, cw: 0, ch: 0 });
+  const told = useRef(onDrawn);
+  told.current = onDrawn;
   useEffect(() => {
     dirty.current = true;
     invalidate();
@@ -105,6 +111,17 @@ export function OffspringThumb({ genome, slot, track }: { genome: Genome; slot: 
     }, 120);
     return () => clearTimeout(t);
   }, [phenotype, smooth, invalidate]);
+  // A creature whose programs were still building was held out of its frame (programs.ts guardDraws):
+  // it is drawn again once they are built. (Marked drawn regardless, it never was: the whole litter
+  // stayed blank on a machine where the creature's shader takes seconds to build.)
+  useEffect(
+    () =>
+      onProgramsBuilt(renderer, () => {
+        dirty.current = true;
+        invalidate();
+      }),
+    [renderer, invalidate],
+  );
 
   useFrame(({ gl }) => {
     const el = track.current[slot];
@@ -129,11 +146,19 @@ export function OffspringThumb({ genome, slot, track }: { genome: Genome; slot: 
     gl.setScissor(r.left, r.bottom, r.width, r.height);
     gl.setScissorTest(true);
     gl.clear(true, true, true); // this rectangle only: last generation's creature must not show through
+    const held = heldDraws(gl);
     gl.render(scene, camera);
     gl.setScissorTest(false);
     gl.autoClear = autoClear;
+    // (held back for a program still building: drawn again when it is built)
+    if (heldDraws(gl) > held) {
+      dirty.current = true;
+      el.dataset.drawn = `${genome.seed}:wait`;
+      return;
+    }
     // what this slot shows now (headless checks read it: the preview must match the litter)
     el.dataset.drawn = `${genome.seed}:${smooth ? 'skin' : 'kit'}`;
+    told.current?.(slot, genome.seed, smooth);
   }, 1);
 
   const c = framing.center;

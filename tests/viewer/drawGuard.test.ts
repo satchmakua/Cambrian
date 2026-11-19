@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type * as THREE from 'three';
-import { guardDraws, shadersSettled } from '../../src/viewer/programs';
+import { LOSE_WAIT_MS, buildingPrograms, guardDraws, heldDraws, onProgramsBuilt, shadersSettled } from '../../src/viewer/programs';
 
 const DONE = 0x91b1;
 interface Prog {
@@ -28,10 +28,13 @@ function fake(parallel = true) {
       if (!p.built) waited.push('log');
       return '';
     },
+    // (a deleted program never finishes building, as far as asking after it goes: the browser answers
+    // with an error)
+    deleteProgram(_p: Prog) {},
   };
   const gl = {
     getContext: () => ctx,
-    info: { programs: [] },
+    info: { programs: [] as { program: Prog }[] },
     properties: { get: () => ({}) },
     compile: () => new Set(),
     renderBufferDirect(_c: unknown, _s: unknown, _g: unknown, material: { program: Prog; fail?: boolean }, object: Obj) {
@@ -114,6 +117,55 @@ describe('never wait for a shader program inside a draw', () => {
     expect(guard.waiting.size).toBe(0);
     // (nothing held back: no wait)
     expect(await shadersSettled(f.gl)).toBe(false);
+  });
+
+  it('counts a program deleted while it was waited for as built — asking after it is an error', async () => {
+    // (a thumbnail's kit swapped for its skin before the kit's programs were pinned)
+    const f = fake();
+    const ctx = f.gl.getContext() as unknown as { deleteProgram: (p: Prog) => void };
+    const guard = guardDraws(f.gl)!;
+    const p: Prog = { built: false };
+    f.draw(obj('a'), p);
+    expect(buildingPrograms(f.gl)).toBe(1);
+    expect(heldDraws(f.gl)).toBe(1);
+    const woke = vi.fn();
+    const stop = onProgramsBuilt(f.gl, woke);
+    ctx.deleteProgram(p);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(guard.waiting.size).toBe(0);
+    expect(woke).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it('gives a context up only once its programs are built: losing it sooner holds the page until they are', async () => {
+    // (9 s, measured: the menu's stage taken down on "Start game" while it was building the creature's shader)
+    const f = fake();
+    const lose = vi.fn();
+    const p: Prog = { built: false };
+    const gl = f.gl as unknown as { forceContextLoss: () => void; info: { programs: { program: Prog }[] } };
+    gl.forceContextLoss = lose;
+    gl.info.programs = [{ program: p }];
+    guardDraws(f.gl);
+    gl.forceContextLoss();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(lose).not.toHaveBeenCalled();
+    p.built = true;
+    await vi.advanceTimersByTimeAsync(150);
+    expect(lose).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives it up after a while whatever: a context kept holds graphics memory a built-in chip has little of', async () => {
+    const f = fake();
+    const lose = vi.fn();
+    const gl = f.gl as unknown as { forceContextLoss: () => void; info: { programs: { program: Prog }[] } };
+    gl.forceContextLoss = lose;
+    gl.info.programs = [{ program: { built: false } }];
+    guardDraws(f.gl);
+    gl.forceContextLoss();
+    await vi.advanceTimersByTimeAsync(LOSE_WAIT_MS - 200);
+    expect(lose).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(400);
+    expect(lose).toHaveBeenCalledTimes(1);
   });
 
   it('lets a real error through, and changes nothing where programs are built on the spot', () => {

@@ -2,6 +2,9 @@ import { lazy, Suspense } from 'react';
 import { useStore } from './store';
 import { MainMenu } from './menu/MainMenu';
 import { fetching } from './ScreenBoundary';
+import { LoadingGate } from './LoadingGate';
+import { fetchingSteps } from './gate';
+import { HARNESS } from './settings';
 
 // The game's screens are fetched when a game is entered: with them come the 3D library and the
 // creature renderer — three quarters of the code — and the menu must be usable before any of that
@@ -19,8 +22,16 @@ export function App() {
   // may be the creature being bred — one that cannot be grown, or drawn — so the way to the menu must
   // not pass through anything that needs it (the game's screens grow it before they draw anything).
   if (view === 'menu' && !BARE) return <MainMenu />;
+  // (while the game's code is fetched: the loading screen its screens are then got ready behind)
+  const screen = view === 'menu' ? 'breed' : view;
+  const fallback =
+    BARE || HARNESS ? (
+      <div className="screen-loading">Loading…</div>
+    ) : (
+      <LoadingGate screen={screen} steps={fetchingSteps(screen)} open={false} onMenu={() => useStore.getState().setView('menu')} />
+    );
   return (
-    <Suspense fallback={<div className="screen-loading">Loading…</div>}>
+    <Suspense fallback={fallback}>
       <Game />
     </Suspense>
   );
