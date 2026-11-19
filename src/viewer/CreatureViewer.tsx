@@ -222,7 +222,7 @@ export function CreatureViewer({
         <KeepPrograms />
         {/* (a long wait: where the browser compiles off the page's thread the menu stays usable
             meanwhile, and drawing any sooner would make the page wait for the compiler instead) */}
-        {!warm && <WarmShaders onReady={() => setWarm(true)} timeoutMs={20000} />}
+        {!warm && <WarmShaders onReady={() => setWarm(true)} timeoutMs={20000} patient />}
         {measured && <FramePace pace={pace} idle={idle || !warm} stage={JSON.stringify(quality)} onPace={onPace} />}
         {!shown && (
           <FirstFrame

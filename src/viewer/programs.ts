@@ -18,6 +18,9 @@ interface ProgramLike {
   usedTimes: number;
 }
 
+/** how long a patient WarmShaders waits where programs are built off the page's thread */
+export const PATIENCE_MS = 180000;
+
 const RENDERERS = new Set<THREE.WebGLRenderer>();
 const PINNED = new WeakSet<object>();
 let hooked = false;
@@ -36,9 +39,198 @@ export function pinPrograms(gl: Pick<THREE.WebGLRenderer, 'info'>): number {
   return n;
 }
 
-/** Put inside any <Canvas> (or offscreen root): its renderer keeps every program it compiles. */
+/** thrown out of three's first use of a program that is still being built (see guardDraws) */
+const NOT_READY = new Error('shader program still building');
+
+export interface DrawGuard {
+  /** programs a draw was held back for, not yet built */
+  waiting: Set<WebGLProgram>;
+  /** called when the last of them is built, and when a creature's drawn parts must be taken back */
+  wake: Set<() => void>;
+  /** how many draws have been held back */
+  held: number;
+}
+const GUARDS = new WeakMap<object, DrawGuard>();
+/** a creature drawn whole or not at all (userData.drawWhole on its root) → the programs it waits for */
+const WHOLE = new WeakMap<THREE.Object3D, Set<WebGLProgram>>();
+const ROOTS = new WeakMap<THREE.Object3D, THREE.Object3D | null>();
+
+function wholeOf(o: THREE.Object3D | null | undefined): THREE.Object3D | null {
+  if (!o) return null;
+  const known = ROOTS.get(o);
+  if (known !== undefined) return known;
+  let root: THREE.Object3D | null = null;
+  for (let p: THREE.Object3D | null = o; p; p = p.parent) {
+    if (p.userData.drawWhole) {
+      root = p;
+      break;
+    }
+  }
+  ROOTS.set(o, root);
+  return root;
+}
+
+/**
+ * Never wait for a shader program inside a draw.
+ *
+ * Where the browser builds programs off the page's thread (KHR_parallel_shader_compile), a program
+ * asked for is not built yet — and three's first use of one asks the driver for its link status, which
+ * WAITS for the build. On Windows, where Chrome compiles through Direct3D, the creature's program took
+ * 52 s: a draw that used it before then held the whole page for the rest of that time (measured on the
+ * owner's laptop: a 32 s block when a 20 s wait gave up). So a draw whose program is still building is
+ * skipped: the first question three asks of an unbuilt program throws out of the draw, and the object
+ * is drawn on a later frame, when its program is ready. A creature (userData.drawWhole on its root) is
+ * held back whole while any of its programs is building. Whoever needs the finished picture (a still
+ * canvas, a portrait) is woken through `wake`, or waits on shadersSettled.
+ *
+ * Without the extension nothing is changed: programs are built where they are first used, as before.
+ */
+export function guardDraws(gl: THREE.WebGLRenderer): DrawGuard | null {
+  const known = GUARDS.get(gl);
+  if (known) return known;
+  const ctx = gl.getContext() as WebGL2RenderingContext;
+  const ext = ctx.getExtension?.('KHR_parallel_shader_compile') as { COMPLETION_STATUS_KHR: number } | null;
+  if (!ext) return null;
+  const DONE = ext.COMPLETION_STATUS_KHR;
+  const param = ctx.getProgramParameter.bind(ctx);
+  const info = ctx.getProgramInfoLog.bind(ctx);
+  // (a lost context answers null: nothing is waited for there)
+  const built = (program: WebGLProgram) => param(program, DONE) !== false;
+  const guard: DrawGuard = { waiting: new Set(), wake: new Set(), held: 0 };
+  GUARDS.set(gl, guard);
+  const wake = () => {
+    for (const w of [...guard.wake]) w();
+  };
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const watch = () => {
+    if (timer !== undefined) return;
+    timer = setInterval(() => {
+      for (const p of [...guard.waiting]) if (built(p)) guard.waiting.delete(p);
+      if (guard.waiting.size > 0) return;
+      clearInterval(timer);
+      timer = undefined;
+      wake();
+    }, 40);
+  };
+  let drawing: THREE.Object3D | null | undefined; // the object inside a guarded draw (undefined outside one)
+  // A creature held back has all its programs asked for at once, after the frame (three cannot compile
+  // in the middle of a render), and waits for every one of them. (Held at its first unbuilt program, its
+  // others were not even asked for until that one was built: they built one after another, the creature
+  // flashing up and going again between each.)
+  let view: { scene: THREE.Scene; camera: THREE.Camera } | null = null;
+  const asking = new WeakSet<THREE.Object3D>();
+  const askAll = (whole: THREE.Object3D) => {
+    const at = view;
+    if (!at || asking.has(whole)) return;
+    asking.add(whole);
+    setTimeout(() => {
+      try {
+        const set = WHOLE.get(whole);
+        for (const m of gl.compile(whole, at.camera, at.scene)) {
+          const programs = (gl.properties.get(m) as { programs?: Map<string, { program: WebGLProgram }> }).programs;
+          if (!set || !programs) continue;
+          for (const { program } of programs.values()) {
+            if (built(program)) continue;
+            set.add(program);
+            guard.waiting.add(program);
+          }
+        }
+        pinPrograms(gl);
+        watch();
+      } catch {
+        // (a creature gone from the scene since: nothing to ask for)
+      } finally {
+        asking.delete(whole);
+      }
+    }, 0);
+  };
+  const hold = (program: WebGLProgram): boolean => {
+    if (drawing === undefined || built(program)) return false;
+    guard.waiting.add(program);
+    const whole = wholeOf(drawing);
+    if (whole) {
+      let set = WHOLE.get(whole);
+      if (!set) WHOLE.set(whole, (set = new Set()));
+      set.add(program);
+    }
+    return true;
+  };
+  // three's first use of a program (WebGLProgram onFirstUse) begins with one of these two questions
+  const raw = ctx as unknown as Record<string, unknown>;
+  raw.getProgramInfoLog = (program: WebGLProgram) => {
+    if (hold(program)) throw NOT_READY;
+    return info(program);
+  };
+  raw.getProgramParameter = (program: WebGLProgram, name: number) => {
+    if (name !== DONE && hold(program)) throw NOT_READY;
+    return param(program, name);
+  };
+  const draw = gl.renderBufferDirect;
+  gl.renderBufferDirect = function (this: THREE.WebGLRenderer, camera, scene, geometry, material, object, group) {
+    if (drawing !== undefined) return draw.call(this, camera, scene, geometry, material, object, group);
+    // (the shadow pass draws with no scene: the view is the main pass's)
+    if (scene && (scene as THREE.Scene).isScene) view = { scene: scene as THREE.Scene, camera };
+    const whole = wholeOf(object);
+    const pending = whole ? WHOLE.get(whole) : undefined;
+    if (whole && pending) {
+      for (const p of [...pending]) if (built(p)) pending.delete(p);
+      if (pending.size > 0) {
+        guard.held++;
+        return;
+      }
+      WHOLE.delete(whole);
+    }
+    drawing = object ?? null;
+    try {
+      draw.call(this, camera, scene, geometry, material, object, group);
+    } catch (e) {
+      if (e !== NOT_READY) throw e;
+      guard.held++;
+      watch();
+      // (the parts of this creature already drawn this frame are taken back on the next)
+      if (whole) {
+        askAll(whole);
+        requestAnimationFrame(wake);
+      }
+    } finally {
+      drawing = undefined;
+    }
+  };
+  return guard;
+}
+
+/** Wait until no draw of this renderer is held back for a program; resolves true if it had to wait. */
+export function shadersSettled(gl: THREE.WebGLRenderer, timeoutMs = 120000): Promise<boolean> {
+  const guard = GUARDS.get(gl);
+  if (!guard || guard.waiting.size === 0) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const done = () => {
+      if (guard.waiting.size > 0) return;
+      guard.wake.delete(done);
+      clearTimeout(t);
+      resolve(true);
+    };
+    const t = setTimeout(() => {
+      guard.wake.delete(done);
+      resolve(true);
+    }, timeoutMs);
+    guard.wake.add(done);
+  });
+}
+
+/** Put inside any <Canvas> (or offscreen root): its renderer keeps every program it compiles, never
+ *  waits for one inside a draw (guardDraws), and draws again when one it was waiting for is built. */
 export function KeepPrograms(): null {
   const gl = useThree((s) => s.gl);
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    const guard = guardDraws(gl);
+    const again = () => invalidate();
+    guard?.wake.add(again);
+    return () => {
+      guard?.wake.delete(again);
+    };
+  }, [gl, invalidate]);
   useEffect(() => {
     RENDERERS.add(gl);
     if (!hooked) {
@@ -86,7 +278,8 @@ export function holdsUncompiled(scene: Pick<THREE.Object3D, 'traverse'>, compile
  * browser offers KHR_parallel_shader_compile the programs build on the GPU process's own threads,
  * in parallel, and the page stays responsive (the World's ~35 programs, linked one by one on its first
  * frame, were most of its load); without it three compiles as before and the first frame pays. A
- * timeout guarantees the scene is shown whatever happens.
+ * timeout guarantees the scene is shown whatever happens (and what is not built by then is left out of
+ * the frames until it is: guardDraws).
  *
  * (The wait is three's `compileAsync`, done here: three's own throws if a material is disposed while
  * it waits — a creature swapped for another during the compile — and then never reports at all. Here
@@ -94,7 +287,7 @@ export function holdsUncompiled(scene: Pick<THREE.Object3D, 'traverse'>, compile
  * — the creature that replaces it finds them — and whatever the swap brought is compiled and waited
  * for too.)
  */
-export function WarmShaders({ onReady, timeoutMs = 6000 }: { onReady: () => void; timeoutMs?: number }): null {
+export function WarmShaders({ onReady, timeoutMs = 6000, patient = false }: { onReady: () => void; timeoutMs?: number; patient?: boolean }): null {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
@@ -105,7 +298,10 @@ export function WarmShaders({ onReady, timeoutMs = 6000 }: { onReady: () => void
       done = true;
       onReady();
     };
-    const t = setTimeout(finish, timeoutMs);
+    // (`patient`: where the browser builds programs off the page's thread, wait for them however long
+    // they take — the page is free meanwhile, and what would be shown before then is half a scene)
+    const offThread = patient && !!(gl.getContext() as WebGL2RenderingContext).getExtension?.('KHR_parallel_shader_compile');
+    const t = setTimeout(finish, offThread ? Math.max(timeoutMs, PATIENCE_MS) : timeoutMs);
     let poll: ReturnType<typeof setTimeout> | undefined;
     const start = () => {
       if (done) return;

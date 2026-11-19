@@ -181,6 +181,11 @@ export function builtShell(phenotype: Phenotype, quality: SkinQuality): SkinQual
   return ([quality, 'far', 'low', 'high'] as const).find((q) => hasGeometry(phenotype, shellKey(q))) ?? null;
 }
 
+/** A creature is drawn whole or not at all: while one of its shader programs is still being built its
+ *  other parts wait with it (programs.ts guardDraws) — eyes and claws do not hang in the air where its
+ *  skin is about to be. */
+const DRAW_WHOLE = { drawWhole: true };
+
 /**
  * Build (and cache) everything a creature's smooth skin needs, ahead of mounting it — the World
  * schedules these within a time budget each frame, so a burst of new genomes never stalls rendering.
@@ -652,7 +657,7 @@ export function CreatureMesh({
 
   if (skinned && rig) {
     return (
-      <group>
+      <group userData={DRAW_WHOLE}>
         <primitive object={skinned} />
         {shellGeo && shellMat && shellMount &&
           createPortal(
@@ -667,7 +672,7 @@ export function CreatureMesh({
   }
 
   return (
-    <group>
+    <group userData={DRAW_WHOLE}>
       {showSmooth && smoothGeo ? (
         // M15: a single welded organic surface replaces the capsule kit
         <>

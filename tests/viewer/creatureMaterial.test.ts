@@ -612,3 +612,35 @@ describe('creature material shader injection', () => {
     expect(f).not.toContain('smoothstep(0.0, 0.05 + 1.5 * c, F.y - F.x)');
   });
 });
+
+describe("each covering's relief is compiled only where it is worn", () => {
+  // (one program carried all eight coverings at each of the four places the relief is read: on Windows,
+  // where Chrome compiles through Direct3D, it took 52 s to build)
+  it('keys its program on its covering, and on bare legs and shell scutes where it has them', () => {
+    const pal = { hueA: 0.1, hueB: 0.6, sat: 0.6, light: 0.5 } as Parameters<typeof makeCreatureMaterial>[0];
+    const cov = (type: string) => ({ type, pattern: 'plain', patternScale: 4, patternContrast: 0.5, sheen: 0.3 }) as Parameters<typeof makeCreatureMaterial>[1];
+    const fur = makeCreatureMaterial(pal, cov('fur'), 1);
+    const scales = makeCreatureMaterial(pal, cov('scales'), 1);
+    expect(fur.defines!.COVER).not.toBe(scales.defines!.COVER);
+    expect(fur.defines!.BARE_LEGS).toBeUndefined();
+    expect(fur.defines!.USE_SCUTES).toBeUndefined();
+    const bird = makeCreatureMaterial(pal, cov('feathers'), 1, { y: 0.3, band: 0.1, color: 0x886644 });
+    expect(bird.defines!.BARE_LEGS).toBe('');
+    const shell = makeCreatureMaterial(pal, cov('plates'), 1, null, null, null, 0, null, false, false, new Float32Array([0, 0, 0, 1, 0, 0]));
+    expect(shell.defines!.USE_SCUTES).toBe('');
+  });
+
+  it('wraps every covering branch of the relief in its own switch, balanced', () => {
+    const shader = { uniforms: {}, vertexShader: '#include <common>\n#include <project_vertex>', fragmentShader: '#include <common>' } as unknown as Parameters<NonNullable<ReturnType<typeof makeCreatureMaterial>['onBeforeCompile']>>[0];
+    const pal = { hueA: 0.1, hueB: 0.6, sat: 0.6, light: 0.5 } as Parameters<typeof makeCreatureMaterial>[0];
+    const m = makeCreatureMaterial(pal, { type: 'fur', pattern: 'plain', patternScale: 4, patternContrast: 0.5, sheen: 0.3 } as Parameters<typeof makeCreatureMaterial>[1], 1);
+    m.onBeforeCompile(shader, null as never);
+    const f = shader.fragmentShader;
+    const from = f.indexOf('float surfaceHeight(');
+    const body = f.slice(from);
+    for (let k = 1; k <= 7; k++) expect(body, `covering ${k}`).toMatch(new RegExp(`#if COVER == ${k}[^\\n]*\\n\\s*if \\(cover == ${k}`));
+    expect(body).toContain('#if COVER == 0');
+    const opens = (f.match(/^#if/gm) ?? []).length, closes = (f.match(/^#endif/gm) ?? []).length;
+    expect(opens).toBe(closes);
+  });
+});

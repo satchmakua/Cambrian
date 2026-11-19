@@ -934,11 +934,21 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
     why; `?safe=1` starts with the lowest graphics and no backdrop.
   - The page shows a static shell before any JavaScript runs; the entry chunk is 107 KB gzipped (461 KB
     before).
+- [x] **No draw waits for a shader.** The owner's laptop (Windows, Chrome on Direct3D, RTX 5070 Ti) showed
+  the real cause: the creature's shader took 52 s to build, and the first draw that used it held the page
+  until it was done (a 32 s block after a 20 s wait gave up; on `main`, the whole 52 s).
+  - `programs.ts guardDraws`: a draw whose program is still building is skipped and drawn when it is
+    ready; a creature is held back whole. Portraits and still canvases are drawn again once it is.
+  - The stage waits for its shaders however long they take (the page is free meanwhile).
+  - Each covering's relief is compiled only into the programs that wear it (`COVER`, `BARE_LEGS`,
+    `USE_SCUTES`): the creature's fragment shader is about a third of its size. Ten plans render
+    pixel-identical.
 - [ ] **What the front door left.**
   - The first entry to the breeder on a software renderer still holds the page for some seconds.
   - The valley is still too heavy for a software renderer: it warns, but is not lighter.
-  - The creature shader compiles all eight coverings for every creature; compile only its own.
-  - Confirm on the owner's laptop (`scripts/diag-frontdoor.mjs`).
+  - Confirm on the owner's laptop that the 32 s freeze is gone and how long the creature now takes to
+    appear (`scripts/diag-frontdoor.mjs`).
+  - If the creature's shader still takes long to build there: one place that reads the relief, not four.
 
 #### The simulation: making it a game (agreed 2026-11-17)
 
