@@ -13,6 +13,7 @@ import { Canvas } from '@react-three/fiber';
 import type { Genome } from '../engine/genome';
 import { WorldScene } from './WorldScene';
 import { TreeOfLife } from './TreeOfLife';
+import { SpeciesCard } from './SpeciesCard';
 import { useWorldUi, getWorld, populate, strangerGenome, bumpVersion, autosave, downloadWorld, type Snapshot } from './worldStore';
 import { DAY_LENGTH, YEAR_DAYS, dayNumber, speciesById, stepWorld, type HistorySample } from '../sim/world';
 import { howItDiffers } from '../sim/lineage';
@@ -153,6 +154,18 @@ export function WorldView({ founder, onExit, onAdopt, onMenu }: { founder: Genom
   const hints = useSettings((s) => s.gameplay.hints);
   const autosaveMinutes = useSettings((s) => s.gameplay.autosaveMinutes);
   const [warm, setWarm] = useState(false);
+  // the species card open beside the census (null: none)
+  const [card, setCard] = useState<number | null>(null);
+  // (a new or loaded world numbers its species afresh: an open card would show a stranger)
+  const epoch = useWorldUi((s) => s.epoch);
+  useEffect(() => setCard(null), [epoch]);
+  const followOne = (id: number) => {
+    const c = getWorld().creatures.find((x) => x.species === id && x.alive);
+    if (c) {
+      select(c.id);
+      setFollow(true);
+    }
+  };
   const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
     if (!notice) return;
@@ -369,16 +382,13 @@ export function WorldView({ founder, onExit, onAdopt, onMenu }: { founder: Genom
             {snap.species.slice(0, 14).map((s) => (
               <li
                 key={s.id}
-                className={s.extinct ? 'extinct' : ''}
                 onClick={() => {
-                  // follow a living member
-                  const c = getWorld().creatures.find((x) => x.species === s.id && x.alive);
-                  if (c) {
-                    select(c.id);
-                    setFollow(true);
-                  }
+                  // its card (a second click closes it), and the camera on a living member
+                  setCard(card === s.id ? null : s.id);
+                  followOne(s.id);
                 }}
-                title={s.extinct ? 'extinct' : 'follow one'}
+                className={`${s.extinct ? 'extinct' : ''}${card === s.id ? ' open' : ''}`}
+                title={s.extinct ? 'extinct: its record' : 'its record, and follow one'}
               >
                 <CensusIcon speciesId={s.id} hue={s.hue} />
                 <span className="sp-name">{s.name}</span>
@@ -400,7 +410,11 @@ export function WorldView({ founder, onExit, onAdopt, onMenu }: { founder: Genom
       {sel && (
         <aside className="critter">
           <div className="critter-head">
-            <h3>{sel.species}</h3>
+            <h3>
+              <button className="link" onClick={() => setCard(sel.speciesId)} title="its species' record">
+                {sel.species}
+              </button>
+            </h3>
             <button onClick={() => select(null)} title="deselect">✕</button>
           </div>
           <p className="doing">
@@ -442,14 +456,13 @@ export function WorldView({ founder, onExit, onAdopt, onMenu }: { founder: Genom
           now={snap.time}
           onClose={() => setShowTree(false)}
           onPick={(id) => {
-            const c = getWorld().creatures.find((x) => x.species === id && x.alive);
-            if (c) {
-              select(c.id);
-              setFollow(true);
-            }
+            setCard(id);
+            followOne(id);
           }}
         />
       )}
+
+      {snap && card !== null && <SpeciesCard id={card} at={snap.time} onClose={() => setCard(null)} onPick={setCard} onFollow={followOne} />}
 
       {snap && (
         <footer className="journal">
