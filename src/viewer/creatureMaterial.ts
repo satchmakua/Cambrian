@@ -103,6 +103,9 @@ export interface FurShell {
  *  taken from the GPU's per-block derivative. Shared by every creature material: see `setFineRelief`. */
 const FINE_RELIEF = { value: 1 };
 
+/** Always 0: every octave loop's count is offset by it, so no shader compiler can unroll one (see OCT). */
+const ROLL = { value: 0 };
+
 /** a cut crystal's clear coat, how rough it is, and the least roughness of its stone (see
  *  makeCreatureMaterial). Its faces are exact planes now (facets.ts gemGeometry), each mirroring its own
  *  part of the studio's softboxes — crisp light and dark faces with glints. (Cut in place, their ragged
@@ -245,6 +248,7 @@ export function makeCreatureMaterial(
     shader.uniforms.uScutes = { value: sc };
     shader.uniforms.uScuteN = { value: scutes ? Math.min(MAX_SCUTES, Math.floor(scutes.length / 3)) : 0 };
     shader.uniforms.uMuscle = { value: preset.muscle };
+    shader.uniforms.uRoll = ROLL;
     shader.uniforms.uFine = FINE_RELIEF; // (one object, shared: the graphics option switches every coat at once)
     // (unused slots keep r = 0, which clears nothing)
     shader.uniforms.uEyes = { value: Array.from({ length: 8 }, (_, i) => new THREE.Vector4(...(shell?.eyes?.slice(i * 4, i * 4 + 4) ?? []).concat([0, 0, 0, 0]).slice(0, 4))) };
@@ -306,14 +310,17 @@ export function makeCreatureMaterial(
             vec3 t = flow - gNb * dot(flow, gNb);
             gLay = t / max(length(t), 1e-3);
           }
+#if COVER == 7
+          cutFacet();
+#endif
           if (uShellH < 0.0 && uFine > 0.5) {
-            surfaceHeight(bp + dPx, uCover);
+            surfaceHeight(bp + dPx);
             hX = gHb;
-            surfaceHeight(bp + dPy, uCover);
+            surfaceHeight(bp + dPy);
             hY = gHb;
             gFine = 1.0;
           }
-          gH = surfaceHeight(bp, uCover);
+          gH = surfaceHeight(bp);
           gDhx = hX - gHb;
           gDhy = hY - gHb;
           gM = muscle(bp) * uMuscle;
@@ -388,7 +395,7 @@ export function makeCreatureMaterial(
             // scaled coordinate (and gFw is restored — the fur shells and debug views read it after)
             float fw0 = gFw;
             gFw *= 2.6;
-            float hs = surfaceHeight(bp * 2.6, 1);
+            float hs = scalesHeight(bp * 2.6);
             gFw = fw0;
             gH = mix(gH, hs, bare);
             gHb = mix(hb, gHb * 0.6, bare);
@@ -576,6 +583,15 @@ uniform float uBareY; uniform float uBareBand; uniform vec3 uBareCol;
 uniform float uShellH; uniform float uShellDen; uniform vec4 uEyes[8]; uniform vec4 uFace; uniform vec3 uFaceCol; uniform vec4 uHeadA; uniform vec3 uHeadB; uniform float uSeam; uniform float uCut; uniform float uMuscle; uniform float uShag;
 uniform float uFine;
 uniform float uDapple;
+// Every loop over a noise's octaves runs to a count the shader compiler cannot know: OCT(n) is n plus
+// uRoll, a uniform that is always 0. Direct3D's compiler (FXC, under Chrome on Windows) unrolls each loop
+// whose count it knows, at every place its function is called, and the octaves unrolled were most of the
+// time a creature's program took to build there: a furred coat's 4.0 s, a bird's 5.3 s (1.25 s and 1.6 s
+// rolled). Each loop's second point is worked out before it (p1), as it was when the loop was unrolled:
+// FXC folds the caller's scale into that step (p * 6.0 * 2.02 is p * 12.12), and the point reached the
+// other way rounds differently — a few pixels of every creature changed by a shade under Direct3D.
+uniform int uRoll;
+#define OCT(n) ((n) + uRoll)
 // a fawn's dapples: from how far down the flank (the skin normal's y) they start, and how near the midline
 // (body units) they give out
 const float DAPPLE_LOW = -0.2;
@@ -655,25 +671,28 @@ float vnoise(vec3 x) {
 // band-limited fbm: \`p\` is already scaled by \`freq\` (its base frequency, cycles/bu)
 float fbmA(vec3 p, float freq) {
   float a = 0.5; float v = 0.0;
-  for (int i = 0; i < 5; i++) {
+  vec3 p1 = p * 2.02 + 7.3; // (the second octave's point, before the loop: see OCT)
+  for (int i = 0; i < OCT(5); i++) {
     v += a * mix(0.5, vnoise(p), aaW(freq));
-    p = p * 2.02 + 7.3; a *= 0.5; freq *= 2.02;
+    p = i == 0 ? p1 : p * 2.02 + 7.3; a *= 0.5; freq *= 2.02;
   }
   return v;
 }
 // unfiltered low-frequency fbm — only for domain warps (≤ ~1 cycle/bu, never near a pixel)
 float fbm3(vec3 p) {
   float a = 0.5; float v = 0.0;
-  for (int i = 0; i < 3; i++) { v += a * vnoise(p); p = p * 2.02 + 7.3; a *= 0.5; }
+  vec3 p1 = p * 2.02 + 7.3;
+  for (int i = 0; i < OCT(3); i++) { v += a * vnoise(p); p = i == 0 ? p1 : p * 2.02 + 7.3; a *= 0.5; }
   return v;
 }
 // band-limited ridged multifractal — sharp veins/fibres (muscle striations, scale keels)
 float ridgedA(vec3 p, float freq) {
   float a = 0.5; float v = 0.0;
-  for (int i = 0; i < 4; i++) {
+  vec3 p1 = p * 2.03 + 3.7;
+  for (int i = 0; i < OCT(4); i++) {
     float n = 1.0 - abs(2.0 * vnoise(p) - 1.0);
     v += a * mix(0.333, n * n, aaW(freq));
-    p = p * 2.03 + 3.7; a *= 0.5; freq *= 2.03;
+    p = i == 0 ? p1 : p * 2.03 + 3.7; a *= 0.5; freq *= 2.03;
   }
   return v;
 }
@@ -867,6 +886,31 @@ float facets(vec3 q, out float id, out float wall) {
 }
 #endif
 
+// --- a crystal's skin already cut ----------------------------------------------
+// The geometry's own flat faces carry the cut; cut again in the relief, at other places, the two sets of
+// faces showed through each other — torn patches, two skins flickering. Each face takes a shade of its
+// own: on a face its normal is the same at every corner, so it neither varies across the pixel nor
+// between the face's pixels, and hashes to one value. (The uncut legs and face, whose normals vary, stay
+// the stone's own tone.) The narrow bevels between faces, where the normal swings from one face's to the
+// next within a pixel or two, are the cut's EDGES: they catch the light as bright lines. (A curved, uncut
+// skin turns its normal far more slowly than that.) Sets gFacet and gSeam once, before the relief is read:
+// they come from the pixel's own slopes, the same wherever the relief is sampled.
+#if COVER == 7
+void cutFacet() {
+  // (the face's own normal — the triangle's, from the body-space position's slopes — one value across
+  // the face, and turned to the outside)
+  vec3 fn = normalize(cross(dFdx(vBodyPos), dFdy(vBodyPos)));
+  if (dot(fn, vBNrm) < 0.0) fn = -fn;
+  float bend = length(fwidth(fn));
+  float planar = 1.0 - smoothstep(0.0, 0.03, bend);
+  // (a face's own shade only where the skin IS a face — the cut stone, vCut: on the GPU fn is one
+  // triangle's normal, so fwidth(fn) is 0 inside every triangle and every triangle of the uncut legs and
+  // face took a shade of its own, a mosaic of flakes; |x|, so the stone's left and right faces match)
+  gFacet = mix(0.5, hash13(floor(vec3(abs(fn.x), fn.yz) * 5.0 + 0.5) + 3.0), planar * step(0.99, vCut));
+  gSeam = smoothstep(0.05, 0.16, bend);
+}
+#endif
+
 // --- surface relief per covering (MORPHOLOGY §7.2) ----------------------------
 // Returns the relief normalized to [0,1] (grime + roughness read it) and writes gHb, the same relief
 // as a PHYSICAL height in body units. The bump must use a physical height: a scale ~1/8 bu across is
@@ -875,7 +919,25 @@ float facets(vec3 q, out float id, out float wall) {
 // Amplitudes are set so each relief's peak slope (2π·freq·amp) lands near 0.5–1.
 // Each relief also fades to its mean as its cells shrink toward the pixel footprint (aaW), so the
 // bump is a crisp scale/plate/feather read up close and a clean surface at a distance.
-float surfaceHeight(vec3 p, int cover) {
+// Only the program's own covering (COVER) is compiled in, and the relief runs straight through to one
+// return. (Each covering's branch returning on its own, Direct3D's compiler warned on every creature
+// program that the result might be used unset.)
+
+// scales — imbricated, laid back. A fish's scales, a snake's, a lizard's: small round-edged scallops
+// shingled toward the tail, each lying on the roots of the ones behind (see scallops). (A cell per scale
+// with straight borders was a fine crazing that read as rough skin; larger, a tortoiseshell of polygons.)
+// Also a bird's bare shanks, sampled finer (see the colour stage).
+#if COVER == 1 || defined(BARE_LEGS)
+float scalesHeight(vec3 p) {
+  float mid;
+  float lay = mix(0.66, scallops(p * 17.0, gLay, gNb, gFw * 17.0, mid), aaW(17.0));
+  gHb = lay * 0.006;
+  return clamp(0.8 - lay * 0.55, 0.0, 1.0);
+}
+#endif
+
+float surfaceHeight(vec3 p) {
+  float h = 0.5;
   // a tortoise's shell: each scute a low dome rising from its grooved seams, ridged with growth rings
 #ifdef USE_SCUTES
   if (uScuteN > 0) {
@@ -885,144 +947,110 @@ float surfaceHeight(vec3 p, int cover) {
     float dome = smoothstep(0.0, 0.3, e);
     float ring = (0.5 + 0.5 * cos(e * SCUTE_RINGS)) * aaW(SCUTE_RINGS * 0.16);
     gHb = groove * 0.008 + dome * 0.014 + ring * 0.0015;
-    return clamp(0.85 - groove * 0.45 - dome * 0.1, 0.0, 1.0);
-  }
+    h = clamp(0.85 - groove * 0.45 - dome * 0.1, 0.0, 1.0);
+  } else {
 #endif
-#if COVER == 1 || defined(BARE_LEGS)
-  if (cover == 1) {                                             // scales — imbricated, laid back
-    // A fish's scales, a snake's, a lizard's: small round-edged scallops shingled toward the tail, each
-    // lying on the roots of the ones behind (see scallops). (A cell per scale with straight borders
-    // was a fine crazing that read as rough skin; larger, a tortoiseshell of polygons.)
-    float mid;
-    float lay = mix(0.66, scallops(p * 17.0, gLay, gNb, gFw * 17.0, mid), aaW(17.0));
-    gHb = lay * 0.006;
-    return clamp(0.8 - lay * 0.55, 0.0, 1.0);
+#if COVER == 0
+  // skin — fine wrinkle-and-pore relief
+  float pores = fbmA(p * 6.0, 6.0);
+  float wrinkle = ridgedA(p * vec3(3.0, 9.0, 3.0), 9.0);
+  gHb = pores * 0.008 + wrinkle * 0.006;
+  h = pores * 0.22 + wrinkle * 0.12;
+#elif COVER == 1
+  h = scalesHeight(p);
+#elif COVER == 2
+  // fur — clumped pile, locks laid along its lay
+  // Locks of hair laid along the coat's lay (gLay: back along the body, down a flank and a chest), and
+  // the strands within them: the grain that still reads once the strands are smaller than a pixel (the
+  // shells fade out there and the coat carries the look). (Squeezed along the body's length alone, and
+  // faint, the grain ran across a flank's lay: a coat seen whole was a smooth stuffed sock with a
+  // fringe of fuzz round its outline.)
+  float clumps = fbmA(vec3(p.x * 5.0, p.y * 5.0, p.z * 2.4), 5.0);
+  vec3 q = p * FUR_LOCKS;
+  float locks = fbmA(q - gLay * dot(q, gLay) * 0.75, FUR_LOCKS);
+  vec3 s = p * FUR_STRANDS;
+  float streak = fbmA(s - gLay * dot(s, gLay) * 0.9, FUR_STRANDS);
+  gHb = clumps * 0.016 + locks * 0.011 + streak * 0.006;
+  h = clumps * 0.22 + locks * 0.38 + streak * 0.4;
+#elif COVER == 3
+  // feathers — imbricated, laid back
+  // Contour feathers: overlapping scallops laid along the body (see scallops), each a little under
+  // a tenth of a body unit long — a bird's head wears a dozen across, not five polygons — and down
+  // the middle of each, seen close, the fine pale line of its shaft.
+  float barbs = fbmA(vec3(p.x * 40.0, p.y * 40.0, p.z * 9.0), 40.0);
+  float shaft;
+  float lay = mix(0.66, scallops(p * 13.0, gLay, gNb, gFw * 13.0, shaft), aaW(13.0));
+  // A bird's head and its underside are smooth plumage; the feathers' edges show on its back and
+  // its wings. (Scalloped evenly all over, each feather's edge in shadow, it wore fish scales.)
+  float plain = smoothstep(0.1, -0.6, gNb.y) * 0.7;
+  if (uHeadA.w > 0.0) {
+    vec3 hab = uHeadB - uHeadA.xyz;
+    float ht = clamp(dot(vBodyPos - uHeadA.xyz, hab) / max(dot(hab, hab), 1e-6), 0.0, 1.0);
+    plain = max(plain, 1.0 - smoothstep(uHeadA.w * 1.0, uHeadA.w * 1.6, length(vBodyPos - uHeadA.xyz - hab * ht)));
   }
-#endif
-#if COVER == 2
-  if (cover == 2) {                                             // fur — clumped pile, locks laid along its lay
-    // Locks of hair laid along the coat's lay (gLay: back along the body, down a flank and a chest), and
-    // the strands within them: the grain that still reads once the strands are smaller than a pixel (the
-    // shells fade out there and the coat carries the look). (Squeezed along the body's length alone, and
-    // faint, the grain ran across a flank's lay: a coat seen whole was a smooth stuffed sock with a
-    // fringe of fuzz round its outline.)
-    float clumps = fbmA(vec3(p.x * 5.0, p.y * 5.0, p.z * 2.4), 5.0);
-    vec3 q = p * FUR_LOCKS;
-    float locks = fbmA(q - gLay * dot(q, gLay) * 0.75, FUR_LOCKS);
-    vec3 s = p * FUR_STRANDS;
-    float streak = fbmA(s - gLay * dot(s, gLay) * 0.9, FUR_STRANDS);
-    gHb = clumps * 0.016 + locks * 0.011 + streak * 0.006;
-    return clumps * 0.22 + locks * 0.38 + streak * 0.4;
-  }
-#endif
-#if COVER == 3
-  if (cover == 3) {                                             // feathers — imbricated, laid back
-    // Contour feathers: overlapping scallops laid along the body (see scallops), each a little under
-    // a tenth of a body unit long — a bird's head wears a dozen across, not five polygons — and down
-    // the middle of each, seen close, the fine pale line of its shaft.
-    float barbs = fbmA(vec3(p.x * 40.0, p.y * 40.0, p.z * 9.0), 40.0);
-    float shaft;
-    float lay = mix(0.66, scallops(p * 13.0, gLay, gNb, gFw * 13.0, shaft), aaW(13.0));
-    // A bird's head and its underside are smooth plumage; the feathers' edges show on its back and
-    // its wings. (Scalloped evenly all over, each feather's edge in shadow, it wore fish scales.)
-    float plain = smoothstep(0.1, -0.6, gNb.y) * 0.7;
-    if (uHeadA.w > 0.0) {
-      vec3 hab = uHeadB - uHeadA.xyz;
-      float ht = clamp(dot(vBodyPos - uHeadA.xyz, hab) / max(dot(hab, hab), 1e-6), 0.0, 1.0);
-      plain = max(plain, 1.0 - smoothstep(uHeadA.w * 1.0, uHeadA.w * 1.6, length(vBodyPos - uHeadA.xyz - hab * ht)));
-    }
-    // …and a FLIER's breast, flanks and neck are smooth too: its feathers' edges show along its back alone
-    // (the mantle between its folded wings, its rump), giving out as the skin turns to the side or forward.
-    // (Kept off the belly and the head alone, the edges ran in rows of dark-rimmed arcs over the breast and
-    // up the neck to the chin, one tile to a feather: fish scales.)
-    if (uShag < 0.5) plain = max(plain, 1.0 - smoothstep(FEATHER_EDGE_Y, FEATHER_EDGE_Y + 0.45, gNb.y) * (1.0 - smoothstep(0.2, 0.6, gNb.z)));
-    lay = mix(lay, 0.66, plain * (uShag > 0.5 ? 0.85 : 0.95));
-    shaft *= aaW(50.0) * (1.0 - plain);
-    // A FLIGHTLESS bird (an ostrich's, an emu's) wears loose plumes, hair-like, hanging along the lay: no
-    // feather's edge to be seen. (Scalloped like a flier's contour feathers, its neck, body and thighs
-    // were all one tight fish-scale pattern: plucked, scaly, a pinecone.) The strands run with the lay —
-    // the noise squeezed tenfold along it — and gather into locks.
-    // (…in a wider range of tone than a feather's edge: the strands' grooves deep enough to read)
-    if (uShag > 0.5) {
-      vec3 q = p * 15.0;
-      vec3 qs = q - gLay * dot(q, gLay) * 0.92;
-      float strands = fbmA(qs, 15.0);
-      float locks = fbmA(p * 3.0 - gLay * dot(p, gLay) * 2.2, 3.0);
-      float plume = clamp(0.2 + strands * 0.75 + (locks - 0.5) * 0.8, 0.0, 1.0);
-      float l = mix(plume, 0.66, plain * 0.85);
-      gHb = l * 0.012 + (barbs - 0.5) * 0.001;
-      return clamp(0.98 - l * 0.72 + (barbs - 0.5) * 0.05, 0.0, 1.0);
-    }
+  // …and a FLIER's breast, flanks and neck are smooth too: its feathers' edges show along its back alone
+  // (the mantle between its folded wings, its rump), giving out as the skin turns to the side or forward.
+  // (Kept off the belly and the head alone, the edges ran in rows of dark-rimmed arcs over the breast and
+  // up the neck to the chin, one tile to a feather: fish scales.)
+  if (uShag < 0.5) plain = max(plain, 1.0 - smoothstep(FEATHER_EDGE_Y, FEATHER_EDGE_Y + 0.45, gNb.y) * (1.0 - smoothstep(0.2, 0.6, gNb.z)));
+  lay = mix(lay, 0.66, plain * (uShag > 0.5 ? 0.85 : 0.95));
+  shaft *= aaW(50.0) * (1.0 - plain);
+  // A FLIGHTLESS bird (an ostrich's, an emu's) wears loose plumes, hair-like, hanging along the lay: no
+  // feather's edge to be seen. (Scalloped like a flier's contour feathers, its neck, body and thighs
+  // were all one tight fish-scale pattern: plucked, scaly, a pinecone.) The strands run with the lay —
+  // the noise squeezed tenfold along it — and gather into locks.
+  // (…in a wider range of tone than a feather's edge: the strands' grooves deep enough to read)
+  if (uShag > 0.5) {
+    vec3 q = p * 15.0;
+    vec3 qs = q - gLay * dot(q, gLay) * 0.92;
+    float strands = fbmA(qs, 15.0);
+    float locks = fbmA(p * 3.0 - gLay * dot(p, gLay) * 2.2, 3.0);
+    float plume = clamp(0.2 + strands * 0.75 + (locks - 0.5) * 0.8, 0.0, 1.0);
+    float l = mix(plume, 0.66, plain * 0.85);
+    gHb = l * 0.012 + (barbs - 0.5) * 0.001;
+    h = clamp(0.98 - l * 0.72 + (barbs - 0.5) * 0.05, 0.0, 1.0);
+  } else {
     gHb = lay * 0.0075 + (barbs - 0.5) * 0.001 + shaft * 0.0012;
     // (gH reads as a RECESS for the grime and roughness: where a feather comes out from under the
     // one in front is where the shadow sits; its tip is clean — a soft shadow, not an outline)
-    return clamp(0.82 - lay * 0.42 + (barbs - 0.5) * 0.05 - shaft * 0.18, 0.0, 1.0);
+    h = clamp(0.82 - lay * 0.42 + (barbs - 0.5) * 0.05 - shaft * 0.18, 0.0, 1.0);
   }
-#endif
-#if COVER == 4
-  if (cover == 4) {                                             // chitin — a smooth lacquered cuticle
-    // Hard and glossy: a faint undulation and fine punctures, no seam network. (Voronoi grooves drew a
-    // tortoiseshell over every beetle and spider; an arthropod's plates are its body SEGMENTS, which
-    // the geometry already carries.)
-    float swell = fbmA(p * 2.2, 2.2);
-    float pits = fbmA(p * 26.0, 26.0);
-    float h = 0.62 + (swell - 0.5) * 0.25 - smoothstep(0.62, 0.8, pits) * 0.18 * aaW(26.0);
-    gHb = swell * 0.006 - smoothstep(0.62, 0.8, pits) * 0.0012 * aaW(26.0);
-    return h;
-  }
-#endif
-#if COVER == 5
-  if (cover == 5) {                                             // slime — soft papillae under a wet ripple
-    // Soft round papillae and wrinkles — smooth blobs of noise, laid long along the body — dull and a shade
-    // darker between them, under a faint wet ripple: a slug's back, an octopus's warts. (The ripple alone
-    // was a glossy pickle, its highlight one unbroken smear. Voronoi domes, each creased against the next
-    // where their cells met, caught the light facet by facet: hammered foil, a golf ball.)
-    float n = fbmA(vec3(p.x, p.y, p.z * SLIME_LONG) * SLIME_CELL, SLIME_CELL);
-    float bump = smoothstep(0.38, 0.72, n);
-    float ripple = fbmA(p * 3.5, 3.5);
-    gHb = bump * SLIME_TUBERCLE + ripple * 0.01;
-    return clamp(0.62 - bump * 0.3 + ripple * 0.1, 0.0, 1.0);
-  }
-#endif
-#if COVER == 6
-  if (cover == 6) {                                             // plates — domed scutes (osteoderms, ossicles)
-    // A dragon's armour, a sea star's ossicles: each plate a low dome rising from a narrow groove to its
-    // middle, the grooves a shade darker. (Flat-topped cells half a body unit across between dark seams
-    // were a quilt, a turtle's shell, cracked clay.)
-    vec2 F = voronoi(p * PLATE_CELL);
-    float w = aaW(PLATE_CELL);
-    float dome = mix(0.6, smoothstep(0.0, 0.42 + gFw * PLATE_CELL, F.y - F.x), w);
-    gHb = dome * PLATE_DOME;
-    return clamp(0.72 - dome * 0.42, 0.0, 1.0);
-  }
-#endif
-#if COVER == 7
-  if (cover == 7 && uCut > 0.5) {                               // crystal, its skin already cut
-    // the geometry's own flat faces carry the cut; cut again here, at other places, the two sets of
-    // faces showed through each other — torn patches, two skins flickering. Each face takes a shade
-    // of its own: on a face its normal is the same at every corner, so it neither varies across the
-    // pixel nor between the face's pixels, and hashes to one value. (The uncut legs and face, whose
-    // normals vary, stay the stone's own tone.)
-    // The narrow bevels between faces, where the normal swings from one face's to the next within a
-    // pixel or two, are the cut's EDGES: they catch the light as bright lines. (A curved, uncut skin
-    // turns its normal far more slowly than that.)
-    // (the face's own normal — the triangle's, from the body-space position's slopes — one value across
-    // the face, and turned to the outside)
-    vec3 fn = normalize(cross(dFdx(vBodyPos), dFdy(vBodyPos)));
-    if (dot(fn, vBNrm) < 0.0) fn = -fn;
-    float bend = length(fwidth(fn));
-    float planar = 1.0 - smoothstep(0.0, 0.03, bend);
-    // (a face's own shade only where the skin IS a face — the cut stone, vCut: on the GPU fn is one
-    // triangle's normal, so fwidth(fn) is 0 inside every triangle and every triangle of the uncut legs and
-    // face took a shade of its own, a mosaic of flakes; |x|, so the stone's left and right faces match)
-    gFacet = mix(0.5, hash13(floor(vec3(abs(fn.x), fn.yz) * 5.0 + 0.5) + 3.0), planar * step(0.99, vCut));
-    gSeam = smoothstep(0.05, 0.16, bend);
+#elif COVER == 4
+  // chitin — a smooth lacquered cuticle
+  // Hard and glossy: a faint undulation and fine punctures, no seam network. (Voronoi grooves drew a
+  // tortoiseshell over every beetle and spider; an arthropod's plates are its body SEGMENTS, which
+  // the geometry already carries.)
+  float swell = fbmA(p * 2.2, 2.2);
+  float pits = fbmA(p * 26.0, 26.0);
+  h = 0.62 + (swell - 0.5) * 0.25 - smoothstep(0.62, 0.8, pits) * 0.18 * aaW(26.0);
+  gHb = swell * 0.006 - smoothstep(0.62, 0.8, pits) * 0.0012 * aaW(26.0);
+#elif COVER == 5
+  // slime — soft papillae under a wet ripple
+  // Soft round papillae and wrinkles — smooth blobs of noise, laid long along the body — dull and a shade
+  // darker between them, under a faint wet ripple: a slug's back, an octopus's warts. (The ripple alone
+  // was a glossy pickle, its highlight one unbroken smear. Voronoi domes, each creased against the next
+  // where their cells met, caught the light facet by facet: hammered foil, a golf ball.)
+  float n = fbmA(vec3(p.x, p.y, p.z * SLIME_LONG) * SLIME_CELL, SLIME_CELL);
+  float bump = smoothstep(0.38, 0.72, n);
+  float ripple = fbmA(p * 3.5, 3.5);
+  gHb = bump * SLIME_TUBERCLE + ripple * 0.01;
+  h = clamp(0.62 - bump * 0.3 + ripple * 0.1, 0.0, 1.0);
+#elif COVER == 6
+  // plates — domed scutes (osteoderms, ossicles)
+  // A dragon's armour, a sea star's ossicles: each plate a low dome rising from a narrow groove to its
+  // middle, the grooves a shade darker. (Flat-topped cells half a body unit across between dark seams
+  // were a quilt, a turtle's shell, cracked clay.)
+  vec2 F = voronoi(p * PLATE_CELL);
+  float w = aaW(PLATE_CELL);
+  float dome = mix(0.6, smoothstep(0.0, 0.42 + gFw * PLATE_CELL, F.y - F.x), w);
+  gHb = dome * PLATE_DOME;
+  h = clamp(0.72 - dome * 0.42, 0.0, 1.0);
+#elif COVER == 7
+  if (uCut > 0.5) {                                             // crystal, its skin already cut
+    // (its faces' shades and edges are the faces' own: see cutFacet)
     gHb = 0.0;
-    return 0.3;
-  }
-#endif
-#if COVER == 7
-  if (cover == 7) {                                             // crystal — cut facets
+    h = 0.3;
+  } else {                                                      // crystal — cut facets
     // A cut stone: flat faces, each tilted its own way, meeting in sharp edges — see facets(). One
     // grid alone is a regular net of triangles (a wire mesh drawn over the body); so the stone is cut
     // TWICE, at two angles and two sizes, and the higher cut shows. The higher of two reliefs that are
@@ -1042,18 +1070,15 @@ float surfaceHeight(vec3 p, int cover) {
     float d = min(mix(wallB / 5.4, wallA / 3.8, top), abs(hA - hB) * 0.4);
     gSeam = (1.0 - smoothstep(0.0, 0.006 + gFw, d)) * w;
     gHb = max(hA, hB) * 0.11 * w;
-    return 0.3;                                                 // (no grime: a crystal has no recesses)
+    h = 0.3;                                                    // (no grime: a crystal has no recesses)
   }
-#endif
-#if COVER == 0
-  // skin — fine wrinkle-and-pore relief
-  float pores = fbmA(p * 6.0, 6.0);
-  float wrinkle = ridgedA(p * vec3(3.0, 9.0, 3.0), 9.0);
-  gHb = pores * 0.008 + wrinkle * 0.006;
-  return pores * 0.22 + wrinkle * 0.12;
 #else
   gHb = 0.0;
-  return 0.5;
 #endif
+#ifdef USE_SCUTES
+  }
+#endif
+  return h;
 }
 `;
+

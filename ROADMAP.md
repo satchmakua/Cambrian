@@ -948,7 +948,20 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
   - The valley is still too heavy for a software renderer: it warns, but is not lighter.
   - Confirm on the owner's laptop that the 32 s freeze is gone and how long the creature now takes to
     appear (`scripts/diag-frontdoor.mjs`).
-  - If the creature's shader still takes long to build there: one place that reads the relief, not four.
+  - The creature's shader now builds in a second or so on Direct3D, whatever its covering, on either chip:
+    FXC, the compiler Chrome's Direct3D path goes through, unrolls every loop whose count it knows, and the
+    noise octaves now run to a count it cannot know (`OCT`). Compile and link, the shader cache bypassed,
+    RTX 5070 Ti (the Radeon 610M within 0.1 s of it): skin 3.3 → 1.2 s, scales 2.2 → 1.0, fur 4.0 → 1.25,
+    fur with a bare tail 4.5 → 1.25, feathers with bare legs 5.3 → 1.6, chitin 3.4 → 1.15, slime 3.4 → 1.2,
+    plates 2.0 → 0.95, a tortoise's scutes 2.1 → 1.0, crystal 2.4 → 1.05. A first entry to the breeder has
+    every program built in 6 s, not 17, on either chip. 24 views of 15 plans render identical before and
+    after on SwiftShader and on the RTX; on the Radeon 6 of them differ by a shade in 1-4 pixels.
+  - Drawing a creature costs a little more since the octaves were rolled: a furred close-up with its twelve
+    shells 11% on the Radeon (70.5 → 78.2 ms a frame at 960×600), 2% on the RTX; other views 2-5%.
+  - Not done: reading the relief in one place would take another 0.3 s off each program, but Direct3D then
+    rounds a few pixels a shade differently (2 of 24 views on the RTX, 8 on the Radeon).
+  - A tortoise shell's program still draws Direct3D's "potentially uninitialized variable" warning, from
+    the early return its pattern takes for the scutes (`patternField`).
 
 #### The simulation: making it a game (agreed 2026-11-17)
 
