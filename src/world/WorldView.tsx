@@ -156,6 +156,26 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
   const hints = useSettings((s) => s.gameplay.hints);
   const autosaveMinutes = useSettings((s) => s.gameplay.autosaveMinutes);
   const [warm, setWarm] = useState(false);
+  // For the loading screen: a frame drawn whole (no draw held back for a shader still building), then
+  // the frame rate measured — and, where it is under WORLD_SMOOTH_MS, the graphics lowered once, if the
+  // game may, and the frame rate measured again at the new ones.
+  const [whole, setWhole] = useState(false);
+  const [rate, setRate] = useState<{ tries: number; ms: number | null }>({ tries: 0, ms: null });
+  const [lowered, setLowered] = useState(false);
+  const onRate = (ms: number) => {
+    if (rate.tries === 0 && ms > WORLD_SMOOTH_MS && useSettings.getState().autoLower('slow')) {
+      setLowered(true);
+      setRate({ tries: 1, ms: null });
+    } else setRate({ tries: rate.tries + 1, ms });
+  };
+  const step: StageStatus['step'] = !warm || !whole ? 'shaders' : rate.ms === null ? 'measuring' : 'ready';
+  const slow = rate.ms !== null && rate.ms > WORLD_SMOOTH_MS;
+  const status = useMemo<StageStatus>(() => ({ step, still: false, lowered, slow }), [step, lowered, slow]);
+  const told = useRef(onStatus);
+  told.current = onStatus;
+  useEffect(() => {
+    told.current?.(status);
+  }, [status]);
   // the species card open beside the census (null: none)
   const [card, setCard] = useState<number | null>(null);
   // (a new or loaded world numbers its species afresh: an open card would show a stranger)
