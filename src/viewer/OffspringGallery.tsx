@@ -2,7 +2,7 @@
  * The breeder gallery (DESIGN §7): a 3×3 grid of mutant offspring of the current
  * parent. Click one → it becomes the next parent. This is the feel-good core loop.
  */
-import { useEffect, useRef, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, type RefObject } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OffspringThumb } from './OffspringThumb';
 import { KeepPrograms } from './programs';
@@ -14,13 +14,36 @@ interface Props {
   generation: number;
   onPick: (child: Genome) => void;
   onReroll: () => void;
+  /** how many of the litter are on screen in their skins, of how many (the loading screen waits for
+   *  them all) */
+  onProgress?: (drawn: number, total: number) => void;
 }
 
-export function OffspringGallery({ offspring, generation, onPick, onReroll }: Props) {
+export function OffspringGallery({ offspring, generation, onPick, onReroll, onProgress }: Props) {
   const body = useRef<HTMLDivElement>(null);
   const quality = useQuality();
   // the nine buttons; each thumbnail's scene draws itself into its button's rectangle of the canvas
   const slots = useRef<(HTMLElement | null)[]>([]);
+  // the seed each slot last showed in its skin
+  const skinned = useRef<number[]>([]);
+  const litter = useRef(offspring);
+  litter.current = offspring;
+  const progress = useRef(onProgress);
+  progress.current = onProgress;
+  const tell = useCallback(() => {
+    const l = litter.current;
+    progress.current?.(l.filter((g, i) => skinned.current[i] === g.seed).length, l.length);
+  }, []);
+  // (a new litter starts the count again)
+  useEffect(tell, [offspring, tell]);
+  const onDrawn = useCallback(
+    (slot: number, seed: number, skin: boolean) => {
+      const was = skinned.current[slot];
+      skinned.current[slot] = skin ? seed : -1;
+      if (skinned.current[slot] !== was) tell();
+    },
+    [tell],
+  );
   return (
     <div className="gallery-body" ref={body}>
       <div className="gallery-head">
@@ -54,7 +77,7 @@ export function OffspringGallery({ offspring, generation, onPick, onReroll }: Pr
         <KeepPrograms />
         <Relayout target={body} />
         {offspring.map((g, i) => (
-          <OffspringThumb key={i} slot={i} genome={g} track={slots} />
+          <OffspringThumb key={i} slot={i} genome={g} track={slots} onDrawn={onDrawn} />
         ))}
       </Canvas>
     </div>

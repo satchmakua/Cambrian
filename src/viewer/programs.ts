@@ -10,8 +10,8 @@
  * lights), so they are simply kept: after every frame, each program a renderer holds gets one extra
  * use that is never given back, and three never frees it.
  */
-import { useEffect } from 'react';
-import { addAfterEffect, useThree } from '@react-three/fiber';
+import { useEffect, useRef } from 'react';
+import { addAfterEffect, useFrame, useThree } from '@react-three/fiber';
 import type * as THREE from 'three';
 
 interface ProgramLike {
@@ -20,6 +20,10 @@ interface ProgramLike {
 
 /** how long a patient WarmShaders waits where programs are built off the page's thread */
 export const PATIENCE_MS = 180000;
+
+/** how long a canvas taken down keeps its context while programs it asked for are still being built
+ *  (ms; see guardDraws) */
+export const LOSE_WAIT_MS = 20000;
 
 const RENDERERS = new Set<THREE.WebGLRenderer>();
 const PINNED = new WeakSet<object>();
@@ -94,8 +98,39 @@ export function guardDraws(gl: THREE.WebGLRenderer): DrawGuard | null {
   const DONE = ext.COMPLETION_STATUS_KHR;
   const param = ctx.getProgramParameter.bind(ctx);
   const info = ctx.getProgramInfoLog.bind(ctx);
+  // A program deleted while it was waited for (a thumbnail's kit swapped for its skin before the kit's
+  // programs were pinned) is nothing to wait for — and asking after it is an error the browser
+  // reports on the console, once per poll.
+  const deleted = new WeakSet<WebGLProgram>();
+  if (typeof ctx.deleteProgram === 'function') {
+    const del = ctx.deleteProgram.bind(ctx);
+    (ctx as unknown as Record<string, unknown>).deleteProgram = (program: WebGLProgram | null) => {
+      if (program) deleted.add(program);
+      return del(program);
+    };
+  }
   // (a lost context answers null: nothing is waited for there)
-  const built = (program: WebGLProgram) => param(program, DONE) !== false;
+  const built = (program: WebGLProgram) => deleted.has(program) || param(program, DONE) !== false;
+  // Giving a context up waits for every program it is still building: Chrome's loseContext holds the
+  // page until the GPU process is done with them — 9 s, measured, when the menu's stage was taken down
+  // on "Start game" a moment after it had asked for the creature's shader. A canvas taken down (React
+  // Three Fiber loses its context on unmount) gives it up once they are built, and the page goes on.
+  // (Its commands are flushed meanwhile, so the builds it asked for go ahead with no canvas drawing it;
+  // and it is given up after LOSE_WAIT_MS whatever: a context kept holds its share of the graphics
+  // memory, and a laptop's built-in graphics have little of it.)
+  if (typeof gl.forceContextLoss === 'function') {
+    const lose = gl.forceContextLoss.bind(gl);
+    gl.forceContextLoss = () => {
+      const since = Date.now();
+      const building = () => ((gl.info as { programs?: { program: WebGLProgram }[] | null }).programs ?? []).some((p) => !built(p.program));
+      const later = () => {
+        ctx.flush?.();
+        if (building() && Date.now() - since < LOSE_WAIT_MS) setTimeout(later, 100);
+        else lose();
+      };
+      later();
+    };
+  }
   const guard: DrawGuard = { waiting: new Set(), wake: new Set(), held: 0 };
   GUARDS.set(gl, guard);
   const wake = () => {
@@ -162,6 +197,9 @@ export function guardDraws(gl: THREE.WebGLRenderer): DrawGuard | null {
     return info(program);
   };
   raw.getProgramParameter = (program: WebGLProgram, name: number) => {
+    // (a deleted program is built, as far as anyone waiting for it goes: asked, the browser reports
+    // an error on the console — three's own isReady asks, of a disposed thumbnail's program)
+    if (name === DONE && deleted.has(program)) return true;
     if (name !== DONE && hold(program)) throw NOT_READY;
     return param(program, name);
   };
@@ -199,6 +237,27 @@ export function guardDraws(gl: THREE.WebGLRenderer): DrawGuard | null {
   return guard;
 }
 
+/** How many programs this renderer's draws are waiting for (0 where nothing is guarded). */
+export function buildingPrograms(gl: THREE.WebGLRenderer): number {
+  return GUARDS.get(gl)?.waiting.size ?? 0;
+}
+
+/** How many of this renderer's draws have been held back so far (a count that only grows: compare it
+ *  before and after a render to learn whether that render was drawn whole). */
+export function heldDraws(gl: THREE.WebGLRenderer): number {
+  return GUARDS.get(gl)?.held ?? 0;
+}
+
+/** Be told when a program this renderer was waiting for is built (returns the way to stop). */
+export function onProgramsBuilt(gl: THREE.WebGLRenderer, fn: () => void): () => void {
+  const guard = GUARDS.get(gl);
+  if (!guard) return () => undefined;
+  guard.wake.add(fn);
+  return () => {
+    guard.wake.delete(fn);
+  };
+}
+
 /** Wait until no draw of this renderer is held back for a program; resolves true if it had to wait. */
 export function shadersSettled(gl: THREE.WebGLRenderer, timeoutMs = 120000): Promise<boolean> {
   const guard = GUARDS.get(gl);
@@ -223,6 +282,10 @@ export function shadersSettled(gl: THREE.WebGLRenderer, timeoutMs = 120000): Pro
 export function KeepPrograms(): null {
   const gl = useThree((s) => s.gl);
   const invalidate = useThree((s) => s.invalidate);
+  // The guard goes in as this renders, not in an effect: a canvas may draw its first frame before
+  // its effects have run, and that frame waited for the creature's program (4 s on a laptop's built-in
+  // graphics, measured: the litter's first thumbnail). Installing it twice is a no-op.
+  guardDraws(gl);
   useEffect(() => {
     const guard = guardDraws(gl);
     const again = () => invalidate();
@@ -242,6 +305,37 @@ export function KeepPrograms(): null {
     return () => {
       RENDERERS.delete(gl);
     };
+  }, [gl]);
+  return null;
+}
+
+/**
+ * Put inside a <Canvas> that draws one scene a frame (a stage, the valley, the Studio): told `true`
+ * once a frame of it has been drawn whole — no draw held back for a program still building, none
+ * waited for — and `false` again whenever one is (a creature swapped for one whose programs are new).
+ * What the loading screen waits for: a scene whose shaders are built but that has not yet been drawn
+ * with them is not ready to be seen.
+ */
+export function DrawnWhole({ onChange }: { onChange: (whole: boolean) => void }): null {
+  const gl = useThree((s) => s.gl);
+  // the held-draw count as this canvas's frame began (-1: no frame of it since the last check)
+  const start = useRef(-1);
+  const tell = useRef(onChange);
+  tell.current = onChange;
+  useFrame(() => {
+    start.current = heldDraws(gl);
+  });
+  useEffect(() => {
+    let last: boolean | null = null;
+    // (after every frame of every canvas: the frame this one began has been drawn by now)
+    return addAfterEffect(() => {
+      if (start.current < 0) return;
+      const whole = heldDraws(gl) === start.current && buildingPrograms(gl) === 0;
+      start.current = -1;
+      if (whole === last) return;
+      last = whole;
+      tell.current(whole);
+    });
   }, [gl]);
   return null;
 }

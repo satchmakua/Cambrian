@@ -2402,6 +2402,167 @@ body,
   letter-spacing: 0.06em;
 }
 
+/* --- the loading screen in front of a game screen (LoadingGate) --- */
+
+/* (the screen behind it, made inert while it is up: a wrapper that adds no box of its own) */
+.screen-behind {
+  display: contents;
+}
+
+/* (laid out as the menu's panel and the page's static shell are, so the name does not move between them) */
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--bg);
+  color: var(--fg);
+  outline: none;
+  transition: opacity 0.3s ease;
+}
+
+.gate.leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gate-card {
+  box-sizing: border-box;
+  width: 460px;
+  max-width: 100vw;
+  height: 100%;
+  padding: 7vh 40px 22px;
+  overflow: hidden auto;
+}
+
+.gate h1 {
+  margin: 0;
+  font-size: 46px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+.gate-lead {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.gate-steps {
+  list-style: none;
+  margin: 6vh 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14.5px;
+}
+
+.gate-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gate-steps li.next {
+  color: var(--muted);
+}
+
+.gate-steps small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.gate-mark {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+/* the step under way: a turning ring (transform only, so the compositor turns it even while the page
+   is busy) */
+.gate-steps li.now .gate-mark {
+  box-sizing: border-box;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: gate-turn 0.9s linear infinite;
+}
+
+@keyframes gate-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gate-steps li.now .gate-mark {
+    animation: none;
+    border-color: var(--accent);
+  }
+}
+
+.gate-time {
+  margin: 22px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.gate-why,
+.gate-hint {
+  margin: 14px 0 0;
+  max-width: 380px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.gate-hint {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 26px;
+}
+
+.gate button.plain {
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--line);
+  background: #171a21;
+  color: var(--fg);
+  padding: 6px 12px;
+  border-radius: 7px;
+  transition: border-color 0.15s ease;
+}
+
+.gate button.plain:hover {
+  border-color: var(--accent);
+}
+
+.gate button.plain:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .gate-card {
+    width: 100vw;
+    padding: 5vh 22px 16px;
+  }
+}
+
 /* --- a screen that failed (see ScreenBoundary) --- */
 
 .screen-failed {

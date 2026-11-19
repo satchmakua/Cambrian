@@ -28,7 +28,8 @@ import { useStore, type SkinMode } from '../ui/store';
 import { CreatureMesh } from './CreatureMesh';
 import { SkeletonOverlay, BONE_COLORS } from './SkeletonOverlay';
 import { StudioEnvironment } from './StudioEnvironment';
-import { KeepPrograms } from './programs';
+import { DrawnWhole, KeepPrograms } from './programs';
+import type { StageStatus } from './pace';
 import { mouthVariant, eyeVariant } from './partStyles';
 import type { SkinQuality } from './smoothSkin';
 import { createRig, poseDead, poseRig, restPosed, SLEEP_DROP, type RigInstance } from './rig';
@@ -601,6 +602,7 @@ export function Studio({
   onAdopt,
   onExit,
   onMenu,
+  onStatus,
 }: {
   genome: Genome;
   skinMode: SkinMode;
@@ -608,9 +610,17 @@ export function Studio({
   onAdopt: (g: Genome) => void;
   onExit: () => void;
   onMenu?: () => void;
+  /** for the loading screen: ready once a frame of its views has been drawn whole */
+  onStatus?: (s: StageStatus) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const quality = useQuality();
+  const [whole, setWhole] = useState(false);
+  const told = useRef(onStatus);
+  told.current = onStatus;
+  useEffect(() => {
+    told.current?.({ step: whole ? 'ready' : 'shaders', still: false, lowered: false });
+  }, [whole]);
   const [tab, setTab] = useState<'bench' | 'bestiary'>(() =>
     typeof location !== 'undefined' && new URLSearchParams(location.search).get('bestiary') === '1' ? 'bestiary' : 'bench',
   );
@@ -670,6 +680,7 @@ export function Studio({
         dpr={dprOf(quality, 2)}
       >
         <KeepPrograms />
+        <DrawnWhole onChange={setWhole} />
         <View.Port />
       </Canvas>
     </div>

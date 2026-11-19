@@ -934,21 +934,46 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
     why; `?safe=1` starts with the lowest graphics and no backdrop.
   - The page shows a static shell before any JavaScript runs; the entry chunk is 107 KB gzipped (461 KB
     before).
-- [x] **No draw waits for a shader.** The owner's laptop (Windows, Chrome on Direct3D, RTX 5070 Ti) showed
-  the real cause: the creature's shader took 52 s to build, and the first draw that used it held the page
-  until it was done (a 32 s block after a 20 s wait gave up; on `main`, the whole 52 s).
+- [x] **No draw waits for a shader.** A Windows laptop (Chrome on Direct3D, RTX 5070 Ti) showed the real
+  cause: the creature's shader took 52 s to build, and the first draw that used it held the page until it
+  was done (a 32 s block after a 20 s wait gave up; on `main`, the whole 52 s).
   - `programs.ts guardDraws`: a draw whose program is still building is skipped and drawn when it is
     ready; a creature is held back whole. Portraits and still canvases are drawn again once it is.
   - The stage waits for its shaders however long they take (the page is free meanwhile).
   - Each covering's relief is compiled only into the programs that wear it (`COVER`, `BARE_LEGS`,
     `USE_SCUTES`): the creature's fragment shader is about a third of its size. Ten plans render
     pixel-identical.
+- [x] **A loading screen in front of every game screen.** The same laptop's Chrome had restarted its
+  graphics process onto the processor's own Radeon 610M, the RTX idle beside it. There the breeder opened
+  as a dead screen: 87 s without an answer (one wait for the creature's shader alone took 86 s, and the
+  shader then failed to link), each pick another 100 s, and every tab of the browser slowed with it.
+  - `ui/LoadingGate`, `ui/gate.ts`: a screen is mounted behind a loading screen and let in only once it
+    is ready: its shaders built, a frame drawn whole (`programs.ts DrawnWhole`), the litter drawn in its
+    skins, its frames measured. It shows its steps and a clock; the menu is always a click away, and a way
+    in regardless after 12 s. The breeder, the valley and the Studio are each gated when opened.
+  - A first verdict cheaper than 100 ms but slower than 33 ms is timed twice, and lowers the graphics if
+    the game may (`PACE.smoothMs`); the valley measures its median frame and lowers once if under 24 a
+    second (`WORLD_SMOOTH_MS`). The lowering happens behind the loading screen, and is measured again.
+  - Where the drawing is slow on a computer's built-in graphics, the loading screen and the lowered-
+    graphics notice name the chip and say how to give the browser the graphics card (`gpu.ts slowGpuHint`).
+  - Repaired on the way: the litter stayed blank once a thumbnail had been held for its shader (marked
+    drawn, never redrawn); the guard went in after a canvas's first frame (a 4 s block); the menu's stage,
+    taken down mid-build, held the page 9 s in `loseContext` (a context is now given up once its builds
+    are done, 20 s at the most); a timed frame that left a held creature out was timed cheap; polling a
+    deleted program warned on the console.
+  - Measured with an empty shader cache, Start game to the breeder: 15-35 s on the Radeon 610M (no task
+    over 1.2 s), 9-14 s on the RTX 5070 Ti; 1.6 s on the RTX once its shaders are kept. The valley on the
+    Radeon: 27 s behind its loading screen, then 20-24 frames a second at Low.
 - [ ] **What the front door left.**
   - The first entry to the breeder on a software renderer still holds the page for some seconds.
   - The valley is still too heavy for a software renderer: it warns, but is not lighter.
-  - Confirm on the owner's laptop that the 32 s freeze is gone and how long the creature now takes to
-    appear (`scripts/diag-frontdoor.mjs`).
-  - If the creature's shader still takes long to build there: one place that reads the relief, not four.
+  - The creature's shader still takes 4-5 s to build on Direct3D (a furred one, on either chip): one place
+    that reads the relief, not four.
+  - A lowering from High to Low builds the stage's shaders again (shadows off: 10 s more on the Radeon).
+  - On a built-in chip with 512 MB of its own memory, a second tab of the game in the valley leaves none
+    for the first: a frame a second, the chip idle.
+  - Direct3D warns of a "potentially uninitialized variable" in the relief function on every creature
+    program, and one deleted program is still polled somewhere on the way in.
 
 #### The simulation: making it a game (agreed 2026-11-17)
 

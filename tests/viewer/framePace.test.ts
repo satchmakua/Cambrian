@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PACE, judgePace, paceStart, paceStep, type PaceEvent, type PaceState } from '../../src/viewer/pace';
+import { PACE, judgePace, medianFrameMs, paceStart, paceStep, type PaceEvent, type PaceState } from '../../src/viewer/pace';
 
 const run = (s: PaceState, ...events: PaceEvent[]): PaceState => events.reduce(paceStep, s);
 const timed = (ms: number, now = 0): PaceEvent => ({ type: 'timed', ms, now });
@@ -10,10 +10,22 @@ const SLOW = PACE.gapMs + 50;
 const RESTED = PACE.restMs + 1;
 
 describe('frame pace: what the timed frames say', () => {
-  it('a stage loops once a timed frame is cheap, and not before one is timed', () => {
+  it('a stage loops once a timed frame is smooth, and not before one is timed', () => {
     expect(judgePace([])).toBe('probing');
     expect(judgePace([4])).toBe('live');
-    expect(judgePace([PACE.slowMs])).toBe('live');
+    expect(judgePace([PACE.smoothMs])).toBe('live');
+  });
+
+  it('cheap but not smooth, a frame is timed again before the verdict — which may lower the graphics', () => {
+    // (one such frame may be something else in the way: a first frame after its shaders were built)
+    expect(judgePace([PACE.smoothMs + 1])).toBe('probing');
+    expect(judgePace([PACE.slowMs])).toBe('probing');
+    expect(judgePace([60, 70])).toBe('live');
+    expect(judgePace([PACE.slowMs, PACE.slowMs])).toBe('live');
+    // (the second came smooth: the first was the one in the way)
+    expect(judgePace([80, 12])).toBe('live');
+    const s = run(paceStart('high'), { type: 'primed' }, timed(60), timed(50, 2000));
+    expect(s).toMatchObject({ pace: 'live', first: false, cost: 50 });
   });
 
   it('one slow frame is not a verdict — something else may have been in the way: it is timed again', () => {
@@ -129,5 +141,14 @@ describe('frame pace: a still stage', () => {
   it('a stage that changes while it is being measured starts over, still on its first verdict', () => {
     const s = run(paceStart('high'), { type: 'primed' }, timed(400), { type: 'stage', stage: 'medium' });
     expect(s).toMatchObject({ pace: 'probing', primed: false, costs: [], first: true });
+  });
+});
+
+describe("the valley's frame rate", () => {
+  it('is the median of the frame intervals counted — one long frame (a skin built) does not make it slow', () => {
+    expect(medianFrameMs([])).toBe(0);
+    expect(medianFrameMs([16])).toBe(16);
+    expect(medianFrameMs([16, 17, 900, 16, 18])).toBe(17);
+    expect(medianFrameMs([10, 20, 30, 40])).toBe(25);
   });
 });

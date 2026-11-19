@@ -15,7 +15,8 @@
  */
 import { useCallback, useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { PACE, paceStart, paceStep, type Pace, type PaceEvent, type PaceState } from './pace';
+import { PACE, medianFrameMs, paceStart, paceStep, type Pace, type PaceEvent, type PaceState } from './pace';
+import { buildingPrograms, heldDraws, shadersSettled } from './programs';
 
 /** What came with a change of pace: was it this stage's first verdict (the one that may lower the
  *  graphics), and the cheapest timed frame, ms. */
@@ -25,6 +26,40 @@ export interface PaceVerdict {
 }
 
 const PIXEL = new Uint8Array(4);
+
+/**
+ * Inside a looping <Canvas> (the valley): while `run`, its frames are counted — the first `skipMs` of
+ * them left out, a scene's start-up — for `ms`, and `onDone` is told the median interval between them
+ * (ms). A run that is stopped and started again measures from the start. (Frames seconds apart are
+ * waited for: three intervals at the least, or whatever came in four times the time.)
+ */
+export function MeasureFrames({ run, skipMs = 600, ms = 2000, onDone }: { run: boolean; skipMs?: number; ms?: number; onDone: (medianMs: number) => void }): null {
+  const m = useRef<{ from: number; last: number; dts: number[] } | null>(null);
+  const done = useRef(onDone);
+  done.current = onDone;
+  useEffect(() => {
+    m.current = run ? { from: performance.now() + skipMs, last: 0, dts: [] } : null;
+  }, [run, skipMs]);
+  useFrame(() => {
+    const r = m.current;
+    if (!r) return;
+    const now = performance.now();
+    // (a hidden tab's frames come seconds apart by the browser's own doing: measured from the start
+    // once it is back)
+    if (document.hidden) {
+      m.current = { from: now + skipMs, last: 0, dts: [] };
+      return;
+    }
+    if (now >= r.from && r.last > 0) r.dts.push(now - r.last);
+    r.last = now;
+    const spent = now - r.from;
+    if (spent >= ms && (r.dts.length >= 3 || spent >= ms * 4)) {
+      m.current = null;
+      done.current(r.dts.length ? medianFrameMs(r.dts) : spent);
+    }
+  });
+  return null;
+}
 
 /**
  * Put inside a <Canvas> whose `frameloop` is 'always' only while `pace` is 'live'. `idle` holds the
@@ -67,11 +102,28 @@ export function FramePace({ pace, idle, stage, onPace }: { pace: Pace; idle: boo
       let ms = 0; // (a stage that cannot be timed is left to run as it always did)
       try {
         const three = get();
+        // A scene waiting for a program to be built is drawn without what waits (programs.ts
+        // guardDraws): timed, it would pass for cheap — a creature with its shadows switched off by a
+        // lowering waits seconds for its new shaders on a laptop's built-in graphics. Wait for them,
+        // then for quiet again; and a frame in which anything was held back is timed again.
+        if (buildingPrograms(three.gl) > 0) {
+          void shadersSettled(three.gl).then(() => {
+            if (!on) return;
+            invalidate();
+            settle();
+          });
+          return;
+        }
+        const held = heldDraws(three.gl);
         const t0 = performance.now();
         three.advance(t0, false);
         const gl = three.gl.getContext();
         gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, PIXEL);
         ms = performance.now() - t0;
+        if (heldDraws(three.gl) > held) {
+          settle();
+          return;
+        }
       } catch {
         /* as above */
       }
@@ -82,11 +134,12 @@ export function FramePace({ pace, idle, stage, onPace }: { pace: Pace; idle: boo
     const quiet = () => {
       let last = 0;
       let run = 0;
+      const from = performance.now();
       const tick = (t: number) => {
         if (!on) return;
         run = last > 0 && t - last < PACE.calmMs ? run + 1 : 0;
         last = t;
-        if (run >= PACE.calmRun) timed();
+        if (run >= PACE.calmRun || t - from > PACE.calmWaitMs) timed();
         else raf = requestAnimationFrame(tick);
       };
       raf = requestAnimationFrame(tick);

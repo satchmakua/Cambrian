@@ -11,7 +11,7 @@ import type { Genome } from '../../engine/genome';
 import { MORPHOTYPE_IDS, type SymmetryMode } from '../../engine/random';
 import { exportSave, founderFor, importSave, loadGame, saveGame, type NewGameOptions } from '../game';
 import { cleanName, describeSave, nextGameName, saveStore, NAME_MAX, type Ecosystem, type SaveHeader } from '../saves';
-import { noGpu, settleGraphics } from '../gpu';
+import { noGpu, settleGraphics, slowGpuHint } from '../gpu';
 import { AUTOSAVE_MINUTES, DENSITIES, RENDER_SCALES, SAFE, useSettings, type CreatureDetail, type QualityPreset } from '../settings';
 import { useStore, type GameView } from '../store';
 
@@ -344,9 +344,13 @@ export function LoweredNotice({ onSettings }: { onSettings: () => void }) {
   const notice = useSettings((s) => s.notice);
   const dismissNotice = useSettings((s) => s.dismissNotice);
   if (SAFE || !notice.lowered || notice.seen) return null;
+  // (slow frames on a laptop's built-in graphics: a card in the same machine may be standing idle)
+  const hint = notice.lowered === 'slow' ? slowGpuHint() : null;
   return (
     <div className="mm-notice" role="status">
-      <span>Graphics were set to Low because {LOWERED[notice.lowered]}.</span>
+      <span>
+        Graphics were set to Low because {LOWERED[notice.lowered]}.{hint && ` ${hint}`}
+      </span>
       <button
         className="plain"
         onClick={() => {

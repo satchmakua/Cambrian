@@ -19,9 +19,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, ContactShadows } from '@react-three/drei';
 import { StudioEnvironment } from './StudioEnvironment';
-import { KeepPrograms, WarmShaders } from './programs';
+import { DrawnWhole, KeepPrograms, WarmShaders } from './programs';
 import { FramePace, type PaceVerdict } from './FramePace';
-import { PACE, type Pace } from './pace';
+import { PACE, type Pace, type StageStatus } from './pace';
 
 // Dev/headless: a URL `view` param picks a canonical camera angle for reproducible face shots.
 // The creature faces +Z, so 'front' looks back along +Z at the head; 'side' from +X. `head=1`
@@ -91,6 +91,7 @@ export function CreatureViewer({
   paused = false,
   onSlow,
   onShown,
+  onStatus,
 }: {
   phenotype: Phenotype;
   skinMode?: SkinMode;
@@ -104,6 +105,8 @@ export function CreatureViewer({
   onSlow?: () => void;
   /** the stage has drawn its first frame */
   onShown?: () => void;
+  /** told each change in what the stage is doing (the loading screen waits for 'ready') */
+  onStatus?: (status: StageStatus) => void;
 }) {
   if (DEV_FAIL) throw new Error('the stage failed to draw (dev: ?failstage=1)');
   const quality = useQuality();
@@ -124,6 +127,11 @@ export function CreatureViewer({
   const [shown, setShown] = useState(false); // its first frame has been drawn
   const [measured] = useState(() => !noGpu() || DEV_MEASURE);
   const [pace, setPace] = useState<Pace>(measured ? 'probing' : 'still');
+  // a frame has been drawn whole (nothing in it held back for a shader still building)
+  const [whole, setWhole] = useState(false);
+  // the options the last verdict holds for (a stage lowered from still is measured again at the new ones)
+  const [verdictFor, setVerdictFor] = useState<string | null>(null);
+  const [lowered, setLowered] = useState(false);
   // (the backdrop's fur: put on once, after a frame without it was timed with room to spare)
   const [lush, setLush] = useState(false);
   const lushTried = useRef(false);
@@ -132,25 +140,43 @@ export function CreatureViewer({
   const onPace = useCallback(
     (p: Pace, verdict: PaceVerdict) => {
       setPace(p);
+      let again = false;
       if (p === 'still') {
         setLush(false);
         // (too slow as it is, on its first measurement: start lower, if the game may. The stage is
-        // still by now, so the options' change is drawn once, not in a loop. A stage that has looped
-        // and then slowed is only held still: whatever slowed it may pass)
+        // still by now, so the options' change is drawn once, not in a loop — and measured again. A
+        // stage that has looped and then slowed is only held still: whatever slowed it may pass)
         if (verdict.first) {
-          useSettings.getState().autoLower('slow');
+          again = useSettings.getState().autoLower('slow');
+          if (again) setLowered(true);
           slow.current?.();
         }
-      } else if (p === 'live' && backdrop && !lushTried.current && verdict.ms <= PACE.roomyMs && useSettings.getState().quality.furShells > 0) {
-        // (the fur's shaders are compiled as the first were: nothing is drawn until they are ready,
-        // so the turntable starts with the coat on, not with a hitch a moment after)
-        lushTried.current = true;
-        setLush(true);
-        setWarm(false);
+      } else if (p === 'live') {
+        // (cheap enough to loop, but not to turn smoothly — under thirty frames a second the turntable
+        // judders: the game's own stage starts lower, if the game may. It keeps looping meanwhile, and
+        // lower options only make its frames cheaper)
+        if (!backdrop && verdict.first && verdict.ms > PACE.smoothMs && useSettings.getState().autoLower('slow')) setLowered(true);
+        if (backdrop && !lushTried.current && verdict.ms <= PACE.roomyMs && useSettings.getState().quality.furShells > 0) {
+          // (the fur's shaders are compiled as the first were: nothing is drawn until they are ready,
+          // so the turntable starts with the coat on, not with a hitch a moment after)
+          lushTried.current = true;
+          setLush(true);
+          setWarm(false);
+        }
       }
+      if (!again) setVerdictFor(JSON.stringify(useSettings.getState().quality));
     },
     [backdrop],
   );
+  // what the stage is doing, for the loading screen
+  const stageKey = JSON.stringify(quality);
+  const step: StageStatus['step'] = !warm || !shown || !whole ? 'shaders' : measured && (pace === 'probing' || verdictFor !== stageKey) ? 'measuring' : 'ready';
+  const status = useMemo<StageStatus>(() => ({ step, still: pace === 'still', lowered }), [step, pace, lowered]);
+  const told = useRef(onStatus);
+  told.current = onStatus;
+  useEffect(() => {
+    told.current?.(status);
+  }, [status]);
   const idle = frozen || menuOpen || paused;
   const hold = idle || pace !== 'live';
   // (a line on the stage where it is a picture, or not yet drawn — never on the menu's backdrop, nor
@@ -220,10 +246,11 @@ export function CreatureViewer({
         camera={{ position: [dist * 0.52, dist * 0.42, dist * 0.78], fov: 42 }}
       >
         <KeepPrograms />
+        <DrawnWhole onChange={setWhole} />
         {/* (a long wait: where the browser compiles off the page's thread the menu stays usable
             meanwhile, and drawing any sooner would make the page wait for the compiler instead) */}
         {!warm && <WarmShaders onReady={() => setWarm(true)} timeoutMs={20000} patient />}
-        {measured && <FramePace pace={pace} idle={idle || !warm} stage={JSON.stringify(quality)} onPace={onPace} />}
+        {measured && <FramePace pace={pace} idle={idle || !warm} stage={stageKey} onPace={onPace} />}
         {!shown && (
           <FirstFrame
             onDrawn={() => {
