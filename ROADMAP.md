@@ -957,7 +957,9 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
     every program built in 6 s, not 17, on either chip. 24 views of 15 plans render identical before and
     after on SwiftShader and on the RTX; on the Radeon 6 of them differ by a shade in 1-4 pixels.
   - Drawing a creature costs a little more since the octaves were rolled: a furred close-up with its twelve
-    shells 11% on the Radeon (70.5 → 78.2 ms a frame at 960×600), 2% on the RTX; other views 2-5%.
+    shells 8-11% on the Radeon (71 → 77-78 ms a frame at 960×600, two measurements), 2% on the RTX; other
+    views 2-5%. Each loop's first octave worked out before it, so no step is chosen inside, gets that view to
+    6% but builds 60-90% slower (fur 2.0 s, a bird 3.0 s): what is left is the rolled loop itself.
   - Not done: reading the relief in one place would take another 0.3 s off each program, but Direct3D then
     rounds a few pixels a shade differently (2 of 24 views on the RTX, 8 on the Radeon).
   - A tortoise shell's program still draws Direct3D's "potentially uninitialized variable" warning, from
