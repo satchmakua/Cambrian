@@ -39,13 +39,33 @@ const env = vi.hoisted(() => {
   }
   (globalThis as unknown as { localStorage: unknown }).localStorage = storage;
   (globalThis as unknown as { Worker: unknown }).Worker = FakeWorker;
-  return { kept, state, FakeWorker };
+  // the valley's own store (the browser's IndexedDB): one that refuses to take a valley when full
+  const valley = { json: null as string | null };
+  const valleyStore = {
+    get: async () => valley.json,
+    put: async (json: string) => {
+      if (state.full) throw new Error('QuotaExceededError');
+      valley.json = json;
+    },
+    clear: async () => {
+      valley.json = null;
+    },
+  };
+  return { kept, state, FakeWorker, valley, valleyStore };
 });
 
 import { loadWorld, saveWorld } from '../../src/sim/persist';
 import { runFor } from '../../src/sim/fastForward';
 import { stepWorld } from '../../src/sim/world';
-import { autosave, getWorld, installWorld, populate, useWorldUi } from '../../src/world/worldStore';
+import { autosave, getWorld, installWorld, populate, useWorldUi, valleyKept } from '../../src/world/worldStore';
+import { setValleyStore } from '../../src/ui/valleyStore';
+
+setValleyStore(env.valleyStore);
+/** the valley the browser holds, once every write asked for has landed */
+const keptValley = async () => {
+  await valleyKept();
+  return env.valley.json;
+};
 
 const SETUP = { worldSeed: 77, ecosystem: 'sparse' } as const;
 
@@ -65,9 +85,11 @@ function ranOn(json: string, seconds: number): string {
   return saveWorld(w);
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   env.state.full = false;
   env.kept.clear();
+  await valleyKept();
+  env.valley.json = null;
   env.FakeWorker.made.length = 0;
 });
 
@@ -163,26 +185,28 @@ describe('a fast-forward and the valley it set out from', () => {
 });
 
 describe('what the browser keeps of the valley', () => {
-  it('a valley where everything has died is kept as it is (not brought back to life on Continue)', () => {
+  it('a valley where everything has died is kept as it is (not brought back to life on Continue)', async () => {
     livedIn();
     const w = getWorld();
     w.creatures = [];
     w.eggs = [];
     expect(w.species.length).toBeGreaterThan(0);
     autosave();
-    const kept = env.kept.get('cambrian.world');
+    const kept = await keptValley();
     expect(kept).toBeTruthy();
     expect(loadWorld(kept!).creatures.length).toBe(0);
     // …while a valley nobody has opened is not written at all
     installWorld({ worldSeed: 3, ecosystem: 'standard' }, null);
     autosave();
+    expect(await keptValley()).toBeNull();
+    // (and the browser's small store is not where it is kept any more)
     expect(env.kept.has('cambrian.world')).toBe(false);
   });
 
-  it('a game put in place never leaves the last game’s valley behind, even when the store is full', () => {
+  it('a game put in place never leaves the last game’s valley behind, even when the store is full', async () => {
     const old = livedIn();
     autosave();
-    expect(env.kept.get('cambrian.world')).toBe(old);
+    expect(await keptValley()).toBe(old);
     // another game's valley is loaded while the browser's store refuses writes
     installWorld({ worldSeed: 5, ecosystem: 'standard' }, null);
     const other = getWorld();
@@ -191,10 +215,10 @@ describe('what the browser keeps of the valley', () => {
     installWorld(SETUP, old);
     env.state.full = true;
     installWorld({ worldSeed: 5, ecosystem: 'standard' }, otherJson);
-    expect(env.kept.has('cambrian.world')).toBe(false); // not the old game's valley
+    expect(await keptValley()).toBeNull(); // not the old game's valley
     // once there is room again the next autosave writes the right one
     env.state.full = false;
     autosave();
-    expect(loadWorld(env.kept.get('cambrian.world')!).seed).toBe(5);
+    expect(loadWorld((await keptValley())!).seed).toBe(5);
   });
 });

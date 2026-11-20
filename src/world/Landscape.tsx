@@ -15,7 +15,8 @@ import * as THREE from 'three';
 import { mulberry32 } from '../engine/rng';
 import { heightAt, biomeAt, moistureAt, normalAt, WATER_LEVEL, type Terrain } from '../sim/terrain';
 import type { World } from '../sim/world';
-import { yearLook } from './seasonLook';
+import { standsOf } from '../sim/stands';
+import { yearLook } from '../sim/seasonLook';
 import { FOLIAGE_TIME, coniferGeometry, crownGeometry, foliageMaterial, withSightCut } from './foliage';
 import { cellMeshes, cellsOf } from './cells';
 
@@ -92,11 +93,12 @@ export const SEASON_LOOK = {
   wet: { value: 0 }, // 0 … 1 rain-soaked ground (darker, glossier)
 };
 
-export function updateSeasonLook(time: number, dry = 0): void {
+export function updateSeasonLook(time: number, dry = 0, snow = 0): void {
   const look = yearLook(time);
   // a dry year bleaches the living green toward straw
   SEASON_LOOK.tint.value.setRGB(look.tint[0] * (1 + 0.1 * dry), look.tint[1] * (1 - 0.1 * dry), look.tint[2] * (1 - 0.3 * dry));
-  SEASON_LOOK.snow.value = look.snow;
+  // (an ice age keeps snow on the ground the year round)
+  SEASON_LOOK.snow.value = Math.max(look.snow, snow);
 }
 
 function groundMaterial(): THREE.MeshStandardMaterial {
@@ -408,26 +410,8 @@ const BARE = new THREE.Color(0x8c7b68);
 const SNOWY = new THREE.Color(0xdfe4ea);
 
 export function Decor({ terrain, world }: { terrain: Terrain; world?: World }) {
-  const { trees, pines, rocks } = useMemo(() => {
-    const rng = mulberry32(terrain.seed ^ 0x7ee5);
-    const trees: { x: number; y: number; z: number; s: number; r: number }[] = [];
-    const pines: { x: number; y: number; z: number; s: number; r: number }[] = [];
-    const rocks: { x: number; y: number; z: number; s: number; r: number }[] = [];
-    for (let i = 0; i < 9000 && (trees.length + pines.length < 300 || rocks.length < 160); i++) {
-      const x = (rng() - 0.5) * terrain.size * 0.97;
-      const z = (rng() - 0.5) * terrain.size * 0.97;
-      const b = biomeAt(terrain, x, z);
-      const y = heightAt(terrain, x, z);
-      const full = trees.length + pines.length >= 300;
-      // conifers climb the high woods and the edge of the rock; broadleaves keep the low woods
-      const pine = y > 4.2 || rng() < 0.18;
-      if (b === 'wood' && !full && rng() < 0.6) (pine ? pines : trees).push({ x, y, z, s: 0.8 + rng() * 0.9, r: rng() * 6.28 });
-      else if (b === 'meadow' && !full && rng() < 0.03) trees.push({ x, y, z, s: 0.7 + rng() * 0.6, r: rng() * 6.28 });
-      else if (b === 'rock' && !full && y < 9.5 && rng() < 0.12) pines.push({ x, y, z, s: 0.6 + rng() * 0.5, r: rng() * 6.28 });
-      else if ((b === 'rock' || b === 'sand') && rocks.length < 160 && rng() < 0.4) rocks.push({ x, y, z, s: 0.3 + rng() * 1.1, r: rng() * 6.28 });
-    }
-    return { trees, pines, rocks };
-  }, [terrain]);
+  // (where they stand is the simulation's too: a flier roosts in a broadleaf's crown — see sim/stands.ts)
+  const { trees, pines, rocks } = useMemo(() => standsOf(terrain), [terrain]);
   const trunkRef = useRef<THREE.InstancedMesh>(null);
   const pineTrunkRef = useRef<THREE.InstancedMesh>(null);
   const rockRef = useRef<THREE.InstancedMesh>(null);

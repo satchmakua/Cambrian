@@ -14,7 +14,7 @@ import { runGenerations, ZERO_PRESSURE, type Pressure } from '../engine/pressure
 import type { LineageNode, LineageNodes } from '../engine/lineage';
 import { archiveAll, descriptorsOf, type Menagerie } from '../viewer/archive';
 import type { Trajectory } from '../physics/fitness';
-import { DEFAULT_SETUP, cleanName, type BreederSave, type GameSetup } from './saves';
+import { DEFAULT_SETUP, checkSetup, cleanName, type BreederSave, type GameSetup } from './saves';
 
 const LITTER = 9;
 const STORAGE_KEY = 'cambrian.session.v2c'; // bumped for the M12 covering genes
@@ -211,14 +211,10 @@ function persist(s: Session, replacing = false): boolean {
 
 function readGame(v: unknown): GameInfo {
   const g = (v && typeof v === 'object' ? v : {}) as Partial<GameInfo>;
-  const setup = (g.setup && typeof g.setup === 'object' ? g.setup : {}) as Partial<GameSetup>;
   return {
     id: typeof g.id === 'string' ? g.id : null,
     name: cleanName(typeof g.name === 'string' ? g.name : '', NEW_GAME.name),
-    setup: {
-      worldSeed: typeof setup.worldSeed === 'number' && Number.isFinite(setup.worldSeed) ? setup.worldSeed >>> 0 : DEFAULT_SETUP.worldSeed,
-      ecosystem: setup.ecosystem === 'sparse' || setup.ecosystem === 'empty' ? setup.ecosystem : 'standard',
-    },
+    setup: checkSetup(g.setup),
   };
 }
 

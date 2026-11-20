@@ -13,10 +13,22 @@
  */
 import { mulberry32, mix32, range, type Rng } from './rng';
 import { GENE_BOUNDS, DEPTH_MAX, clamp } from './bounds';
-import type { Genome, SegmentGene, AppendageGene, Terminal, PartKind, CoveringType, PatternType } from './genome';
-import { legBearer } from './grow';
+import { WEB_MAX, type Genome, type SegmentGene, type AppendageGene, type Terminal, type PartKind, type CoveringType, type PatternType } from './genome';
+import { defaultForm, formable, legBearer } from './grow';
 
 const OP_SALT = 0x9e3779b9;
+/** the stream the fin ↔ leg drift draws from: its own, so every other gene's draws are as they were */
+const FORM_SALT = 0xf0e3;
+/** …and for a leg's web, a glider's patagium (see applyWebDrift) */
+const WEB_SALT = 0x3eb5;
+/** how far a leg's web moves in one point mutation, against the other genes' step (a share of WEB_MAX):
+ *  a membrane worth gliding on is many steps from none (at 1.5, small mammals drifted into gliders in
+ *  every valley within decades: gliding should be a rare turn, as in life) */
+const WEB_SIGMA = 0.6;
+/** the fin ↔ leg form takes steps the size of any other gene's: a crossing between water and land is
+ *  still many generations of them, each of which must pay where the line lives (at 0.6 a line drifted
+ *  too slowly to cross the flat stretch below a crawl in a century, however it paid) */
+const FORM_SIGMA = 1;
 
 /** Per-offspring operator rates. Tunable — defaults from DESIGN §4.5. */
 export interface MutationRates {
@@ -47,6 +59,8 @@ export function mutate(
   const rng = mulberry32(mix32(streamSeed, parent.seed, n, OP_SALT));
 
   applyPointMutations(g, rng, rates);
+  applyFormDrift(g, mulberry32(mix32(streamSeed, parent.seed, n, FORM_SALT)), rates);
+  applyWebDrift(g, mulberry32(mix32(streamSeed, parent.seed, n, WEB_SALT)), rates);
   if (rng() < rates.structural) applyStructural(g, rng, lockSymmetry);
   if (rng() < rates.duplication) applyDuplication(g, rng);
   if (rng() < rates.macro) {
@@ -96,6 +110,34 @@ function applyPointMutations(g: Genome, rng: Rng, rates: MutationRates): void {
       a.taper = jitter(rng, a.taper, A.taper, r, s);
       a.curl[0] = jitter(rng, a.curl[0], A.curlPitch, r, s);
       a.curl[1] = jitter(rng, a.curl[1], A.curlYaw, r, s);
+    }
+  }
+}
+
+/** Fin ↔ leg: each formable part's form jitters like a point mutation (from its kind's own form when
+ *  the gene is absent; left absent when it does not move). */
+function applyFormDrift(g: Genome, rng: Rng, rates: MutationRates): void {
+  for (const seg of segments(g)) {
+    for (const a of seg.appendages) {
+      if (!formable(a)) continue;
+      const was = a.form ?? defaultForm(a);
+      const now = jitter(rng, was, GENE_BOUNDS.appendage.form, rates.point, rates.pointSigma * FORM_SIGMA);
+      if (now !== was || a.form !== undefined) a.form = now;
+    }
+  }
+}
+
+/** A bilateral body's legs: each leg's web — the skin to the next leg behind it, a glider's patagium —
+ *  jitters like a point mutation, from none when it is absent (and is absent again at none). A radial
+ *  body's webs are its arms' own, and left as they are. */
+function applyWebDrift(g: Genome, rng: Rng, rates: MutationRates): void {
+  if (g.symmetry === 'radial') return;
+  for (const seg of segments(g)) {
+    for (const a of seg.appendages) {
+      if (a.kind !== 'leg') continue;
+      const now = jitter(rng, a.web ?? 0, [0, WEB_MAX], rates.point, rates.pointSigma * WEB_SIGMA);
+      if (now > 0.01) a.web = now;
+      else delete a.web;
     }
   }
 }

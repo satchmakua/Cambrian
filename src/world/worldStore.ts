@@ -11,25 +11,39 @@ import { create } from 'zustand';
 import { SOUND } from './audio';
 import { NARRATOR } from './narrator';
 import { loadWorld, saveWorld } from '../sim/persist';
-import { droughtOf, weatherAt, weatherWord } from '../sim/weather';
+import { weatherWord } from '../sim/weather';
 import { adoptWorld, chronicle, snapshotForChronicle, type Chronicle } from '../sim/fastForward';
 import type { Genome } from '../engine/genome';
-import { genomeOfMorphotype, randomGenome } from '../engine/random';
+import { randomGenome } from '../engine/random';
+import { populateCast } from '../sim/cast';
 import {
-  AIRBORNE, createWorld, release, dayNumber, yearNumber, dayPhase, isNight, growthOf, speciesById, liveCount, seasonOf, type Season,
+  AIRBORNE, createWorld, release, skyNow, dryNow, takeHome, bredFromHere, cloneCreature, boostSpecies, dayNumber, yearNumber, dayPhase, isNight, growthOf, speciesById, liveCount, seasonOf, type Season,
   type World, type Action, type HistorySample, type WorldEvent,
 } from '../sim/world';
 import type { Traits } from '../sim/traits';
 import { useSettings } from '../ui/settings';
-import { DEFAULT_SETUP, type Ecosystem, type GameSetup } from '../ui/saves';
+import { checkSetup, DEFAULT_SETUP, type GameSetup } from '../ui/saves';
+import { valleyStore } from '../ui/valleyStore';
+import { scenarioById, startScenario } from '../sim/scenarios';
+import type { SimHost } from './simHost';
 
 let WORLD: World | null = null;
 /** the fast-forward in flight: its worker, and whether the valley was running when it began */
 let FF: { worker: Worker; wasRunning: boolean } | null = null;
 let VERSION = 0; // bumps whenever the set of live creatures/corpses changes shape (re-render actors)
 
+/** who steps the valley while its screen is open (a worker, or the page: see simHost.ts) */
+let HOST: SimHost | null = null;
+export function setHost(h: SimHost | null): void {
+  HOST = h;
+}
+/** The page changed the world itself (or put another in its place): whoever steps it goes on from this. */
+export function changed(): void {
+  HOST?.invalidate();
+}
+
 export function getWorld(): World {
-  if (!WORLD) WORLD = resumeWorld() ?? createWorld(SETUP.worldSeed);
+  if (!WORLD) WORLD = resumeWorld() ?? createWorld(SETUP.worldSeed, SETUP.capacity);
   return WORLD;
 }
 
@@ -49,9 +63,7 @@ function loadSetup(): GameSetup {
   try {
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(SETUP_KEY) : null;
     const v = raw ? (JSON.parse(raw) as Partial<GameSetup>) : null;
-    if (v && typeof v.worldSeed === 'number' && Number.isFinite(v.worldSeed)) {
-      return { worldSeed: v.worldSeed >>> 0, ecosystem: v.ecosystem === 'sparse' || v.ecosystem === 'empty' ? v.ecosystem : 'standard' };
-    }
+    if (v && typeof v.worldSeed === 'number' && Number.isFinite(v.worldSeed)) return checkSetup(v);
   } catch {
     /* fall through */
   }
@@ -73,17 +85,64 @@ function keepSetup(): void {
   }
 }
 
+// The valley in play is kept in the browser's IndexedDB (ui/valleyStore.ts), read once as the page loads:
+// valleyReady() resolves when it has been. (A copy an older version left in localStorage is moved across.)
+let RESUME: string | null = null;
+const READY: Promise<void> = (async () => {
+  if (typeof window === 'undefined' || devFresh()) return;
+  try {
+    const old = localStorage.getItem(AUTOSAVE_KEY);
+    if (old !== null) {
+      await valleyStore().put(old);
+      localStorage.removeItem(AUTOSAVE_KEY);
+    }
+  } catch {
+    /* it stays where it was, and is read from there */
+  }
+  try {
+    RESUME = await valleyStore().get();
+  } catch {
+    RESUME = null;
+  }
+  try {
+    if (RESUME === null) RESUME = localStorage.getItem(AUTOSAVE_KEY);
+  } catch {
+    /* no localStorage either */
+  }
+})();
+
+/** Resolves once the valley kept in the browser has been read (the World screen waits for it). */
+export function valleyReady(): Promise<void> {
+  return READY;
+}
+
 /** The world left running last visit, if there is one (and it still loads). Dev pages opened with
  *  query parameters (the screenshot harness) start fresh, so they stay reproducible — unless they
  *  ask to `resume`. */
 function resumeWorld(): World | null {
-  if (devFresh()) return null;
+  if (devFresh() || RESUME === null) return null;
   try {
-    const s = localStorage.getItem(AUTOSAVE_KEY);
-    return s ? loadWorld(s) : null;
+    return loadWorld(RESUME);
   } catch {
     return null;
+  } finally {
+    RESUME = null; // (read once: the world is the copy from here on)
   }
+}
+
+// The valley's writes go one after another, in the order they were asked for: a game swapped in while an
+// autosave of the last one is still being written must never be followed by that older valley.
+let KEEPING: Promise<void> = Promise.resolve();
+function keepValley(json: string | null): void {
+  const store = valleyStore();
+  // (a valley the store will not take is cleared instead: none at all, never the last game's beside the
+  // new game's lineage; storage blocked altogether, the world simply won't be there next visit)
+  KEEPING = KEEPING.then(() => (json !== null ? store.put(json).catch(() => store.clear()) : store.clear())).catch(() => undefined);
+}
+
+/** Resolves once every write of the valley asked for so far has landed (or failed). */
+export function valleyKept(): Promise<void> {
+  return KEEPING;
 }
 
 /** Keep the current world in the browser (called periodically and when the page is hidden). */
@@ -91,11 +150,7 @@ export function autosave(): void {
   // (a valley nobody has opened holds nothing to keep; one whose animals have all died does — it must
   // come back as it was left, not repopulated)
   if (!worldStarted()) return;
-  try {
-    localStorage.setItem(AUTOSAVE_KEY, saveWorld(WORLD!));
-  } catch {
-    // storage full or blocked — the world simply won't be there next visit
-  }
+  keepValley(saveWorld(WORLD!));
 }
 
 /** Has the valley been opened (does it hold anything a save should keep)? */
@@ -124,19 +179,15 @@ export function worldSummary(): { day: number; population: number; species: numb
  * the current valley — if a saved World will not load.
  */
 export function installWorld(setup: GameSetup, json: string | null): void {
-  const next = json !== null ? loadWorld(json) : createWorld(setup.worldSeed >>> 0);
+  const next = json !== null ? loadWorld(json) : createWorld(setup.worldSeed >>> 0, setup.capacity);
   abandonFastForward(); // (only now: a save that will not load leaves a run in progress alone)
   WORLD = next;
+  changed();
   SETUP = { ...setup };
   keepSetup();
-  try {
-    // (the last game's valley goes first: if the new one cannot be written — the browser's store is
-    // full — Continue must not find the old game's valley beside the new game's lineage)
-    localStorage.removeItem(AUTOSAVE_KEY);
-    if (json !== null) localStorage.setItem(AUTOSAVE_KEY, json);
-  } catch {
-    /* storage full or blocked */
-  }
+  // (the last game's valley is replaced, or cleared: Continue must never find the old game's valley beside
+  // the new game's lineage — and a store that will not take the new one has none at all)
+  keepValley(json);
   bumpVersion();
   // (the epoch remounts the World screen if it is the one showing: a valley not yet visited is
   // populated when the screen mounts, and a loaded one must not inherit the last one's camera or cast)
@@ -183,7 +234,11 @@ export interface SpeciesRow {
   alive: number;
   born: number;
   extinct: boolean;
+  /** what its line became, if its name ended that way (shown instead of the dagger) */
+  became: string | null;
   diet: string;
+  /** how many of them are in the air now */
+  aloft: number;
 }
 
 export interface CreatureCard {
@@ -197,6 +252,8 @@ export interface CreatureCard {
   age: number; // fraction of lifespan
   adult: boolean;
   generation: number;
+  /** how well its body is made against its line's founder (0..1) */
+  fit: number;
   children: number;
   kills: number;
   traits: Traits;
@@ -236,6 +293,14 @@ export interface Snapshot {
   phase: number;
   night: boolean;
   pop: number;
+  /** how many creatures are in the air now */
+  aloft: number;
+  /** god mode, and what it has set */
+  god: World['god'];
+  /** the levers pulled on the climate, and the events under way */
+  levers: World['levers'];
+  /** the scenario being played, its goal, and where it stands (null: a free valley) */
+  scenario: { title: string; goal: string; progress: string; status: 'going' | 'won' | 'lost' } | null;
   species: SpeciesRow[];
   tally: World['tally'];
   events: WorldEvent[];
@@ -276,7 +341,7 @@ interface WorldUi {
   setFollow: (v: boolean) => void;
   refresh: () => void;
   /** Start a new world from a seed, populated with a starter ecosystem (and optionally `founder`). */
-  reset: (seed: number, founder?: Genome | null) => void;
+  reset: (seed: number, founder?: Genome | null, capacity?: number) => void;
   /** Swap in a loaded world (from a saved file). Throws, leaving the current world, if it won't load. */
   open: (json: string) => void;
   /** a fast-forward in progress (run in a worker): how far through, and a line of news */
@@ -287,32 +352,44 @@ interface WorldUi {
   fastForward: (seconds: number, span: string) => void;
   stopFastForward: () => void;
   dismissChronicle: () => void;
-  releaseGenome: (g: Genome, count: number) => void;
+  /** Release `count` of a genome: at `at` (else where its kind can live), and — where `root`, the first
+   *  genome of the breeder's lineage it was bred in, was taken home from this valley — as a branch of the
+   *  species it was bred from. */
+  releaseGenome: (g: Genome, count: number, at?: { x: number; z: number } | null, root?: Genome | null) => void;
+  /** "take home": the valley notes where the creature came from (see takeHome) */
+  takeHome: (id: number) => void;
+  /** `n` copies of a living creature beside it */
+  clone: (id: number, n: number) => void;
+  /** `n` more of a living species, from its own stock */
+  boost: (speciesId: number, n: number) => void;
+  /** a release, or a creature carried in god mode, being placed by clicking the ground (null: none) */
+  placing: Placing | null;
+  setPlacing: (p: Placing | null) => void;
+  /** a god-mode act on the valley (see sim/god.ts): run it, and show what it did */
+  godAct: (act: (w: World) => boolean) => void;
+  /** adopt a species' line (or let it go): the player is told when it splits, is renamed or dies out */
+  adoptLine: (speciesId: number, on: boolean) => void;
+  /** a line said briefly under the bar ("View 1 saved"…) — null when there is none */
+  notice: string | null;
+  notify: (text: string | null) => void;
+  /** photo mode: the bar and the panels hidden, for framing a shot */
+  photo: boolean;
+  setPhoto: (v: boolean) => void;
 }
 
-/** A starter ecosystem: grazers, browsers, a scavenger-omnivore or two, a predator and some fish. */
-const STARTER: [string, number][] = [
-  ['rodent', 8],
-  ['ungulate', 6],
-  ['insectoid', 6],
-  ['bird', 6],
-  ['fish', 7],
-  ['canid', 3],
-  ['felid', 2],
-];
+/** What a click on the ground places: a release (what, how many at each click, and its breeder
+ *  lineage's root), or a creature carried there in god mode. */
+export type Placing = { kind: 'release'; genome: Genome; count: number; root: Genome | null } | { kind: 'carry'; id: number };
 
-/** The cast a valley starts with, by the game's set-up: the full starter ecosystem, half of each kind
- *  (never fewer than a pair), or nobody. Each kind keeps its place in the list, so a sparse valley
- *  holds the same species as a standard one of its seed. */
-export function starterCast(ecosystem: Ecosystem): [string, number][] {
-  if (ecosystem === 'empty') return [];
-  if (ecosystem === 'sparse') return STARTER.map(([kind, n]) => [kind, Math.max(2, Math.round(n / 2))]);
-  return STARTER;
-}
+export { starterCast } from '../sim/cast';
 
-export function populate(w: World, founder?: Genome | null, ecosystem: Ecosystem = SETUP.ecosystem): void {
-  starterCast(ecosystem).forEach(([kind, n], i) => release(w, genomeOfMorphotype((w.seed * 97 + i * 13) >>> 0, kind), n, undefined, kind));
-  if (founder) release(w, founder, 6);
+export function populate(w: World, founder?: Genome | null, setup: GameSetup = SETUP): void {
+  // (a scenario's valley is its own cast: the creature being bred is not let into it unasked)
+  const sc = scenarioById(setup.scenario);
+  populateCast(w, sc ? sc.cast() : setup.cast ?? setup.ecosystem);
+  if (sc) startScenario(w, sc.id);
+  else if (founder) release(w, founder, 6);
+  if (w === WORLD) changed();
 }
 
 function aboutOf(w: World, c: World['creatures'][number]): string | null {
@@ -342,11 +419,20 @@ export function snapshotOf(w: World, selected: number | null): Snapshot {
       alive: s.alive,
       born: s.born,
       extinct: s.extinctAt !== null,
+      became: s.evolvedInto !== null ? speciesById(w, s.evolvedInto)?.name ?? null : null,
       diet: '',
+      aloft: 0,
     }));
-  for (const row of species) {
-    const c = w.creatures.find((x) => x.species === row.id);
-    if (c) row.diet = c.traits.diet;
+  const rowOf = new Map(species.map((r) => [r.id, r]));
+  let aloft = 0;
+  for (const c of w.creatures) {
+    const row = rowOf.get(c.species);
+    if (!row) continue;
+    if (!row.diet) row.diet = c.traits.diet;
+    if (c.alive && c.alt > AIRBORNE) {
+      row.aloft++;
+      aloft++;
+    }
   }
   species.sort((a, b) => b.alive - a.alive);
   let card: CreatureCard | null = null;
@@ -369,6 +455,7 @@ export function snapshotOf(w: World, selected: number | null): Snapshot {
         nesting: w.eggs.some((e) => e.mother === c.id),
         raiding: c.action === 'scavenge' && w.eggs.some((e) => e.id === c.target),
         generation: c.generation,
+        fit: c.fit,
         children: c.children,
         kills: c.kills,
         traits: c.traits,
@@ -380,14 +467,21 @@ export function snapshotOf(w: World, selected: number | null): Snapshot {
   return {
     tree: w.species.map((sp) => ({ id: sp.id, name: sp.name, hue: sp.hue, parent: sp.parent, born: sp.firstSeen, extinctAt: sp.extinctAt, alive: sp.alive })),
     season: seasonOf(w.time),
-    dry: droughtOf(w.seed, w.time),
-    weather: weatherWord(weatherAt(w.seed, w.time)),
+    dry: dryNow(w),
+    weather: weatherWord(skyNow(w)),
     time: w.time,
     day: dayNumber(w.time),
     year: yearNumber(w.time),
     phase: dayPhase(w.time),
     night: isNight(w.time),
     pop: liveCount(w),
+    aloft,
+    god: { ...w.god },
+    levers: { ...w.levers, events: w.levers.events.map((e) => ({ ...e })) },
+    scenario: (() => {
+      const sc = w.scenario ? scenarioById(w.scenario.id) : null;
+      return sc && w.scenario ? { title: sc.title, goal: sc.goal, progress: sc.progress(w), status: w.scenario.status } : null;
+    })(),
     species,
     tally: { ...w.tally },
     events: w.events.slice(-40),
@@ -447,11 +541,11 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
   setPanel: (panel) => set({ panel }),
   setFollow: (follow) => set({ follow }),
   refresh: () => set({ snapshot: snapshotOf(getWorld(), get().selected) }),
-  reset: (seed, founder) => {
+  reset: (seed, founder, capacity) => {
     abandonFastForward();
-    WORLD = createWorld(seed >>> 0);
-    // (a new world from the World screen keeps the game's cast but takes the new seed as its own)
-    SETUP = { ...SETUP, worldSeed: seed >>> 0 };
+    // (a new world from the World screen keeps the game's cast and size but takes the new seed as its own)
+    SETUP = { ...SETUP, worldSeed: seed >>> 0, ...(capacity ? { capacity } : {}) };
+    WORLD = createWorld(seed >>> 0, SETUP.capacity);
     keepSetup();
     populate(WORLD, founder);
     bumpVersion();
@@ -461,6 +555,7 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
     const next = loadWorld(json); // (throws, with nothing changed, if it will not load)
     abandonFastForward();
     WORLD = next;
+    changed();
     bumpVersion();
     set({ selected: null, follow: false, chronicle: null, snapshot: snapshotOf(WORLD, null) });
   },
@@ -471,6 +566,7 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
     const w = getWorld();
     const before = snapshotForChronicle(w);
     const wasRunning = get().running;
+    changed(); // (a frame on its way would change the valley the run set out from)
     set({ ff: { f: 0, label: '' }, running: false, chronicle: null });
     const worker = new Worker(new URL('./ffWorker.ts', import.meta.url), { type: 'module' });
     FF = { worker, wasRunning };
@@ -493,6 +589,7 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
         } catch {
           return end(); // (a result that will not read back: the valley stays as it was)
         }
+        changed();
         bumpVersion();
         const sel = get().selected;
         const keep = sel !== null && w.creatures.some((c) => c.id === sel) ? sel : null;
@@ -510,8 +607,57 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
   },
   stopFastForward: () => FF?.worker.postMessage({ type: 'stop' }),
   dismissChronicle: () => set({ chronicle: null }),
-  releaseGenome: (g, count) => {
-    release(getWorld(), g, count);
+  releaseGenome: (g, count, at, root) => {
+    const w = getWorld();
+    const from = root ? bredFromHere(w, root) : null;
+    release(w, g, count, at ?? undefined, undefined, from ?? undefined);
+    changed();
+    bumpVersion();
+    get().refresh();
+  },
+  takeHome: (id) => {
+    const w = getWorld();
+    const c = w.creatures.find((x) => x.id === id);
+    if (c) {
+      takeHome(w, c);
+      changed();
+    }
+  },
+  clone: (id, n) => {
+    const w = getWorld();
+    const c = w.creatures.find((x) => x.id === id && x.alive);
+    if (!c || cloneCreature(w, c, n).length === 0) return;
+    changed();
+    bumpVersion();
+    get().refresh();
+  },
+  boost: (speciesId, n) => {
+    const w = getWorld();
+    const sp = speciesById(w, speciesId);
+    if (!sp || boostSpecies(w, sp, n).length === 0) return;
+    changed();
+    bumpVersion();
+    get().refresh();
+  },
+  placing: null,
+  setPlacing: (placing) => set({ placing }),
+  notice: null,
+  notify: (notice) => set({ notice }),
+  adoptLine: (speciesId, on) => {
+    const w = getWorld();
+    const had = w.adopted.includes(speciesId);
+    if (on === had) return;
+    w.adopted = on ? [...w.adopted, speciesId] : w.adopted.filter((x) => x !== speciesId);
+    changed();
+    const sp = speciesById(w, speciesId);
+    if (sp) get().notify(on ? `${sp.name}: your line now — you will be told when it splits, changes or dies out` : `${sp.name} is no longer your line`);
+    get().refresh();
+  },
+  photo: false,
+  setPhoto: (photo) => set({ photo }),
+  godAct: (act) => {
+    if (!act(getWorld())) return;
+    changed();
     bumpVersion();
     get().refresh();
   },

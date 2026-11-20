@@ -10,10 +10,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Sky, Stars } from '@react-three/drei';
 import * as THREE from 'three';
-import { stepWorld, STEP, dayPhase, isNight, climate, growthOf, type World } from '../sim/world';
+import { dayPhase, isNight, growthOf, dryNow, type World, climateOf, leverSnow } from '../sim/world';
 import { SOUND } from './audio';
-import { heightAt, WATER_LEVEL } from '../sim/terrain';
-import { droughtOf } from '../sim/weather';
+import { heightAt, inBounds, WATER_LEVEL, type Terrain } from '../sim/terrain';
 import { PAN_KEYS, keysToAxes, panDelta } from './keyPan';
 import { TerrainMesh, Water, Bushes, Decor, updateSeasonLook } from './Landscape';
 import { Grass } from './Flora';
@@ -22,10 +21,12 @@ import { Ambient } from './Ambient';
 import { FOLIAGE_CUT } from './foliage';
 import { Precipitation, WEATHER_LOOK, setPrecipDaylight, updateWeatherLook } from './Weather';
 import { Director } from './Director';
-import { Actor, Carcass, useSkinScheduler } from './Actors';
-import { getWorld, useWorldUi, worldVersion, bumpVersion, worldSceneLive } from './worldStore';
+import { Actor, Carcass, capsuled, useSkinScheduler } from './Actors';
+import { getWorld, useWorldUi, worldVersion, bumpVersion, worldSceneLive, setHost } from './worldStore';
+import { pageHost, workerHost, type SimHost } from './simHost';
+import { carry } from '../sim/god';
 import { StudioEnvironment } from '../viewer/StudioEnvironment';
-import { useQuality } from '../ui/settings';
+import { getQuality, useQuality } from '../ui/settings';
 import { useStore } from '../ui/store';
 
 const MAX_STEPS_PER_FRAME = 90;
@@ -33,25 +34,30 @@ const MAX_STEPS_PER_FRAME = 90;
 function SimDriver() {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
-  const acc = useRef(0);
   const snapTimer = useRef(0);
   const lastShape = useRef('');
+  // the valley is stepped in a worker (the page draws from a mirror of its world), or — where no worker
+  // can run, or a dev page asks with ?worker=0 — by the page, as it always was
+  const host = useMemo(() => {
+    const page = import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('worker') === '0';
+    return (page ? null : workerHost(getWorld, () => undefined)) ?? pageHost(getWorld);
+  }, []);
+  useEffect(() => {
+    setHost(host);
+    host.invalidate();
+    if (import.meta.env.DEV) (window as unknown as { __simHost?: SimHost }).__simHost = host;
+    return () => {
+      setHost(null);
+      host.dispose();
+    };
+  }, [host]);
   useFrame((_, dtRaw) => {
     const { running, speed, refresh } = useWorldUi.getState();
     const w = getWorld();
-    updateSeasonLook(w.time, droughtOf(w.seed, w.time));
+    updateSeasonLook(w.time, dryNow(w), leverSnow(w));
     updateWeatherLook(w, dtRaw);
     const dt = Math.min(dtRaw, 0.1);
-    if (running) {
-      acc.current += dt * speed;
-      let n = 0;
-      while (acc.current >= STEP && n < MAX_STEPS_PER_FRAME) {
-        stepWorld(w);
-        acc.current -= STEP;
-        n++;
-      }
-      if (n === MAX_STEPS_PER_FRAME) acc.current = 0; // falling behind: drop the backlog
-    }
+    if (running) host.advance(dt * speed, MAX_STEPS_PER_FRAME);
     // re-render the actor list when births/deaths change the cast
     const shape = `${w.creatures.length}:${w.creatures[w.creatures.length - 1]?.id ?? 0}:${w.corpses.length}:${w.corpses[w.corpses.length - 1]?.id ?? 0}:${w.eggs.length}:${w.eggs[0]?.id ?? 0}`;
     if (shape !== lastShape.current) {
@@ -69,6 +75,8 @@ function SimDriver() {
           triangles: gl.info.render.triangles,
           geometries: gl.info.memory.geometries,
           creatures: w.creatures.length,
+          stepper: host.where,
+          capsules: capsuled(),
         };
       }
     }
@@ -192,7 +200,7 @@ function SoundDriver() {
     if (!SOUND.running) return;
     const w = getWorld();
     camera.getWorldDirection(fwd);
-    SOUND.tick({ x: camera.position.x, y: camera.position.y, z: camera.position.z, fx: fwd.x, fy: fwd.y, fz: fwd.z }, isNight(w.time), climate(w.time).cold, WEATHER_LOOK.snow ? 0 : WEATHER_LOOK.rain);
+    SOUND.tick({ x: camera.position.x, y: camera.position.y, z: camera.position.z, fx: fwd.x, fy: fwd.y, fz: fwd.z }, isNight(w.time), climateOf(w).cold, WEATHER_LOOK.snow ? 0 : WEATHER_LOOK.rain);
   });
   return null;
 }
@@ -239,6 +247,101 @@ function FollowCam() {
  * slide together, the pivot riding the ground beneath it, held inside the world. Taking the camera
  * back ends following and the documentary.
  */
+// --- the camera: framing the valley, saved views, a still -------------------------------------------
+
+/** the views saved with Shift+1…4, kept in the browser between visits */
+const VIEWS_KEY = 'cambrian.views';
+type View = { pos: [number, number, number]; target: [number, number, number] };
+function savedViews(): (View | null)[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(VIEWS_KEY) ?? '[]') as unknown;
+    return Array.isArray(v) ? [0, 1, 2, 3].map((i) => (v[i] && Array.isArray(v[i].pos) && Array.isArray(v[i].target) ? (v[i] as View) : null)) : [null, null, null, null];
+  } catch {
+    return [null, null, null, null];
+  }
+}
+function keepViews(v: (View | null)[]): void {
+  try {
+    localStorage.setItem(VIEWS_KEY, JSON.stringify(v));
+  } catch {
+    /* not kept: they last until the page closes */
+  }
+}
+
+/** The still the photo mode saves: the scene drawn once more, read straight off the canvas (null until the
+ *  valley is up). */
+let CAPTURE: (() => string) | null = null;
+export function captureStill(): string | null {
+  return CAPTURE ? CAPTURE() : null;
+}
+
+/**
+ * F (or Home) flies the camera out to frame the whole valley; Shift+1…4 saves the view, and 1…4 flies back
+ * to it. A flight eases in and out over most of a second; the documentary and following let go of the
+ * camera for it.
+ */
+function CameraKeys() {
+  const camera = useThree((s) => s.camera);
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3; update: () => void } | null;
+  const flight = useRef<{ from: View; to: View; t: number } | null>(null);
+  useEffect(() => {
+    CAPTURE = () => {
+      gl.render(scene, camera);
+      return gl.domElement.toDataURL('image/png');
+    };
+    return () => {
+      CAPTURE = null;
+    };
+  }, [gl, scene, camera]);
+  useEffect(() => {
+    const here = (): View | null => (controls ? { pos: camera.position.toArray() as View['pos'], target: controls.target.toArray() as View['target'] } : null);
+    const fly = (to: View) => {
+      const from = here();
+      if (!from) return;
+      const ui = useWorldUi.getState();
+      if (ui.documentary) ui.setDocumentary(false);
+      if (ui.follow) ui.setFollow(false);
+      flight.current = { from, to, t: 0 };
+    };
+    const key = (e: KeyboardEvent) => {
+      if (useStore.getState().menuOpen || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+      if (e.code === 'KeyF' || e.code === 'Home') {
+        const terrain = getWorld().terrain;
+        const s = terrain.size;
+        fly({ pos: [0, s * 0.62, s * 0.72], target: [0, 0, s * 0.04] });
+      } else if (/^Digit[1-4]$/.test(e.code)) {
+        const i = Number(e.code.slice(5)) - 1;
+        const views = savedViews();
+        if (e.shiftKey) {
+          const v = here();
+          if (!v) return;
+          views[i] = v;
+          keepViews(views);
+          useWorldUi.getState().notify(`View ${i + 1} saved: press ${i + 1} to come back to it`);
+        } else if (views[i]) fly(views[i]!);
+        else useWorldUi.getState().notify(`No view ${i + 1} yet: Shift+${i + 1} saves the one you have`);
+      }
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [camera, controls]);
+  useFrame((_, dt) => {
+    const f = flight.current;
+    if (!f || !controls) return;
+    f.t = Math.min(1, f.t + dt / 0.85);
+    const k = f.t * f.t * (3 - 2 * f.t);
+    camera.position.set(...(f.from.pos.map((a, i) => a + (f.to.pos[i] - a) * k) as [number, number, number]));
+    controls.target.set(...(f.from.target.map((a, i) => a + (f.to.target[i] - a) * k) as [number, number, number]));
+    controls.update();
+    if (f.t >= 1) flight.current = null;
+  });
+  return null;
+}
+
 function KeyPan() {
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3; update: () => void } | null;
@@ -294,26 +397,66 @@ function KeyPan() {
   return null;
 }
 
+/** Beyond this distance from the camera (bu, × the creature-detail option's scale) a creature is drawn
+ *  as a marker — a small shape in its own colours — not as a body: a valley can then hold more animals
+ *  than can be drawn whole. (The one selected is always drawn whole.) */
+const MARKER_AT = 80;
+/** …and never more than this many bodies at once, the nearest: each body is posed and drawn every frame,
+ *  and in a valley of six hundred, from the usual view, five hundred stood within the line (eight frames a
+ *  second on a laptop's best graphics card; at most 140 of them whole, 26) */
+const WHOLE_MAX = 90;
+/** how often (s) who is near enough is judged again, and how far past the line a body is kept (×) */
+const MARKER_JUDGE = 0.4;
+const MARKER_KEEP = 1.15;
+const NEAR_AT = new THREE.Vector3();
+
+/** Which living creatures are near enough to the camera to be drawn whole (`was`: those drawn whole
+ *  now, kept until MARKER_KEEP past the line, so a body at the edge does not flicker). */
+function nearSet(world: World, cam: THREE.Vector3, k: number, was: Set<number>, selected: number | null): Set<number> {
+  const r = MARKER_AT * k;
+  const within: { id: number; d: number }[] = [];
+  for (const c of world.creatures) {
+    if (!c.alive) continue;
+    const d = cam.distanceTo(NEAR_AT.set(c.x, c.y + c.alt, c.z));
+    // (one drawn whole now is judged a little nearer than it is: it holds its body past the line)
+    const held = was.has(c.id) ? d / MARKER_KEEP : d;
+    if (c.id === selected || held < r) within.push({ id: c.id, d: c.id === selected ? -1 : held });
+  }
+  if (within.length > WHOLE_MAX) within.sort((a, b) => a.d - b.d || a.id - b.id).length = WHOLE_MAX;
+  return new Set(within.map((x) => x.id));
+}
+
 function Cast({ world }: { world: World }) {
-  // re-read the cast whenever the version bumps (polled cheaply each frame)
+  const camera = useThree((s) => s.camera);
+  const selected = useWorldUi((s) => s.selected);
+  // who is drawn whole: judged when the cast changes, and every MARKER_JUDGE s as the camera moves
+  const near = useRef<Set<number>>(null!);
+  if (near.current === null) near.current = nearSet(world, camera.position, getQuality().lod, new Set(), selected);
   const [, setV] = useState(0);
   const seen = useRef(-1);
-  useFrame(() => {
+  const judged = useRef(0);
+  useFrame((_, dt) => {
     const v = worldVersion();
-    if (v !== seen.current) {
+    judged.current -= dt;
+    if (v === seen.current && judged.current > 0) return;
+    judged.current = MARKER_JUDGE;
+    const next = nearSet(world, camera.position, getQuality().lod, near.current, useWorldUi.getState().selected);
+    const same = next.size === near.current.size && [...next].every((id) => near.current.has(id));
+    near.current = next;
+    if (v !== seen.current || !same) {
       seen.current = v;
-      setV(v);
+      setV((x) => x + 1);
     }
   });
   useSkinScheduler();
-  const selected = useWorldUi((s) => s.selected);
   // (a creature clicked is picked by hand: its panel opens, even if it had been closed)
   const pick = useWorldUi((s) => s.pick);
   return (
     <>
-      {world.creatures.map((c) => (
-        <Actor key={c.id} c={c} world={world} onPick={pick} selected={c.id === selected} />
-      ))}
+      {world.creatures.map((c) =>
+        near.current.has(c.id) || c.id === selected ? <Actor key={c.id} c={c} world={world} onPick={pick} selected={c.id === selected} /> : null,
+      )}
+      <Markers world={world} near={near} />
       <Nests world={world} />
       {world.corpses.map((k) => (
         <Carcass key={k.id} k={k} world={world} />
@@ -322,7 +465,121 @@ function Cast({ world }: { world: World }) {
   );
 }
 
+/** the most markers drawn at once (above the largest valley's capacity) */
+const MARKER_MAX = 1024;
+const MARKER_O = new THREE.Object3D();
+const MARKER_C = new THREE.Color();
+
+/** Every living creature not drawn whole, as one instanced shape each: a low, long body in its own
+ *  colours, its size, on the ground or in the air where it is, facing the way it faces. */
+function Markers({ world, near }: { world: World; near: { current: Set<number> } }) {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const geo = useMemo(() => new THREE.SphereGeometry(1, 10, 6).scale(0.5, 0.4, 0.95), []);
+  const mat = useMemo(() => new THREE.MeshLambertMaterial(), []);
+  useEffect(
+    () => () => {
+      geo.dispose();
+      mat.dispose();
+    },
+    [geo, mat],
+  );
+  useFrame(() => {
+    const m = ref.current;
+    if (!m) return;
+    let n = 0;
+    for (const c of world.creatures) {
+      if (!c.alive || near.current.has(c.id) || n >= MARKER_MAX) continue;
+      // (sized by its bulk, not its reach: a squid's sprawled arms or a fish's fins made a marker the size
+      // of a boat)
+      const size = 0.85 * Math.cbrt(c.traits.mass) * (0.4 + 0.6 * growthOf(c));
+      const ground = heightAt(world.terrain, c.x, c.z);
+      // (a swimmer rides under the surface; anything else stands on the ground, and a flier is up where it
+      // flies)
+      const swims = c.traits.habitat === 'water' && ground < WATER_LEVEL;
+      MARKER_O.position.set(c.x, swims ? WATER_LEVEL - size * 0.6 : Math.max(ground, WATER_LEVEL) + c.alt + size * 0.4, c.z);
+      MARKER_O.rotation.set(0, c.heading, 0);
+      MARKER_O.scale.setScalar(size);
+      MARKER_O.updateMatrix();
+      m.setMatrixAt(n, MARKER_O.matrix);
+      // (its own colours, muted toward a coat's: at a distance a body is not a lamp)
+      const p = c.genome.palette;
+      m.setColorAt(n, MARKER_C.setHSL(p.hueA, Math.min(1, p.sat) * 0.6, Math.min(0.55, Math.max(0.2, p.light * 0.8))));
+      n++;
+    }
+    m.count = n;
+    m.instanceMatrix.needsUpdate = true;
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  });
+  // (never culled as one: the instances spread over the whole valley, beyond the template's bounds)
+  return <instancedMesh ref={ref} args={[geo, mat, MARKER_MAX]} frustumCulled={false} castShadow={false} />;
+}
+
 let WORLD_IDS = 0;
+
+/** Where a ray from the camera first meets the ground (or the lake's surface): marched, then halved
+ *  down to the crossing. Null when it meets none inside the valley. */
+function groundHit(t: Terrain, ray: THREE.Ray): { x: number; z: number } | null {
+  const o = ray.origin, d = ray.direction;
+  const above = (s: number) => o.y + d.y * s - Math.max(heightAt(t, o.x + d.x * s, o.z + d.z * s), WATER_LEVEL);
+  let prev = 0;
+  for (let s = 0.5; s < 900; s += 0.75) {
+    if (above(s) <= 0) {
+      let lo = prev, hi = s;
+      for (let i = 0; i < 20; i++) {
+        const m = (lo + hi) / 2;
+        if (above(m) > 0) lo = m;
+        else hi = m;
+      }
+      const x = o.x + d.x * hi, z = o.z + d.z * hi;
+      return inBounds(t, x, z, 4) ? { x, z } : null;
+    }
+    prev = s;
+  }
+  return null;
+}
+
+/** While a release is being placed: a click on the ground (not a drag, which turns the view) lets the
+ *  animals go there. */
+function GroundPicker({ world }: { world: World }) {
+  const placing = useWorldUi((s) => s.placing);
+  const camera = useThree((s) => s.camera);
+  const gl = useThree((s) => s.gl);
+  useEffect(() => {
+    if (!placing) return;
+    const el = gl.domElement;
+    const ray = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    let down: { x: number; y: number } | null = null;
+    const onDown = (e: PointerEvent) => {
+      down = e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
+    };
+    const onUp = (e: PointerEvent) => {
+      const from = down;
+      down = null;
+      if (!from || e.button !== 0 || Math.hypot(e.clientX - from.x, e.clientY - from.y) > 5) return;
+      const r = el.getBoundingClientRect();
+      ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      ray.setFromCamera(ndc, camera);
+      const at = groundHit(world.terrain, ray.ray);
+      if (!at) return;
+      const ui = useWorldUi.getState();
+      if (placing.kind === 'release') ui.releaseGenome(placing.genome, placing.count, at, placing.root);
+      else {
+        // (carried: set down at the click, and the placing is done)
+        const c = world.creatures.find((x) => x.id === placing.id);
+        if (c) ui.godAct((w) => carry(w, c, at.x, at.z));
+        ui.setPlacing(null);
+      }
+    };
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointerup', onUp);
+    return () => {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointerup', onUp);
+    };
+  }, [placing, camera, gl, world]);
+  return null;
+}
 
 export function WorldScene() {
   const [world, setWorld] = useState(() => getWorld());
@@ -347,6 +604,7 @@ export function WorldScene() {
       <Precipitation />
       <Ambient />
       <Cast world={world} />
+      <GroundPicker world={world} />
       {/* (a wheel notch zooms nearly twice as far as the default, and a drag pans further: across a
           valley 220 units wide the defaults crawled; the damping settles sooner, so a zoom ends crisply) */}
       <OrbitControls
@@ -359,8 +617,10 @@ export function WorldScene() {
         dampingFactor={0.08}
         zoomSpeed={1.8}
         panSpeed={1.4}
+        zoomToCursor
       />
       <FollowCam />
+      <CameraKeys />
       <KeyPan />
       {import.meta.env.DEV && <DevLook />}
       <Director />

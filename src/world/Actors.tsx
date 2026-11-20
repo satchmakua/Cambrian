@@ -59,15 +59,42 @@ export function useSkinScheduler(): void {
   useFrame(() => buildSkins());
 }
 
-/** Count this body as a user of a skin it has built (and of that skin's shell, if it has one), so
- *  neither is swept while the body may wear it again. Returns the cache keys actually retained. */
+// A soft round shadow straight below a body in the air: what tells a flier from a walker at a glance, at
+// every graphics level (the sun's shadow maps are a graphics option, and from a height their shadow
+// falls far off to one side, if it is drawn at all). One texture and one plane for every actor.
+let SHADE_TEX: THREE.Texture | null = null;
+function shadeTexture(): THREE.Texture {
+  if (!SHADE_TEX) {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 64;
+    const ctx = cv.getContext('2d')!;
+    const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(0,0,0,1)');
+    grad.addColorStop(0.5, 'rgba(0,0,0,0.7)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 64, 64);
+    SHADE_TEX = new THREE.CanvasTexture(cv);
+  }
+  return SHADE_TEX;
+}
+const SHADE_GEO = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+
 /** a mood bubble's largest size against the camera's distance from it (≈ a 14th of the view's height) */
 const BUBBLE_NEAR = 0.06;
 const BUBBLE_AT = new THREE.Vector3();
 
+/** Count this body as a user of a skin it has built (and of that skin's shell, if it has one), so
+ *  neither is swept while the body may wear it again. Returns the cache keys actually retained. */
 function hold(p: Phenotype, q: Skin): string[] {
   return [KEY[q], shellKey(q)].filter((k) => retainGeometry(p, k));
 }
+
+/** (dev: the bodies still in their capsule kit, and ?coarse=0 to ask for the wanted skin alone — to time
+ *  the way into the valley with and without the coarse skin first) */
+const CAPSULED = new Set<object>();
+export const capsuled = (): number => CAPSULED.size;
+const COARSE_FIRST = !(import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('coarse') === '0');
 
 /** The skin to wear now, while the wanted one is built in the background (null: the capsule kit). */
 function useSkin(p: Phenotype, want: Skin): Skin | null {
@@ -88,7 +115,14 @@ function useSkin(p: Phenotype, want: Skin): Skin | null {
       return s.p === p && s.have === next ? s : { p, have: next };
     });
     if (now === want) return;
-    return requestSkin(p, want, () => setState({ p, have: want }));
+    const cancel = requestSkin(p, want, () => setState({ p, have: want }));
+    // (nothing built yet: the coarse distant skin as well, which the queue builds first and in a fraction
+    // of the time — the body leaves its capsule kit, a chain of beads, while the one it wants is made)
+    const coarse = COARSE_FIRST && now === null && want !== 'far' ? requestSkin(p, 'far', () => setState((s) => (s.p === p && s.have === null ? { p, have: 'far' } : s))) : null;
+    return () => {
+      cancel();
+      coarse?.();
+    };
   }, [p, want]);
 
   // what this body has worn, it keeps (see "skins" above)
@@ -235,6 +269,13 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
   const body = useRef<THREE.Group>(null);
   const ring = useRef<THREE.Mesh>(null);
   const bubble = useRef<THREE.Sprite>(null);
+  const shade = useRef<THREE.Mesh>(null);
+  // (only a body that can leave the ground has one; each its own material, for its own depth of shade)
+  const shadeMat = useMemo(
+    () => (traits.flies || traits.glides ? new THREE.MeshBasicMaterial({ map: shadeTexture(), color: '#000000', transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }) : null),
+    [traits.flies, traits.glides],
+  );
+  useEffect(() => () => shadeMat?.dispose(), [shadeMat]);
   const voice = useMemo(() => voiceOf(traits), [traits]);
   const heard = useRef({ action: c.action, bitten: c.attackedAt, last: -1e9, born: c.age < 2 });
   const shown = useRef<{ e: Emote | null; pop: number }>({ e: null, pop: 0 });
@@ -257,6 +298,14 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
   // built in the background, not inside the click that selects it), distant past the detail bands
   const want: Skin = near || selected ? 'high' : lod.distant ? 'far' : 'low';
   const skin = useSkin(phenotype, want);
+  const me = useRef({});
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const key = me.current;
+    if (skin === null) CAPSULED.add(key);
+    else CAPSULED.delete(key);
+    return () => void CAPSULED.delete(key);
+  }, [skin]);
   // (a new body's meshes are new: their shadows are set again)
   useEffect(() => applyShadows(ref.current, detail), [detail, skin, phenotype]);
   // growing up: the adult body takes over once it has a skin built. It is asked of the scheduler; were
@@ -293,7 +342,9 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
     // altitude: ease toward the sim's, and spread the wings while airborne
     const prevAlt = P.alt;
     P.alt += (c.alt - P.alt) * k;
-    P.fly += ((c.alt > AIRBORNE || (c.fly && c.alt > 0.05) ? 1 : 0) - P.fly) * Math.min(1, dt * 4);
+    // (asleep in a tree's crown, its wings are folded)
+    const roosting = c.perch >= 0 && c.action === 'sleep';
+    P.fly += ((!roosting && (c.alt > AIRBORNE || (c.fly && c.alt > 0.05)) ? 1 : 0) - P.fly) * Math.min(1, dt * 4);
     if (dt > 0) P.climb += ((P.alt - prevAlt) / dt - P.climb) * Math.min(1, dt * 3);
     // courting: the pair circling each other put on a display
     const courting = c.action === 'mate' && c.courtT > 0 && c.courtT < COURT_TIME;
@@ -422,43 +473,60 @@ export function Actor({ c, world, onPick, selected }: { c: Creature; world: Worl
       ring.current.visible = selected;
       ring.current.position.y = ground - y + 0.06;
     }
+    // its shadow, while it is up: darker and tighter low down, a wide faint blur from high up
+    if (shade.current && shadeMat) {
+      const up = Math.max(0, P.alt);
+      const show = P.fly * Math.min(1, up / 0.8);
+      shade.current.visible = show > 0.02;
+      if (shade.current.visible) {
+        const spread = 1 + up * 0.05;
+        const size = Math.max(traits.length * 1.1, traits.radius * 3) * s * spread;
+        shade.current.position.set(P.x, Math.max(ground, WATER_LEVEL) + 0.06, P.z);
+        shade.current.scale.set(size, 1, size);
+        shadeMat.opacity = (0.5 * show) / (spread * spread);
+      }
+    }
   });
 
   return (
-    <group ref={ref}>
-      <group ref={body}>
-        <group position={[-place.center[0], 0, -place.center[2]]}>
-          <JawContext.Provider value={jaw}>
-            <FlightContext.Provider value={flight}>
-              <LidContext.Provider value={lids}>
-                {/* the creature you're watching up close gets the fine skin: at the herd's low resolution
-                    a bird's thin shanks broke into jagged shards a cell or two across */}
-                {/* (in the kit, a shelled body draws a shell only if one is built already: the scheduler
-                    builds it with the skin — see lazyShell) */}
-                <CreatureMesh phenotype={phenotype} skinMode={skin ? 'hybrid' : 'capsules'} quality={skin ?? plainSkin(lod.distant)} lazyShell={!skin} rig={rig} detail={detail} carved={false} fur={selected && detail === 'full'} />
-              </LidContext.Provider>
-            </FlightContext.Provider>
-          </JawContext.Provider>
+    <>
+      <group ref={ref}>
+        <group ref={body}>
+          <group position={[-place.center[0], 0, -place.center[2]]}>
+            <JawContext.Provider value={jaw}>
+              <FlightContext.Provider value={flight}>
+                <LidContext.Provider value={lids}>
+                  {/* the creature you're watching up close gets the fine skin: at the herd's low resolution
+                      a bird's thin shanks broke into jagged shards a cell or two across */}
+                  {/* (in the kit, a shelled body draws a shell only if one is built already: the scheduler
+                      builds it with the skin — see lazyShell) */}
+                  <CreatureMesh phenotype={phenotype} skinMode={skin ? 'hybrid' : 'capsules'} quality={skin ?? plainSkin(lod.distant)} lazyShell={!skin} rig={rig} detail={detail} carved={false} fur={selected && detail === 'full'} />
+                </LidContext.Provider>
+              </FlightContext.Provider>
+            </JawContext.Provider>
+          </group>
         </group>
+        {/* an invisible pick target — the only thing in the actor that is raycast */}
+        <mesh
+          position={[0, -place.lift + place.height * 0.5, 0]}
+          userData={{ hitbox: true }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPick(c.id);
+          }}
+        >
+          <boxGeometry args={[traits.radius * 2.2, place.height, traits.length * 0.9]} />
+          <meshBasicMaterial visible={false} />
+        </mesh>
+        <sprite ref={bubble} visible={false} renderOrder={5} />
+        <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} visible={false}>
+          <ringGeometry args={[traits.radius * 1.4, traits.radius * 1.4 + 0.18, 40]} />
+          <meshBasicMaterial color="#7fd1b9" transparent opacity={0.85} depthWrite={false} />
+        </mesh>
       </group>
-      {/* an invisible pick target — the only thing in the actor that is raycast */}
-      <mesh
-        position={[0, -place.lift + place.height * 0.5, 0]}
-        userData={{ hitbox: true }}
-        onClick={(e) => {
-          e.stopPropagation();
-          onPick(c.id);
-        }}
-      >
-        <boxGeometry args={[traits.radius * 2.2, place.height, traits.length * 0.9]} />
-        <meshBasicMaterial visible={false} />
-      </mesh>
-      <sprite ref={bubble} visible={false} renderOrder={5} />
-      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} visible={false}>
-        <ringGeometry args={[traits.radius * 1.4, traits.radius * 1.4 + 0.18, 40]} />
-        <meshBasicMaterial color="#7fd1b9" transparent opacity={0.85} depthWrite={false} />
-      </mesh>
-    </group>
+      {/* (outside the body's group: it lies flat on the ground whatever the body's bank and pitch) */}
+      {shadeMat && <mesh ref={shade} geometry={SHADE_GEO} material={shadeMat} visible={false} renderOrder={1} />}
+    </>
   );
 }
 

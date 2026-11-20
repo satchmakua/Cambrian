@@ -3,6 +3,7 @@ import {
   createWorld, release, stepWorld, worldHash, bodyOf, liveCount, preysOn, STEP, DAY_LENGTH, MAX_POP, AIRBORNE, climate, seasonOf, YEAR_DAYS, COURT_TIME,
   footprintGap, dayNumber, yearNumber,
 } from '../../src/sim/world';
+import { SOFT_POP, SPECIES_SHARE } from '../../src/sim/model';
 import { traitsOf } from '../../src/sim/traits';
 import { saveWorld, loadWorld } from '../../src/sim/persist';
 import { heightAt, makeTerrain, biomeAt, WORLD_SIZE, WATER_LEVEL } from '../../src/sim/terrain';
@@ -151,7 +152,8 @@ describe('flight', () => {
           // on its feet means on ground it can stand on
           expect(heightAt(w.terrain, c.x, c.z)).toBeGreaterThan(WATER_LEVEL - 0.5);
         }
-        expect(c.alt).toBeLessThan(15);
+        // (a strong flier cruises high, up to ~18 bu and 3 more in flight from danger: seen in the air)
+        expect(c.alt).toBeLessThan(22);
       }
     }
     expect(aloft).toBeGreaterThan(20);
@@ -453,7 +455,8 @@ describe('bookkeeping that holds (review fixes)', () => {
       stepWorld(w);
       peak = Math.max(peak, w.creatures.filter((c) => c.species === sp).length + w.eggs.filter((e) => e.species === sp).length);
     }
-    expect(peak).toBeLessThanOrEqual(45); // the species' share is 0.3 × 135 = 40.5 (was 129 + 77 eggs)
+    // the species' share of the soft cap (was 129 + 77 eggs), and a clutch's slack
+    expect(peak).toBeLessThanOrEqual(SOFT_POP * SPECIES_SHARE + 5);
   });
 
   it('immigrants that find no room leave their stock extinct (not in limbo)', () => {

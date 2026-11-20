@@ -120,10 +120,22 @@ export interface AppendageGene {
    */
   radialPair?: boolean;
   /**
-   * A web of skin joining this part to its neighbours round a radial body, out to this share of the
-   * part's length (0..WEB_MAX): an octopus's arms are webbed near their roots. Absent: none.
+   * A web of skin joining this part to its neighbours, out to this share of the part's length
+   * (0..WEB_MAX). Round a radial body it joins each arm to the next: an octopus's arms are webbed near
+   * their roots. On a bilateral body's LEG it joins the leg to the next leg behind it on the same side: a
+   * glider's patagium (a flying squirrel's, a sugar glider's), which carries it down from a leap. Point
+   * mutation moves a leg's web a little at a time, from none. Absent: none.
    */
   web?: number;
+  /**
+   * Fin ↔ leg (0..1), on a LEG or on a PAIRED FIN mounted low on the body: how far the part has gone
+   * from a fin (0) to a leg (1). A fin rising through it grows a fleshy lobe, joints and at last a foot
+   * (a lobe-finned fish, then a walker); a leg falling through it shortens into a paddle and at last a
+   * flipper (an otter's webbed feet, a seal's flippers). Absent: what its kind is (a fin 0, a leg 1).
+   * Point mutation moves it a little at a time: the transitions between water and land are many small
+   * steps, each one living (see grow's expressForm).
+   */
+  form?: number;
 }
 
 /** the furthest out along its arms a web can reach (a share of their length) */

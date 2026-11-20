@@ -33,6 +33,7 @@ export const GENE_BOUNDS = {
     taper: [0.5, 1.0] as [number, number], // limb thinning toward the tip
     curlPitch: [-0.6, 0.6] as [number, number], // radians per limb segment
     curlYaw: [-0.6, 0.6] as [number, number],
+    form: [0, 1] as [number, number], // fin (0) ↔ leg (1): see AppendageGene.form
   },
   radialCount: [3, 12] as [number, number], // up to 12 for many-tentacled cephalopods (v2)
   covering: {

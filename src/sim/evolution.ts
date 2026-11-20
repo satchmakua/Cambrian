@@ -7,7 +7,7 @@
 import type { Genome } from '../engine/genome';
 import { biomeAt, type Biome } from './terrain';
 import { howItDiffers } from './lineage';
-import { bodyOf, speciesById, type DeathTally, type Species, type TrendSample, type World } from './world';
+import { bodyOf, speciesById, type DeathTally, type Species, type TrendSample, type World, type FilmFrame } from './world';
 import type { Diet, Habitat } from './traits';
 
 export interface Relation {
@@ -27,9 +27,12 @@ export interface SpeciesProfile {
   deaths: number;
   founded: number;
   extinctAt: number | null;
-  /** the species it branched off, if any */
-  parent: { id: number; name: string } | null;
-  /** the species that have branched off it */
+  /** the species it came from, if any — and how: its whole line became this one ('evolved'), this one
+   *  branched off it ('branched'), or the player bred this one from it in the breeder ('bred') */
+  parent: { id: number; name: string; how: 'evolved' | 'branched' | 'bred' } | null;
+  /** what its whole line became, if that is how its name ended (not by dying out) */
+  became: { id: number; name: string } | null;
+  /** the species that have branched off it (not counting what it became) */
   daughters: { id: number; name: string; extinct: boolean }[];
   /** the commonest body among its living members (its founder's, once it is gone) */
   now: Genome;
@@ -46,6 +49,17 @@ export interface SpeciesProfile {
   /** how its body differs from its founder's, in a few words ([] when, to the eye, it does not) */
   differs: string[];
   trend: TrendSample[];
+  /** its film: its typical body over the generations (see Species.film) */
+  film: FilmFrame[];
+  /** the player has adopted its line (it, or a species it descends from) */
+  adopted: boolean;
+}
+
+/** Is `id` in a line the player has adopted — that species, or one it descends from? */
+export function inAdoptedLine(w: World, id: number): boolean {
+  if (w.adopted.length === 0) return false;
+  for (let sp = speciesById(w, id), i = 0; sp && i < 256; sp = sp.parent !== null ? speciesById(w, sp.parent) : undefined, i++) if (w.adopted.includes(sp.id)) return true;
+  return false;
 }
 
 const BIOME_ORDER: Biome[] = ['meadow', 'wood', 'sand', 'rock', 'shallow', 'deep'];
@@ -91,8 +105,12 @@ export function speciesProfile(w: World, id: number): SpeciesProfile | null {
     deaths: sp.deaths,
     founded: sp.firstSeen,
     extinctAt: sp.extinctAt,
-    parent: parent ? { id: parent.id, name: parent.name } : null,
-    daughters: w.species.filter((s) => s.parent === id).map((s) => ({ id: s.id, name: s.name, extinct: s.extinctAt !== null })),
+    parent: parent ? { id: parent.id, name: parent.name, how: sp.bred ? 'bred' : parent.evolvedInto === sp.id ? 'evolved' : 'branched' } : null,
+    became: (() => {
+      const b = sp.evolvedInto !== null ? speciesById(w, sp.evolvedInto) : undefined;
+      return b ? { id: b.id, name: b.name } : null;
+    })(),
+    daughters: w.species.filter((s) => s.parent === id && s.id !== sp.evolvedInto).map((s) => ({ id: s.id, name: s.name, extinct: s.extinctAt !== null })),
     now,
     founder: sp.founder,
     diet: ref.diet,
@@ -101,6 +119,8 @@ export function speciesProfile(w: World, id: number): SpeciesProfile | null {
     where,
     prey: relations(w, sp.killed, 4),
     predators: relations(w, sp.killedBy, 4),
+    film: sp.film,
+    adopted: inAdoptedLine(w, sp.id),
     causes: { ...sp.causes },
     differs: howItDiffers(sp.founder, now),
     trend: sp.trend,

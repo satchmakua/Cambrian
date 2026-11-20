@@ -19,6 +19,7 @@
  */
 import * as THREE from 'three';
 import type { Phenotype } from '../engine/grow';
+import { wingSpanFactor } from '../sim/traits';
 import { projectToSurface } from './bodyField';
 import { surfacePrims, type SkinSurface } from './mouthLine';
 import { trunkRise } from './rig';
@@ -194,7 +195,8 @@ export function wingOpenSpan(p: Phenotype, tipRadius: number): { openS: number; 
   }
   const trunkLen = Number.isFinite(z1 - z0) ? z1 - z0 : 1;
   const gene = Math.max(tipRadius, 0.06) / Math.max(girth, 0.1); // ~0.4–0.6 typical
-  return { openS: Math.max(trunkLen * 1.15, girth * 3) * (0.55 + gene), trunkLen, girth, gene };
+  // (the same rule flight is reckoned by: a small enough wing is drawn as the flap it is)
+  return { openS: Math.max(trunkLen * 1.15, girth * 3) * wingSpanFactor(gene), trunkLen, girth, gene };
 }
 
 /** a folded membrane wing's span ×its open one: folded along the flank, its fingers reach further back */

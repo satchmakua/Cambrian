@@ -21,10 +21,11 @@ import { MORPHOTYPE_IDS } from '../engine/random';
 // The valley and the Studio are loaded when they are first opened: neither is needed to draw the
 // breeder.
 // (a fetch that fails is tried once more; one that keeps failing is shown by the screen boundary)
-const WorldView = lazy(fetching(() => import('../world/WorldView').then((m) => ({ default: m.WorldView }))));
+// (the valley kept in the browser is read before the screen opens: it resumes, rather than starting afresh)
+const WorldView = lazy(fetching(() => Promise.all([import('../world/WorldView'), valleyReady()]).then(([m]) => ({ default: m.WorldView }))));
 const Studio = lazy(fetching(() => import('../viewer/Studio').then((m) => ({ default: m.Studio }))));
 import { useStore, type GameView } from './store';
-import { useWorldUi } from '../world/worldStore';
+import { useWorldUi, valleyReady } from '../world/worldStore';
 import { fetching } from './ScreenBoundary';
 import { noGpu, settleGraphics, slowGpuHint } from './gpu';
 import { typingIn } from './keys';
@@ -87,6 +88,13 @@ export function Game() {
 
   const current = nodes[currentId];
   const genome = current.genome;
+  // the lineage's first creature: if it was taken home from the valley, the line released is a branch
+  // of its species there
+  const lineageRoot = useMemo(() => {
+    let n = current;
+    for (let i = 0; i < 1e6 && n.parentId !== null && nodes[n.parentId]; i++) n = nodes[n.parentId];
+    return n.genome;
+  }, [nodes, current]);
   const generation = current.generation;
   const phenotype = useMemo(() => grow(genome), [genome]);
   // every hook runs before the screen-switching returns below (rules of hooks)
@@ -205,6 +213,7 @@ export function Game() {
         <WorldView
           key={worldEpoch}
           founder={genome}
+          lineageRoot={lineageRoot}
           onExit={() => setView('breed')}
           onMenu={openMenu}
           onAdopt={(g) => {

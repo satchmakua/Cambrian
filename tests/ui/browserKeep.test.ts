@@ -16,7 +16,19 @@ const env = vi.hoisted(() => {
     },
     removeItem: (k: string) => void kept.delete(k),
   };
-  return { kept, state };
+  // the valley's own store (the browser's IndexedDB): one that refuses to take a valley when full
+  const valley = { json: null as string | null };
+  const valleyStore = {
+    get: async () => valley.json,
+    put: async (json: string) => {
+      if (state.full) throw new Error('QuotaExceededError');
+      valley.json = json;
+    },
+    clear: async () => {
+      valley.json = null;
+    },
+  };
+  return { kept, state, valley, valleyStore };
 });
 
 import { genomeOfMorphotype } from '../../src/engine/random';
@@ -25,17 +37,25 @@ import { loadWorld } from '../../src/sim/persist';
 import { keepGame, loadGame, saveGame, startNewGame } from '../../src/ui/game';
 import { memoryStore } from '../../src/ui/saves';
 import { useStore } from '../../src/ui/store';
-import { getWorld, populate } from '../../src/world/worldStore';
+import { getWorld, populate, valleyKept } from '../../src/world/worldStore';
+import { setValleyStore } from '../../src/ui/valleyStore';
 
+setValleyStore(env.valleyStore);
+/** the valley the browser holds, once every write asked for has landed */
+const keptValley = async () => {
+  await valleyKept();
+  return env.valley.json;
+};
 const SESSION = 'cambrian.session.v2c';
-const VALLEY = 'cambrian.world';
 const start = (name: string, seed: number, worldSeed: number) =>
   startNewGame({ name, founder: genomeOfMorphotype(seed, 'canid'), symmetry: 'auto', worldSeed, ecosystem: 'sparse', startIn: 'breed' });
 const storedGame = () => (env.kept.has(SESSION) ? (JSON.parse(env.kept.get(SESSION)!) as { game: { name: string }; nodes: Record<string, unknown> }) : null);
 
-beforeEach(() => {
+beforeEach(async () => {
   env.state.full = false;
   env.kept.clear();
+  await valleyKept();
+  env.valley.json = null;
 });
 
 describe('what the browser keeps when a game is swapped', () => {
@@ -43,18 +63,18 @@ describe('what the browser keeps when a game is swapped', () => {
     const store = memoryStore();
     start('First', 1, 100);
     expect(storedGame()?.game.name).toBe('First');
-    expect(env.kept.has(VALLEY)).toBe(false); // a valley nobody has opened
+    expect(await keptValley()).toBeNull(); // a valley nobody has opened
     populate(getWorld(), null);
     for (let i = 0; i < 40; i++) stepWorld(getWorld());
     useStore.getState().promote(useStore.getState().offspring[2]);
     const saved = await saveGame(store, 'First', null, 10);
     start('Second', 2, 200);
     expect(storedGame()?.game.name).toBe('Second');
-    expect(env.kept.has(VALLEY)).toBe(false);
+    expect(await keptValley()).toBeNull();
     await loadGame(store, saved.id);
     expect(storedGame()?.game.name).toBe('First');
     expect(Object.keys(storedGame()!.nodes).length).toBe(2);
-    expect(loadWorld(env.kept.get(VALLEY)!).seed).toBe(100);
+    expect(loadWorld((await keptValley())!).seed).toBe(100);
     expect(useStore.getState().unkept).toBe(false);
   });
 
@@ -64,17 +84,17 @@ describe('what the browser keeps when a game is swapped', () => {
     populate(getWorld(), null);
     keepGame();
     expect(storedGame()?.game.name).toBe('First');
-    expect(loadWorld(env.kept.get(VALLEY)!).seed).toBe(100);
+    expect(loadWorld((await keptValley())!).seed).toBe(100);
     const saved = await saveGame(store, 'First', null, 10);
 
     env.state.full = true;
     start('Second', 2, 200);
     expect(env.kept.has(SESSION)).toBe(false); // not First's lineage…
-    expect(env.kept.has(VALLEY)).toBe(false); // …nor First's valley
+    expect(await keptValley()).toBeNull(); // …nor First's valley
     expect(useStore.getState().unkept).toBe(true); // and the game knows the browser is not keeping it
     await loadGame(store, saved.id);
     expect(env.kept.has(SESSION)).toBe(false);
-    expect(env.kept.has(VALLEY)).toBe(false);
+    expect(await keptValley()).toBeNull();
     expect(useStore.getState().unkept).toBe(true);
 
     // room again: the next thing kept is the game being played, whole
@@ -83,7 +103,7 @@ describe('what the browser keeps when a game is swapped', () => {
     useStore.getState().promote(useStore.getState().offspring[0]);
     keepGame();
     expect(storedGame()?.game.name).toBe('First');
-    expect(loadWorld(env.kept.get(VALLEY)!).seed).toBe(100);
+    expect(loadWorld((await keptValley())!).seed).toBe(100);
     expect(useStore.getState().unkept).toBe(false);
   });
 

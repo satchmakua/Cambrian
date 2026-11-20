@@ -5,7 +5,7 @@
  */
 import { useMemo } from 'react';
 import { speciesProfile, type Relation, type SpeciesProfile } from '../sim/evolution';
-import { dayNumber, type TrendSample } from '../sim/world';
+import { dayNumber, type TrendSample, type FilmFrame } from '../sim/world';
 import { usePortrait } from '../viewer/portrait';
 import { getWorld } from './worldStore';
 
@@ -152,7 +152,21 @@ function Chips({ list, onPick }: { list: Relation[]; onPick: (id: number) => voi
   );
 }
 
-export function SpeciesCard({ id, at, onClose, onPick, onFollow }: { id: number; at: number; onClose: () => void; onPick: (id: number) => void; onFollow: (id: number) => void }) {
+/** One frame of a species' film: its body then, small, with the day and the generation under it. */
+function FilmFrameView({ f }: { f: FilmFrame }) {
+  const url = usePortrait(f.genome);
+  return (
+    <figure>
+      {url ? <img src={url} alt="" /> : <div className="ph" />}
+      <figcaption>
+        day {dayNumber(f.t)}
+        {f.gen > 0 ? ` · gen ${f.gen}` : ''}
+      </figcaption>
+    </figure>
+  );
+}
+
+export function SpeciesCard({ id, at, onClose, onPick, onFollow, onBoost, onAdopt, onPlague }: { id: number; at: number; onClose: () => void; onPick: (id: number) => void; onFollow: (id: number) => void; onBoost?: (id: number, n: number) => void; onAdopt?: (id: number, on: boolean) => void; onPlague?: (id: number) => void }) {
   // (read again on every snapshot of the world: `at` is its clock)
   const p = useMemo(() => speciesProfile(getWorld(), id), [id, at]);
   const changed = (p?.differs.length ?? 0) > 0;
@@ -170,10 +184,33 @@ export function SpeciesCard({ id, at, onClose, onPick, onFollow }: { id: number;
     <aside className="species-card">
       <div className="critter-head">
         <h3 style={{ borderColor: color }}>{p.name}</h3>
+        {onAdopt && (
+          <button className={`adopt${p.adopted ? ' active' : ''}`} onClick={() => onAdopt(p.id, !p.adopted)} title={p.adopted ? 'your line: you are told when it splits, changes or dies out (click to let it go)' : 'adopt its line: be told when it splits, changes or dies out'}>
+            {p.adopted ? '★ your line' : '☆ adopt'}
+          </button>
+        )}
         <button onClick={onClose} title="close">✕</button>
       </div>
       <p className="doing">
-        {p.extinctAt !== null ? <b className="gone">died out on day {dayNumber(p.extinctAt)}</b> : <b>{p.alive} alive</b>} · {p.born} born · founded day {dayNumber(p.founded)}
+        {p.became ? (
+          <b>
+            became{' '}
+            <button className="link" onClick={() => onPick(p.became!.id)}>
+              {p.became.name}
+            </button>{' '}
+            on day {dayNumber(p.extinctAt ?? p.founded)}
+          </b>
+        ) : p.extinctAt !== null ? (
+          <b className="gone">died out on day {dayNumber(p.extinctAt)}</b>
+        ) : (
+          <b>{p.alive} alive</b>
+        )}{' '}
+        {onBoost && p.alive > 0 && (
+          <button className="boost" onClick={() => onBoost(p.id, 5)} title="five more of it, from its own stock, beside one of them">
+            +5 more
+          </button>
+        )}{' '}
+        · {p.born} born · founded day {dayNumber(p.founded)}
       </p>
       <div className="portraits">
         {changed && (
@@ -190,7 +227,7 @@ export function SpeciesCard({ id, at, onClose, onPick, onFollow }: { id: number;
       {changed && <p>Since its founder: {p.differs.join(', ')}.</p>}
       {p.parent && (
         <p className="from">
-          Branched off{' '}
+          {p.parent.how === 'evolved' ? 'Evolved from' : p.parent.how === 'bred' ? 'Bred, in the breeder, from' : 'Branched off'}{' '}
           <button className="link" onClick={() => onPick(p.parent!.id)}>
             {p.parent.name}
           </button>
@@ -209,6 +246,17 @@ export function SpeciesCard({ id, at, onClose, onPick, onFollow }: { id: number;
             </span>
           ))}
         </p>
+      )}
+
+      {p.film.length > 1 && (
+        <>
+          <h4>Its body, over the generations</h4>
+          <div className="film">
+            {p.film.map((f) => (
+              <FilmFrameView key={`${f.t}`} f={f} />
+            ))}
+          </div>
+        </>
       )}
 
       <h4>Its life</h4>
@@ -249,6 +297,11 @@ export function SpeciesCard({ id, at, onClose, onPick, onFollow }: { id: number;
       {p.alive > 0 && (
         <div className="critter-actions">
           <button onClick={() => onFollow(p.id)}>follow one</button>
+          {onPlague && (
+            <button onClick={() => onPlague(p.id)} title="a plague among them: most of them taken over three days (a lever on its world, told in the journal)">
+              a plague on it
+            </button>
+          )}
         </div>
       )}
     </aside>

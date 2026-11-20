@@ -10,7 +10,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import type { Genome } from '../../engine/genome';
 import { MORPHOTYPE_IDS, type SymmetryMode } from '../../engine/random';
 import { exportSave, founderFor, importSave, loadGame, saveGame, type NewGameOptions } from '../game';
-import { cleanName, describeSave, nextGameName, saveStore, NAME_MAX, type Ecosystem, type SaveHeader } from '../saves';
+import { cleanName, describeSave, nextGameName, saveStore, NAME_MAX, type CastEntry, type Ecosystem, type SaveHeader } from '../saves';
+import { CAST_COUNT, CAST_KINDS, castOf, founderOf, lookFor } from '../../sim/cast';
+import { CAPACITIES } from '../../sim/model';
+import { SCENARIOS } from '../../sim/scenarios';
+import { decodeGenome } from '../../engine/share';
+import { grow } from '../../engine/grow';
+import { coherence } from '../../engine/morphospace';
 import { noGpu, settleGraphics, slowGpuHint } from '../gpu';
 import { AUTOSAVE_MINUTES, DENSITIES, RENDER_SCALES, SAFE, useSettings, type CreatureDetail, type QualityPreset } from '../settings';
 import { useStore, type GameView } from '../store';
@@ -174,7 +180,7 @@ function when(ms: number): string {
  * not wait for. In safe mode, and where the browser draws without a graphics card, a slot has no
  * picture: drawing each would hold the page for seconds.
  */
-function SlotPortrait({ genome }: { genome: Genome }) {
+function SlotPortrait({ genome, className = 'slot-portrait' }: { genome: Genome; className?: string }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     setUrl(null);
@@ -188,7 +194,7 @@ function SlotPortrait({ genome }: { genome: Genome }) {
       live = false;
     };
   }, [genome]);
-  return <span className="slot-portrait">{url && <img src={url} alt="" />}</span>;
+  return <span className={className}>{url && <img src={url} alt="" />}</span>;
 }
 
 /**
@@ -375,6 +381,85 @@ const ECO_WORDS: Record<Ecosystem, { label: string; hint: string }> = {
 
 const randomSeed = () => (Math.random() * 0xffffffff) >>> 0; // UI layer only; the engine's RNG is seeded
 
+/** One kind in the cast, as its founder will look in this valley (its picture changes with the seed). */
+function CastFace({ worldSeed, entry }: { worldSeed: number; entry: CastEntry }) {
+  const g = useMemo(() => founderOf(worldSeed, entry), [worldSeed, entry]);
+  return <SlotPortrait genome={g} className="cast-face" />;
+}
+
+/**
+ * The valley's cast, as the new-game panel edits it: each kind with how many of it, another look for
+ * it (↻), or out (✕); a kind added; a creature pasted as a `CAM2:` string, released as it is.
+ */
+function CastEditor({ cast, worldSeed, room, onChange }: { cast: CastEntry[]; worldSeed: number; room: number; onChange: (c: CastEntry[]) => void }) {
+  const [adding, setAdding] = useState('');
+  const [paste, setPaste] = useState('');
+  const [pasteErr, setPasteErr] = useState<string | null>(null);
+  const total = cast.reduce((n, e) => n + e.count, 0);
+  const set = (i: number, patch: Partial<CastEntry>) => onChange(cast.map((e, j) => (j === i ? { ...e, ...patch } : e)));
+  const full = cast.length >= CAST_KINDS;
+  const addPasted = () => {
+    try {
+      const text = paste.trim();
+      const kind = coherence(grow(decodeGenome(text))).nearest;
+      onChange([...cast, { kind, count: 4, look: 0, genome: text }]);
+      setPaste('');
+      setPasteErr(null);
+    } catch (e) {
+      setPasteErr(e instanceof Error ? e.message : 'That is not a creature string.');
+    }
+  };
+  return (
+    <div className="cast">
+      {cast.length === 0 && <p className="cast-empty">Nobody: only what you release.</p>}
+      <ul>
+        {cast.map((e, i) => (
+          <li key={`${i}-${e.kind}`}>
+            <CastFace worldSeed={worldSeed} entry={e} />
+            <span className="cast-kind">
+              {e.kind}
+              {e.genome && <small> pasted</small>}
+            </span>
+            <span className="cast-n">
+              <button className="plain" onClick={() => set(i, { count: Math.max(1, e.count - 1) })} aria-label={`fewer ${e.kind}`}>−</button>
+              <b>{e.count}</b>
+              <button className="plain" onClick={() => set(i, { count: Math.min(CAST_COUNT, e.count + 1) })} aria-label={`more ${e.kind}`}>+</button>
+            </span>
+            {e.genome ? <span className="cast-gap" /> : <button className="plain" onClick={() => set(i, { look: randomSeed() % 1000000 })} title="another look for this kind">↻</button>}
+            <button className="plain" onClick={() => onChange(cast.filter((_, j) => j !== i))} title="leave this kind out">✕</button>
+          </li>
+        ))}
+      </ul>
+      <div className="cast-add">
+        <select value={adding} aria-label="Add a kind" onChange={(e) => setAdding(e.target.value)}>
+          <option value="">Add a kind…</option>
+          {MORPHOTYPE_IDS.map((id) => (
+            <option key={id} value={id}>{id}</option>
+          ))}
+        </select>
+        <button
+          className="plain"
+          disabled={!adding || full}
+          onClick={() => {
+            onChange([...cast, { kind: adding, count: 4, look: lookFor(adding) }]);
+            setAdding('');
+          }}
+        >
+          Add
+        </button>
+      </div>
+      <div className="cast-add">
+        <input value={paste} placeholder="…or paste a CAM2: creature" aria-label="Paste a creature string" onChange={(e) => setPaste(e.target.value)} />
+        <button className="plain" disabled={!paste.trim() || full} onClick={addPasted}>Add</button>
+      </div>
+      {pasteErr && <small className="warn">{pasteErr}</small>}
+      <small className="cast-total">
+        {total} animals{total > room ? `: the valley holds ${room}, so the last kinds listed will not all fit` : ''}
+      </small>
+    </div>
+  );
+}
+
 /**
  * New-game set-up. The founder is shown on the stage behind the menu as it is chosen (`onPreview`) —
  * where the menu has a stage (`staged`) — and `onStart` receives the finished options. `slow`: the
@@ -391,6 +476,13 @@ export function NewGamePanel({ onPreview, onStart, staged, slow }: { onPreview: 
   const [seed, setSeed] = useState(randomSeed);
   const [worldSeed, setWorldSeed] = useState(() => randomSeed() % 100000);
   const [ecosystem, setEcosystem] = useState<Ecosystem>('standard');
+  // the cast: the ecosystem's own until the player edits it (a preset picked starts it afresh)
+  const [cast, setCast] = useState<CastEntry[]>(() => castOf('standard'));
+  const [castOpen, setCastOpen] = useState(false);
+  const [capacity, setCapacity] = useState<number>(CAPACITIES[0]);
+  const [scenario, setScenario] = useState<string>('');
+  const sc = SCENARIOS.find((x) => x.id === scenario) ?? null;
+  const edited = useMemo(() => JSON.stringify(cast) !== JSON.stringify(castOf(ecosystem)), [cast, ecosystem]);
   const [startIn, setStartIn] = useState<GameView>('breed');
   const [confirm, setConfirm] = useState(false);
   // a default name the save list doesn't hold yet
@@ -406,7 +498,7 @@ export function NewGamePanel({ onPreview, onStart, staged, slow }: { onPreview: 
   }, [store, hasGame, current.name]);
   const founder = useMemo(() => founderFor(seed, kind || null, symmetry), [seed, kind, symmetry]);
   useEffect(() => onPreview(founder), [founder, onPreview]);
-  const start = () => onStart({ name: cleanName(name, 'Game 1'), founder, symmetry, worldSeed, ecosystem, startIn });
+  const start = () => onStart({ name: cleanName(name, 'Game 1'), founder, symmetry, worldSeed, ecosystem, ...(edited ? { cast } : {}), ...(capacity !== CAPACITIES[0] ? { capacity } : {}), ...(sc ? { scenario: sc.id } : {}), startIn });
   return (
     <div className="newgame">
       <Row label="Name">
@@ -432,8 +524,38 @@ export function NewGamePanel({ onPreview, onStart, staged, slow }: { onPreview: 
       </section>
       <section>
         <h3>The valley</h3>
-        <Row label="Wildlife" hint={ECO_WORDS[ecosystem].hint}>
-          <Choice<Ecosystem> label="Wildlife" value={ecosystem} options={(['standard', 'sparse', 'empty'] as const).map((v) => ({ v, label: ECO_WORDS[v].label }))} onChange={setEcosystem} />
+        <Row label="Scenario" hint={sc ? sc.goal : 'A free valley: no goal but what you make of it.'}>
+          <select value={scenario} aria-label="Scenario" onChange={(e) => setScenario(e.target.value)}>
+            <option value="">None</option>
+            {SCENARIOS.map((x) => (
+              <option key={x.id} value={x.id}>{x.title}</option>
+            ))}
+          </select>
+        </Row>
+        {!sc && (
+        <>
+        <Row label="Wildlife" hint={edited ? 'Your own cast: the kinds and numbers below.' : ECO_WORDS[ecosystem].hint}>
+          <Choice<Ecosystem | 'custom'>
+            label="Wildlife"
+            value={edited ? 'custom' : ecosystem}
+            options={[...(['standard', 'sparse', 'empty'] as const).map((v) => ({ v, label: ECO_WORDS[v].label })), ...(edited ? [{ v: 'custom' as const, label: 'Yours' }] : [])]}
+            onChange={(v) => {
+              if (v === 'custom') return;
+              setEcosystem(v);
+              setCast(castOf(v));
+            }}
+          />
+        </Row>
+        <Row label="The cast" hint="Which kinds start in the valley, and how many. Each valley's founders are its own; ↻ shows another of a kind.">
+          <button className="plain" aria-expanded={castOpen} onClick={() => setCastOpen(!castOpen)}>
+            {castOpen ? 'Hide ▴' : 'Choose ▾'}
+          </button>
+        </Row>
+        {castOpen && <CastEditor cast={cast} worldSeed={worldSeed} room={capacity} onChange={setCast} />}
+        </>
+        )}
+        <Row label="Room for" hint={capacity === CAPACITIES[0] ? 'As many as are drawn whole.' : 'Far off, animals are drawn as markers: a busy valley asks more of the computer.'}>
+          <Choice<number> label="Room for" value={capacity} options={CAPACITIES.map((v) => ({ v, label: `${v}` }))} onChange={setCapacity} />
         </Row>
         <Row label="Seed" hint="The same seed grows the same valley.">
           <input className="seed" type="number" min={0} max={4294967295} value={worldSeed} aria-label="Valley seed" onChange={(e) => setWorldSeed(Math.max(0, Math.floor(Number(e.target.value) || 0)) >>> 0)} />

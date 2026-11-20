@@ -10,9 +10,9 @@ import { grow } from '../engine/grow';
 import { coherence } from '../engine/morphospace';
 import type { Genome } from '../engine/genome';
 import { genomeOfMorphotype, randomGenome, type SymmetryMode } from '../engine/random';
-import { autosave, installWorld, worldForSave, worldSummary } from '../world/worldStore';
+import { autosave, installWorld, valleyReady, worldForSave, worldSummary } from '../world/worldStore';
 import {
-  cleanName, newSaveId, packGame, parseSave, saveFileName, serializeSave, type Ecosystem, type SavedGame, type SaveHeader, type SaveStore, type SaveSummary,
+  cleanName, newSaveId, packGame, parseSave, saveFileName, serializeSave, type CastEntry, type Ecosystem, type GameSetup, type SavedGame, type SaveHeader, type SaveStore, type SaveSummary,
 } from './saves';
 import { lastGameView, saveSessionNow, useStore, type GameView } from './store';
 
@@ -22,6 +22,12 @@ export interface NewGameOptions {
   symmetry: SymmetryMode;
   worldSeed: number;
   ecosystem: Ecosystem;
+  /** the cast the player chose (absent: the ecosystem's own) */
+  cast?: CastEntry[];
+  /** how many creatures the valley can hold (absent: the first of CAPACITIES) */
+  capacity?: number;
+  /** a scenario to play the valley as (absent: a free valley) */
+  scenario?: string;
   startIn: GameView;
 }
 
@@ -32,7 +38,7 @@ export function founderFor(seed: number, kind: string | null, symmetry: Symmetry
 
 /** Begin a fresh game: a new lineage at the founder, a new (as yet unvisited) valley, on the chosen screen. */
 export function startNewGame(o: NewGameOptions): void {
-  const setup = { worldSeed: o.worldSeed >>> 0, ecosystem: o.ecosystem };
+  const setup: GameSetup = { worldSeed: o.worldSeed >>> 0, ecosystem: o.ecosystem, ...(o.cast ? { cast: o.cast.map((e) => ({ ...e })) } : {}), ...(o.capacity ? { capacity: o.capacity } : {}), ...(o.scenario ? { scenario: o.scenario } : {}) };
   grow(o.founder); // (a founder that will not grow stops here, with nothing replaced)
   installWorld(setup, null);
   useStore.getState().newGame(o.founder, o.symmetry, { id: null, name: cleanName(o.name), setup });
@@ -77,6 +83,7 @@ export function captureGame(name: string, id: string | null, now: number): Saved
 /** Save the game to a slot (`id` to overwrite one; none for a new slot). The game then knows that slot
  *  as its own, so the next save offers to overwrite it. */
 export async function saveGame(store: SaveStore, name: string, id: string | null, now = Date.now()): Promise<SaveHeader> {
+  await valleyReady(); // (a save made as the page opens still holds the valley kept from last time)
   const g = captureGame(name, id, now);
   await store.put(g);
   useStore.getState().setGame({ id: g.id, name: g.name });

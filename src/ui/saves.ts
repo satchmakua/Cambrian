@@ -26,12 +26,21 @@ export const SAVE_V = 1;
 export const NAME_MAX = 48;
 
 /** What the valley starts with: the standard cast, half of it, or nothing but what the player releases. */
-export type Ecosystem = 'standard' | 'sparse' | 'empty';
+import { checkCast, type CastEntry, type Ecosystem } from '../sim/cast';
+import { CAPACITIES } from '../sim/model';
+import { scenarioById } from '../sim/scenarios';
+export type { CastEntry, Ecosystem };
 export const ECOSYSTEMS: readonly Ecosystem[] = ['standard', 'sparse', 'empty'];
 
 export interface GameSetup {
   worldSeed: number;
   ecosystem: Ecosystem;
+  /** the cast the player chose in the new-game panel (absent: the ecosystem's own) */
+  cast?: CastEntry[];
+  /** how many creatures the valley can hold (one of CAPACITIES; absent: the first) */
+  capacity?: number;
+  /** the scenario the valley is played as (see sim/scenarios.ts; absent: none) */
+  scenario?: string;
 }
 
 export const DEFAULT_SETUP: GameSetup = { worldSeed: 1, ecosystem: 'standard' };
@@ -150,12 +159,18 @@ const fail = (why: string): never => {
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
-function checkSetup(v: unknown): GameSetup {
+/** A set-up read from a save, a file or the browser, checked field by field. */
+export function checkSetup(v: unknown): GameSetup {
   if (!isObj(v)) return { ...DEFAULT_SETUP };
-  return {
+  const out: GameSetup = {
     worldSeed: finite(v.worldSeed) ? Math.floor(Math.abs(v.worldSeed)) >>> 0 : DEFAULT_SETUP.worldSeed,
     ecosystem: ECOSYSTEMS.includes(v.ecosystem as Ecosystem) ? (v.ecosystem as Ecosystem) : DEFAULT_SETUP.ecosystem,
   };
+  const cast = checkCast(v.cast);
+  if (cast) out.cast = cast;
+  if (finite(v.capacity) && CAPACITIES.includes(v.capacity) && v.capacity !== CAPACITIES[0]) out.capacity = v.capacity;
+  if (typeof v.scenario === 'string' && scenarioById(v.scenario)) out.scenario = v.scenario;
+  return out;
 }
 
 /** A lineage id is the breeder's counter ("0", "1", …): nothing else is one — so a name like

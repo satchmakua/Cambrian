@@ -177,6 +177,8 @@ function validateAppendage(o: unknown): AppendageGene {
     const w = within(a.web, [0, WEB_MAX], 'web');
     if (w > 0) out.web = w;
   }
+  // (fin ↔ leg: likewise optional)
+  if (a.form !== undefined) out.form = within(a.form, A.form, 'form');
   return out;
 }
 

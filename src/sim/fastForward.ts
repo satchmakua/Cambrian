@@ -53,8 +53,12 @@ export interface Chronicle {
   arose: string[];
   /** …and their ids (for portraits of their founders) */
   aroseIds: number[];
-  /** names of species that died out */
+  /** names of species that died out (not those whose line became another: see `became`) */
   lost: string[];
+  /** lines that took a new name: "ursid α → ursid β" */
+  became: string[];
+  /** young never born: bodies too far gone to live */
+  stillborn: number;
   population: [number, number];
 }
 
@@ -73,7 +77,11 @@ export function chronicle(before: { time: number; tally: World['tally']; species
     aged: t1.oldAge - t0.oldAge,
     arose: after.species.filter((s) => !known.has(s.id)).map((s) => s.name),
     aroseIds: after.species.filter((s) => !known.has(s.id)).map((s) => s.id),
-    lost: after.species.filter((s) => s.extinctAt !== null && !extinctBefore.has(s.id)).map((s) => s.name),
+    lost: after.species.filter((s) => s.extinctAt !== null && s.evolvedInto === null && !extinctBefore.has(s.id)).map((s) => s.name),
+    became: after.species
+      .filter((s) => s.evolvedInto !== null && !extinctBefore.has(s.id))
+      .map((s) => `${s.name} → ${after.species.find((x) => x.id === s.evolvedInto)?.name ?? '?'}`),
+    stillborn: (t1.stillborn ?? 0) - (t0.stillborn ?? 0),
     population: [before.pop, after.creatures.length],
   };
 }

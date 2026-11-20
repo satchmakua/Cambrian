@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { yearLook } from '../../src/world/seasonLook';
+import { yearLook } from '../../src/sim/seasonLook';
 import { DAY_LENGTH, YEAR_DAYS } from '../../src/sim/world';
 
 const at = (phase: number) => yearLook(phase * DAY_LENGTH * YEAR_DAYS);

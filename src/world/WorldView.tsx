@@ -11,11 +11,15 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { Genome } from '../engine/genome';
-import { WorldScene } from './WorldScene';
+import { WorldScene, captureStill } from './WorldScene';
 import { TreeOfLife } from './TreeOfLife';
 import { SpeciesCard } from './SpeciesCard';
-import { useWorldUi, getWorld, populate, strangerGenome, bumpVersion, autosave, downloadWorld, type Snapshot } from './worldStore';
-import { DAY_LENGTH, YEAR_DAYS, dayNumber, speciesById, stepWorld, type HistorySample } from '../sim/world';
+import { useWorldUi, getWorld, populate, starterCast, strangerGenome, bumpVersion, changed, autosave, downloadWorld, type Snapshot } from './worldStore';
+import { DAY_LENGTH, YEAR_DAYS, bredFromHere, dayNumber, liveCount, release, speciesById, stepWorld, type Creature, type HistorySample, type World } from '../sim/world';
+import { genomeOfMorphotype } from '../engine/random';
+import { MUTATION_DIAL, bloom, cull, forceWeather, glut, heal, makeBreed, setGodMode, setImmigration, setMutation, smite } from '../sim/god';
+import { inAdoptedLine } from '../sim/evolution';
+import { setRain, setWarmth, startEvent } from '../sim/levers';
 import { howItDiffers } from '../sim/lineage';
 import { usePortrait } from '../viewer/portrait';
 import { DrawnWhole, KeepPrograms, WarmShaders } from '../viewer/programs';
@@ -28,6 +32,7 @@ import { useStore } from '../ui/store';
 
 const SPEEDS = [1, 4, 16, 48];
 let DEV_WARMED = false;
+let DEV_CROWDED = false;
 
 const ACTION_LABEL: Record<string, string> = {
   wander: 'wandering',
@@ -132,7 +137,7 @@ function Bar({ label, v, color }: { label: string; v: number; color: string }) {
   );
 }
 
-export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { founder: Genome; onExit: () => void; onAdopt: (g: Genome) => void; onMenu?: () => void; onStatus?: (s: StageStatus) => void }) {
+export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu, onStatus }: { founder: Genome; lineageRoot?: Genome | null; onExit: () => void; onAdopt: (g: Genome) => void; onMenu?: () => void; onStatus?: (s: StageStatus) => void }) {
   const running = useWorldUi((s) => s.running);
   const speed = useWorldUi((s) => s.speed);
   const follow = useWorldUi((s) => s.follow);
@@ -144,7 +149,28 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
   const [showTree, setShowTree] = useState(() => import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('tree') === '1');
   const narration = useWorldUi((s) => s.narration);
   const panel = useWorldUi((s) => s.panel);
-  const { setRunning, setSpeed, setFollow, setEmotes, setDocumentary, setNarration, setSound, select, pick, setPanel, reset, open, releaseGenome, refresh, fastForward, stopFastForward, dismissChronicle } = useWorldUi.getState();
+  const { setRunning, setSpeed, setFollow, setEmotes, setDocumentary, setNarration, setSound, select, pick, setPanel, reset, open, releaseGenome, refresh, fastForward, stopFastForward, dismissChronicle, takeHome, clone, boost, setPlacing, godAct } = useWorldUi.getState();
+  const god = snap?.god ?? null;
+  // a god-mode act on the selected creature
+  const onSel = (act: (w: World, c: Creature) => boolean) => {
+    const id = useWorldUi.getState().selected;
+    godAct((w) => {
+      const c = w.creatures.find((x) => x.id === id);
+      return !!c && act(w, c);
+    });
+  };
+  const placing = useWorldUi((s) => s.placing);
+  // the release card: how many of the creature being bred to let go, and where
+  const [releasing, setReleasing] = useState(false);
+  const [releaseN, setReleaseN] = useState(6);
+  // (the species the breeder's line was bred from, if its first creature was taken home from here)
+  const bredFrom = useMemo(() => (lineageRoot ? bredFromHere(getWorld(), lineageRoot) : null), [lineageRoot, snap?.time]);
+  // (a count changed while placing applies to the next click; leaving the valley ends the placing)
+  useEffect(() => {
+    const p = useWorldUi.getState().placing;
+    if (p && p.kind === 'release' && p.count !== releaseN) setPlacing({ ...p, count: releaseN });
+  }, [releaseN, setPlacing]);
+  useEffect(() => () => setPlacing(null), [setPlacing]);
   const ff = useWorldUi((s) => s.ff);
   const chron = useWorldUi((s) => s.chronicle);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -218,7 +244,41 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
     ro.observe(h);
     return () => ro.disconnect();
   }, []);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [ownNotice, setNotice] = useState<string | null>(null);
+  const storeNotice = useWorldUi((s) => s.notice);
+  const notice = ownNotice ?? storeNotice;
+  useEffect(() => {
+    if (!storeNotice) return;
+    const t = setTimeout(() => useWorldUi.getState().notify(null), 4000);
+    return () => clearTimeout(t);
+  }, [storeNotice]);
+  const photo = useWorldUi((s) => s.photo);
+  // news of an adopted line: a split, a renaming, an extinction — each said for a while, with a way to it
+  const [lineNews, setLineNews] = useState<{ key: string; text: string; id: number }[]>([]);
+  const seenNews = useRef<string | null>(null);
+  useEffect(() => {
+    const evs = snap?.events;
+    if (!evs || evs.length === 0) return;
+    const keyOf = (e: { t: number; text: string }) => `${e.t}:${e.text}`;
+    const lastKey = keyOf(evs[evs.length - 1]);
+    if (seenNews.current === null) {
+      seenNews.current = lastKey; // (what was already in the journal when the valley opened is old news)
+      return;
+    }
+    if (lastKey === seenNews.current) return;
+    let from = evs.length - 1;
+    while (from >= 0 && keyOf(evs[from]) !== seenNews.current) from--;
+    seenNews.current = lastKey;
+    const w = getWorld();
+    const fresh = evs.slice(from + 1).filter((e) => (e.kind === 'speciation' || e.kind === 'extinction') && e.species !== undefined && inAdoptedLine(w, e.species));
+    if (fresh.length === 0) return;
+    setLineNews((l) => [...l, ...fresh.map((e) => ({ key: keyOf(e), text: e.text, id: e.species! }))].slice(-3));
+  }, [snap?.events]);
+  useEffect(() => {
+    if (lineNews.length === 0) return;
+    const t = setTimeout(() => setLineNews((l) => l.slice(1)), 12000);
+    return () => clearTimeout(t);
+  }, [lineNews]);
   useEffect(() => {
     if (!notice) return;
     const t = setTimeout(() => setNotice(null), 4000);
@@ -266,6 +326,11 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
         else setPanel(!ui.panel);
       } else if (e.code === 'Comma' || e.code === 'Period') {
         stepKin(e.code === 'Comma' ? -1 : 1);
+      } else if (e.code === 'KeyP' && !e.repeat) {
+        useWorldUi.getState().setPhoto(!useWorldUi.getState().photo);
+      } else if (e.code === 'KeyS' && !e.repeat && useWorldUi.getState().photo) {
+        e.preventDefault();
+        saveStill();
       }
     };
     window.addEventListener('keydown', key);
@@ -275,6 +340,17 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
 
   // first visit: populate the starter ecosystem (+ the breeder's creature)
   useEffect(() => {
+    // Dev/headless: ?crowd=N opens a valley with room for N, filled to the brim with the starter cast's
+    // kinds (to measure what a crowded valley costs to draw)
+    const crowd = import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('crowd') ?? 0) : 0;
+    if (crowd > 0 && !DEV_CROWDED) {
+      DEV_CROWDED = true;
+      reset(1, null, crowd);
+      const cw = getWorld();
+      const kinds = starterCast('standard');
+      for (let i = 0; liveCount(cw) < crowd && i < 400; i++) release(cw, genomeOfMorphotype((cw.seed * 97 + (i % kinds.length) * 13) >>> 0, kinds[i % kinds.length][0]), 6, undefined, kinds[i % kinds.length][0]);
+      bumpVersion();
+    }
     const w = getWorld();
     if (w.creatures.length === 0 && w.species.length === 0) {
       populate(w, founder);
@@ -333,6 +409,7 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
       }
       if (q.get('paused') === '1') setRunning(false);
       if (q.get('doc') === '1') setDocumentary(true);
+      changed(); // (the valley was run on, or its clock moved, here: whoever steps it goes on from this)
       bumpVersion();
     }
     refresh();
@@ -343,7 +420,7 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
   const kin = sel ? kinOf(sel.speciesId) : [];
   const kinAt = sel ? kin.findIndex((x) => x.id === sel.id) : -1;
   return (
-    <div className="world" ref={root}>
+    <div className={`world${placing ? ' placing' : ''}${photo ? ' photo' : ''}`} ref={root}>
       {/* the scene mounts paused while its shaders compile (in parallel, where the browser can), then runs */}
       <Canvas className="world-canvas" frameloop={!warm ? 'never' : menuOpen ? 'demand' : 'always'} shadows={quality.shadows} dpr={dprOf(quality, 1.75)} camera={{ position: [40, 38, 70], fov: 45, near: 0.2, far: 1200 }} gl={{ preserveDrawingBuffer: import.meta.env.DEV }}>
         <KeepPrograms />
@@ -389,18 +466,125 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
           )}
           <button className={emotes ? 'active' : ''} onClick={() => setEmotes(!emotes)} title="mood icons over the creatures: asleep, courting, alarmed, hunting">moods</button>
           <Menu label="+ release" title="release new animals into the valley">
-            <button onClick={() => releaseGenome(founder, 6)} title="release six of the creature you're breeding">six of your creature</button>
+            <button onClick={() => setReleasing(true)} title="release the creature you're breeding: as many as you like, where you click">{bredFrom ? `your line, bred from ${bredFrom.name}…` : 'your creature…'}</button>
             <button onClick={() => releaseGenome(strangerGenome((Date.now() * 2654435761) >>> 0), 6)} title="release six of a random new species">six strangers</button>
           </Menu>
+          {snap && (
+            <Menu label="🌦 climate" title="levers on the environment: a colder or warmer age, a drier or wetter valley, and what may befall it (told in the journal)">
+              <span className="menu-sub">the age</span>
+              <span className="menu-dial">
+                {[-1, -0.5, 0, 0.5, 1].map((x) => (
+                  <button key={x} className={snap.levers.warmth === x ? 'active' : ''} onClick={() => godAct((w) => setWarmth(w, x))} title={x === 0 ? 'the valley’s own climate' : x < 0 ? 'a colder age' : 'a warmer age'}>
+                    {x === -1 ? '❄❄' : x === -0.5 ? '❄' : x === 0 ? '·' : x === 0.5 ? '☀' : '☀☀'}
+                  </button>
+                ))}
+              </span>
+              <span className="menu-sub">the rains</span>
+              <span className="menu-dial">
+                {[0.5, 0.75, 1, 1.25, 1.5].map((x) => (
+                  <button key={x} className={snap.levers.rain === x ? 'active' : ''} onClick={() => godAct((w) => setRain(w, x))} title={x === 1 ? 'the valley’s own rains' : x < 1 ? 'a drier valley' : 'a wetter valley'}>
+                    {x}×
+                  </button>
+                ))}
+              </span>
+              <span className="menu-sub">events</span>
+              <button onClick={() => godAct((w) => startEvent(w, 'ice-age'))} title="four years of hard cold, and snow that does not melt">an ice age</button>
+              <button onClick={() => godAct((w) => startEvent(w, 'ash-winter'))} title="a volcano far off: three days of cold and dark, little growing">an ash winter</button>
+              <button onClick={() => godAct((w) => startEvent(w, 'meteor'))} title="most of the big animals killed at a stroke, and dust after">a meteor</button>
+            </Menu>
+          )}
+          {god?.on && (
+            <Menu label="⚡ god" title="god mode: the valley is yours to change (every act is told in the journal)">
+              <button onClick={() => godAct(bloom)} title="the lake as rich as it can be">algae bloom</button>
+              <button onClick={() => godAct(glut)} title="every bush and tree in full fruit">fruit glut</button>
+              <button onClick={() => godAct((w) => forceWeather(w, 'rain'))} title="a shower, now, for half a day">rain now</button>
+              <button onClick={() => godAct((w) => forceWeather(w, 'drought'))} title="a dry spell, now, for three days">drought now</button>
+              <button onClick={() => godAct((w) => setImmigration(w, !w.god.immigration))} title="whether founding stocks lost from the valley wander back in">
+                {god.immigration ? 'close the valley' : 'open the valley'}
+              </button>
+              <span className="menu-sub">births mutated</span>
+              <span className="menu-dial">
+                {MUTATION_DIAL.map((x) => (
+                  <button key={x} className={god.mutation === x ? 'active' : ''} onClick={() => godAct((w) => setMutation(w, x))} title={x === 1 ? "the valley's own rate" : `${x}× the valley's own rate`}>
+                    {x === 0.5 ? '½' : x}×
+                  </button>
+                ))}
+              </span>
+            </Menu>
+          )}
           <Menu label="world ▾" title="new, save and open worlds">
             <button onClick={() => reset((Date.now() >>> 0) % 100000, founder)} title="a fresh world">new world</button>
             <button onClick={downloadWorld} title="save this world to a file (it is also kept in your browser between visits)">save to a file</button>
+            {!snap?.scenario && (
+              <button onClick={() => godAct((w) => (setGodMode(w, !w.god.on), true))} title="a sandbox: strike creatures down, heal them, carry them, call down rain or drought (every act is told in the journal)">
+                {god?.on ? 'god mode: on' : 'god mode'}
+              </button>
+            )}
             <button onClick={() => fileRef.current?.click()} title="open a saved world file">open a file…</button>
           </Menu>
           <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => { void openFile(e.target.files?.[0]); e.target.value = ''; }} />
         </div>
         {notice && <div className="world-notice">{notice}</div>}
       </header>
+
+      {snap?.scenario && (
+        <div className={`goal goal-${snap.scenario.status}`} title={snap.scenario.goal}>
+          <b>{snap.scenario.status === 'won' ? 'Won' : snap.scenario.status === 'lost' ? 'Lost' : 'Goal'}</b> {snap.scenario.title} — {snap.scenario.progress}
+        </div>
+      )}
+      {lineNews.length > 0 && (
+        <div className="line-news">
+          {lineNews.map((n) => (
+            <div key={n.key} className="line-news-item">
+              <b>Your line</b> {n.text}
+              <button
+                onClick={() => {
+                  setCard(n.id);
+                  setLineNews((l) => l.filter((x) => x.key !== n.key));
+                }}
+              >
+                see
+              </button>
+              <button onClick={() => setLineNews((l) => l.filter((x) => x.key !== n.key))} title="dismiss">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {photo && (
+        <div className="photo-bar">
+          <span>Photo mode — drag and scroll to frame the shot</span>
+          <button onClick={saveStill} title="save the picture as it is now (S)">save a still</button>
+          <button onClick={() => useWorldUi.getState().setPhoto(false)} title="bring back the bar and the panels (P)">done</button>
+        </div>
+      )}
+      {placing && (
+        <div className="placing-hint">
+          {placing.kind === 'release' ? `Click the ground to release ${placing.count} there` : 'Click the ground to set it down there'}{' '}
+          <button onClick={() => setPlacing(null)}>{placing.kind === 'release' ? 'done' : 'cancel'}</button>
+        </div>
+      )}
+      {releasing && (
+        <div className="release-card">
+          <div className="critter-head">
+            <h3>Release {bredFrom ? <>your line <small>bred from {bredFrom.name}</small></> : 'your creature'}</h3>
+            <button onClick={() => { setReleasing(false); setPlacing(null); }} title="close">✕</button>
+          </div>
+          <p className="doing">
+            {bredFrom ? 'It joins the valley as a species of its own, a branch of the one it was bred from.' : 'It joins the valley as a species of its own.'}
+          </p>
+          <div className="release-row">
+            <span className="cast-n">
+              <button onClick={() => setReleaseN(Math.max(1, releaseN - 1))} aria-label="fewer">−</button>
+              <b>{releaseN}</b>
+              <button onClick={() => setReleaseN(Math.min(30, releaseN + 1))} aria-label="more">+</button>
+            </span>
+            <button className={placing?.kind === 'release' ? 'active' : ''} onClick={() => setPlacing(placing?.kind === 'release' ? null : { kind: 'release', genome: founder, count: releaseN, root: lineageRoot })} title="each click on the ground releases them there">
+              {placing?.kind === 'release' ? 'placing: click the ground' : 'where I click'}
+            </button>
+            <button onClick={() => releaseGenome(founder, releaseN, null, lineageRoot)} title="where its kind can live">anywhere</button>
+          </div>
+        </div>
+      )}
 
 
       {ff && (
@@ -433,15 +617,17 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
               ))}
             </div>
           )}
+          {chron.became.length > 0 && <p className="arose">Lines that changed: {chron.became.join(', ')}</p>}
           {chron.lost.length > 0 && <p className="lost">Died out: {chron.lost.join(', ')}</p>}
           {chron.arose.length === 0 && chron.lost.length === 0 && <p className="quiet">No species arose or died out.</p>}
+          {chron.stillborn > 0 && <p className="quiet">{chron.stillborn} young too misshapen to live were never born.</p>}
         </div>
       )}
 
       {snap && (
         <aside className="census">
           <h3>
-            Census <span>{snap.pop} alive</span>
+            Census <span>{snap.pop} alive{snap.aloft > 0 && <em className="aloft" title="in the air now"> · {snap.aloft} aloft</em>}</span>
             <button className={`tol-toggle${showTree ? ' active' : ''}`} onClick={() => setShowTree(!showTree)} title="every species the world has known, as a branching tree through time">tree of life</button>
           </h3>
           <PopulationChart history={snap.history} species={snap.species} />
@@ -459,8 +645,11 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
               >
                 <CensusIcon speciesId={s.id} hue={s.hue} />
                 <span className="sp-name">{s.name}</span>
-                <span className="sp-diet">{s.diet}</span>
-                <span className="sp-n">{s.extinct ? '†' : s.alive}</span>
+                <span className="sp-diet">
+                  {s.diet}
+                  {s.aloft > 0 && <em className="aloft" title={`${s.aloft} in the air now`}> ↑{s.aloft}</em>}
+                </span>
+                <span className="sp-n" title={s.became ? `became ${s.became}` : undefined}>{s.became ? '→' : s.extinct ? '†' : s.alive}</span>
               </li>
             ))}
           </ul>
@@ -504,13 +693,35 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
             <dt>bite</dt><dd>{sel.traits.attack.toFixed(1)}</dd>
             <dt>armour</dt><dd>{Math.round(sel.traits.defense * 100)}%</dd>
             <dt>mass</dt><dd>{sel.traits.mass.toFixed(2)}</dd>
+            <dt title="how well its body is made, against its line's first founder: a poorer one burns more and is passed over by mates">build</dt><dd>{Math.round(sel.fit * 100)}%</dd>
             <dt>offspring</dt><dd>{sel.children}{sel.kills ? ` · ${sel.kills} kills` : ''}</dd>
           </dl>
           <Lineage genome={sel.genome} speciesId={sel.speciesId} />
           <div className="critter-actions">
             <button className={follow ? 'active' : ''} onClick={() => setFollow(!follow)}>{follow ? 'following' : 'follow'}</button>
-            <button onClick={() => onAdopt(sel.genome)} title="make this creature the parent in the breeder">take home</button>
+            <button
+              onClick={() => {
+                takeHome(sel.id);
+                onAdopt(sel.genome);
+              }}
+              title="make this creature the parent in the breeder (released again, its line is a branch of its species)"
+            >
+              take home
+            </button>
+            <span className="clone">
+              <button onClick={() => clone(sel.id, 1)} disabled={!sel.alive} title="a grown copy of it, beside it">clone</button>
+              <button onClick={() => clone(sel.id, 5)} disabled={!sel.alive} title="five grown copies of it">×5</button>
+            </span>
           </div>
+          {god?.on && sel.alive && (
+            <div className="critter-actions god-actions">
+              <button onClick={() => onSel(heal)} title="healed, fed and rested">heal &amp; feed</button>
+              <button onClick={() => setPlacing({ kind: 'carry', id: sel.id })} className={placing?.kind === 'carry' ? 'active' : ''} title="pick it up: click the ground to set it down">carry</button>
+              <button onClick={() => onSel(makeBreed)} title="breed now, with the nearest grown one of its kind">breed</button>
+              <button onClick={() => onSel(smite)} title="struck dead where it stands">smite</button>
+              <button onClick={() => onSel(cull)} title="taken out of the valley, no carcass">cull</button>
+            </div>
+          )}
         </aside>
       )}
 
@@ -534,7 +745,7 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
         />
       )}
 
-      {snap && card !== null && <SpeciesCard id={card} at={snap.time} onClose={() => setCard(null)} onPick={setCard} onFollow={followOne} />}
+      {snap && card !== null && <SpeciesCard id={card} at={snap.time} onClose={() => setCard(null)} onPick={setCard} onFollow={followOne} onBoost={boost} onAdopt={(id, on) => useWorldUi.getState().adoptLine(id, on)} onPlague={(id) => godAct((w) => startEvent(w, 'plague', id))} />}
 
       {snap && (
         <footer className="journal">
@@ -547,6 +758,18 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
       )}
     </div>
   );
+}
+
+/** The scene as it is now, saved as a picture (photo mode's S). */
+function saveStill(): void {
+  const url = captureStill();
+  if (!url) return;
+  const w = getWorld();
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `cambrian-valley-${w.seed}-day${dayNumber(w.time)}.png`;
+  a.click();
+  useWorldUi.getState().notify('Still saved');
 }
 
 /** "a day", "3 days", "a season and a day"… for the chronicle's heading */

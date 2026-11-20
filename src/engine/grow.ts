@@ -334,7 +334,7 @@ export interface BodyNode {
   scale?: Vec3; // local-frame ellipsoid multipliers on `radius` (width/height/length); round if absent
   kind: 'spine' | 'limb' | 'terminal';
   terminal?: Terminal;
-  part?: { kind: PartKind; style: number; web?: number }; // which genome part grew this node (for render variants; `web`: see AppendageGene)
+  part?: { kind: PartKind; style: number; web?: number; form?: number }; // which genome part grew this node (for render variants; `web`, `form`: see AppendageGene)
   segment?: number; // spine nodes: which body section (0 = the trunk, 1 = the next child, …)
 }
 
@@ -348,7 +348,8 @@ export interface Phenotype {
 export function grow(genome: Genome): Phenotype {
   // M24: the bauplan pass pulls limbs onto a canonical layout + guarantees the face before building,
   // so every grown creature reads as a real body plan. The raw genome is kept as genomeRef (share/seed).
-  const dev = developBauplan(genome);
+  // (fins and legs take their form first: a fin grown into a leg is slotted like any other leg)
+  const dev = developBauplan(expressForm(genome));
   const rng = mulberry32(dev.seed);
   const nodes: BodyNode[] = [];
   const edges: [number, number][] = [];
@@ -1251,6 +1252,8 @@ export function grow(genome: Genome): Phenotype {
       const idx = addNode(pos, quat, r, last ? 'terminal' : 'limb', last ? app.terminal : undefined);
       // (a webbed ring's arms carry their web's reach, for the skin to stretch it between them)
       nodes[idx].part = app.web ? { kind: app.kind, style: app.style, web: app.web } : { kind: app.kind, style: app.style };
+      // (how far a fin has gone toward a leg, or a leg toward a flipper: traits read it off the body)
+      if (app.form !== undefined) nodes[idx].part!.form = app.form;
       // a SCULLING tail leaves the rump round and turns into a blade: its width falls away faster than
       // its depth, so from the side it stays tall to near the tip and from above it runs to a thin
       // line. (Round all the way down, a crocodile's tail was a cone — a rat's, scaled up.)
@@ -1300,6 +1303,96 @@ export function grow(genome: Genome): Phenotype {
       }
     }
   }
+}
+
+// =============================================================================
+// Form — fin ↔ leg (water ↔ land, by degrees)
+// =============================================================================
+
+/** A part that can move between fin and leg: any leg, and a paired fin mounted on the body's lower half
+ *  (a pectoral or pelvic fin — never a dorsal fin or a tail fan). */
+export function formable(a: AppendageGene): boolean {
+  if (a.kind === 'leg') return true;
+  if (a.kind !== 'fin' || !a.pair) return false;
+  const az = ((a.attachAzimuth % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  return az > Math.PI && az < Math.PI * 2;
+}
+
+/** The form a part has when its gene is absent: a fin is a fin (0), a leg a leg (1). */
+export function defaultForm(a: AppendageGene): number {
+  return a.kind === 'leg' ? 1 : 0;
+}
+
+/** where a fin swung down to stand as a leg aims: straight down, square to the body */
+const FORM_LEG_AZ = 4.6;
+const FORM_LEG_EL = 0.05;
+/** …and where a leg swept back into a flipper aims: out low on the flank, back along the body */
+const FORM_FLIPPER_AZ = 3.95;
+const FORM_FLIPPER_EL = -0.7;
+
+/**
+ * Give each formable part the shape its form calls for (on a copy; the genome itself is kept as it is).
+ *   a fin rising toward a leg (form above 0.25): its root grows into a fleshy lobe — more joints,
+ *     longer, thicker at the base, swung down under the body — and from 0.65 it is a leg with a foot;
+ *   a leg falling toward a fin (form below 0.6): it shortens and broadens into a paddle, sweeping back
+ *     along the flank — and from 0.35 down it is a flipper.
+ * Each step between is a body that can live: a lobe-finned fish crawls a little and swims well, a
+ * paddle-footed walker swims a little and walks well.
+ */
+export function expressForm(genome: Genome): Genome {
+  let any = false;
+  const scan = (s: SegmentGene | undefined): void => {
+    for (let x = s; x && !any; x = x.child) {
+      for (const a of x.appendages) {
+        if (a.form === undefined || !formable(a)) continue;
+        if (a.kind === 'fin' ? a.form > 0.25 : a.form < 0.6) any = true;
+      }
+    }
+  };
+  scan(genome.body);
+  if (!any) return genome;
+  const g = structuredClone(genome) as Genome;
+  for (let s: SegmentGene | undefined = g.body; s; s = s.child) {
+    const girth = (s.size[0] + s.size[1]) / 2;
+    // (a leg must reach below the body it carries: on a deep-bodied fish one sized to its girth stood
+    // hidden inside its flanks, only the feet showing under its belly)
+    const depth = s.size[1];
+    for (const a of s.appendages) {
+      if (a.form === undefined || !formable(a)) continue;
+      const f = clamp(a.form, AP.form);
+      if (a.kind === 'fin' && f > 0.25) {
+        const t = smooth01((f - 0.25) / 0.6);
+        // (the lobe swings down under the body late: a lobe-finned fish still holds its fins out to
+        // its sides, and only a walker stands on them)
+        const down = smooth01((f - 0.4) / 0.45);
+        a.segments = Math.max(a.segments, Math.round(lerp(1, 3, t)));
+        a.length = clamp(lerp(a.length, Math.max(a.length, depth * 0.95), t), AP.length);
+        a.thickness = clamp(lerp(a.thickness, girth * 0.17, t), AP.thickness);
+        a.taper = clamp(lerp(a.taper, 0.78, t), AP.taper);
+        a.attachAzimuth = lerp(a.attachAzimuth, FORM_LEG_AZ, down);
+        a.attachElevation = lerp(a.attachElevation, FORM_LEG_EL, down);
+        a.curl = [lerp(a.curl[0], -0.18, down), lerp(a.curl[1], 0, down)];
+        if (f >= 0.65) {
+          a.kind = 'leg';
+          a.terminal = 'foot';
+        }
+      } else if (a.kind === 'leg' && f < 0.6) {
+        // (above 0.6 a leg keeps its shape: a frog's or an otter's webbed feet swim, and look as they did)
+        const t = smooth01((0.6 - f) / 0.45);
+        a.segments = Math.max(1, Math.round(lerp(a.segments, 2, t)));
+        a.length = clamp(lerp(a.length, a.length * 0.85, t), AP.length);
+        a.thickness = clamp(lerp(a.thickness, a.thickness * 1.6, t), AP.thickness);
+        a.attachAzimuth = lerp(a.attachAzimuth, FORM_FLIPPER_AZ, t);
+        a.attachElevation = lerp(a.attachElevation, FORM_FLIPPER_EL, t);
+        a.curl = [lerp(a.curl[0], 0, t), lerp(a.curl[1], 0, t)];
+        if (f <= 0.35) {
+          a.kind = 'fin';
+          a.terminal = 'fin';
+        }
+      }
+    }
+  }
+  return g;
 }
 
 // =============================================================================

@@ -7,8 +7,7 @@
 import { useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { weatherAt } from '../sim/weather';
-import type { World } from '../sim/world';
+import { skyNow, type World } from '../sim/world';
 import { SEASON_LOOK } from './Landscape';
 import { useQuality } from '../ui/settings';
 
@@ -17,7 +16,7 @@ export const WEATHER_LOOK = { cloud: 0, rain: 0, snow: false, wet: 0, lastT: -1 
 
 /** Ease the shared look toward the weather at the world's time (call once a frame). */
 export function updateWeatherLook(w: World, dt: number): void {
-  const sky = weatherAt(w.seed, w.time);
+  const sky = skyNow(w); // (the weather, or the shower god mode called down)
   const L = WEATHER_LOOK;
   const k = Math.min(1, dt * 1.5);
   L.cloud += (sky.cloud - L.cloud) * k;

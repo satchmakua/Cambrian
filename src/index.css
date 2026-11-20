@@ -1145,6 +1145,266 @@ body,
   background: rgba(255, 255, 255, 0.06);
 }
 
+.release-card {
+  position: absolute;
+  z-index: 3;
+  top: calc(var(--bar-h, 50px) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(380px, calc(100vw - 32px));
+  padding: 10px 14px 12px;
+  border-radius: 10px;
+  background: rgba(20, 24, 33, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 13px;
+}
+
+.release-card h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.release-card h3 small {
+  display: block;
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.release-card .doing {
+  margin: 4px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.release-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.release-row .cast-n button {
+  padding: 3px 9px;
+}
+
+.world .placing-hint {
+  position: absolute;
+  z-index: 3;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 6px;
+  background: rgba(20, 24, 33, 0.9);
+  border: 1px solid var(--accent);
+  font-size: 12px;
+}
+
+.world.placing canvas {
+  cursor: crosshair;
+}
+
+.critter-actions.god-actions {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(240, 200, 120, 0.3);
+}
+
+.critter-actions.god-actions button {
+  border-color: rgba(240, 200, 120, 0.35);
+}
+
+.world-bar .menu-list .menu-sub {
+  display: block;
+  padding: 6px 10px 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.world-bar .menu-list .menu-dial {
+  display: flex;
+  gap: 2px;
+  padding: 0 6px 6px;
+}
+
+.world-bar .menu-list .menu-dial button {
+  flex: 1;
+  padding: 4px 0;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.world-bar .menu-list .menu-dial button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.critter-actions .clone {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.species-card .critter-head .adopt {
+  margin-left: auto;
+  margin-right: 6px;
+  padding: 2px 9px;
+  font-size: 11px;
+}
+
+.species-card .critter-head .adopt.active {
+  border-color: #f3d27b;
+  color: #f3d27b;
+}
+
+.species-card .film {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.species-card .film figure {
+  flex: 0 0 64px;
+  margin: 0;
+}
+
+.species-card .film img,
+.species-card .film .ph {
+  display: block;
+  width: 64px;
+  height: 48px;
+  border-radius: 4px;
+  object-fit: cover;
+  background: #0c0e13;
+}
+
+.species-card .film figcaption {
+  font-size: 10px;
+  color: var(--muted);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.species-card .boost {
+  padding: 1px 8px;
+  font-size: 11px;
+}
+
+/* photo mode: everything but the picture is hidden, and a slim bar says how to leave it */
+.world.photo .world-bar,
+.world.photo .census,
+.world.photo .critter,
+.world.photo .species-card,
+.world.photo .journal,
+.world.photo .cam-hint,
+.world.photo .doc-caption,
+.world.photo .release-card,
+.world.photo .placing-hint,
+.world.photo .chronicle,
+.world.photo .tree-of-life,
+.world.photo .line-news,
+.world.photo .photo-hidden {
+  display: none !important;
+}
+
+/* (at the foot of the view, above the camera hint: the top centre is the notices', the release card's and
+   the chronicle's) */
+.world .goal {
+  position: absolute;
+  z-index: 2;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(640px, calc(100vw - 32px));
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: rgba(20, 24, 33, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.world .goal b {
+  color: var(--accent);
+  margin-right: 4px;
+}
+
+.world .goal-won {
+  border-color: var(--accent);
+}
+
+.world .goal-lost b {
+  color: #e06a5f;
+}
+
+.journal .ev-goal {
+  color: #8fe0c0;
+  font-weight: 600;
+}
+
+.world.photo .goal {
+  display: none;
+}
+
+.world .line-news {
+  position: absolute;
+  z-index: 3;
+  top: calc(var(--bar-h, 50px) + 10px);
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: min(380px, calc(100vw - 32px));
+}
+
+.world .line-news-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px 7px 12px;
+  border-radius: 8px;
+  background: rgba(20, 24, 33, 0.92);
+  border: 1px solid rgba(243, 210, 123, 0.6);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.world .line-news-item b {
+  color: #f3d27b;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.world .line-news-item button {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.world .photo-bar {
+  position: absolute;
+  z-index: 4;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 14px;
+  border-radius: 8px;
+  background: rgba(20, 24, 33, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 12px;
+  opacity: 0.55;
+  transition: opacity 0.2s ease;
+}
+
+.world .photo-bar:hover {
+  opacity: 1;
+}
+
 .world-notice {
   position: absolute;
   top: 52px;
@@ -1295,6 +1555,11 @@ body,
   font-size: 10px;
 }
 
+.census .aloft {
+  color: #8fc7e8;
+  font-style: normal;
+}
+
 .census li .sp-n {
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -1384,6 +1649,7 @@ body,
 
 .critter-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 12px;
 }
@@ -1429,6 +1695,10 @@ body,
 }
 .journal .ev-climate {
   color: #e2c27a;
+}
+.journal .ev-god {
+  color: #f3d27b;
+  font-style: italic;
 }
 .season .dry {
   color: #e2c27a;
@@ -2305,6 +2575,94 @@ body,
   border-radius: 6px;
   background: #0c0e13;
   overflow: hidden;
+}
+
+.cast {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.cast ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 4px 10px;
+}
+
+.cast li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cast-face {
+  flex-shrink: 0;
+  width: 44px;
+  height: 33px;
+  border-radius: 5px;
+  background: #0c0e13;
+  overflow: hidden;
+}
+
+.cast-face img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cast-kind {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.cast-kind small,
+.cast-total,
+.cast-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.cast-empty {
+  margin: 0;
+}
+
+.cast-n {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cast-n b {
+  min-width: 20px;
+  text-align: center;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.cast-gap {
+  width: 26px;
+}
+
+.cast-add {
+  display: flex;
+  gap: 6px;
+}
+
+.cast-add input {
+  flex: 1;
+  min-width: 0;
 }
 
 .slot-portrait img {

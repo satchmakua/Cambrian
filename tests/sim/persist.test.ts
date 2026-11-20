@@ -28,14 +28,18 @@ describe('saving a world', () => {
     expect(saveWorld(b)).toBe(saveWorld(a));
   });
 
-  it('stores each genome once and keeps genome identity (founders stay their herds’ genomes)', () => {
+  it('stores each genome once and keeps genome identity (a herd’s founder is its first member’s genome)', () => {
     const a = living(4);
+    const inUse = new Set([...a.creatures.map((c) => c.genome), ...a.species.map((s) => s.founder), ...a.species.flatMap((s) => s.bank)]);
+    // (a release's animals are its genome a little varied: one genome each, the first the founder's own)
+    expect(inUse.size).toBe(8 + 6 + 6 + 7 + 3 + 2);
     const json = JSON.parse(saveWorld(a));
-    expect(json.genomes.length).toBe(6);
+    expect(json.genomes.length).toBe(inUse.size);
     const b = loadWorld(saveWorld(a));
     for (const sp of b.species) {
       const first = b.creatures.find((c) => c.species === sp.id);
       if (first) expect(first.genome).toBe(sp.founder);
+      for (const g of sp.bank) expect(g === sp.founder || b.creatures.some((c) => c.genome === g)).toBe(true);
     }
   });
 

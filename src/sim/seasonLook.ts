@@ -1,4 +1,9 @@
-import { DAY_LENGTH, YEAR_DAYS, seasonal, yearPhase } from '../sim/world';
+/**
+ * The year's look: how green the valley is, how much snow lies on it, how bare the broadleaves stand. Pure,
+ * a function of the time: the scene paints the land by it (world/Landscape.tsx), and the simulation reads
+ * the snow off it too — a coat is seen against the ground it stands on, white or green.
+ */
+import { DAY_LENGTH, YEAR_DAYS, seasonal, yearPhase } from './model';
 
 const window01 = (p: number, a: number, b: number, c: number, d: number) => {
   const up = (x: number, e0: number, e1: number) => {

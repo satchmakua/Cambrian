@@ -994,12 +994,16 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
 Principle: the player changes the pressures, never the animals directly. The breeder is the one place for
 artificial selection.
 
-- [ ] **1. Evolution you can see.** Works on any map, so it comes first.
+- [x] **1. Evolution you can see.** Works on any map, so it comes first.
   - Trait-over-time charts for a species (size, speed, coat, diet).
   - Species cards: where it lives, what it eats, what eats it, how it differs from its founder.
   - Causes of death, per species and over time.
   - The lineage film: a species' body over the generations as a strip of portraits.
   - Adopt a lineage: follow "your" species and be told when it splits or dies out.
+  **Done (2026-11-20).** The trait charts, cards and deaths by cause were there; added the film (a
+  species' typical body each dawn it has visibly changed, at most twelve frames, on its card) and adopted
+  lines (☆ on the card; a split, a renaming or an extinction anywhere in the line is announced, with a way
+  to its card).
 - [ ] **2. A planet with climate zones.** Built together, so terrain is rewritten once.
   - A small sphere you can rotate, with no map edge. Distant animals as simple markers, full bodies when
     zoomed in.
@@ -1007,17 +1011,35 @@ artificial selection.
   - Oceans and islands that isolate populations, so species split by geography.
   - Costs to plan for: terrain, movement, the grass grid, the camera, plant rendering and saves all assume
     a flat square today; the 165-creature cap is a rendering budget; old saves will not carry over.
-- [ ] **3. Selection that is real.** Traits matter differently by place.
+- [x] **3. Selection that is real.** Traits matter differently by place.
   - Camouflage: coat colour against the local ground changes how easily a hunter spots prey.
   - Mate choice: crests and bright colours attract mates and hunters alike.
   - Fur or bare skin against temperature; body size against cold.
   - Replace the per-species and per-guild quotas with ecological limits where the food web can carry it.
+  **Done (2026-11-20)** (sim/selection.ts). A coat is seen against the ground under it (the scene's own
+  colours, snow in the depth of winter): hunters spot a matched one only nearer, and a matched stalker
+  creeps nearer unseen. Crests, frills, a bright coat and a bold pattern draw mates and hunters alike. A
+  coat of fur or feathers is warm blood: a small body pays more for a hard winter than a big one, a big one
+  a little for a hot summer; the cold-blooded slow down instead. A grazer or a swimmer breeds only where
+  the grass and fruit, or the algae, around it can carry one more (`foodWebCarries`); a hunter is held by
+  what it catches (a gate on the prey in sight left no hunter past its fourth generation). The quotas stay
+  as the valley's ceiling, with the limits inside them, not in their place: loosened, the valley sat at its
+  hard cap, where no minority kind can breed. Ten fifty-year valleys with all of it: hunters past generation
+  20 in all ten (canids to 155, felids to 142), 80–148 alive and 6–13 kinds at the end; rodents reach
+  generation 20 in 6 of ten and one valley's median coherence fell to 0.54 — see "Selection's side effects".
 - [ ] **4. Levers on the environment.**
   - Shape it: sea level, temperature, rainfall, forests, a land bridge or a strait.
   - Events: an ice age, a volcano, a meteor, a plague, then watch what radiates into the gaps.
   - Introductions: release a bred design as an invader and see whether it lasts.
-- [ ] **5. Scenarios.** Goals that give a run a point: "get something to colonise the ice cap", "keep three
+  **Built (2026-11-20), but for the terrain:** the 🌦 climate menu sets a colder or warmer age and a drier or
+  wetter valley, and sets going an ice age, an ash winter or a meteor; "a plague on it" is on a species'
+  card (sim/levers.ts, each told in the journal, saved with the valley). Releases are the introductions.
+  Sea level, forests, a land bridge and a strait wait for the planet's terrain.
+- [x] **5. Scenarios.** Goals that give a run a point: "get something to colonise the ice cap", "keep three
   levels of the food chain alive for 100 years".
+  **Done for the valley (2026-11-20)** (sim/scenarios.ts): "Three levels for a century", "Through the ice
+  age" and "A walker takes wing", chosen in the new-game panel; the goal and where it stands at the foot of
+  the view, won or lost at a dawn, in the journal. The ice cap waits for the planet.
 
 #### What a 26-year valley showed (proposed 2026-11-20)
 
@@ -1045,7 +1067,7 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
   the panel stays closed. "year" moves the clock from Year 1 to Year 2. At 1100 px wide the bar wraps and
   the census starts below it.
 
-- [ ] **Species that can last.** A species is a population, not one mutant.
+- [x] **Species that can last.** A species is a population, not one mutant.
   - Split by clusters: once a day, a species with ≥ 8 alive whose members fall into two groups further
     apart than `SPECIATION_DIST`, each at least 4 strong, becomes two. A lone mutant is variation.
   - Mates mix: a child takes each numeric gene from either parent, and its plan from one, swapping parts
@@ -1054,14 +1076,32 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
     species' last living genomes, mutated a little each day, not from its founder.
   **Test:** ten seeds, fifty years each, headless. New species reach five members and live two years.
   Species of one are rare. Rodents, fish and birds pass generation 20.
+  **Done (2026-11-20).** Splits wait six dawns of two groups apart (`SPLIT_*`, sim/species.ts); a population
+  whose average body drifts past `SPECIATION_DIST` takes a new name ("felid α has become felid β"); mates
+  cross (engine/crossover.ts); immigrants come from a bank of the last eight living genomes. What it took
+  besides: a fish lake with food for its fish (algae ×2.3), the cold-blooded breeding on a fair meal, prey
+  that fears only hunters that hunt (it had spent two days in five running), a diet that holds across births
+  (`DIET_SHIFT`: within two years every canid had become a grazer), bigger litters for small bodies, hunters
+  weighing what prey is worth, and a minority floor of 16 (6 for hunters). Ten valleys, fifty years
+  (`scripts/valley-report.ts`): 9–23 lasting new species each, 0 species of one; generation 20
+  passed by birds in 10 of ten, fish in 9, rodents in 8 (not in valleys 11 and 17; with the selection round
+  on top of it — camouflage, display, the cold by size, food limits — birds 8, fish 9, rodents 6: see
+  "Selection's side effects" below).
 
-- [ ] **Bodies that hold together.** A body's viability, worked out at birth, has a price.
+- [x] **Bodies that hold together.** A body's viability, worked out at birth, has a price.
   - Viability comes from coherence, fused or useless limbs, node count against the plan's, asymmetry and
     contorted joints. Very low: the embryo fails. Low: dearer upkeep, less health and speed, fewer mates.
   - The valley's structural mutations follow the plan: pairs in canonical slots, only the plan's own
     parts. Each node costs upkeep, so a part that earns nothing shrinks away.
   **Test:** ten seeds, fifty years. The median coherence of the living stays ≥ 0.6, and nine bodies in
   ten stay within 1.3× their founder's node count. Lineages still drift far enough to split.
+  **Done (2026-11-20).** sim/viability.ts scores a body against its line's first founder (coherence lost,
+  node bloat, limb chains fused, curls contorted, symmetry lost): below 0.25 it is stillborn; above, its
+  upkeep is dearer and mates pass it over. The fin ↔ leg path is not charged (a walking fish reads as no
+  plan, but is its line's own). Ten valleys, fifty years: median coherence of the living 0.65–0.84 (with the
+  selection round, 0.54–0.86: one valley under 0.6, see below); nine bodies
+  in ten within 1.10–1.25× (1.08–1.19× with selection) of their founder's nodes; 9–23 (4–26 with selection)
+  lasting new species each.
 
 - [ ] **Water, land and air by degree.** Capacities replace the habitat label:
   - swim
@@ -1079,8 +1119,18 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
   **Test:** an otter-like forages on both sides of the shore. In seeded runs with a crowded lake and a rich
   shore, a fish lineage gains legs and spends a third of its time ashore in some seeds. In seeds without
   that opportunity it never does.
+  **Built (2026-11-20), one part of its test open.** Traits carry swim, walk and breath ashore (sim/traits.ts;
+  the habitat label is read off them). A paired fin's or a leg's `form` gene (0 fin … 1 leg) grows a lobe,
+  joints, a foot, or folds a leg to a paddle and a flipper (grow's `expressForm`); every step is viable, and
+  each step of crawl reaches further up the water's margin and what grows there (model's `canStand`). The
+  otter and the pinniped are morphotypes; the starter cast has fish, cephalopods, anurans and otters, and
+  the lake grows more. An otter forages both sides of the shore (fruit on the bank, algae in the lake), a
+  seal hauls out to sleep, a lobe-fin caught ashore makes for the water before its breath runs out (tests).
+  Open: in seeded shore runs (`--scenario shore`, sixty years) no fish line crossed to legs: fin form drifts
+  to 0.1–0.27 in shore and control valleys alike, so the push toward land is still too weak to see. Not
+  built: a fluke-to-tail gene.
 
-- [ ] **Flight by degree.** A lift ratio, wing area against mass^⅔, replaces `wings && mass < 9`.
+- [x] **Flight by degree.** A lift ratio, wing area against mass^⅔, replaces `wings && mass < 9`.
   - Below 0.4 there is no flight.
   - From 0.4 to 0.8, a glider: it launches from a height and can only come down.
   - Above that, powered flight, with its climb, speed and time aloft set by the ratio and its energy.
@@ -1092,8 +1142,18 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
     - the census's count of those aloft
   **Test:** a glider can't climb, and a heavy body with small wings can't take off. Gliders appear in some
   seeded runs with woods and ground predators. A flier's shadow shows at Low.
+  **Done (2026-11-20).** Lift is 0.6 (span/s)²/s off the wing's open span (`wingSpanFactor`, shared with the
+  drawn wing: below a gene of 0.15 a wing is a flap, scaled down); a leg's `web` is a patagium (a flank of
+  skin to the next leg behind, drawn in the skin field; its area carries a glide, never more), and drifts by
+  point mutation. Gliders leap and come down at their glide ratio; fliers climb and cruise by their spare
+  lift and pay more the less they have. Big fliers ride the thermals, high and cheap; fliers roost in the
+  broadleaves' crowns at night (sim/stands.ts lists the trees the scene draws), out of reach of walkers. A
+  soft shadow lies under anything aloft at every graphics level; the census counts those aloft. Tests: a
+  stub-winged or overweight bird stays down, a glider never climbs, roosting and soaring; over ten
+  fifty-year valleys gliders appeared in eight, never more than 28 at once (with webs drifting three times
+  as fast and costing nothing, in all ten, up to 87).
 
-- [ ] **The player's cast.**
+- [x] **The player's cast.**
   - New game: choose the kinds and their numbers (two or three aquatic by default), re-roll a kind's looks,
     or paste `CAM2:` strings. Each game's founders vary within their plan.
   - Take a creature home, breed it, and release it as its own named species, "bred from ursid α": as many
@@ -1101,15 +1161,25 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
   - Clone a creature ×N from its panel, or boost a species from the census.
   **Test:** two new games with different seeds show visibly different felids. A bred ungulate, released,
   appears in the census and the tree of life under its own name, with its parent recorded.
+  **Done (2026-11-20).** The new-game panel edits the cast (kinds, counts, ↻ another look, a pasted
+  `CAM2:`), kept with the game (sim/cast.ts); a look is a number, so a game keeps the founders it showed.
+  Felids of seeds 11 and 12 lie 0.09 apart in morphospace with different coats. "take home" notes the
+  creature's species; the breeder's line released again is "ungulate β, bred from ungulate α" (journal,
+  census, card, tree of life), as many as you like, where you click. Clone ×1/×5 on the panel, "+5 more"
+  on the species card.
 
-- [ ] **God mode.** A sandbox switch, off in scenarios, with every act told in the journal.
+- [x] **God mode.** A sandbox switch, off in scenarios, with every act told in the journal.
   - Creatures: clone, cull, smite, heal and feed, carry one elsewhere, make a pair breed.
   - The world: an algae bloom or a fruit glut, rain or a drought now, a mutation-rate dial, immigration on
     or off.
   **Test:** each act works from the panel, the census or the bar, and is told in the journal. With god
   mode off, none is offered.
+  **Done (2026-11-20).** sim/god.ts: heal and feed, carry (click the ground), make breed, smite (a carcass),
+  cull (none); a bloom, a glut, rain or a drought now (`skyNow`, `dryNow`), the mutation dial (0×–3×),
+  immigration on or off. Switched from the "world" menu; its acts sit on the creature panel and a ⚡ menu,
+  and are told in the journal in gold. Off, every act does nothing (tested); it is not offered in a scenario.
 
-- [ ] **Room for a planet.** Groundwork before the sphere:
+- [x] **Room for a planet.** Groundwork before the sphere:
   - `sim/world.ts` (about 2,000 lines) split by concern.
   - The simulation stepped in a worker, with the view drawing from snapshots.
   - Far creatures drawn as markers, so more can live than can be drawn whole.
@@ -1117,6 +1187,14 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
     the breeder shares) to IndexedDB.
   **Test:** a valley of 600 creatures holds its frame rate. A fifty-year valley saves and loads, and a
   reload continues bit-for-bit.
+  **Done (2026-11-20).** sim/world.ts (2,574 lines) is a facade over model, species, population, behaviour,
+  motion and fields. The valley is stepped in a worker (world/simWorker.ts); the page draws from a mirror
+  (sim/replica.ts) that frames keep exactly the world (a save of one is a save of the other, tested), and a
+  change made on the page hands the worker its world. Past 80 bu, and beyond the nearest 90, an animal is a
+  marker. A valley holds 165, 330 or 600 (chosen with the game). The valley's autosave is in IndexedDB
+  (ui/valleyStore.ts). On the laptop's RTX 5070 Ti: 600 creatures at 57 fps (330 at 59, an ordinary valley
+  60); at 16× the worker keeps 28 fps where the page managed 20. Ten fifty-year valleys (1.6–3.2 MB) each
+  reloaded as saved and ran on a day identically.
 
 - [ ] **The planet, in a branch** (item 2 above), in this order:
   1. A sphere that spins, with water and the line of day, and today's creatures walking on it.
@@ -1129,12 +1207,27 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
 
   The flat valley stays as a mode, so its saves still play.
 
-- [ ] **Smaller things the valley wants.**
+- [x] **Smaller things the valley wants.**
   - **No bead chains on the way in.** Bodies wear the capsule skin for several seconds while their smooth
     skins build. A coarse smooth skin should come first ("More headroom" plans the skin worker).
   - **A camera that goes where you point.** Zoom toward the pointer, a key that frames the whole valley,
     and saved views.
   - **A photo mode.** Hide the bar and panels, frame a shot, save a still.
+  **Done (2026-11-20).** A body with no skin yet asks for the coarse one as well, built first: a crowded
+  valley's bodies left their capsules in 6.2 s after the scene appeared, against 10.9 s (an ordinary one's
+  in under a second). The wheel zooms toward the pointer; `F` flies out to frame the valley; `Shift+1…4`
+  saves a view and `1…4` flies back to it. `P` is a photo mode (everything but the picture hidden; `S` or
+  its button saves a PNG).
+
+- [ ] **Selection's side effects, tuned.** The selection round of 2026-11-20 (camouflage, display, the
+  cold by size, food limits for grazers and swimmers) cost the small kinds and coherence a little: over ten
+  fifty-year valleys, rodents reach generation 20 in 6 (8 before it), birds in 8 (10), and one valley's
+  median coherence fell to 0.54 as its 13 kinds diverged (every other stayed at 0.64 or more). Two wrong
+  turns are already undone: a food gate on hunters (no hunter past its fourth generation) and loosened
+  quotas (the valley sat at its hard cap, where no minority kind can breed). To try: a grazer's food reckoned
+  by the needs of the mouths around it (a mouse eats less than a deer), shelter for small bodies in a hard
+  winter (a burrow, a huddle), and display weighed against a body's coherence.
+  **Test:** "Species that can last" and "Bodies that hold together" pass again with selection on.
 
 #### Creature looks (on hold while the simulation is worked on)
 
