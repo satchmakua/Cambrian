@@ -143,7 +143,8 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
   // (dev: ?tree=1 opens it, for inspection screenshots)
   const [showTree, setShowTree] = useState(() => import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('tree') === '1');
   const narration = useWorldUi((s) => s.narration);
-  const { setRunning, setSpeed, setFollow, setEmotes, setDocumentary, setNarration, setSound, select, reset, open, releaseGenome, refresh, fastForward, stopFastForward, dismissChronicle } = useWorldUi.getState();
+  const panel = useWorldUi((s) => s.panel);
+  const { setRunning, setSpeed, setFollow, setEmotes, setDocumentary, setNarration, setSound, select, pick, setPanel, reset, open, releaseGenome, refresh, fastForward, stopFastForward, dismissChronicle } = useWorldUi.getState();
   const ff = useWorldUi((s) => s.ff);
   const chron = useWorldUi((s) => s.chronicle);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -184,10 +185,39 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
   const followOne = (id: number) => {
     const c = getWorld().creatures.find((x) => x.species === id && x.alive);
     if (c) {
-      select(c.id);
+      pick(c.id);
       setFollow(true);
     }
   };
+  // The selected creature's living kin, in a fixed order: ‹ and › (or the , and . keys) step through
+  // them. Stepping by hand is browsing, so the documentary's director stands aside.
+  const kinOf = (speciesId: number) => getWorld().creatures.filter((x) => x.alive && x.species === speciesId).sort((a, b) => a.id - b.id);
+  const stepKin = (d: number) => {
+    const cur = useWorldUi.getState().selected;
+    const me = cur === null ? undefined : getWorld().creatures.find((x) => x.id === cur);
+    if (!me) return;
+    const kin = kinOf(me.species);
+    if (kin.length === 0) return;
+    const i = kin.findIndex((x) => x.id === me.id);
+    const at = i < 0 ? (d > 0 ? -1 : 0) : i; // (it died: step on from where it stood)
+    const next = kin[(at + d + kin.length) % kin.length];
+    if (next.id === me.id) return;
+    if (useWorldUi.getState().documentary) setDocumentary(false);
+    pick(next.id);
+  };
+  // the bar's height, for the panels under it: on a narrow window its groups wrap onto a second row,
+  // and a panel pinned 60 px down sat over it
+  const root = useRef<HTMLDivElement>(null);
+  const bar = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const r = root.current, h = bar.current;
+    if (!r || !h || typeof ResizeObserver === 'undefined') return;
+    const fit = () => r.style.setProperty('--bar-h', `${Math.ceil(h.getBoundingClientRect().height)}px`);
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(h);
+    return () => ro.disconnect();
+  }, []);
   const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
     if (!notice) return;
@@ -218,15 +248,25 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
     };
   }, [autosaveMinutes]);
 
-  // Space stops and starts time (not while typing, nor while a button has the focus — Space presses it)
+  // Space stops and starts time (not while typing, nor while a button has the focus — Space presses it);
+  // I shows or hides the creature panel; , and . step to the previous or next one of its species
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.code !== 'Space' || e.repeat) return;
       if (useStore.getState().menuOpen) return; // (the menu is up: time is stopped, and stays stopped)
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
-      if (t && /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(t.tagName)) return;
-      e.preventDefault();
-      setRunning(!useWorldUi.getState().running);
+      if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+      if (e.code === 'Space') {
+        if (e.repeat || t?.tagName === 'BUTTON') return;
+        e.preventDefault();
+        setRunning(!useWorldUi.getState().running);
+      } else if (e.code === 'KeyI' && !e.repeat) {
+        const ui = useWorldUi.getState();
+        if (ui.selected === null) setNotice('Click a creature to open its panel');
+        else setPanel(!ui.panel);
+      } else if (e.code === 'Comma' || e.code === 'Period') {
+        stepKin(e.code === 'Comma' ? -1 : 1);
+      }
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
@@ -300,8 +340,10 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
   }, []);
 
   const sel = snap?.selected ?? null;
+  const kin = sel ? kinOf(sel.speciesId) : [];
+  const kinAt = sel ? kin.findIndex((x) => x.id === sel.id) : -1;
   return (
-    <div className="world">
+    <div className="world" ref={root}>
       {/* the scene mounts paused while its shaders compile (in parallel, where the browser can), then runs */}
       <Canvas className="world-canvas" frameloop={!warm ? 'never' : menuOpen ? 'demand' : 'always'} shadows={quality.shadows} dpr={dprOf(quality, 1.75)} camera={{ position: [40, 38, 70], fov: 45, near: 0.2, far: 1200 }} gl={{ preserveDrawingBuffer: import.meta.env.DEV }}>
         <KeepPrograms />
@@ -312,9 +354,9 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
         <WorldScene />
       </Canvas>
       {!warm && <div className="world-loading">Waking the world…</div>}
-      {warm && hints && <div className="cam-hint">drag to orbit · scroll to zoom · WASD or arrows to pan (Shift: faster)</div>}
+      {warm && hints && <div className="cam-hint">drag to orbit · scroll to zoom · WASD or arrows to pan (Shift: faster) · I: the creature panel</div>}
 
-      <header className="world-bar">
+      <header className="world-bar" ref={bar}>
         <h1>Cambrian</h1>
         <nav className="tabs">
           <button onClick={onExit}>Breed</button>
@@ -323,7 +365,7 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
         </nav>
         {snap && (
           <div className="clock">
-            <b>Day {snap.day}</b> <span className="season">{snap.season}{snap.dry > 0 && <span className="dry" title="a dry year: fewer showers, and the grass and the fruit come back slower"> · {snap.dry > 0.8 ? 'drought' : 'dry year'}</span>}</span>{snap.weather && <span className="weather">{snap.weather === 'overcast' ? '☁' : snap.weather.includes('snow') ? '❄' : '☂'} {snap.weather}</span>} <span>{clock(snap.phase)}</span> <span className="sky">{snap.night ? '☾ night' : '☀ day'}</span>
+            <b title={`a year in the valley is ${YEAR_DAYS} days, three to a season`}>Year {snap.year}</b> <span className="day">day {snap.day}</span> <span className="season">{snap.season}{snap.dry > 0 && <span className="dry" title="a dry year: fewer showers, and the grass and the fruit come back slower"> · {snap.dry > 0.8 ? 'drought' : 'dry year'}</span>}</span>{snap.weather && <span className="weather">{snap.weather === 'overcast' ? '☁' : snap.weather.includes('snow') ? '❄' : '☂'} {snap.weather}</span>} <span>{clock(snap.phase)}</span> <span className="sky">{snap.night ? '☾ night' : '☀ day'}</span>
           </div>
         )}
         <div className="transport">
@@ -337,7 +379,7 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
         <div className="skip" title="fast-forward: the world runs on at full speed, then you see what happened">
           <button disabled={!!ff} onClick={() => fastForward(DAY_LENGTH, 'a day')}>⏩ day</button>
           <button disabled={!!ff} onClick={() => fastForward(DAY_LENGTH * 3, 'a season')}>season</button>
-          <button disabled={!!ff} onClick={() => fastForward(DAY_LENGTH * YEAR_DAYS, 'a year')}>year</button>
+          <button disabled={!!ff} onClick={() => fastForward(DAY_LENGTH * YEAR_DAYS, 'a year')} title={`a year: ${YEAR_DAYS} days`}>year</button>
         </div>
         <div className="releases">
           <button className={sound ? 'active' : ''} onClick={() => setSound(!sound)} title="synthesized wind, birdsong and crickets, and the creatures' own calls">{sound ? '♪ sound' : '♪ sound off'}</button>
@@ -432,7 +474,7 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
         </aside>
       )}
 
-      {sel && (
+      {sel && panel && (
         <aside className="critter">
           <div className="critter-head">
             <h3>
@@ -440,7 +482,12 @@ export function WorldView({ founder, onExit, onAdopt, onMenu, onStatus }: { foun
                 {sel.species}
               </button>
             </h3>
-            <button onClick={() => select(null)} title="deselect">✕</button>
+            <div className="critter-nav">
+              <button onClick={() => stepKin(-1)} disabled={kin.length < 2} title="the previous one of its species (,)" aria-label="the previous one of its species">‹</button>
+              <span className="kin-n" title="which of its species' living members this is">{kinAt >= 0 ? `${kinAt + 1} of ${kin.length}` : `of ${kin.length}`}</span>
+              <button onClick={() => stepKin(1)} disabled={kin.length < 2} title="the next one of its species (.)" aria-label="the next one of its species">›</button>
+              <button className="close" onClick={() => setPanel(false)} title="close the panel (I opens it again)" aria-label="close the panel">✕</button>
+            </div>
           </div>
           <p className="doing">
             {sel.adult ? 'adult' : 'juvenile'} · gen {sel.generation} · <b>{sel.raiding ? 'raiding a nest' : sel.nesting && sel.action === 'wander' ? 'minding its nest' : ACTION_LABEL[sel.action] ?? sel.action}{sel.flying ? ' · on the wing' : ''}</b>

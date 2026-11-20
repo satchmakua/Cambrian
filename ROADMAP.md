@@ -1019,6 +1019,123 @@ artificial selection.
 - [ ] **5. Scenarios.** Goals that give a run a point: "get something to colonise the ice cap", "keep three
   levels of the food chain alive for 100 years".
 
+#### What a 26-year valley showed (proposed 2026-11-20)
+
+Read from a valley 301 days old (year 26): 7,714 births, 2,601 of them mutated, and 27 speciations. Every
+one of the 27 new species had a single member, ever, and died with it. Rodents, felids, insectoids and birds
+were still at generation 0–1, re-seeded by copies of their founders. Only the two big herbivores evolved,
+and their bodies came apart: the ursids went from 32 body nodes to as many as 74, coherence 0.71 → 0.56
+(the worst 0.29). The one aquatic species changed little, held down by the lake's algae. The birds did fly
+(half were aloft), but nothing on screen said so.
+
+- [x] **The valley's bar and creature panel, repaired.** The bar's menus ("+ release", "world") opened
+  under the creature panel. The panel's ✕ didn't close it: in documentary mode the director picked a new
+  subject at once. A year's fast-forward moved the day on twelve with no year shown, and zoom and
+  keyboard panning crawled.
+  - The bar sits above the side panels. On a narrow window it wraps onto a second row, and the panels sit
+    under it at its measured height (`--bar-h`).
+  - The creature panel: ‹ n of N › steps through its species' living members (`,` and `.` too). ✕ closes
+    the panel but keeps the selection, and the camera keeps following. `I` opens it again, and so does a
+    creature clicked.
+  - The clock shows the year beside the day: "Year 26 · day 301" (`yearNumber`, twelve days to a year).
+  - A wheel notch zooms 1.8× as far, a drag pans 1.4× as far, and the keys pan at 0.95 of the camera's
+    distance a second (0.6 before).
+  **Test:** select a creature and open "+ release": its list shows over the panel. ›, `.` and `,` step
+  through its kin. ✕ closes and `I` reopens the same creature. With documentary on and the panel closed,
+  the panel stays closed. "year" moves the clock from Year 1 to Year 2. At 1100 px wide the bar wraps and
+  the census starts below it.
+
+- [ ] **Species that can last.** A species is a population, not one mutant.
+  - Split by clusters: once a day, a species with ≥ 8 alive whose members fall into two groups further
+    apart than `SPECIATION_DIST`, each at least 4 strong, becomes two. A lone mutant is variation.
+  - Mates mix: a child takes each numeric gene from either parent, and its plan from one, swapping parts
+    where both plans match. Budding kinds stay clonal. Mates prefer their own look.
+  - Releases and new valleys start varied, not as clones. Immigrants come from a seed bank of the
+    species' last living genomes, mutated a little each day, not from its founder.
+  **Test:** ten seeds, fifty years each, headless. New species reach five members and live two years.
+  Species of one are rare. Rodents, fish and birds pass generation 20.
+
+- [ ] **Bodies that hold together.** A body's viability, worked out at birth, has a price.
+  - Viability comes from coherence, fused or useless limbs, node count against the plan's, asymmetry and
+    contorted joints. Very low: the embryo fails. Low: dearer upkeep, less health and speed, fewer mates.
+  - The valley's structural mutations follow the plan: pairs in canonical slots, only the plan's own
+    parts. Each node costs upkeep, so a part that earns nothing shrinks away.
+  **Test:** ten seeds, fifty years. The median coherence of the living stays ≥ 0.6, and nine bodies in
+  ten stay within 1.3× their founder's node count. Lineages still drift far enough to split.
+
+- [ ] **Water, land and air by degree.** Capacities replace the habitat label:
+  - swim
+  - walk: legs that can carry the body
+  - breathe water: gills, with a time limit ashore
+  - breathe air: a time limit under water
+  - stay moist: slime and bare skin dry out on land
+
+  The rest of the milestone:
+  - A `limbForm` gene from fin to leg, and a fluke-to-tail one, so the in-between forms can grow. A
+    pinniped and an otter-like join the morphotypes.
+  - Semi-aquatic lives: forage in the water and haul out to rest. A fish can flop into the shallows.
+  - The starter cast holds two or three aquatic species and a semi-aquatic one, and the lake grows more
+    food.
+  **Test:** an otter-like forages on both sides of the shore. In seeded runs with a crowded lake and a rich
+  shore, a fish lineage gains legs and spends a third of its time ashore in some seeds. In seeds without
+  that opportunity it never does.
+
+- [ ] **Flight by degree.** A lift ratio, wing area against mass^⅔, replaces `wings && mass < 9`.
+  - Below 0.4 there is no flight.
+  - From 0.4 to 0.8, a glider: it launches from a height and can only come down.
+  - Above that, powered flight, with its climb, speed and time aloft set by the ratio and its energy.
+  - A `wingDev` gene grows a wing from a flap, and a web of skin between the legs is a glider's patagium.
+  - Flight you can see:
+    - a shadow under everything aloft, at every graphics level
+    - higher flight paths and soaring
+    - perches in tree crowns
+    - the census's count of those aloft
+  **Test:** a glider can't climb, and a heavy body with small wings can't take off. Gliders appear in some
+  seeded runs with woods and ground predators. A flier's shadow shows at Low.
+
+- [ ] **The player's cast.**
+  - New game: choose the kinds and their numbers (two or three aquatic by default), re-roll a kind's looks,
+    or paste `CAM2:` strings. Each game's founders vary within their plan.
+  - Take a creature home, breed it, and release it as its own named species, "bred from ursid α": as many
+    as you like, where you click.
+  - Clone a creature ×N from its panel, or boost a species from the census.
+  **Test:** two new games with different seeds show visibly different felids. A bred ungulate, released,
+  appears in the census and the tree of life under its own name, with its parent recorded.
+
+- [ ] **God mode.** A sandbox switch, off in scenarios, with every act told in the journal.
+  - Creatures: clone, cull, smite, heal and feed, carry one elsewhere, make a pair breed.
+  - The world: an algae bloom or a fruit glut, rain or a drought now, a mutation-rate dial, immigration on
+    or off.
+  **Test:** each act works from the panel, the census or the bar, and is told in the journal. With god
+  mode off, none is offered.
+
+- [ ] **Room for a planet.** Groundwork before the sphere:
+  - `sim/world.ts` (about 2,000 lines) split by concern.
+  - The simulation stepped in a worker, with the view drawing from snapshots.
+  - Far creatures drawn as markers, so more can live than can be drawn whole.
+  - The valley's autosave moved from localStorage (880 KB at year 26, against a quota of about 5 MB that
+    the breeder shares) to IndexedDB.
+  **Test:** a valley of 600 creatures holds its frame rate. A fifty-year valley saves and loads, and a
+  reload continues bit-for-bit.
+
+- [ ] **The planet, in a branch** (item 2 above), in this order:
+  1. A sphere that spins, with water and the line of day, and today's creatures walking on it.
+  2. Procedural terrain, with climate by latitude and rain shadows. Biomes by temperature and rainfall,
+     each with its own plants and food.
+  3. The fields on a cube-sphere grid.
+  4. Far markers and more creatures.
+  5. Weather fronts, and seasons by hemisphere.
+  6. Saves, and the new-game planet options.
+
+  The flat valley stays as a mode, so its saves still play.
+
+- [ ] **Smaller things the valley wants.**
+  - **No bead chains on the way in.** Bodies wear the capsule skin for several seconds while their smooth
+    skins build. A coarse smooth skin should come first ("More headroom" plans the skin worker).
+  - **A camera that goes where you point.** Zoom toward the pointer, a key that frames the whole valley,
+    and saved views.
+  - **A photo mode.** Hide the bar and panels, frame a shot, save a still.
+
 #### Creature looks (on hold while the simulation is worked on)
 
 - [ ] **What the fourteenth look left.** A tail's or tentacle's spline hand-over (the chain blend stands

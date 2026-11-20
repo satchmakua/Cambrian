@@ -314,6 +314,11 @@ export function dayNumber(time: number): number {
 // --- seasons ----------------------------------------------------------------------------------------
 /** Days in a year: three per season. */
 export const YEAR_DAYS = 12;
+/** The year a moment falls in, from 1 (a year is YEAR_DAYS days: the clock shows it beside the day, so
+ *  a year's fast-forward reads as one). */
+export function yearNumber(time: number): number {
+  return Math.floor(time / (DAY_LENGTH * YEAR_DAYS)) + 1;
+}
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 const SEASONS: Season[] = ['spring', 'summer', 'autumn', 'winter'];
 /** 0..1 through the year (0 = the first morning of spring). */

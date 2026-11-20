@@ -483,6 +483,8 @@ const CONTROLS: { where: string; rows: [string, string][] }[] = [
       ['W A S D / arrows', 'Pan over the ground (Shift: faster)'],
       ['Space', 'Pause or run time'],
       ['Click a creature', 'Select it — then follow it, or take it home to breed'],
+      ['I', 'Close or open the selected creature’s panel'],
+      [', and .', 'The previous or next one of its species'],
       ['Click a census row', 'Follow one of that species'],
     ],
   },

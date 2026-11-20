@@ -307,11 +307,12 @@ function Cast({ world }: { world: World }) {
   });
   useSkinScheduler();
   const selected = useWorldUi((s) => s.selected);
-  const select = useWorldUi((s) => s.select);
+  // (a creature clicked is picked by hand: its panel opens, even if it had been closed)
+  const pick = useWorldUi((s) => s.pick);
   return (
     <>
       {world.creatures.map((c) => (
-        <Actor key={c.id} c={c} world={world} onPick={select} selected={c.id === selected} />
+        <Actor key={c.id} c={c} world={world} onPick={pick} selected={c.id === selected} />
       ))}
       <Nests world={world} />
       {world.corpses.map((k) => (
@@ -346,6 +347,8 @@ export function WorldScene() {
       <Precipitation />
       <Ambient />
       <Cast world={world} />
+      {/* (a wheel notch zooms nearly twice as far as the default, and a drag pans further: across a
+          valley 220 units wide the defaults crawled; the damping settles sooner, so a zoom ends crisply) */}
       <OrbitControls
         makeDefault
         target={[lake.lakeX, 0, lake.lakeZ + lake.lakeR * 0.9]}
@@ -353,6 +356,9 @@ export function WorldScene() {
         minDistance={1.2}
         maxDistance={220}
         enableDamping
+        dampingFactor={0.08}
+        zoomSpeed={1.8}
+        panSpeed={1.4}
       />
       <FollowCam />
       <KeyPan />

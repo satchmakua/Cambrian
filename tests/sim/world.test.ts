@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   createWorld, release, stepWorld, worldHash, bodyOf, liveCount, preysOn, STEP, DAY_LENGTH, MAX_POP, AIRBORNE, climate, seasonOf, YEAR_DAYS, COURT_TIME,
-  footprintGap,
+  footprintGap, dayNumber, yearNumber,
 } from '../../src/sim/world';
 import { traitsOf } from '../../src/sim/traits';
 import { saveWorld, loadWorld } from '../../src/sim/persist';
@@ -169,6 +169,15 @@ describe('seasons', () => {
     expect(winter.cold).toBeGreaterThan(0.8);
     // smooth: no jumps between neighbouring moments
     for (let t = 0; t < DAY_LENGTH * YEAR_DAYS; t += 30) expect(Math.abs(climate(t + 30).grass - climate(t).grass)).toBeLessThan(0.08);
+  });
+
+  it('the clock counts years as well as days: a year on is the next year, YEAR_DAYS days later', () => {
+    const year = DAY_LENGTH * YEAR_DAYS;
+    expect([0, year - 1, year, year * 25 + 10].map(yearNumber)).toEqual([1, 1, 2, 26]);
+    // (what the year button does: the day moves on twelve, the year on one)
+    const t = 288.4 * DAY_LENGTH;
+    expect(dayNumber(t + year) - dayNumber(t)).toBe(YEAR_DAYS);
+    expect(yearNumber(t + year) - yearNumber(t)).toBe(1);
   });
 });
 

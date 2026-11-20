@@ -16,7 +16,7 @@ import { adoptWorld, chronicle, snapshotForChronicle, type Chronicle } from '../
 import type { Genome } from '../engine/genome';
 import { genomeOfMorphotype, randomGenome } from '../engine/random';
 import {
-  AIRBORNE, createWorld, release, dayNumber, dayPhase, isNight, growthOf, speciesById, liveCount, seasonOf, type Season,
+  AIRBORNE, createWorld, release, dayNumber, yearNumber, dayPhase, isNight, growthOf, speciesById, liveCount, seasonOf, type Season,
   type World, type Action, type HistorySample, type WorldEvent,
 } from '../sim/world';
 import type { Traits } from '../sim/traits';
@@ -231,6 +231,8 @@ export interface Snapshot {
   weather: string;
   time: number;
   day: number;
+  /** the year it is (YEAR_DAYS days each), from 1 */
+  year: number;
   phase: number;
   night: boolean;
   pop: number;
@@ -263,7 +265,14 @@ interface WorldUi {
   setEmotes: (v: boolean) => void;
   setRunning: (v: boolean) => void;
   setSpeed: (v: number) => void;
+  /** set the subject (the camera director uses this too: it leaves the creature panel as it is) */
   select: (id: number | null) => void;
+  /** a creature picked by hand (clicked, stepped to, followed from the census): selected, and its panel
+   *  opened */
+  pick: (id: number) => void;
+  /** the selected creature's panel is showing (closed, the subject stays selected; I opens it again) */
+  panel: boolean;
+  setPanel: (v: boolean) => void;
   setFollow: (v: boolean) => void;
   refresh: () => void;
   /** Start a new world from a seed, populated with a starter ecosystem (and optionally `founder`). */
@@ -375,6 +384,7 @@ export function snapshotOf(w: World, selected: number | null): Snapshot {
     weather: weatherWord(weatherAt(w.seed, w.time)),
     time: w.time,
     day: dayNumber(w.time),
+    year: yearNumber(w.time),
     phase: dayPhase(w.time),
     night: isNight(w.time),
     pop: liveCount(w),
@@ -429,6 +439,12 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
   setRunning: (running) => set({ running }),
   setSpeed: (speed) => set({ speed }),
   select: (selected) => set({ selected, follow: selected !== null ? get().follow : false, snapshot: snapshotOf(getWorld(), selected) }),
+  pick: (id) => {
+    get().select(id);
+    set({ panel: true });
+  },
+  panel: true,
+  setPanel: (panel) => set({ panel }),
   setFollow: (follow) => set({ follow }),
   refresh: () => set({ snapshot: snapshotOf(getWorld(), get().selected) }),
   reset: (seed, founder) => {

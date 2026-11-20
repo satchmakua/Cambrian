@@ -24,9 +24,10 @@ export function keysToAxes(held: ReadonlySet<string>): PanAxes {
   };
 }
 
-/** Pan speed (bu/s) at a camera distance: proportional to the zoom, with a floor for close-ups. */
+/** Pan speed (bu/s) at a camera distance: proportional to the zoom, with a floor for close-ups. (At
+ *  0.6 of the distance a second, crossing the valley from a wide view took most of half a minute.) */
 export function panSpeed(distance: number, fast: boolean): number {
-  return Math.max(2.5, distance * 0.6) * (fast ? 2.5 : 1);
+  return Math.max(4, distance * 0.95) * (fast ? 2.5 : 1);
 }
 
 /**
