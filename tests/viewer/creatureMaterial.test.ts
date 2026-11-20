@@ -48,11 +48,13 @@ describe('shaggy plumage', () => {
     (mat.onBeforeCompile as (s: typeof shader) => void)(shader);
     mat.dispose();
     expect(shader.uniforms.uShag.value).toBe(1);
-    // the plumes return before the scallops' edge relief is applied
+    // the plumes take a height of their own: the scallops' edge relief is the other way through
     const frag = shader.fragmentShader;
-    const shag = frag.indexOf('if (uShag > 0.5)');
+    const shag = frag.indexOf('if (uShag > 0.5) {');
     expect(shag).toBeGreaterThan(0);
-    expect(frag.slice(shag, shag + 800)).toContain('return');
+    const other = frag.indexOf('} else {', shag);
+    expect(frag.slice(shag, other)).toContain('h = clamp(0.98 - l * 0.72 + (barbs - 0.5) * 0.05, 0.0, 1.0);');
+    expect(frag.indexOf('gHb = lay * 0.0075', shag)).toBeGreaterThan(other);
     // …and a flier's stays scalloped
     const flier = makeCreatureMaterial(g.palette, { ...g.covering, type: 'feathers' }, g.seed);
     const s2 = { uniforms: {} as Record<string, { value: unknown }>, vertexShader: THREE.ShaderLib.physical.vertexShader, fragmentShader: THREE.ShaderLib.physical.fragmentShader };
@@ -139,7 +141,7 @@ describe('creature material shader injection', () => {
     expect(s.fragmentShader).toContain('float h = gHb * uBump + hm;');
     // the pixel footprint is measured before any AA'd noise is evaluated
     const iFw = s.fragmentShader.indexOf('gFw = max(length(dPx), length(dPy))');
-    const iH = s.fragmentShader.indexOf('gH = surfaceHeight(bp, uCover);');
+    const iH = s.fragmentShader.indexOf('gH = surfaceHeight(bp);');
     expect(iFw).toBeGreaterThan(0);
     expect(iH).toBeGreaterThan(iFw);
   });
@@ -151,9 +153,9 @@ describe('creature material shader injection', () => {
     const s = compileShaderStrings();
     const f = s.fragmentShader;
     // the height one pixel across and one down, each evaluated at this pixel, before the height here
-    const iX = f.indexOf('surfaceHeight(bp + dPx, uCover);');
-    const iY = f.indexOf('surfaceHeight(bp + dPy, uCover);');
-    const iC = f.indexOf('gH = surfaceHeight(bp, uCover);');
+    const iX = f.indexOf('surfaceHeight(bp + dPx);');
+    const iY = f.indexOf('surfaceHeight(bp + dPy);');
+    const iC = f.indexOf('gH = surfaceHeight(bp);');
     expect(iX).toBeGreaterThan(0);
     expect(iY).toBeGreaterThan(iX);
     expect(iC).toBeGreaterThan(iY);
@@ -317,7 +319,7 @@ describe('creature material shader injection', () => {
     expect(f).toContain('vec3 t = flow - gNb * dot(flow, gNb);');
     expect(iLay).toBeGreaterThan(0);
     // … worked out before the relief is first read
-    expect(iLay).toBeLessThan(f.indexOf('surfaceHeight(bp + dPx, uCover);'));
+    expect(iLay).toBeLessThan(f.indexOf('surfaceHeight(bp + dPx);'));
 
     // The same arithmetic as the shader's scallops() (its loop pinned here line by line):
     expect(f).toContain('vec3 qs = vec3(q.x + 0.5 * q.z, q.y + 0.5 * q.z, q.z);');
@@ -466,13 +468,13 @@ describe('creature material shader injection', () => {
     // (squeezed along the body's length alone, and faint, the grain ran across a flank's lay: a coat seen
     // whole was a smooth stuffed sock with a fringe of fuzz round its outline)
     const f = compileShaderStrings('fur').fragmentShader;
-    const i = f.indexOf('if (cover == 2) {');
+    const i = f.indexOf('#elif COVER == 2');
     expect(i).toBeGreaterThan(0);
-    const branch = f.slice(i, f.indexOf('if (cover == 3) {', i));
+    const branch = f.slice(i, f.indexOf('#elif COVER == 3', i));
     expect(branch).toContain('fbmA(q - gLay * dot(q, gLay) * 0.75, FUR_LOCKS)');
     expect(branch).toContain('fbmA(s - gLay * dot(s, gLay) * 0.9, FUR_STRANDS)');
     // the locks and strands carry most of the coat's grain, not the broad clumps
-    const w = /return clumps \* ([0-9.]+) \+ locks \* ([0-9.]+) \+ streak \* ([0-9.]+);/.exec(branch)!;
+    const w = /h = clumps \* ([0-9.]+) \+ locks \* ([0-9.]+) \+ streak \* ([0-9.]+);/.exec(branch)!;
     expect(Number(w[2]) + Number(w[3])).toBeGreaterThan(0.7);
   });
 
@@ -480,16 +482,16 @@ describe('creature material shader injection', () => {
     // (flat-topped cells half a body unit across between dark seams: a dragon in a quilt, a turtle's shell; a
     // sea star of cracked clay)
     const f = compileShaderStrings('plates').fragmentShader;
-    const i = f.indexOf('if (cover == 6) {');
+    const i = f.indexOf('#elif COVER == 6');
     expect(i).toBeGreaterThan(0);
-    const branch = f.slice(i, f.indexOf('if (cover == 7', i));
+    const branch = f.slice(i, f.indexOf('#elif COVER == 7', i));
     expect(branch).toContain('voronoi(p * PLATE_CELL)');
     const num = (name: string) => Number(new RegExp(`const float ${name} = ([0-9.]+);`).exec(f)![1]);
     expect(num('PLATE_CELL')).toBeGreaterThan(3);
     // each a dome to its middle, not a plateau with a seam round it
     expect(branch).toMatch(/smoothstep\(0\.0, 0\.4\d? \+ gFw \* PLATE_CELL, F\.y - F\.x\)/);
     // its grooves only a shade darker: the grime's height runs 0.3–0.72, not 0–1
-    expect(branch).toContain('return clamp(0.72 - dome * 0.42, 0.0, 1.0);');
+    expect(branch).toContain('h = clamp(0.72 - dome * 0.42, 0.0, 1.0);');
   });
 
   it('every scale wears its own shade, so a scaled hide reads where its relief has faded below a pixel', () => {
@@ -522,9 +524,9 @@ describe('creature material shader injection', () => {
     // (a faint ripple alone was a pickle in a smear of highlight; Voronoi domes, creased against each other
     // where their cells met, caught the light facet by facet: hammered foil, a golf ball)
     const f = compileShaderStrings('slime').fragmentShader;
-    const i = f.indexOf('if (cover == 5) {');
+    const i = f.indexOf('#elif COVER == 5');
     expect(i).toBeGreaterThan(0);
-    const branch = f.slice(i, f.indexOf('if (cover == 6) {', i));
+    const branch = f.slice(i, f.indexOf('#elif COVER == 6', i));
     // smooth noise, laid along the body, longer than it is wide: no cell boundaries to crease
     expect(branch).toContain('fbmA(vec3(p.x, p.y, p.z * SLIME_LONG) * SLIME_CELL, SLIME_CELL)');
     expect(branch).not.toContain('voronoi(');
@@ -630,7 +632,7 @@ describe("each covering's relief is compiled only where it is worn", () => {
     expect(shell.defines!.USE_SCUTES).toBe('');
   });
 
-  it('wraps every covering branch of the relief in its own switch, balanced', () => {
+  it('wraps every covering branch of the relief in its own switch, one way through it, balanced', () => {
     const shader = { uniforms: {}, vertexShader: '#include <common>\n#include <project_vertex>', fragmentShader: '#include <common>' } as unknown as Parameters<NonNullable<ReturnType<typeof makeCreatureMaterial>['onBeforeCompile']>>[0];
     const pal = { hueA: 0.1, hueB: 0.6, sat: 0.6, light: 0.5 } as Parameters<typeof makeCreatureMaterial>[0];
     const m = makeCreatureMaterial(pal, { type: 'fur', pattern: 'plain', patternScale: 4, patternContrast: 0.5, sheen: 0.3 } as Parameters<typeof makeCreatureMaterial>[1], 1);
@@ -638,9 +640,57 @@ describe("each covering's relief is compiled only where it is worn", () => {
     const f = shader.fragmentShader;
     const from = f.indexOf('float surfaceHeight(');
     const body = f.slice(from);
-    for (let k = 1; k <= 7; k++) expect(body, `covering ${k}`).toMatch(new RegExp(`#if COVER == ${k}[^\\n]*\\n\\s*if \\(cover == ${k}`));
     expect(body).toContain('#if COVER == 0');
+    for (let k = 1; k <= 7; k++) expect(body, `covering ${k}`).toContain(`#elif COVER == ${k}`);
+    // (the covering is the program's own: no branch on it at run time, and one return — with an early
+    // return from each covering's branch, Direct3D's compiler warned on every program that the result
+    // might be used unset)
+    expect(body.startsWith('float surfaceHeight(vec3 p) {')).toBe(true);
+    expect(body).not.toMatch(/\bcover\b/);
+    expect(body.match(/\breturn\b/g)).toEqual(['return']);
+    // a bird's bare shanks take the scales' relief by a function of its own
+    expect(f).toContain('float scalesHeight(vec3 p) {');
+    expect(compileShaderStrings('feathers').fragmentShader).toContain('float hs = scalesHeight(bp * 2.6);');
     const opens = (f.match(/^#if/gm) ?? []).length, closes = (f.match(/^#endif/gm) ?? []).length;
     expect(opens).toBe(closes);
+  });
+});
+
+describe('a creature program Direct3D builds in a second or so', () => {
+  // (Chrome on Windows compiles shaders through Direct3D's FXC, which inlines every call and unrolls every
+  // loop whose count it knows: with each fbm's octaves unrolled at each of its calls, a furred coat's
+  // program took 4.0 s to build there, a bird's 5.3 s)
+  it("runs every octave loop to a count no compiler can know, and the octaves' own", () => {
+    const s = compileShaderStrings();
+    const f = s.fragmentShader;
+    expect(s.uniforms.uRoll).toEqual({ value: 0 });
+    expect(f).toContain('uniform int uRoll;');
+    expect(f).toContain('#define OCT(n) ((n) + uRoll)');
+    const loop = (fn: string) => {
+      const at = f.indexOf(fn);
+      expect(at, fn).toBeGreaterThan(0);
+      return /for \(int i = 0; i < ([^;]+); i\+\+\)/.exec(f.slice(at))![1];
+    };
+    expect(loop('float fbmA(')).toBe('OCT(5)');
+    expect(loop('float fbm3(')).toBe('OCT(3)');
+    expect(loop('float ridgedA(')).toBe('OCT(4)');
+    // each loop's second point is worked out before it, where Direct3D's compiler rounds it as it did when
+    // the loop was unrolled (reached in the loop, a few pixels of every creature changed by a shade there)
+    for (const [fn, step] of [['float fbmA(', 'p * 2.02 + 7.3'], ['float fbm3(', 'p * 2.02 + 7.3'], ['float ridgedA(', 'p * 2.03 + 3.7']]) {
+      const body = f.slice(f.indexOf(fn), f.indexOf('\n}\n', f.indexOf(fn)));
+      expect(body, fn).toContain(`vec3 p1 = ${step};`);
+      expect(body, fn).toContain(`p = i == 0 ? p1 : ${step};`);
+    }
+  });
+
+  it("takes a cut stone's slopes once, before the relief is read", () => {
+    // (a face's slopes are the pixel's own, the same wherever the relief is sampled)
+    const f = compileShaderStrings('crystal').fragmentShader;
+    const relief = f.slice(f.indexOf('float surfaceHeight('), f.indexOf('#include <color_fragment>'));
+    expect(relief).not.toMatch(/dFdx|dFdy|fwidth/);
+    const colour = f.slice(f.indexOf('#include <color_fragment>'));
+    expect(colour.indexOf('cutFacet();')).toBeGreaterThan(0);
+    expect(colour.indexOf('cutFacet();')).toBeLessThan(colour.indexOf('surfaceHeight(bp + dPx);'));
+    expect(f).toContain('void cutFacet() {');
   });
 });

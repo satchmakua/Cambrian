@@ -967,13 +967,27 @@ the engine's determinism discipline (seeded RNG only, headless-tested, `Math.ran
 - [ ] **What the front door left.**
   - The first entry to the breeder on a software renderer still holds the page for some seconds.
   - The valley is still too heavy for a software renderer: it warns, but is not lighter.
-  - The creature's shader still takes 4-5 s to build on Direct3D (a furred one, on either chip): one place
-    that reads the relief, not four.
-  - A lowering from High to Low builds the stage's shaders again (shadows off: 10 s more on the Radeon).
+  - The creature's shader now builds in a second or so on Direct3D, whatever its covering, on either chip:
+    FXC, the compiler Chrome's Direct3D path goes through, unrolls every loop whose count it knows, and the
+    noise octaves now run to a count it cannot know (`OCT`). Compile and link, the shader cache bypassed,
+    RTX 5070 Ti (the Radeon 610M within 0.1 s of it): skin 3.3 → 1.2 s, scales 2.2 → 1.0, fur 4.0 → 1.25,
+    fur with a bare tail 4.5 → 1.25, feathers with bare legs 5.3 → 1.6, chitin 3.4 → 1.15, slime 3.4 → 1.2,
+    plates 2.0 → 0.95, a tortoise's scutes 2.1 → 1.0, crystal 2.4 → 1.05. A first entry to the breeder has
+    every program built in 6 s, not 17, on either chip. 24 views of 15 plans render identical before and
+    after on SwiftShader and on the RTX; on the Radeon 6 of them differ by a shade in 1-4 pixels.
+  - Drawing a creature costs a little more since the octaves were rolled: a furred close-up with its twelve
+    shells 8-11% on the Radeon (71 → 77-78 ms a frame at 960×600, two measurements), 2% on the RTX; other
+    views 2-5%. Each loop's first octave worked out before it, so no step is chosen inside, gets that view to
+    6% but builds 60-90% slower (fur 2.0 s, a bird 3.0 s): what is left is the rolled loop itself.
+  - Not done: reading the relief in one place would take another 0.3 s off each program, but Direct3D then
+    rounds a few pixels a shade differently (2 of 24 views on the RTX, 8 on the Radeon).
+  - A tortoise shell's program still draws Direct3D's "potentially uninitialized variable" warning, from
+    the early return its pattern takes for the scutes (`patternField`).
+  - A lowering from High to Low builds the stage's shaders again (shadows off: 10 s more on the Radeon,
+    measured before the octaves were rolled).
   - On a built-in chip with 512 MB of its own memory, a second tab of the game in the valley leaves none
     for the first: a frame a second, the chip idle.
-  - Direct3D warns of a "potentially uninitialized variable" in the relief function on every creature
-    program, and one deleted program is still polled somewhere on the way in.
+  - One deleted program is still polled somewhere on the way in, and warns on the console.
 
 #### The simulation: making it a game (agreed 2026-11-17)
 

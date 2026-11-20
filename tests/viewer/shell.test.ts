@@ -75,7 +75,7 @@ describe("a tortoise's shell", () => {
     const pf = f.indexOf('float patternField(');
     expect(f.indexOf('if (uScuteN > 0)', pf)).toBeLessThan(f.indexOf('if (type == 0)', pf));
     const sh = f.indexOf('float surfaceHeight(');
-    expect(f.indexOf('if (uScuteN > 0)', sh)).toBeLessThan(f.indexOf('if (cover == 1)', sh));
+    expect(f.indexOf('if (uScuteN > 0)', sh)).toBeLessThan(f.indexOf('#if COVER == 0', sh));
     mat.dispose();
     // …and any other coat takes none
     const plain = makeCreatureMaterial(g.palette, g.covering, g.seed);
