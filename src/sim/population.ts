@@ -5,37 +5,35 @@
 import type { Genome } from '../engine/genome';
 import { STILLBORN } from './viability';
 import type { Traits } from './traits';
-import { heightAt, inBounds, WATER_LEVEL } from './terrain';
+import { WATER_LEVEL } from './terrain';
+import type { Place } from './surface';
 import { crossover } from '../engine/crossover';
 import { encodeGenome } from '../engine/share';
 import { mix32, unitHash } from '../engine/rng';
 import { mutate } from '../engine/mutate';
-import { aName, ALGAE_ENERGY, bodyOf, canStand, CORPSE_LIFE, FRUIT_ENERGY, GRASS_ENERGY, GRID_CELL, DECIDE_EVERY, growthOf, GUILD_SHARE, guildOf, HATCH_TIME, liveCount, log, MUTATION_CHANCE, RARE, RARE_HUNTER, softPop, SPECIES_SHARE, speciesById, WORLD_MUTATION, type Creature, type DeathCause, type Egg, type Species, type World } from './model';
+import { aName, ALGAE_ENERGY, bodyOf, canStand, CORPSE_LIFE, FRUIT_ENERGY, GRASS_ENERGY, DECIDE_EVERY, growthOf, GUILD_SHARE, guildOf, HATCH_TIME, liveCount, log, MUTATION_CHANCE, RARE, RARE_HUNTER, softPop, SPECIES_SHARE, speciesById, WORLD_MUTATION, type Creature, type DeathCause, type Egg, type Species, type World } from './model';
 import { fitOf, holdDiet, speciesFor, successorOf, variant } from './species';
 
-/** Find a spawn point suited to a habitat, near (cx, cz) if given. */
-export function spawnPoint(w: World, t: Traits, cx?: number, cz?: number, spread = 14): { x: number; z: number } {
+/** Find a spawn point suited to a habitat, near a place if given (within `spread` of it, along both axes). */
+export function spawnPoint(w: World, t: Traits, near?: Place, spread = 14): Place {
+  const S = w.surface;
   for (let i = 0; i < 400; i++) {
-    const far = cx === undefined || i > 200;
-    const x = far ? (w.rng() - 0.5) * w.terrain.size * 0.85 : (cx as number) + (w.rng() - 0.5) * spread;
-    const z = far ? (w.rng() - 0.5) * w.terrain.size * 0.85 : (cz as number) + (w.rng() - 0.5) * spread;
-    if (!inBounds(w.terrain, x, z, 8)) continue;
-    if (canStand(w, t, x, z)) return { x, z };
+    const p = near === undefined || i > 200 ? S.anywhere(w.rng, 0.85) : S.offset(near, (w.rng() - 0.5) * spread, (w.rng() - 0.5) * spread);
+    if (!S.inBounds(p, 8)) continue;
+    if (canStand(w, t, p)) return p;
   }
-  return { x: w.terrain.lakeX, z: w.terrain.lakeZ + w.terrain.lakeR * 1.3 };
+  return S.fallback();
 }
 
-export function spawn(w: World, genome: Genome, species: Species, x: number, z: number, adult: boolean, parent: Creature | null): Creature {
+export function spawn(w: World, genome: Genome, species: Species, at: Place, adult: boolean, parent: Creature | null): Creature {
+  const S = w.surface;
   const { traits } = bodyOf(genome);
   const c: Creature = {
     id: w.nextId++,
     species: species.id,
     genome,
     traits,
-    x,
-    z,
-    y: Math.max(heightAt(w.terrain, x, z), WATER_LEVEL - 10),
-    heading: w.rng() * Math.PI * 2,
+    ...S.standing(at, w.rng),
     speed: 0,
     energy: traits.maxEnergy * (adult ? 0.85 : 0.5),
     health: traits.maxHealth,
@@ -44,8 +42,7 @@ export function spawn(w: World, genome: Genome, species: Species, x: number, z: 
     lifeFactor: 0.85 + w.rng() * 0.3,
     action: 'wander',
     target: -1,
-    tx: x,
-    tz: z,
+    ...S.aimAt(at),
     decideIn: w.rng() * DECIDE_EVERY,
     breedCooldown: adult ? traits.lifespan * 0.03 * w.rng() : traits.maturity,
     generation: parent ? parent.generation + 1 : 0,
@@ -73,7 +70,7 @@ export function spawn(w: World, genome: Genome, species: Species, x: number, z: 
 }
 
 /** Release `count` adults of a genome into the world (a new species unless one has this founder). */
-export function release(w: World, genome: Genome, count: number, near?: { x: number; z: number }, label?: string, bredFrom?: Species): Creature[] {
+export function release(w: World, genome: Genome, count: number, near?: Place, label?: string, bredFrom?: Species): Creature[] {
   const { traits } = bodyOf(genome);
   // a full valley takes no one in (and founds no empty species)
   if (liveCount(w) >= w.cap) return [];
@@ -95,10 +92,10 @@ export function release(w: World, genome: Genome, count: number, near?: { x: num
   const base = near ?? spawnPoint(w, traits);
   const out: Creature[] = [];
   for (let i = 0; i < count && liveCount(w) < w.cap; i++) {
-    const p = spawnPoint(w, traits, base.x, base.z, 18);
+    const p = spawnPoint(w, traits, base, 18);
     // the first is the genome itself (the species' founder); the rest are its kin, a little varied
     const g = i === 0 ? genome : variant(genome, mix32(w.seed, w.nextId, i, 0x5ca7));
-    out.push(spawn(w, g, sp, p.x, p.z, true, null));
+    out.push(spawn(w, g, sp, p, true, null));
   }
   if (out.length > 0) sp.extinctAt = null;
   log(w, 'release', `${out.length} ${sp.name} released${bredFrom ? `, bred from ${bredFrom.name}` : ''}`, sp.id);
@@ -126,8 +123,8 @@ export function cloneCreature(w: World, c: Creature, n: number): Creature[] {
   if (!sp || !c.alive) return [];
   const out: Creature[] = [];
   for (let i = 0; i < n && liveCount(w) < w.cap; i++) {
-    const p = spawnPoint(w, c.traits, c.x, c.z, 6);
-    const k = spawn(w, c.genome, sp, p.x, p.z, true, null);
+    const p = spawnPoint(w, c.traits, c, 6);
+    const k = spawn(w, c.genome, sp, p, true, null);
     k.generation = c.generation;
     out.push(k);
   }
@@ -144,8 +141,8 @@ export function boostSpecies(w: World, sp: Species, n: number): Creature[] {
   const out: Creature[] = [];
   for (let i = 0; i < n && liveCount(w) < w.cap; i++) {
     const g = variant(stock[i % stock.length], mix32(w.seed, w.nextId, i, 0xb005));
-    const p = spawnPoint(w, bodyOf(g).traits, member.x, member.z, 12);
-    const k = spawn(w, g, sp, p.x, p.z, true, null);
+    const p = spawnPoint(w, bodyOf(g).traits, member, 12);
+    const k = spawn(w, g, sp, p, true, null);
     k.generation = member.generation;
     out.push(k);
   }
@@ -164,10 +161,7 @@ export function die(w: World, c: Creature, cause: DeathCause, carcass = true): v
   const g = growthOf(c);
   if (carcass) w.corpses.push({
     id: w.nextId++,
-    x: c.x,
-    z: c.z,
-    y: c.y,
-    heading: c.heading,
+    ...w.surface.remains(c),
     meat: (c.traits.maxEnergy * 0.8 + 30) * g * g,
     maxMeat: (c.traits.maxEnergy * 0.8 + 30) * g * g,
     rot: CORPSE_LIFE,
@@ -252,7 +246,7 @@ function capsAllow(w: World, c: Creature, reserve = false): boolean {
 export function roomToBreed(w: World, c: Creature, near: Creature[]): boolean {
   if (!capsAllow(w, c, true)) return false;
   let crowd = 0;
-  for (const o of near) if (o !== c && o.species === c.species && Math.hypot(o.x - c.x, o.z - c.z) < 9) crowd++;
+  for (const o of near) if (o !== c && o.species === c.species && w.surface.dist(c, o) < 9) crowd++;
   return crowd < 7 && foodWebCarries(w, c, near);
 }
 
@@ -274,17 +268,14 @@ const CARRY_ALGAE = 100;
 function foodWebCarries(w: World, c: Creature, near: Creature[]): boolean {
   const g = guildOf(c);
   if (g === 'hunter') return true;
+  const S = w.surface;
   let mouths = 1;
-  for (const o of near) if (o !== c && o.alive && guildOf(o) === g && Math.hypot(o.x - c.x, o.z - c.z) < CARRY_R) mouths++;
+  for (const o of near) if (o !== c && o.alive && guildOf(o) === g && S.dist(c, o) < CARRY_R) mouths++;
   const field = g === 'water' ? w.algae : w.grass;
   const per = g === 'water' ? ALGAE_ENERGY : GRASS_ENERGY;
-  const N = w.gridN, cell = GRID_CELL, half = w.terrain.size / 2;
-  const i0 = Math.max(0, Math.floor((c.x - CARRY_R + half) / cell)), i1 = Math.min(N - 1, Math.floor((c.x + CARRY_R + half) / cell));
-  const j0 = Math.max(0, Math.floor((c.z - CARRY_R + half) / cell)), j1 = Math.min(N - 1, Math.floor((c.z + CARRY_R + half) / cell));
-  let food = 0;
-  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) food += field[j * N + i];
+  let food = S.fieldNear(field, c, CARRY_R);
   food *= per;
-  if (g !== 'water') for (const p of w.plants) if (Math.abs(p.x - c.x) < CARRY_R && Math.abs(p.z - c.z) < CARRY_R) food += p.fruit * FRUIT_ENERGY;
+  if (g !== 'water') for (const p of S.plantsWithin(w.plants, c, CARRY_R)) if (S.inReach(c, p, CARRY_R)) food += p.fruit * FRUIT_ENERGY;
   return food >= (g === 'water' ? CARRY_ALGAE : CARRY_GRAZE) * mouths;
 }
 
@@ -339,14 +330,12 @@ export function breed(w: World, a: Creature, m: Creature | null): void {
       // an egg in the clutch: a ring of them around the mother's spot, hatching in a third of a day
       const ang = (i / Math.max(1, n)) * Math.PI * 2 + a.wanderSeed;
       const r = 0.35 + 0.12 * n;
-      const x = a.x + Math.sin(ang) * r, z = a.z + Math.cos(ang) * r;
+      const at = w.surface.around(a, ang, r);
       const id = w.nextId++;
       nest ??= id;
       w.eggs.push({
         id,
-        x,
-        z,
-        y: heightAt(w.terrain, x, z),
+        ...w.surface.laid(at),
         genome,
         species: species.id,
         mother: a.id,
@@ -354,21 +343,18 @@ export function breed(w: World, a: Creature, m: Creature | null): void {
         laidAt: w.time,
         hatchAt: w.time + HATCH_TIME * (0.85 + 0.3 * w.rng()),
         nest,
-        water: heightAt(w.terrain, a.x, a.z) < WATER_LEVEL,
+        water: w.surface.height(a) < WATER_LEVEL,
       });
       a.children++;
       m.children++;
       if (i === 0) log(w, 'birth', `${aName(species.name)} laid ${n > 1 ? `${n} eggs` : 'an egg'}`, species.id, a.id);
       continue;
     }
-    let x = a.x + (w.rng() - 0.5) * 3, z = a.z + (w.rng() - 0.5) * 3;
-    if (!canStand(w, ct, x, z)) {
-      x = a.x;
-      z = a.z;
-    }
-    const child = spawn(w, genome, species, x, z, false, a);
+    let at: Place = w.surface.offset(a, (w.rng() - 0.5) * 3, (w.rng() - 0.5) * 3);
+    if (!canStand(w, ct, at)) at = a;
+    const child = spawn(w, genome, species, at, false, a);
     w.tally.births++;
-    child.heading = a.heading + (w.rng() - 0.5);
+    w.surface.faceLike(child, a, w.rng() - 0.5);
     a.children++;
     if (m) m.children++;
     if (i === 0) log(w, 'birth', `${aName(species.name)} was born${m ? '' : ' (budded)'}`, species.id, child.id);
@@ -397,15 +383,12 @@ export function hatch(w: World): void {
     if (sp.extinctAt !== null) sp.extinctAt = null;
     const mum = w.creatures.find((c) => c.id === e.mother && c.alive) ?? null;
     const ct = bodyOf(e.genome).traits;
-    let x = e.x, z = e.z;
-    if (!canStand(w, ct, x, z) && mum) {
-      x = mum.x;
-      z = mum.z;
-    }
-    const child = spawn(w, e.genome, sp, x, z, false, mum);
+    let at: Place = e;
+    if (!canStand(w, ct, at) && mum) at = mum;
+    const child = spawn(w, e.genome, sp, at, false, mum);
     child.generation = e.generation;
     child.parent = e.mother;
-    child.heading = w.rng() * Math.PI * 2;
+    w.surface.faceAnywhere(child, w.rng);
     w.tally.births++;
     if (hatched++ === 0) log(w, 'birth', `${aName(sp.name)} hatched`, sp.id, child.id);
   }

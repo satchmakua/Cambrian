@@ -308,7 +308,7 @@ describe('room', () => {
       for (let j = i + 1; j < live.length; j++) {
         const a = live[i], b = live[j];
         if ((a.traits.habitat === 'water') !== (b.traits.habitat === 'water')) continue;
-        if (footprintGap(a, b) < -0.25 * (a.traits.radius + b.traits.radius)) deep++;
+        if (footprintGap(w, a, b) < -0.25 * (a.traits.radius + b.traits.radius)) deep++;
       }
     expect(deep).toBeLessThanOrEqual(1);
   });
@@ -326,12 +326,12 @@ describe('room', () => {
       c.speed = 0;
     }
     const b0 = { x: bear.x, z: bear.z }, m0 = { x: mouse.x, z: mouse.z };
-    const gap0 = footprintGap(bear, mouse);
+    const gap0 = footprintGap(w, bear, mouse);
     expect(gap0).toBeLessThan(0);
     run(w, 1);
     const bearMoved = Math.hypot(bear.x - b0.x, bear.z - b0.z);
     const mouseMoved = Math.hypot(mouse.x - m0.x, mouse.z - m0.z);
-    expect(footprintGap(bear, mouse)).toBeGreaterThan(gap0 * 0.2); // mostly eased apart in a second
+    expect(footprintGap(w, bear, mouse)).toBeGreaterThan(gap0 * 0.2); // mostly eased apart in a second
     expect(mouseMoved).toBeGreaterThan(bearMoved * 5);
   });
 

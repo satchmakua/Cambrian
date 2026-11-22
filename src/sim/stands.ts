@@ -10,7 +10,7 @@ import { biomeAt, heightAt, type Terrain } from './terrain';
 
 export interface Stand {
   x: number;
-  /** the ground under it */
+  /** the ground under it (a planet's tree: its place's third coordinate; its ground is `h`, planetGround.ts) */
   y: number;
   z: number;
   /** its size (1: an ordinary tree) */

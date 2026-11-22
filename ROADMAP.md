@@ -1196,14 +1196,112 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
   60); at 16× the worker keeps 28 fps where the page managed 20. Ten fifty-year valleys (1.6–3.2 MB) each
   reloaded as saved and ran on a day identically.
 
-- [ ] **The planet, in a branch** (item 2 above), in this order:
-  1. A sphere that spins, with water and the line of day, and today's creatures walking on it.
-  2. Procedural terrain, with climate by latitude and rain shadows. Biomes by temperature and rainfall,
-     each with its own plants and food.
-  3. The fields on a cube-sphere grid.
-  4. Far markers and more creatures.
-  5. Weather fronts, and seasons by hemisphere.
-  6. Saves, and the new-game planet options.
+- [ ] **The planet, in a branch** (item 2 above), in this order: first how it feels and how big it is,
+  then the one seam the simulation needs, and only then the planet itself. (The markers, the worker and
+  `world.ts` split by concern are done already, on the valley.)
+  1. [x] **A feel prototype: the planet lab** (dev: `/?lab=planet`, `src/lab/planet/`). Today's creatures,
+     the valley's starter cast at the valley's crowding (about 240 bu² of land each), on a bare planet:
+     noise continents, the valley's hills and colours, its trees, a sea, a shell of air. A globe camera
+     spins it from orbit and becomes the valley's orbit view near the ground (one camera, no switch); a
+     click follows an animal. Radius, relief, land and sun are sliders, and `?r=…&view=…&follow=1` makes a
+     shot repeatable. Throwaway. **Done (2026-11-21).** What it showed:
+     - **Size.** With a third of the planet land, the valley's 165 / 330 / 600 animals at its crowding
+       need radii of about 95 / 135 / 180 bu. From 10 bu up, the horizon is then 44–60 bu off and 19–25°
+       below level: a small world's curve, nothing like Earth's. The valley's 14 bu of relief makes a lumpy
+       limb from orbit.
+     - **Cost.** On the RTX 5070 Ti, 58–60 fps at the ground with about 25 bodies whole, once their first
+       skins and programs are built (the first ten seconds stall, as they do in the valley). On the Radeon
+       610M, 31–60 fps at the ground, and 60 in orbit over a 250 bu planet with 600 animals and its trees.
+     - **Countershading.** The creature shader shaded backs and bellies against the world's +Y, which is
+       wrong everywhere but the north pole. A shared switch (`setRadialUp`) shades them against the
+       planet's up; off, the valley and the bench are shaded exactly as before.
+     - **Coastlines.** Coloured at the grid's corners, every shore and wood's edge came out in steps a
+       cell wide. The ground is coloured per pixel from its interpolated height and damp instead.
+     **Chosen (2026-11-21): a big world.** A radius of 250–400 bu, 30 bu of relief and 60% land, and the
+     camera and controls kept as they are. Every one of these is set for each game, along with more besides
+     (step 7). What a planet that size means:
+     - **Room.** Its land is 12–30 valleys. At the valley's crowding that would be 1,950–5,000 animals; the
+       600 the largest valley holds leave each 800–2,000 bu² (the valley gives 242), and from the ground at
+       400 bu only 9–15 are near enough to draw whole. So step 6 raises the count (measured first: the
+       lab's 600 at 400 bu draw at 58–60 fps at the ground on the RTX 5070 Ti, 35–53 on the Radeon 610M),
+       and a game's founders start in one region and spread: a world that fills over the generations, its
+       far-flung lines kept apart by distance. Encounters per creature-day are the check.
+     - **Ground.** The lab's 256 cells a face are 2.5 bu at 400 bu (the valley's are 1), and its 3,000 trees
+       stand one to every 400 bu² of land (the valley's one to 100): the detail levels and culling of step 6
+       carry more weight on a big planet.
+  2. [x] **The `Surface` port, on the flat valley.** One interface for the ground (`src/sim/surface.ts`):
+     where a body is, how far from another, which way it faces and how it turns, what the ground is like
+     under it, and the few searches that need the ground's own shape (the spatial index, the nearest bush
+     and tree, the room bodies keep, the way off the water). The valley implements it
+     (`src/sim/valley.ts`), and behaviour, motion, population, species, god mode and selection ask it for
+     everything: they read no coordinate of their own. `src/sim/sphere.ts` is the planet's half to come:
+     great-circle steps with the heading carried along, turns, slides, and the equiangular cube-sphere
+     (cells within √2 of one another in area), all tested. **Done (2026-11-22).** What shows it:
+     - **The same valley, to the bit.** Each operation is the valley's old arithmetic, kept operation for
+       operation, and the creature, carcass and egg fields keep their order in a save. Three seeded
+       valleys run 24 days give the same save hashes at every sixth day as before the port (12 of 12;
+       `scripts/valley-fingerprint.ts`, the check for any change meant to change nothing). No cost: six
+       days of a valley in 6.41 s against 6.40.
+     - **Held there.** `tests/sim/surface-seam.test.ts` scans the simulation for a place's coordinates, a
+       heading's angle, a direct question to the terrain, the valley's own shape or an angle worked out by
+       hand: 200 such lines before the port, none after. 1041 tests pass.
+     - **In the game.** The valley runs in its worker on the branch at 16×, with no page errors.
+  3. [x] **A sphere that spins**, with water and the line of day, and today's creatures living on it: the
+     grid, movement, the spatial hash in 3D, the fields, terrain from noise alone. **Done (2026-11-22).**
+     What shows it:
+     - **The planet as a surface.** `src/sim/planetSurface.ts` implements the port the valley does, and
+       `createPlanet(spec)` makes a world on it; nothing else in the simulation changed. Places lie on the
+       sphere of its sea, and bodies move along great circles with their headings carried along
+       (`sphere.ts`). The spatial index is a 3D hash of 16 bu cells (its searches match a search of every
+       body, a test). The fields lie on the equiangular cube-sphere, 83,544 cells of about the valley's
+       4 bu at 300 bu. The nearest bush comes from grids of the plants, and the room bodies keep is
+       measured in each body's own tangent plane.
+     - **Ground from noise alone.** `src/sim/planetGround.ts` lays warped continents of fractal noise
+       under the valley's own hills, scaled to the relief and cut at the sea to the share of land. Heights
+       are sampled a tile at a time, as bodies first reach them. The biomes are the valley's, from height
+       and damp, and past 64° of latitude the poles are ice, where nothing grows. Its trees (up to 3,000) are the ones the
+       fliers roost in.
+     - **The line of day.** The sun goes round once a day and night is local: a place is dark once the
+       sun is 3.4° below its horizon, so half the world is dark at any hour (a test). The homeland's noon
+       falls at the valley's. In the lab, dusk shows the terminator with a red rim, and at night the birds
+       are in the trees.
+     - **A homeland.** The founders start in a cap of land with the valley's area for every 165 the world
+       may hold (the cap nearest three-quarters land, with water in reach), and spread from it. At cap 165
+       the median animal is 68 bu from its middle on day 1 and 111 on day 8, the farthest 400 bu off; at
+       cap 600 the farthest is 542 bu off (half the way round a 300 bu planet is 942).
+     - **It lives.** Headless (`scripts/planet-report.ts`; seed 7, 300 bu, 30 bu of relief, 60% land),
+       cap 165 holds 98–128 alive in 9–10 kinds over 8 days (deaths: 34 killed, 28 starved, 131 of old
+       age), and cap 600 climbs to 323–394 by day 2 and holds there. The same seed makes the same planet,
+       step for step (a test).
+     - **In the lab.** It is a real world now, stepped on the page, with the cast spawned as a game spawns
+       it. Bodies are whole within 80 bu (at most 90) and markers beyond. Bushes and their fruit, carcasses
+       and eggs are drawn where the simulation has them, with a clock, a census, and stop / 1× / 4× / 16×.
+       At 1×, following an animal on the ground: 60 fps on the RTX 5070 Ti with 36–40 bodies whole, and
+       37–46 on the Radeon 610M (56–61 in orbit). At 16× the page also steps the world: 24–61 fps on the
+       RTX and 21–48 on the Radeon, falling as up to 90 bodies fill in. The valley's worker takes the
+       stepping off the page when the planet comes into the game.
+     - **What it costs.** A planet day at cap 165 takes 2.1–3.6 s headless; a valley day takes about 1.1.
+       In a profile, about a quarter is the sphere's vector arithmetic (normalizing, arcs, headings, cube
+       faces). Another 11% is the heights (filling tiles as bodies first reach them, then the lookups), and
+       8% is regrowing 33 times the valley's field cells. Fewer short-lived vectors and regrowth by region
+       are for step 6's budgets.
+     - **The valley untouched.** Its 12 save hashes are the same as before the port. The seam guard counts
+       the planet's surface as a surface, and 1050 tests pass.
+  4. **Procedural terrain and water**: plates, stream-power erosion, Priority-Flood lakes and rivers, and
+     water bodies a swimmer can or cannot reach.
+  5. **Climate by latitude and rain shadows.** Biomes by temperature and rainfall, each with its own plants
+     and food: the food from a productivity curve anchored to the valley's own numbers.
+  6. **Weather fronts and seasons by hemisphere**, the air and clouds, culling and detail levels, more
+     creatures and founders that spread from a homeland, and the budgets on both GPUs.
+  7. **Regional immigration, sea level as a lever**, saves, and **a planet designer for every game**: its
+     planet types as presets (earthlike, archipelago, one great continent, desert world, ice world,
+     hothouse, highlands), each a set of sliders that can be moved on from: size, land, relief,
+     continents (a few large ↔ many islands), ruggedness, temperature (the ice caps and the snow line),
+     wetness (desert ↔ forest), tilt (seasons none ↔ harsh), the shallow seas (how much shelf the fish
+     get), and the seed, re-rolled. Each slider comes into the lab with the step that makes it real: size,
+     land and relief now; continents and ruggedness with the terrain (4); temperature and wetness with the
+     climate (5); tilt with the seasons (6). A game saves its settings and seed, and makes the same planet
+     from them every time.
 
   The flat valley stays as a mode, so its saves still play.
 

@@ -567,7 +567,7 @@ function GroundPicker({ world }: { world: World }) {
       else {
         // (carried: set down at the click, and the placing is done)
         const c = world.creatures.find((x) => x.id === placing.id);
-        if (c) ui.godAct((w) => carry(w, c, at.x, at.z));
+        if (c) ui.godAct((w) => carry(w, c, at));
         ui.setPlacing(null);
       }
     };

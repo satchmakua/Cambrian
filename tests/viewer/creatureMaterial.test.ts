@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { makeCreatureMaterial, markWeight, MARK_SOLID, setFineRelief, CUT_COAT, CUT_COAT_ROUGH } from '../../src/viewer/creatureMaterial';
+import { makeCreatureMaterial, markWeight, MARK_SOLID, setFineRelief, setRadialUp, CUT_COAT, CUT_COAT_ROUGH } from '../../src/viewer/creatureMaterial';
 import { PRESETS, qualityOf } from '../../src/ui/settings';
 import { defaultGenome, type CoveringType } from '../../src/engine/genome';
 
@@ -217,7 +217,7 @@ describe('creature material shader injection', () => {
     expect(f).toContain('if (uCover == 7) skin *= (uCut > 0.5 ? 0.9 + 0.2 * gFacet : 0.7 + 0.58 * gFacet) * (1.0 + (uCut > 0.5 ? 0.25 : 0.18) * gSeam);');
     // … and has no countershading: by its flat faces' normals whole faces snapped between the belly's,
     // the flank's and the back's tones (a camouflage of pale and dark patches)
-    expect(f).toContain('float up = uCut > 0.5 ? 0.5 : clamp(vWNrm.y * 0.5 + 0.5, 0.0, 1.0);');
+    expect(f).toContain('float up = uCut > 0.5 ? 0.5 : clamp(dot(vWNrm, vUpW) * 0.5 + 0.5, 0.0, 1.0);');
     expect(f).toMatch(/if \(uCover == 7\) totalEmissiveRadiance \+= uMain \* /);
     // the polish is the faces themselves: the clear coat takes each facet's tilt (three leaves a coat
     // on the smooth body under the relief — a glaze over the stone, the same mirror on every face)
@@ -692,5 +692,26 @@ describe('a creature program Direct3D builds in a second or so', () => {
     expect(colour.indexOf('cutFacet();')).toBeGreaterThan(0);
     expect(colour.indexOf('cutFacet();')).toBeLessThan(colour.indexOf('surfaceHeight(bp + dPx);'));
     expect(f).toContain('void cutFacet() {');
+  });
+});
+
+describe('countershading on a planet', () => {
+  it("shades a back against the world's +Y, or, switched, against the planet's up through the body", () => {
+    const s = compileShaderStrings();
+    const v = s.vertexShader, f = s.fragmentShader;
+    // the up is found in the vertex stage, beside the normal it is measured against, and handed on
+    expect(v).toContain('uniform float uRadial;');
+    expect(v).toContain('varying vec3 vUpW;');
+    expect(v).toContain('vUpW = uRadial > 0.5 ? normalize(modelMatrix[3].xyz) : vec3(0.0, 1.0, 0.0);');
+    expect(f).toContain('varying vec3 vUpW;');
+    expect(f).toContain('clamp(dot(vWNrm, vUpW) * 0.5 + 0.5, 0.0, 1.0)');
+    // (off, the up is +Y and the dot is the old vWNrm.y: the valley and the bench are shaded as before)
+    const u = s.uniforms.uRadial as { value: number };
+    expect(u.value).toBe(0);
+    // one uniform, shared: the switch reaches every coat already made
+    setRadialUp(true);
+    expect(u.value).toBe(1);
+    setRadialUp(false);
+    expect(u.value).toBe(0);
   });
 });

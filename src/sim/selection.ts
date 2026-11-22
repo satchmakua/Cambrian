@@ -16,7 +16,7 @@
  * mates choose and hunters are few, toward bulk where the winters bite. Pure.
  */
 import type { Genome, SegmentGene } from '../engine/genome';
-import { biomeAt, type Biome } from './terrain';
+import type { Biome } from './terrain';
 import { climateOf, leverSnow, seasonal, type Creature, type World } from './model';
 import { yearLook } from './seasonLook';
 import type { Traits } from './traits';
@@ -61,7 +61,7 @@ const DISRUPTIVE = new Set(['stripes', 'bands', 'spots', 'mottle', 'reticulate']
 
 /** 0 (melts into the ground under it) … 1 (stands out against it): a creature's coat, now. */
 export function conspicuity(w: World, c: Creature): number {
-  const b = biomeAt(w.terrain, c.x, c.z);
+  const b = w.surface.biome(c);
   let g = GROUND[b];
   // (snow lies on the land in the depth of winter, not on the lake)
   if (b !== 'deep' && b !== 'shallow') {

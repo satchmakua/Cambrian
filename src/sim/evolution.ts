@@ -5,7 +5,7 @@
  * Pure: reads a World, changes nothing.
  */
 import type { Genome } from '../engine/genome';
-import { biomeAt, type Biome } from './terrain';
+import type { Biome } from './terrain';
 import { howItDiffers } from './lineage';
 import { bodyOf, speciesById, type DeathTally, type Species, type TrendSample, type World, type FilmFrame } from './world';
 import type { Diet, Habitat } from './traits';
@@ -86,7 +86,7 @@ export function speciesProfile(w: World, id: number): SpeciesProfile | null {
   const t = members.find((c) => c.genome === now)?.traits;
   const ground = new Map<Biome, number>();
   for (const c of members) {
-    const b = biomeAt(w.terrain, c.x, c.z);
+    const b = w.surface.biome(c);
     ground.set(b, (ground.get(b) ?? 0) + 1);
   }
   const where = [...ground.entries()]

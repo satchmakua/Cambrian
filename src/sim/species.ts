@@ -13,6 +13,7 @@ import { viabilityOf } from './viability';
 import { BANK, bodyOf, canStand, DAY_LENGTH, descriptorOf, DIET_SHIFT, liveCount, log, SPECIATION_DIST, speciesById, SPLIT_DAYS, SPLIT_DIST, SPLIT_FROM, SPLIT_GAP, SPLIT_MIN, SPLIT_SHARE, VARIETY, type Creature, type Species, type World } from './model';
 import { spawn, spawnPoint } from './population';
 import { done } from './motion';
+import type { Place } from './surface';
 
 export function speciesFor(w: World, genome: Genome, parent: number | null, label?: string): Species {
   const { phenotype } = bodyOf(genome);
@@ -395,20 +396,20 @@ export function immigrate(w: World): void {
     // its first founders, which would undo everything the line had become
     const stock = sp.bank.length > 0 ? sp.bank : [sp.founder];
     const t = bodyOf(stock[0]).traits;
-    let at: { x: number; z: number } | undefined;
+    let at: Place | undefined;
     if (t.habitat !== 'water') {
+      // (in from the world's edge, where it may stand)
       for (let i = 0; i < 40 && !at; i++) {
-        const a = w.rng() * Math.PI * 2;
-        const x = Math.sin(a) * w.terrain.size * 0.42, z = Math.cos(a) * w.terrain.size * 0.42;
-        if (canStand(w, t, x, z)) at = { x, z };
+        const p = w.surface.edge(w.rng() * Math.PI * 2);
+        if (canStand(w, t, p)) at = p;
       }
     }
     const base = at ?? spawnPoint(w, t);
     const n = 3 + Math.floor(w.rng() * 3);
     let came = 0;
     for (let i = 0; i < n && liveCount(w) < w.cap; i++) {
-      const q = spawnPoint(w, t, base.x, base.z, 10);
-      spawn(w, variant(stock[i % stock.length], mix32(w.seed, day, sp.id, i, 0x1a7f)), sp, q.x, q.z, true, null);
+      const q = spawnPoint(w, t, base, 10);
+      spawn(w, variant(stock[i % stock.length], mix32(w.seed, day, sp.id, i, 0x1a7f)), sp, q, true, null);
       came++;
     }
     // no room for any of them: it stays extinct, and may try again at a later dawn
