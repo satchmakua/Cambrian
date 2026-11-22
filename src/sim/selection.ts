@@ -18,21 +18,15 @@
 import type { Genome, SegmentGene } from '../engine/genome';
 import type { Biome } from './terrain';
 import { climateOf, leverSnow, seasonal, type Creature, type World } from './model';
+import { BIOME_COLOUR, SNOW_COLOUR } from './palette';
 import { yearLook } from './seasonLook';
 import type { Traits } from './traits';
 
 type RGB = [number, number, number];
 
-/** the ground's colours, as the scene paints them (world/Landscape.tsx) */
-const GROUND: Record<Biome, RGB> = {
-  deep: hex(0x3d4a3f),
-  shallow: hex(0x3d4a3f),
-  sand: hex(0xb8a77c),
-  meadow: hex(0x5f8f3a),
-  wood: hex(0x3f5f2c),
-  rock: hex(0x77736c),
-};
-const SNOW = hex(0xd8d8d2);
+/** the ground's colours, as the scene paints them (the one palette: palette.ts) */
+const GROUND = Object.fromEntries(Object.entries(BIOME_COLOUR).map(([b, c]) => [b, hex(c)])) as Record<Biome, RGB>;
+const SNOW = hex(SNOW_COLOUR);
 
 function hex(h: number): RGB {
   return [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];

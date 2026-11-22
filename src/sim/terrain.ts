@@ -15,7 +15,8 @@ import { mulberry32 } from '../engine/rng';
 export const WORLD_SIZE = 200;
 export const WATER_LEVEL = 0;
 
-export type Biome = 'deep' | 'shallow' | 'sand' | 'meadow' | 'wood' | 'rock';
+/** What grows at a place: the valley's six, and the rest a planet's climate brings (planetGround.ts). */
+export type Biome = 'deep' | 'shallow' | 'sand' | 'meadow' | 'wood' | 'rock' | 'marsh' | 'desert' | 'savanna' | 'jungle' | 'taiga' | 'tundra' | 'ice';
 
 export interface Terrain {
   seed: number;

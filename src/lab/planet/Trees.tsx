@@ -155,7 +155,7 @@ export function Trees({ ground }: { ground: PlanetGround }) {
     });
   });
   return (
-    <group key={`${shape.seed}:${shape.radius}:${shape.relief}:${shape.land}:${shape.continents}:${shape.rugged}`}>
+    <group key={`${shape.seed}:${shape.radius}:${shape.relief}:${shape.land}:${shape.continents}:${shape.rugged}:${shape.temperature}:${shape.wetness}`}>
       <instancedMesh ref={trunkRef} args={[geos.trunk, mats.trunk, Math.max(1, trees.length)]} count={trees.length} frustumCulled={false} />
       <instancedMesh ref={crownRef} args={[geos.crown, mats.crown, Math.max(1, trees.length)]} count={trees.length} frustumCulled={false} />
       <instancedMesh ref={pineTrunkRef} args={[geos.trunk, mats.trunk, Math.max(1, pines.length)]} count={pines.length} frustumCulled={false} />

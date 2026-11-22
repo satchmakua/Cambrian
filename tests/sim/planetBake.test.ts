@@ -111,7 +111,7 @@ function landsOf(b: Bake): number[] {
 }
 
 describe('a hundred baked planets', () => {
-  it('each without a NaN, its land as asked, its waters drained, and the valley’s ground on every one', () => {
+  it('each without a NaN, its land as asked, its waters drained, and ground of many kinds on every one', () => {
     for (let seed = 1; seed <= 100; seed++) {
       const spec = { seed, radius: 70, relief: 30, land: 0.6, continents: (seed % 5) / 4, rugged: (seed % 3) / 2 };
       const g = makePlanetGround(spec);
@@ -137,10 +137,11 @@ describe('a hundred baked planets', () => {
         }
         for (const p of path) drains[p] = 1;
       }
-      // every biome the valley has, somewhere
+      // the sea's deep and its shallows, a shore, and lands of half a dozen kinds or more
       const biomes = new Set<string>();
       for (let k = 0; k < n; k += 3) biomes.add(biomeOn(g, cellCentre(b.grid.N, k)));
-      expect([...biomes].sort()).toEqual(['deep', 'meadow', 'rock', 'sand', 'shallow', 'wood']);
+      for (const kind of ['deep', 'shallow', 'sand']) expect(biomes).toContain(kind);
+      expect([...biomes].filter((x) => x !== 'deep' && x !== 'shallow').length).toBeGreaterThanOrEqual(6);
     }
   }, 120_000);
 

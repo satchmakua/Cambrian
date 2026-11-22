@@ -62,7 +62,7 @@ export function inAdoptedLine(w: World, id: number): boolean {
   return false;
 }
 
-const BIOME_ORDER: Biome[] = ['meadow', 'wood', 'sand', 'rock', 'shallow', 'deep'];
+const BIOME_ORDER: Biome[] = ['meadow', 'wood', 'sand', 'rock', 'shallow', 'deep', 'marsh', 'savanna', 'jungle', 'taiga', 'tundra', 'desert', 'ice'];
 
 function relations(w: World, counts: Record<number, number>, max: number): Relation[] {
   return Object.entries(counts)

@@ -32,6 +32,7 @@ import { makeValley } from './valley';
 import { makePlanet } from './planetSurface';
 import type { PlanetSpec } from './planetGround';
 import type { Ground } from './surface';
+import type { Biome } from './terrain';
 import { droughtOf } from './weather';
 import { mix32, mulberry32State } from '../engine/rng';
 import { DAY_LENGTH, log, MAX_POP, rebuildBuckets, STEP, YEAR_DAYS, type World } from './model';
@@ -56,19 +57,32 @@ export function createPlanet(spec: PlanetSpec, cap: number = MAX_POP): World {
   return worldOn(spec.seed, cap, makePlanet(spec, cap));
 }
 
+/** where fruit bushes grow: the share of the throws landing on each ground that take (every one in a wood
+ *  or a jungle, a quarter on a meadow, fewer in the boreal forest, the marshes and the savanna; and the
+ *  valley's woods and meadows as they always were) */
+const BUSH_TAKES: Partial<Record<Biome, number>> = { wood: 1, jungle: 1, meadow: 0.25, taiga: 0.3, marsh: 0.15, savanna: 0.12 };
+
 function worldOn(seed: number, cap: number, ground: Ground): World {
-  const { terrain, surface, gridN, bushes } = ground;
+  const { terrain, surface, gridN, bushes, food } = ground;
   const rng = mulberry32State(mix32(seed, 0x3c0105));
   const cells = surface.cells;
   const grass = new Float32Array(cells);
   const grassCap = new Float32Array(cells);
   const algae = new Float32Array(cells);
   const algaeCap = new Float32Array(cells);
-  // (each cell by what grows at its middle, in the fields' own order)
+  // (each cell by what grows at its middle, in the fields' own order: the valley's by its ground, a planet's
+  // by its climate too)
   for (let k = 0; k < cells; k++) {
-    const b = surface.biome(surface.cellCenter(k));
-    grassCap[k] = b === 'meadow' ? 0.6 : b === 'wood' ? 0.32 : b === 'sand' ? 0.05 : 0;
-    algaeCap[k] = b === 'shallow' ? 1.25 : b === 'deep' ? 0.8 : 0;
+    const at = surface.cellCenter(k);
+    if (food) {
+      const f = food(at);
+      grassCap[k] = f.grass;
+      algaeCap[k] = f.algae;
+    } else {
+      const b = surface.biome(at);
+      grassCap[k] = b === 'meadow' ? 0.6 : b === 'wood' ? 0.32 : b === 'sand' ? 0.05 : 0;
+      algaeCap[k] = b === 'shallow' ? 1.25 : b === 'deep' ? 0.8 : 0;
+    }
     grass[k] = grassCap[k] * (0.6 + 0.4 * rng());
     algae[k] = algaeCap[k] * (0.6 + 0.4 * rng());
   }
@@ -107,8 +121,8 @@ function worldOn(seed: number, cap: number, ground: Ground): World {
   let tries = 0;
   while (world.plants.length < bushes.most && tries++ < bushes.tries) {
     const p = bushes.place(rng);
-    const b = surface.biome(p);
-    if (b !== 'wood' && !(b === 'meadow' && rng() < 0.25)) continue;
+    const takes = BUSH_TAKES[surface.biome(p)] ?? 0;
+    if (takes <= 0 || (takes < 1 && !(rng() < takes))) continue;
     const max = 3 + Math.floor(rng() * 5);
     world.plants.push({ id: world.nextId++, ...p, fruit: max * rng(), max, size: 0.8 + rng() * 0.9 });
   }

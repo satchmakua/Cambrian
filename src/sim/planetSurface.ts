@@ -11,7 +11,7 @@
  * it: over the generations they spread out over the rest of the world.
  */
 import { anyTangent, arc, cross, cubeToSphere, dot, fibonacci, normalize, randomHeading, randomPlace, rotate, settle, slide, sphereToCube, step, tangent, toward, turn, type Vec3 } from './sphere';
-import { biomeOn, heightOn, levelOn, makePlanetGround, planetStands, type PlanetGround, type PlanetSpec } from './planetGround';
+import { biomeOn, foodOn, heightOn, levelOn, makePlanetGround, planetStands, tempOn, type PlanetGround, type PlanetSpec } from './planetGround';
 import { AIRBORNE, canStand, dayPhase, GRID_CELL, growthOf, MAX_POP, type Creature, type Plant, type World } from './model';
 import { makeTerrain, WORLD_SIZE } from './terrain';
 import { engaged, footprintOf, ROOM, ROOM_AT, ROOM_EVERY, ROOM_PUSH, ROOM_RATE, segmentGap } from './valley';
@@ -52,23 +52,34 @@ function dirAt(u: Vec3, bearing: number): Vec3 {
 
 const isZero = (v: Vec3) => v[0] === 0 && v[1] === 0 && v[2] === 0;
 
+/** the grass a valley's land holds, on the mean (its meadows' 0.6 and its woods' 0.32, about half each),
+ *  and its warmth (planetClimate.ts's VALLEY_CLIMATE) */
+const VALLEY_GRASS = 0.48;
+const VALLEY_WARMTH = 12;
+
 /** The homeland: of the planet's well-spread places on land and away from the poles, the one whose cap of
- *  `reach` holds nearest three parts land to one of water (a valley's worth of meadow, wood and lake). */
+ *  `reach` holds nearest three parts land to one of water, its land about as rich in grass and as warm as the
+ *  valley's (a valley's worth of meadow, wood and lake, not a desert's edge, a tundra or a jungle). */
 function homeOf(g: PlanetGround, reach: number): Vec3 {
   let best: Vec3 = [1, 0, 0], score = -Infinity;
   const n = 400;
   for (let i = 0; i < n; i++) {
     const c = fibonacci(i, n);
     if (Math.abs(c[1]) > 0.7 || heightOn(g, c) - levelOn(g, c) < 1) continue;
-    let landN = 0, all = 0;
+    let landN = 0, all = 0, grass = 0, warmth = 0;
     for (const f of [0.25, 0.5, 0.75, 1]) {
       for (let b = 0; b < 12; b++) {
         const q = step(c, dirAt(c, (b / 12) * Math.PI * 2), reach * f).p;
-        if (heightOn(g, q) > levelOn(g, q)) landN++;
+        if (heightOn(g, q) > levelOn(g, q)) {
+          landN++;
+          grass += foodOn(g, q).grass;
+          warmth += tempOn(g, q);
+        }
         all++;
       }
     }
-    const sc = -Math.abs(landN / all - 0.75);
+    const m = Math.max(1, landN);
+    const sc = -Math.abs(landN / all - 0.75) - 1.5 * Math.abs(grass / m - VALLEY_GRASS) - 0.03 * Math.abs(warmth / m - VALLEY_WARMTH);
     if (sc > score) {
       score = sc;
       best = c;
@@ -95,6 +106,7 @@ export function makePlanet(spec: PlanetSpec, cap: number = MAX_POP): Ground {
         return { x: u[0] * spec.radius, y: u[1] * spec.radius, z: u[2] * spec.radius };
       },
     },
+    food: (p) => foodOn(surface.ground, unitOf(p)),
   };
 }
 

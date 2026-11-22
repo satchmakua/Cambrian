@@ -8,8 +8,8 @@
  *    simulation of them.
  * 2. Noise on the sphere itself: the continents' swell bent by warped noise, so coasts wander off the
  *    plates' edges, and the sea let in until the share of land asked for stands above it.
- * 3. A first, rough rain: wet tropics, dry belts either side, wet middle latitudes, drier inland. (Winds and
- *    rain shadows come with the climate, the next step.)
+ * 3. A first climate (planetClimate.ts): temperature by latitude and height, winds in their bands, rain
+ *    carried on them and wrung out where they climb — the rain the rivers carve with.
  * 4. The land carved by its rivers: stream-power erosion (incision ∝ uplift against √drainage), taken to
  *    the balance the uplift and the rivers reach (Braun & Willett's implicit form, run to its steady state;
  *    Cordonnier et al. 2016). The plates set where the ground is pushed up; the rivers make that uplift
@@ -21,6 +21,8 @@
  * 6. Rivers where the gathered rain passes a threshold: channels cut a cell wide (held unbroken where they
  *    run corner to corner), shallow while they are streams, deep enough to swim in once they are rivers.
  * 7. Water bodies: each sea and lake, the river a lake drains by, and which a swimmer can pass.
+ * 8. The climate again, on the ground the rivers carved, for what grows where (planetGround.ts's biomes)
+ *    and the rain the rivers carry.
  *
  * Every cell keeps its ground's height and its water's surface, which the simulation and the scene read
  * between the cells' middles alike (cubeGrid.ts's `sampleAt`). Pure, deterministic, and checksummed: the
@@ -29,6 +31,7 @@
 import { mulberry32 } from '../engine/rng';
 import { fbm, ridged } from './noise3';
 import { makeGrid, type CubeGrid } from './cubeGrid';
+import { climateOn } from './planetClimate';
 import { randomPlace } from './sphere';
 
 /** What a planet is made from. */
@@ -44,9 +47,13 @@ export interface PlanetSpec {
   continents?: number;
   /** gentle (0) … rugged (1): how hard the plates push their ranges up, and how hilly the rest */
   rugged?: number;
+  /** colder (−1: an ice world) … warmer (1: a hothouse): the ice caps and the snow line */
+  temperature?: number;
+  /** drier (−1: deserts) … wetter (1: forests): how much water the winds carry inland */
+  wetness?: number;
 }
 
-export const SPEC_DEFAULTS = { continents: 0.45, rugged: 0.5 };
+export const SPEC_DEFAULTS = { continents: 0.45, rugged: 0.5, temperature: 0, wetness: 0 };
 
 /** what a cell is */
 export const LAND = 0, SEA = 1, LAKE = 2, RIVER = 3;
@@ -105,9 +112,14 @@ export interface Bake {
   /** each cell's way down (−1: the sea's own) and the rain gathered through it (bu², weighted by rain) */
   recv: Int32Array;
   flow: Float32Array;
-  /** rain (about 0.1 … 1.4) and damp (0 … 1: wood above 0.58, as the valley's) */
+  /** rain (m a year: what the rivers gather) and damp (0 … 1: how lush the ground looks) */
   rain: Float32Array;
   moist: Float32Array;
+  /** each cell's yearly mean temperature (°C), its rain (mm a year), and how steep its ground is (rise over
+   *  run, to the dry ground round it) */
+  T: Float32Array;
+  P: Float32Array;
+  slope: Float32Array;
   /** each cell's plate, each plate continental or not (for maps) */
   plate: Int16Array;
   continental: Uint8Array;
@@ -507,7 +519,7 @@ export function bakePlanet(given: PlanetSpec): Bake {
     }
   }
 
-  // --- 3. rain: by latitude, less of it inland --------------------------------------------------------
+  // --- 3. a first climate, on this first ground: the rain the rivers will carve with ---------------------
   const coastCells: number[] = [];
   for (let k = 0; k < n; k++) {
     for (let e = 0; e < 8; e++) {
@@ -519,14 +531,20 @@ export function bakePlanet(given: PlanetSpec): Bake {
     }
   }
   const toCoast = spread(g, coastCells, null, Infinity);
-  const rain = new Float32Array(n);
-  for (let k = 0; k < n; k++) {
-    const x = pt[k * 3], y = pt[k * 3 + 1], z = pt[k * 3 + 2];
-    const lat = Math.asin(Math.min(1, Math.abs(y)));
-    const belt = 0.95 * Math.exp(-((lat / 0.24) ** 2)) + 0.75 * Math.exp(-(((lat - 0.95) / 0.27) ** 2)) + 0.22;
-    const inland = sea[k] ? 1 : 0.4 + 0.6 * Math.exp(-(toCoast.d[k] * R) / 90);
-    rain[k] = belt * inland * (0.7 + 0.6 * fbm(x * 3, y * 3, z * 3, sRain, 3));
+  // (the first ground's heights about as high as they will stand: its land's top hundredth at most of the
+  // relief, for the winds to climb)
+  const first = new Float32Array(n);
+  {
+    const landH: number[] = [];
+    for (let k = 0; k < n; k++) if (!sea[k]) landH.push(h0[k]);
+    landH.sort((a, b) => a - b);
+    const top = Math.max(1e-6, landH.length ? landH[Math.floor(landH.length * 0.99)] : 1);
+    for (let k = 0; k < n; k++) first[k] = sea[k] ? 0 : (Math.max(0, h0[k]) * spec.relief * 0.8) / top;
   }
+  const weather = { radius: R, relief: spec.relief, temperature: spec.temperature, wetness: spec.wetness, salt: sRain };
+  let climate = climateOn(g, first, sea, weather);
+  const rain = new Float32Array(n);
+  for (let k = 0; k < n; k++) rain[k] = climate.P[k] / 1000;
 
   // --- 4. the land carved by its rivers, to the balance of uplift and incision --------------------------
   // how hard the ground is pushed up: a little everywhere on land, much more along the ranges, broken by
@@ -639,6 +657,10 @@ export function bakePlanet(given: PlanetSpec): Bake {
       }
     }
   }
+
+  // --- 8 (first: the rivers carry its rain). The climate again, on the ground the rivers carved --------------
+  climate = climateOn(g, h, sea, weather);
+  for (let k = 0; k < n; k++) rain[k] = climate.P[k] / 1000;
 
   // --- 6. the rivers: the rain gathered at last, and the channels it cuts -------------------------------
   const wet = new Uint8Array(n);
@@ -770,6 +792,20 @@ export function bakePlanet(given: PlanetSpec): Bake {
   }
 
   const hf = Float32Array.from(h);
+  // (how steep the hillside is: the mean rise to the dry ground round it, not the drop into a channel cut
+  // beside it, which made a cliff of every river bank)
+  const slope = new Float32Array(n);
+  for (let k = 0; k < n; k++) {
+    if (kind[k] === SEA) continue;
+    let sum = 0, cnt = 0;
+    for (let e = 0; e < 8; e++) {
+      const q = g.nbr[k * 8 + e];
+      if (q < 0 || kind[q] !== LAND) continue;
+      sum += Math.abs(hf[k] - hf[q]) / (g.gap[k * 8 + e] * R);
+      cnt++;
+    }
+    slope[k] = cnt ? sum / cnt : 0;
+  }
   return {
     spec,
     grid: g,
@@ -782,6 +818,9 @@ export function bakePlanet(given: PlanetSpec): Bake {
     flow: Float32Array.from(flow),
     rain,
     moist,
+    T: climate.T,
+    P: climate.P,
+    slope,
     plate,
     continental,
     checksum: checksumOf(hf, level, kind),

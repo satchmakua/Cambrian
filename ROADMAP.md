@@ -1337,8 +1337,56 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
        come mostly from the hills' hollows and a few rifts, with no glacial lakes and few high ones; the
        big rivers all run low, as big rivers do. The simulation's rock is by height only, the scene's by
        slope too (step 5's one palette).
-  5. **Climate by latitude and rain shadows.** Biomes by temperature and rainfall, each with its own plants
-     and food: the food from a productivity curve anchored to the valley's own numbers.
+  5. [x] **Climate by latitude and rain shadows.** Biomes by temperature and rainfall, each with its own
+     plants and food: the food from a productivity curve anchored to the valley's own numbers. **Done
+     (2026-11-22).** What shows it:
+     - **A climate, worked out twice in the bake** (`src/sim/planetClimate.ts`): on the first ground, for
+       the rain the rivers carve with, and on the carved ground, for what grows. Each cell's yearly warmth
+       goes by latitude (26° at the equator, −20 at the poles, at sea level), and the highest ground is some
+       21° colder than the shore. The winds blow in three bands a hemisphere (trades, westerlies, polar
+       easterlies), turned by noise; "east" is the one place the planet's axis shows. Rain is carried on
+       them over the ground's large shape, on a grid a quarter as fine. The air takes up water over warm sea
+       and drops a little everywhere by its belt, much more where it climbs or cools. Storms bring the
+       sea's water ashore from every side as well, less of it inland.
+     - **What came of it** (seed 7, 300 bu, on land, 5th to 95th percentile): warmth −10° to 24°, rain 116
+       to 1,903 mm (median 502). The equator is wettest, the warm dry belts and the poles driest. Tested:
+       colder toward the poles and up the mountains, and a range's lee at least 15% drier than its windward
+       side. The first rain was too dry inland (median 25 mm): air climbing every ridge between two
+       valleys wrung itself out, and one mean wind brought sea air to the windward coasts only. The air now
+       rides the ranges alone and storms come from every side. A single upwind neighbour also cut seams
+       where the bands meet and the wind drops, so the air now drifts every way in a calm.
+     - **Biomes** (`planetGround.ts`'s `biomeOn`): a Whittaker diagram, by warmth (ice below −10°, tundra
+       below −1, boreal forest below 5, the tropics above 18) and by rain (desert, grassland, forest), with
+       the ground's own cases on top: sand on every shore (tundra on a cold one), rock on the cold heights
+       and the cliffs, marsh on wet flats. Seven new kinds of ground (marsh, desert, savanna, jungle, taiga,
+       tundra, ice) join the valley's six. Seed 7's land is savanna 16%, desert 15%, wood 13%, meadow 13%,
+       tundra 9%, jungle 9%, rock 7%, taiga 7%, ice 5%, sand 4%, marsh 1%.
+     - **Food from productivity** (Lieth's Miami model, through a `food` the world's ground may give; the
+       valley's own table is untouched). At the valley's own climate (12°, 800 mm) a meadow grows exactly
+       its 0.6 of grass, a wood its 0.32, sand its 0.05, the shallows their 1.25 of algae and a deep lake its
+       0.8. A desert grows about a fifth, a rainforest's floor about twice, the tundra a third. The open sea
+       beyond the shelf is barren, so deep water parts coastal fish.
+     - **Plants by ground.** Trees are thick in the woods and jungles, conifers fill the taiga, a few stand
+       on the meadows, savanna and marshes, hardly any on the tundra, and none on sand, desert or ice. Fruit
+       bushes grow in the woods and jungles, a quarter of the throws on meadows, fewer in the taiga, the
+       marshes and the savanna; the valley's throws are the same as ever.
+     - **One palette** (`src/sim/palette.ts`): the scene's ground and the camouflage the hunters see
+       through read the same colours, and the planet's ice is snow, so a polar coat can whiten.
+     - **The homeland** is chosen now for ground as rich in grass (0.48 on its land) and as warm (12°) as
+       the valley's, as well as three parts land: on four seeds, savanna, wood, meadow and jungle at
+       15–21°, with land grass 0.31–0.49.
+     - **Temperature and wetness**, the step's two sliders in the lab: an ice world 12° colder (seed 7:
+       tundra 29%, ice 18% of the land), a hothouse with no ice caps, and deserts or forests spreading with
+       the rain (tests). `scripts/planet-map.ts` draws the biomes, or `--field rain|warmth`.
+     - **Life** (headless, seed 7, 300 bu, 8 days): cap 165 holds 128–153 alive in 9–10 kinds, and cap 600
+       holds 365–418 from day 3. The report now counts by ground (alive, born there, died there): shallows
+       43/66/69, wood 40/96/40, jungle 36/116/75, meadow 13/28/17, savanna 12/20/16, the rest a few each.
+       Sand saw 1 birth to 11 deaths, the shore's strip: a balance to watch over longer runs.
+     - **Cost.** The bake takes 1.8–1.9 s at 300 bu with its climate. On the RTX 5070 Ti, 60 fps at the
+       ground. On the Radeon 610M, 50–59 at the ground, 57–60 in orbit, and 50 over a region of dense
+       woods. The valley's 12 save hashes are the same, and 1068 tests pass.
+     - **Still to come.** The seasons are still the valley's, all at once over the whole planet (step 6),
+       so body size can't yet answer to the cold by latitude; marsh is rare.
   6. **Weather fronts and seasons by hemisphere**, the air and clouds, culling and detail levels, more
      creatures and founders that spread from a homeland, and the budgets on both GPUs.
   7. **Regional immigration, sea level as a lever**, saves, and **a planet designer for every game**: its

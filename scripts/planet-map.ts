@@ -1,15 +1,19 @@
 /**
  * A baked planet as a map, headless: its numbers, and a shaded picture of the whole globe (equirectangular,
- * north up) — the relief lit from the north-west, the sea's shelf and deeps, lakes, rivers (bright where a
- * swimmer can use them), and with --plates the plates' edges.
+ * north up) — what grows where in the scene's own colours (sim/palette.ts), lit from the north-west, the
+ * sea's shelf and deeps, lakes, rivers (bright where a swimmer can use them), and with --plates the plates'
+ * edges; with --relief-colours, a height ramp instead of the biomes.
  *
  *   npx vite-node scripts/planet-map.ts -- --seed 7 --radius 300 --relief 30 --land 0.6 \
- *     [--continents 0.45] [--rugged 0.5] [--plates] [--width 1600] [--out planet.png]
+ *     [--continents 0.45] [--rugged 0.5] [--temperature 0] [--wetness 0] [--plates] [--relief-colours] \
+ *     [--lon 0 --lat 0 --span 360] [--width 1600] [--out planet.png]
  */
 import { writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
-import { bakePlanet, LAKE, RIVER, SEA, SWIM_FLOW } from '../src/sim/planetBake';
-import { apronOf, cellIndex, sampleAt } from '../src/sim/cubeGrid';
+import { LAKE, RIVER, SEA, SWIM_FLOW } from '../src/sim/planetBake';
+import { cellCentre, cellIndex, sampleAt } from '../src/sim/cubeGrid';
+import { biomeOn, makePlanetGround } from '../src/sim/planetGround';
+import { BIOME_COLOUR } from '../src/sim/palette';
 import type { Vec3 } from '../src/sim/sphere';
 
 const argv = process.argv.slice(2);
@@ -21,10 +25,11 @@ const out = (() => {
   const i = argv.indexOf('--out');
   return i >= 0 ? argv[i + 1] : 'planet.png';
 })();
-const spec = { seed: arg('seed', 7), radius: arg('radius', 300), relief: arg('relief', 30), land: arg('land', 0.6), continents: arg('continents', 0.45), rugged: arg('rugged', 0.5) };
+const spec = { seed: arg('seed', 7), radius: arg('radius', 300), relief: arg('relief', 30), land: arg('land', 0.6), continents: arg('continents', 0.45), rugged: arg('rugged', 0.5), temperature: arg('temperature', 0), wetness: arg('wetness', 0) };
 
 const t0 = performance.now();
-const b = bakePlanet(spec);
+const ground = makePlanetGround(spec);
+const b = ground.bake;
 const ms = performance.now() - t0;
 const { grid: g, h, level, kind } = b;
 const R = spec.radius;
@@ -51,10 +56,35 @@ console.log(`biggest lakes (bu²): ${biggest.map((x) => `${Math.round(x.area)} a
 let hiK = 0;
 for (let k = 0; k < g.count; k++) if (h[k] > h[hiK]) hiK = k;
 console.log(`highest ground ${h[hiK].toFixed(1)} bu`);
+// what grows where: each biome's share of the land
+{
+  const share = new Map<string, number>();
+  let dry = 0;
+  for (let k = 0; k < g.count; k++) {
+    const bm = biomeOn(ground, cellCentre(g.N, k));
+    if (bm === 'deep' || bm === 'shallow') continue;
+    share.set(bm, (share.get(bm) ?? 0) + g.area[k]);
+    dry += g.area[k];
+  }
+  console.log('land: ' + [...share.entries()].sort((a, c) => c[1] - a[1]).map(([bm, a]) => `${bm} ${((100 * a) / dry).toFixed(0)}%`).join(', '));
+  const qs = (f: Float32Array) => {
+    const v: number[] = [];
+    for (let k = 0; k < g.count; k++) if (kind[k] !== SEA) v.push(f[k]);
+    v.sort((a, c) => a - c);
+    return [0.05, 0.25, 0.5, 0.75, 0.95].map((x) => v[Math.floor(v.length * x)].toFixed(0)).join(' / ');
+  };
+  console.log(`on land, warmth °C ${qs(b.T)} · rain mm ${qs(b.P)} (5th / 25th / 50th / 75th / 95th)`);
+}
 
 // the picture
 const Wd = arg('width', 1600), Ht = Math.round(Wd / 2);
-const aH = apronOf(g.N, h), aL = apronOf(g.N, level);
+const aH = ground.aH, aL = ground.aL;
+const showRelief = argv.includes('--relief-colours');
+// (--field rain or warmth: that field alone, on a ramp, over the whole planet, land and sea)
+const field = (() => {
+  const i = argv.indexOf('--field');
+  return i >= 0 ? argv[i + 1] : '';
+})();
 const px = new Uint8Array(Wd * Ht * 3);
 // (--lon and --lat in degrees, --span the degrees across: a closer look, two wide by one high)
 const span = (arg('span', 360) * Math.PI) / 180, lon0 = (arg('lon', 0) * Math.PI) / 180, lat0 = (arg('lat', 0) * Math.PI) / 180;
@@ -94,17 +124,22 @@ for (let y = 0; y < Ht; y++) {
     const dx = (hs[y * Wd + ((x + 1) % Wd)] - hs[y * Wd + ((x + Wd - 1) % Wd)]) / (2 * across);
     const dy = (hs[Math.min(Ht - 1, y + 1) * Wd + x] - hs[Math.max(0, y - 1) * Wd + x]) / (2 * ((span * 0.5 * R) / Ht));
     const shade = Math.max(0.35, Math.min(1.25, 0.85 + 0.9 * (-dx * 0.7 + dy * 0.7)));
-    if (kind[k] === RIVER) c = b.flow[k] >= SWIM_FLOW ? [60, 120, 200] : [90, 150, 205];
+    if (field) {
+      const v = field === 'rain' ? Math.min(1, Math.log10(Math.max(10, sampleAt(ground.aP, p))) / 3.7) : Math.min(1, Math.max(0, (sampleAt(ground.aT, p) + 25) / 55));
+      c = [255 * v, 255 * (1 - Math.abs(v - 0.5) * 2) * 0.9, 255 * (1 - v)];
+      if (kind[k] === SEA) c = [c[0] * 0.55, c[1] * 0.55, c[2] * 0.55];
+    } else if (kind[k] === RIVER) c = b.flow[k] >= SWIM_FLOW ? [60, 120, 200] : [90, 150, 205];
     else if (L - hh > 0 || kind[k] === SEA || kind[k] === LAKE) {
       const depth = L - hh;
       const lake = kind[k] === LAKE;
       const t = Math.min(1, Math.max(0, depth / (lake ? 6 : spec.relief * 0.55)));
       c = lake ? [46 + 20 * (1 - t), 104 + 30 * (1 - t), 150 + 30 * (1 - t)] : depth < 1.25 ? [70, 130, 160] : [22 + 30 * (1 - t), 48 + 40 * (1 - t), 92 + 50 * (1 - t)];
-    } else {
+    } else if (showRelief) {
       const r = ramp(Math.min(1, Math.max(0, hh / spec.relief)));
-      const damp = b.moist[k] > 0.58 ? 0.8 : 1;
-      c = [r[0] * shade * damp, r[1] * shade, r[2] * shade * damp];
-      if (Math.abs(p[1]) > 0.9) c = [228, 232, 234];
+      c = [r[0] * shade, r[1] * shade, r[2] * shade];
+    } else {
+      const col = BIOME_COLOUR[biomeOn(ground, p)];
+      c = [((col >> 16) & 255) * shade, ((col >> 8) & 255) * shade, (col & 255) * shade];
     }
     if (showPlates) {
       const k2 = cellIndex(g.N, dir(x + 1.5, y + 0.5)), k3 = cellIndex(g.N, dir(x + 0.5, y + 1.5));

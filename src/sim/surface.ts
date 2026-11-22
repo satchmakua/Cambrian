@@ -23,12 +23,14 @@ import type { Stand } from './stands';
 
 /** What a world is made on: its terrain (a valley's; a planet carries its seed's, unused, for the valley's
  *  viewer), its surface, how many cells its fields run across (the valley's viewer draws its grass by them),
- *  and where its bushes may grow (up to `most`, in `tries` throws). */
+ *  where its bushes may grow (up to `most`, in `tries` throws), and — where it is the climate's, not the
+ *  ground's alone — how much grass and algae a place can hold (the valley's is by its ground: world.ts). */
 export interface Ground {
   terrain: Terrain;
   surface: Surface;
   gridN: number;
   bushes: { most: number; tries: number; place: (rng: () => number) => Place };
+  food?: (p: Place) => { grass: number; algae: number };
 }
 
 /** A point on the ground. A planet's carries its third coordinate as `y` (a point on the sphere of its sea);

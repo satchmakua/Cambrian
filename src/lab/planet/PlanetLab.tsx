@@ -22,6 +22,8 @@ import { CAST, LabCast } from './LabCast';
 import { START_DAYS, useLab } from './labStore';
 import { cellsFor, freshWaterGeometry, freshWaterMaterial, groundGeometry, groundMaterial, seaGeometry } from './planetMesh';
 import { RIVER, SWIM_FLOW } from '../../sim/planetBake';
+import { biomeOn } from '../../sim/planetGround';
+import { cellCentre } from '../../sim/cubeGrid';
 import { Trees } from './Trees';
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -35,7 +37,8 @@ const FRAME = { fps: 0 };
 /** how long each planet took to make (its terrain baked, its world laid out), for the HUD: its first making
  *  (in development React makes each world twice, the second time on the ground already baked) */
 const MADE = new Map<string, number>();
-const madeKey = (s: { seed: number; radius: number; relief: number; land: number; continents: number; rugged: number; cap: number }) => [s.seed, s.radius, s.relief, s.land, s.continents, s.rugged, s.cap].join(':');
+const madeKey = (s: { seed: number; radius: number; relief: number; land: number; continents: number; rugged: number; temperature: number; wetness: number; cap: number }) =>
+  [s.seed, s.radius, s.relief, s.land, s.continents, s.rugged, s.temperature, s.wetness, s.cap].join(':');
 /** the valley's crowding: 165 animals on its 200 bu square */
 const GROUND_EACH = (200 * 200) / 165;
 
@@ -45,19 +48,21 @@ export default function PlanetLab() {
   const land = useLab((s) => s.land);
   const continents = useLab((s) => s.continents);
   const rugged = useLab((s) => s.rugged);
+  const temperature = useLab((s) => s.temperature);
+  const wetness = useLab((s) => s.wetness);
   const cap = useLab((s) => s.cap);
   const seed = useLab((s) => s.seed);
   // a new world for each planet: its ground, and the valley's starter cast set down in its homeland
   const world = useMemo(() => {
     const t0 = performance.now();
-    const w = createPlanet({ seed, radius, relief, land, continents, rugged }, cap);
-    const key = madeKey({ seed, radius, relief, land, continents, rugged, cap });
+    const w = createPlanet({ seed, radius, relief, land, continents, rugged, temperature, wetness }, cap);
+    const key = madeKey({ seed, radius, relief, land, continents, rugged, temperature, wetness, cap });
     if (!MADE.has(key)) MADE.set(key, performance.now() - t0);
     populateCast(w, 'standard');
     // (?days=: run on before it is shown)
     for (let i = 0; i < (START_DAYS * DAY_LENGTH) / STEP; i++) stepWorld(w);
     return w;
-  }, [seed, radius, relief, land, continents, rugged, cap]);
+  }, [seed, radius, relief, land, continents, rugged, temperature, wetness, cap]);
   const S = world.surface as PlanetSurface;
   // (every coat countershaded against the planet's up, not the world's +Y: see setRadialUp)
   useEffect(() => {
@@ -124,7 +129,7 @@ function Scene({ world, S }: { world: World; S: PlanetSurface }) {
   const R = g.radius;
   const groundGeo = useMemo(() => groundGeometry(g, cellsFor(R)), [g, R]);
   useEffect(() => () => groundGeo.dispose(), [groundGeo]);
-  const sea = useMemo(() => seaGeometry(R), [R]);
+  const sea = useMemo(() => seaGeometry(g), [g]);
   useEffect(() => () => sea.dispose(), [sea]);
   const groundMat = useMemo(() => groundMaterial(g.relief), [g.relief]);
   const fresh = useMemo(() => freshWaterGeometry(g, cellsFor(R)), [g, R]);
@@ -197,7 +202,7 @@ function Scene({ world, S }: { world: World; S: PlanetSurface }) {
       <Trees ground={g} />
       <Bushes world={world} ground={g} />
       <LabCast world={world} R={R} />
-      <GlobeCamera key={`${world.seed}:${R}:${g.relief}:${g.land}:${g.continents}:${g.rugged}:${world.cap}`} ground={g} world={world} home={S.home} />
+      <GlobeCamera key={`${world.seed}:${R}:${g.relief}:${g.land}:${g.continents}:${g.rugged}:${g.temperature}:${g.wetness}:${world.cap}`} ground={g} world={world} home={S.home} />
       <Stepper world={world} />
       <FrameCounter />
     </>
@@ -279,8 +284,21 @@ function clockOf(t: number): string {
 }
 
 function Hud({ world }: { world: World }) {
-  const { radius, relief, land, continents, rugged, cap, seed, speed, follow, set } = useLab();
-  const madeIn = MADE.get(madeKey({ seed, radius, relief, land, continents, rugged, cap })) ?? 0;
+  const { radius, relief, land, continents, rugged, temperature, wetness, cap, seed, speed, follow, set } = useLab();
+  const madeIn = MADE.get(madeKey({ seed, radius, relief, land, continents, rugged, temperature, wetness, cap })) ?? 0;
+  // what grows where: each kind of ground's share of the land
+  const lands = useMemo(() => {
+    const g = (world.surface as PlanetSurface).ground;
+    const N = g.bake.grid.N, share = new Map<string, number>();
+    let all = 0;
+    for (let k = 0; k < g.bake.grid.count; k += 3) {
+      const b = biomeOn(g, cellCentre(N, k));
+      if (b === 'deep' || b === 'shallow') continue;
+      share.set(b, (share.get(b) ?? 0) + 1);
+      all++;
+    }
+    return [...share.entries()].sort((a, c) => c[1] - a[1]).map(([b, c]) => `${b} ${Math.round((100 * c) / Math.max(1, all))}%`).join(' · ');
+  }, [world]);
   const bake = (world.surface as PlanetSurface).ground.bake;
   const waters = useMemo(() => {
     const lakes = bake.bodies.filter((b) => b.kind === 'lake');
@@ -346,6 +364,13 @@ function Hud({ world }: { world: World }) {
       <Row label={`rugged ${rugged.toFixed(2)} (gentle … mountainous)`}>
         <Slider value={rugged} min={0} max={1} step={0.05} onCommit={(r) => set({ rugged: r })} />
       </Row>
+      <Row label={`temperature ${temperature >= 0 ? '+' : ''}${(temperature * 12).toFixed(0)}° (an ice world … a hothouse)`}>
+        <Slider value={temperature} min={-1} max={1} step={0.05} onCommit={(t) => set({ temperature: t })} />
+      </Row>
+      <Row label={`wetness ${wetness >= 0 ? '+' : ''}${wetness.toFixed(2)} (deserts … forests)`}>
+        <Slider value={wetness} min={-1} max={1} step={0.05} onCommit={(t) => set({ wetness: t })} />
+      </Row>
+      <div style={{ opacity: 0.75, marginBottom: 4 }}>{lands}</div>
       <div style={{ opacity: 0.75, marginBottom: 4 }}>
         {waters.lakes} lakes ({waters.joined} joined to the next water by a river a fish can swim) · about {waters.river.toLocaleString()} bu of streams and rivers, {waters.swim.toLocaleString()} of them swimmable · made in {(madeIn / 1000).toFixed(1)} s
       </div>

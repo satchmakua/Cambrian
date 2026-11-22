@@ -10,18 +10,14 @@
  */
 import * as THREE from 'three';
 import { cubeToSphere, FACE_COUNT } from '../../sim/sphere';
-import { heightOn, levelOn, moistOn, type PlanetGround } from '../../sim/planetGround';
+import { heightOn, levelOn, moistOn, rainOn, tempOn, type PlanetGround } from '../../sim/planetGround';
+import { BIOME_COLOUR } from '../../sim/palette';
 
-// the valley's ground colours (world/Landscape.tsx), a deep sea bed, and ice
+// the ground's colours: the one palette (sim/palette.ts), the camouflage's own; and the water's
+const B = Object.fromEntries(Object.entries(BIOME_COLOUR).map(([b, c]) => [b, new THREE.Color(c)])) as Record<keyof typeof BIOME_COLOUR, THREE.Color>;
 const C = {
-  lakebed: new THREE.Color(0x3d4a3f),
+  lakebed: B.deep,
   deep: new THREE.Color(0x1b2627),
-  sand: new THREE.Color(0xb8a77c),
-  meadow: new THREE.Color(0x5f8f3a),
-  dry: new THREE.Color(0xa8994f),
-  wood: new THREE.Color(0x3f5f2c),
-  rock: new THREE.Color(0x77736c),
-  snow: new THREE.Color(0xd8d8d2),
   water: new THREE.Color(0x2b5866),
   fresh: new THREE.Color(0x2f6170),
   ice: new THREE.Color(0xd4dadb),
@@ -37,7 +33,8 @@ export function cellsFor(radius: number): number {
 
 /**
  * The ground: each face of the cube-sphere a grid `n` cells across, carrying its height (`aH`, bu above the
- * sea), the water's surface over it (`aL`) and its damp (`aM`) for the shader to colour by. Its normals are
+ * sea), the water's surface over it (`aL`), its damp (`aM`), its warmth (`aT`, °C) and its rain (`aP`, mm)
+ * for the shader to colour by. Its normals are
  * taken across the grid from one more row of cells all round, which reaches over each seam onto the next
  * face's ground, so the light runs on unbroken from face to face.
  */
@@ -46,7 +43,7 @@ export function groundGeometry(s: PlanetGround, n: number): THREE.BufferGeometry
   const B = W + 2; // …with a border row all round
   const verts = FACE_COUNT * W * W;
   const pos = new Float32Array(verts * 3), nor = new Float32Array(verts * 3);
-  const hs = new Float32Array(verts), ls = new Float32Array(verts), ms = new Float32Array(verts);
+  const hs = new Float32Array(verts), ls = new Float32Array(verts), ms = new Float32Array(verts), ts = new Float32Array(verts), ps = new Float32Array(verts);
   const idx = new Uint32Array(FACE_COUNT * n * n * 6);
   const grid = new Float32Array(B * B * 3);
   const hts = new Float32Array(B * B);
@@ -85,6 +82,8 @@ export function groundGeometry(s: PlanetGround, n: number): THREE.BufferGeometry
         const u: [number, number, number] = [grid[o] / r, grid[o + 1] / r, grid[o + 2] / r];
         ls[v] = levelOn(s, u);
         ms[v] = moistOn(s, u);
+        ts[v] = tempOn(s, u);
+        ps[v] = rainOn(s, u);
         v++;
       }
     }
@@ -106,6 +105,8 @@ export function groundGeometry(s: PlanetGround, n: number): THREE.BufferGeometry
   geo.setAttribute('aH', new THREE.BufferAttribute(hs, 1));
   geo.setAttribute('aL', new THREE.BufferAttribute(ls, 1));
   geo.setAttribute('aM', new THREE.BufferAttribute(ms, 1));
+  geo.setAttribute('aT', new THREE.BufferAttribute(ts, 1));
+  geo.setAttribute('aP', new THREE.BufferAttribute(ps, 1));
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
   geo.computeBoundingSphere();
   return geo;
@@ -114,19 +115,20 @@ export function groundGeometry(s: PlanetGround, n: number): THREE.BufferGeometry
 const glsl = (c: THREE.Color) => `vec3(${c.r.toFixed(5)}, ${c.g.toFixed(5)}, ${c.b.toFixed(5)})`;
 
 /**
- * The ground's material: the valley's palette by height, damp, slope and latitude, its heights scaled to
- * this planet's relief (`relief` / 14: the valley's highest ground). Smooth bands throughout: sand shading
- * up from every waterline (the sea's, a lake's, a river's) into the meadow, meadow into wood, rock up the
- * steeps and the heights, snow above, and the bed under any water darkening with its depth; ice at the
- * poles.
+ * The ground's material: what grows where, by the year's warmth and rain (the Whittaker diagram the
+ * simulation's biomes come from: planetGround.ts), each in the one palette, blended smoothly across the
+ * lines between them; then the ground's own cases — sand up from every waterline (a cold shore's tundra),
+ * marsh on the wet flats, rock on the steeps and the cold heights (scaled to this planet's relief: `relief`
+ * / 14, the valley's highest ground), ice where it is cold enough — and the bed under any water darkening
+ * with its depth.
  */
 export function groundMaterial(relief: number): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
   const k = Math.max(0.2, relief / 14);
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float aH;\nattribute float aL;\nattribute float aM;\nvarying float vH;\nvarying float vL;\nvarying float vM;\nvarying vec3 vOP;\nvarying vec3 vON;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vH = aH;\n  vL = aL;\n  vM = aM;\n  vOP = position;\n  vON = normal;');
+      .replace('#include <common>', '#include <common>\nattribute float aH;\nattribute float aL;\nattribute float aM;\nattribute float aT;\nattribute float aP;\nvarying float vH;\nvarying float vL;\nvarying float vM;\nvarying float vT;\nvarying float vP;\nvarying vec3 vOP;\nvarying vec3 vON;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vH = aH;\n  vL = aL;\n  vM = aM;\n  vT = aT;\n  vP = aP;\n  vOP = position;\n  vON = normal;');
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
@@ -134,40 +136,53 @@ export function groundMaterial(relief: number): THREE.MeshStandardMaterial {
 varying float vH;
 varying float vL;
 varying float vM;
+varying float vT;
+varying float vP;
 varying vec3 vOP;
 varying vec3 vON;
 const float K = ${k.toFixed(4)};
-vec3 groundColour(float h, float L, float up, float m, float lat) {
+// the Whittaker diagram, its lines blurred a little: cold, temperate and tropical columns, each from desert
+// through grass to forest by its rain
+vec3 biomeColour(float T, float P) {
+  vec3 cold = mix(${glsl(B.tundra)}, ${glsl(B.taiga)}, smoothstep(220.0, 290.0, P));
+  vec3 temperate = mix(${glsl(B.desert)}, ${glsl(B.meadow)}, smoothstep(220.0, 290.0, P));
+  temperate = mix(temperate, ${glsl(B.wood)}, smoothstep(640.0, 760.0, P));
+  vec3 tropical = mix(${glsl(B.desert)}, ${glsl(B.savanna)}, smoothstep(260.0, 340.0, P));
+  tropical = mix(tropical, ${glsl(B.jungle)}, smoothstep(1100.0, 1300.0, P));
+  vec3 c = mix(cold, temperate, smoothstep(4.0, 6.0, T));
+  c = mix(c, tropical, smoothstep(17.0, 19.0, T));
+  return mix(${glsl(B.tundra)}, c, smoothstep(-2.0, 0.0, T));
+}
+vec3 groundColour(float h, float L, float up, float m, float T, float P) {
   vec3 c;
   float d = L - h;
   if (d > 0.0) {
-    c = mix(${glsl(C.lakebed)}, ${glsl(C.sand)}, clamp((1.5 - d) / 1.5, 0.0, 1.0) * 0.7);
+    c = mix(${glsl(C.lakebed)}, ${glsl(B.sand)}, clamp((1.5 - d) / 1.5, 0.0, 1.0) * 0.7);
     c = mix(c, ${glsl(C.deep)}, clamp((d - 2.0) / (6.0 * K + 2.0), 0.0, 1.0));
   } else {
     float a = -d;
-    vec3 meadow = mix(${glsl(C.meadow)}, ${glsl(C.dry)}, clamp((0.32 - m) / 0.32, 0.0, 1.0) * 0.6);
-    vec3 wood = mix(${glsl(C.wood)}, ${glsl(C.meadow)}, 0.25 * (1.0 - m));
-    c = mix(meadow, wood, smoothstep(0.53, 0.63, m));
-    c = mix(c, ${glsl(C.sand)}, 1.0 - smoothstep(0.15, 0.9, a));
-    c = mix(c, ${glsl(C.rock)}, max(clamp((h - 7.5 * K) / (1.5 * K), 0.0, 1.0), smoothstep(0.9, 0.78, up)));
-    c = mix(c, ${glsl(C.snow)}, clamp((h - 11.0 * K) / (3.0 * K), 0.0, 1.0));
+    c = biomeColour(T, P) * (0.92 + 0.16 * m);
+    c = mix(c, ${glsl(B.marsh)}, (1.0 - smoothstep(1.2, 1.6, a)) * smoothstep(600.0, 700.0, P) * smoothstep(0.985, 0.995, up) * step(0.0, T));
+    c = mix(c, T < -1.0 ? ${glsl(B.tundra)} : ${glsl(B.sand)}, 1.0 - smoothstep(0.15, 0.6, a));
+    c = mix(c, ${glsl(B.rock)}, max(clamp((h - 7.5 * K) / (1.5 * K), 0.0, 1.0) * (1.0 - smoothstep(13.0, 15.0, T)), smoothstep(0.86, 0.72, up)));
   }
-  return mix(c, ${glsl(C.snow)}, clamp((abs(lat) - 0.9) / 0.05, 0.0, 1.0));
+  return mix(c, ${glsl(B.ice)}, 1.0 - smoothstep(-12.0, -8.0, T));
 }`,
       )
       .replace(
         '#include <color_fragment>',
-        '#include <color_fragment>\n  vec3 rU = normalize(vOP);\n  diffuseColor.rgb = groundColour(vH, vL, dot(normalize(vON), rU), vM, rU.y);',
+        '#include <color_fragment>\n  vec3 rU = normalize(vOP);\n  diffuseColor.rgb = groundColour(vH, vL, dot(normalize(vON), rU), vM, vT, vP);',
       );
   };
   // (one program for every relief: three would otherwise reuse the first relief's compiled shader)
-  m.customProgramCacheKey = () => `lab-ground-water-${k.toFixed(4)}`;
+  m.customProgramCacheKey = () => `lab-ground-climate-${k.toFixed(4)}`;
   return m;
 }
 
-/** The sea: the cube-sphere at the water line, its colour the valley's lake's, turning to pack ice at
- *  the poles. */
-export function seaGeometry(radius: number, n = 64): THREE.BufferGeometry {
+/** The sea: the cube-sphere at the water line, its colour the valley's lake's, turning to pack ice where
+ *  the sea is cold enough. */
+export function seaGeometry(s: PlanetGround, n = 64): THREE.BufferGeometry {
+  const radius = s.radius;
   const W = n + 1;
   const verts = FACE_COUNT * W * W;
   const pos = new Float32Array(verts * 3), nor = new Float32Array(verts * 3), col = new Float32Array(verts * 3);
@@ -183,7 +198,7 @@ export function seaGeometry(radius: number, n = 64): THREE.BufferGeometry {
           pos[v * 3 + a] = d[a] * radius;
           nor[v * 3 + a] = d[a];
         }
-        c.copy(C.water).lerp(C.ice, clamp01((Math.abs(d[1]) - 0.9) / 0.04));
+        c.copy(C.water).lerp(C.ice, clamp01((-6 - tempOn(s, d)) / 4));
         col[v * 3] = c.r;
         col[v * 3 + 1] = c.g;
         col[v * 3 + 2] = c.b;

@@ -1,7 +1,8 @@
 /**
  * The planet lab's settings: the planet's size, relief and land, how many it may hold, how fast its time
  * runs, and the creature the camera follows. Read first from the URL, so a view can be shared or shot again:
- * ?lab=planet&r=300&relief=30&land=0.6&continents=0.45&rugged=0.5&cap=165&seed=7&speed=1&view=orbit|region|ground|low&follow=1&at=lon,lat
+ * ?lab=planet&r=300&relief=30&land=0.6&continents=0.45&rugged=0.5&temperature=0&wetness=0&cap=165&seed=7&speed=1
+ *   &view=orbit|region|ground|low&follow=1&at=lon,lat
  */
 import { create } from 'zustand';
 import { CAPACITIES } from '../../sim/model';
@@ -17,6 +18,10 @@ export interface LabState {
   continents: number;
   /** gentle (0) … rugged (1) */
   rugged: number;
+  /** colder (−1: an ice world) … warmer (1: a hothouse) */
+  temperature: number;
+  /** drier (−1) … wetter (1) */
+  wetness: number;
   /** how many it may hold at once (the valley's three sizes) */
   cap: number;
   seed: number;
@@ -41,6 +46,8 @@ export const useLab = create<LabState>()((set) => ({
   land: num('land', 0.6, 0.1, 0.8),
   continents: num('continents', 0.45, 0, 1),
   rugged: num('rugged', 0.5, 0, 1),
+  temperature: num('temperature', 0, -1, 1),
+  wetness: num('wetness', 0, -1, 1),
   cap: ((c) => (CAPACITIES.includes(c) ? c : CAPACITIES[0]))(num('cap', CAPACITIES[0], 1, 10000)),
   seed: num('seed', 7, 0, 2 ** 31) >>> 0,
   speed: num('speed', 1, 0, 16),
