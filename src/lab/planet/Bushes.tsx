@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { heightOn, type PlanetGround } from '../../sim/planetGround';
+import { heightOn, levelOn, type PlanetGround } from '../../sim/planetGround';
 import { anyTangent, cross, normalize, turn, type Vec3 } from '../../sim/sphere';
 import type { World } from '../../sim/world';
 
@@ -16,13 +16,14 @@ const VY = new THREE.Vector3();
 const VZ = new THREE.Vector3();
 const C = new THREE.Color();
 
-/** Set `O` standing at the unit vector p, `rise` bu above its ground, turned `spin` about its up. */
+/** Set `O` standing at the unit vector p, `rise` bu above its ground (or floating, under the water there),
+ *  turned `spin` about its up. */
 function standOn(g: PlanetGround, p: Vec3, rise: number, spin: number): void {
   const f = turn(p, anyTangent(p), spin);
   const x = cross(p, f);
   BASIS.makeBasis(VX.set(x[0], x[1], x[2]), VY.set(p[0], p[1], p[2]), VZ.set(f[0], f[1], f[2]));
   O.quaternion.setFromRotationMatrix(BASIS);
-  O.position.set(p[0], p[1], p[2]).multiplyScalar(g.radius + Math.max(heightOn(g, p), -0.3) + rise);
+  O.position.set(p[0], p[1], p[2]).multiplyScalar(g.radius + Math.max(heightOn(g, p), levelOn(g, p) - 0.3) + rise);
 }
 
 const MOST_REMAINS = 512;

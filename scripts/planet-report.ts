@@ -3,7 +3,7 @@
  * born and died, how far they have spread from their homeland, and how fast it ran. Pure simulation — no
  * browser. The planet's counterpart of valley-report.ts.
  *
- *   npx vite-node scripts/planet-report.ts -- --seed 7 --radius 300 --relief 30 --land 0.6 --days 12
+ *   npx vite-node scripts/planet-report.ts -- --seed 7 --radius 300 --relief 30 --land 0.6 [--continents 0.45] [--rugged 0.5] --days 12
  */
 import { createPlanet, release, stepWorld, DAY_LENGTH, STEP, MAX_POP } from '../src/sim/world';
 import { genomeOfMorphotype } from '../src/engine/random';
@@ -15,7 +15,7 @@ const arg = (name: string, dflt: string) => {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : dflt;
 };
-const spec = { seed: Number(arg('seed', '7')), radius: Number(arg('radius', '300')), relief: Number(arg('relief', '30')), land: Number(arg('land', '0.6')) };
+const spec = { seed: Number(arg('seed', '7')), radius: Number(arg('radius', '300')), relief: Number(arg('relief', '30')), land: Number(arg('land', '0.6')), continents: Number(arg('continents', '0.45')), rugged: Number(arg('rugged', '0.5')) };
 const days = Number(arg('days', '12'));
 const cap = Number(arg('cap', String(MAX_POP)));
 
@@ -25,6 +25,11 @@ starterCast('standard').forEach(([kind, n], i) => release(w, genomeOfMorphotype(
 const S = w.surface as PlanetSurface;
 const R = spec.radius;
 console.log(`planet ${JSON.stringify(spec)} cap ${cap}: made in ${((Date.now() - t0) / 1000).toFixed(1)} s · ${w.plants.length} bushes · ${S.cells} field cells · homeland ${(S.homeArc * R).toFixed(0)} bu across its middle to its rim`);
+{
+  const b = S.ground.bake;
+  const lakes = b.bodies.filter((x) => x.kind === 'lake');
+  console.log(`terrain ${b.checksum}: ${lakes.length} lakes (${lakes.filter((x) => x.swim).length} joined on by a river a fish can swim), ${new Set(b.bodies.map((x) => x.reach)).size} waters a swimmer cannot pass between`);
+}
 console.log('day  alive kinds  births deaths  spread(bu: median, farthest)  s/day');
 let births = 0, deaths = 0;
 for (let d = 1; d <= days; d++) {

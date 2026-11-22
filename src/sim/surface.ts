@@ -23,14 +23,12 @@ import type { Stand } from './stands';
 
 /** What a world is made on: its terrain (a valley's; a planet carries its seed's, unused, for the valley's
  *  viewer), its surface, how many cells its fields run across (the valley's viewer draws its grass by them),
- *  where its bushes may grow (up to `most`, in `tries` throws), and — where the surface's own reading of
- *  the ground is dear to make the first time — what grows where, for laying the fields out. */
+ *  and where its bushes may grow (up to `most`, in `tries` throws). */
 export interface Ground {
   terrain: Terrain;
   surface: Surface;
   gridN: number;
   bushes: { most: number; tries: number; place: (rng: () => number) => Place };
-  firstBiome?: (p: Place) => Biome;
 }
 
 /** A point on the ground. A planet's carries its third coordinate as `y` (a point on the sphere of its sea);
@@ -95,8 +93,12 @@ export interface Surface {
 
   // --- the ground -------------------------------------------------------------------------------------
 
-  /** The ground's height at a place (bu above the water line; under it, negative). */
+  /** The ground's height at a place (bu above the sea; under it, negative). */
   height(p: Place): number;
+  /** The water's surface at a place (bu): where the ground is below it, the place is wet. The valley's
+   *  lake and river lie at its one level; a planet's lakes stand at their brims and its rivers fall to the
+   *  sea, each at its own. */
+  level(p: Place): number;
   /** What grows at a place. */
   biome(p: Place): Biome;
   /** The ground under a creature, as it was last settled there. */

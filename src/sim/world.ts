@@ -58,7 +58,6 @@ export function createPlanet(spec: PlanetSpec, cap: number = MAX_POP): World {
 
 function worldOn(seed: number, cap: number, ground: Ground): World {
   const { terrain, surface, gridN, bushes } = ground;
-  const firstBiome = ground.firstBiome ?? surface.biome;
   const rng = mulberry32State(mix32(seed, 0x3c0105));
   const cells = surface.cells;
   const grass = new Float32Array(cells);
@@ -67,7 +66,7 @@ function worldOn(seed: number, cap: number, ground: Ground): World {
   const algaeCap = new Float32Array(cells);
   // (each cell by what grows at its middle, in the fields' own order)
   for (let k = 0; k < cells; k++) {
-    const b = firstBiome(surface.cellCenter(k));
+    const b = surface.biome(surface.cellCenter(k));
     grassCap[k] = b === 'meadow' ? 0.6 : b === 'wood' ? 0.32 : b === 'sand' ? 0.05 : 0;
     algaeCap[k] = b === 'shallow' ? 1.25 : b === 'deep' ? 0.8 : 0;
     grass[k] = grassCap[k] * (0.6 + 0.4 * rng());
@@ -108,7 +107,7 @@ function worldOn(seed: number, cap: number, ground: Ground): World {
   let tries = 0;
   while (world.plants.length < bushes.most && tries++ < bushes.tries) {
     const p = bushes.place(rng);
-    const b = firstBiome(p);
+    const b = surface.biome(p);
     if (b !== 'wood' && !(b === 'meadow' && rng() < 0.25)) continue;
     const max = 3 + Math.floor(rng() * 5);
     world.plants.push({ id: world.nextId++, ...p, fruit: max * rng(), max, size: 0.8 + rng() * 0.9 });

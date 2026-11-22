@@ -11,9 +11,9 @@
  * it: over the generations they spread out over the rest of the world.
  */
 import { anyTangent, arc, cross, cubeToSphere, dot, fibonacci, normalize, randomHeading, randomPlace, rotate, settle, slide, sphereToCube, step, tangent, toward, turn, type Vec3 } from './sphere';
-import { biomeOn, exactHeight, heightOn, makePlanetGround, moistOn, planetStands, POLAR_ICE, type PlanetGround, type PlanetSpec } from './planetGround';
+import { biomeOn, heightOn, levelOn, makePlanetGround, planetStands, type PlanetGround, type PlanetSpec } from './planetGround';
 import { AIRBORNE, canStand, dayPhase, GRID_CELL, growthOf, MAX_POP, type Creature, type Plant, type World } from './model';
-import { makeTerrain, WATER_LEVEL, WORLD_SIZE, type Biome } from './terrain';
+import { makeTerrain, WORLD_SIZE } from './terrain';
 import { engaged, footprintOf, ROOM, ROOM_AT, ROOM_EVERY, ROOM_PUSH, ROOM_RATE, segmentGap } from './valley';
 import type { Ground, Place, Surface } from './surface';
 
@@ -59,12 +59,12 @@ function homeOf(g: PlanetGround, reach: number): Vec3 {
   const n = 400;
   for (let i = 0; i < n; i++) {
     const c = fibonacci(i, n);
-    if (Math.abs(c[1]) > 0.7 || exactHeight(g, c) < 1) continue;
+    if (Math.abs(c[1]) > 0.7 || heightOn(g, c) - levelOn(g, c) < 1) continue;
     let landN = 0, all = 0;
     for (const f of [0.25, 0.5, 0.75, 1]) {
       for (let b = 0; b < 12; b++) {
         const q = step(c, dirAt(c, (b / 12) * Math.PI * 2), reach * f).p;
-        if (exactHeight(g, q) > WATER_LEVEL) landN++;
+        if (heightOn(g, q) > levelOn(g, q)) landN++;
         all++;
       }
     }
@@ -75,17 +75,6 @@ function homeOf(g: PlanetGround, reach: number): Vec3 {
     }
   }
   return best;
-}
-
-/** What grows at p, from the noise itself (a world's fields and bushes are laid out by it once, without
- *  sampling the whole planet's ground first). */
-function biomeExact(g: PlanetGround, p: Vec3): Biome {
-  const h = exactHeight(g, p);
-  if (h < -1.2) return 'deep';
-  if (h < WATER_LEVEL) return 'shallow';
-  if (h < 0.45) return 'sand';
-  if (h > 7.5 * Math.max(0.2, g.relief / 14) || Math.abs(p[1]) > POLAR_ICE) return 'rock';
-  return moistOn(g, p) > 0.58 ? 'wood' : 'meadow';
 }
 
 /** A planet's ground for a world: its surface, its fields' cells, and where its bushes grow (over the whole
@@ -106,7 +95,6 @@ export function makePlanet(spec: PlanetSpec, cap: number = MAX_POP): Ground {
         return { x: u[0] * spec.radius, y: u[1] * spec.radius, z: u[2] * spec.radius };
       },
     },
-    firstBiome: (p) => biomeExact(surface.ground, unitOf(p)),
   };
 }
 
@@ -142,6 +130,7 @@ export function planetSurface(spec: PlanetSpec, cap: number = MAX_POP): PlanetSu
   const chord = (r: number) => 2 * R * Math.sin(Math.min(Math.PI, r / R) / 2);
   const sunAt = (time: number): Vec3 => rotate(homeMeridian, NORTH, -2 * Math.PI * (dayPhase(time) - 0.25));
   const height = (p: Place) => heightOn(g, unit(p));
+  const level = (p: Place) => levelOn(g, unit(p));
   const around = (p: Place, bearing: number, d: number) => {
     const u = unit(p);
     return at(step(u, dirAt(u, bearing), d / R).p);
@@ -150,8 +139,8 @@ export function planetSurface(spec: PlanetSpec, cap: number = MAX_POP): PlanetSu
     for (let r = 3; r <= max; r *= 1.5) {
       for (let i = 0; i < 16; i++) {
         const q = around(p, (i / 16) * Math.PI * 2, r);
-        const h = height(q);
-        if (deep ? h < WATER_LEVEL - 0.6 : h > WATER_LEVEL + 0.4) return q;
+        const h = height(q), L = level(q);
+        if (deep ? h < L - 0.6 : h > L + 0.4) return q;
       }
     }
     return null;
@@ -305,6 +294,7 @@ export function planetSurface(spec: PlanetSpec, cap: number = MAX_POP): PlanetSu
 
     // --- the ground ----------------------------------------------------------------------------------
     height,
+    level,
     biome: (p) => biomeOn(g, unit(p)),
     groundOf: (c) => c.ground ?? height(c),
     settle(c) {

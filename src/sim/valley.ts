@@ -90,6 +90,7 @@ export function valleySurface(terrain: Terrain): Surface {
 
     // --- the ground -------------------------------------------------------------------------------------
     height: (p) => heightAt(terrain, p.x, p.z),
+    level: () => WATER_LEVEL,
     biome: (p) => biomeAt(terrain, p.x, p.z),
     groundOf: (c) => c.y,
     settle(c) {

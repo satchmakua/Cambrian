@@ -1287,8 +1287,56 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
        are for step 6's budgets.
      - **The valley untouched.** Its 12 save hashes are the same as before the port. The seam guard counts
        the planet's surface as a surface, and 1050 tests pass.
-  4. **Procedural terrain and water**: plates, stream-power erosion, Priority-Flood lakes and rivers, and
-     water bodies a swimmer can or cannot reach.
+  4. [x] **Procedural terrain and water**: plates, stream-power erosion, Priority-Flood lakes and rivers,
+     and water bodies a swimmer can or cannot reach. **Done (2026-11-22).** What shows it:
+     - **Baked once, in passes** (`src/sim/planetBake.ts`, 1.2 s at 300 bu), on a grid of about 2.5 bu
+       cells (`src/sim/cubeGrid.ts`: 212,064 cells at 300 bu, each with its neighbours found across the
+       seams by the shared edge and checked both ways). The plates are grown by a random flood and each
+       turns about a pole of its own: ranges rise where they collide, island arcs out at sea, rifts where
+       they part. The sea is let in to the share of land asked for (60.1% for 60%), and a rough rain falls
+       by latitude, less of it inland. The rivers carve the land to the balance of uplift against
+       incision: stream power in Braun & Willett's implicit form, run to its steady state (Cordonnier et
+       al.). The flow is routed over hollows by Priority-Flood and jittered Rho8-style, so rivers don't run
+       down the grid's lines, and hillslopes are eased by creep. Then the valley's hills, and hollows big
+       and deep enough fill as lakes; the rest are filled away. Streams begin where the gathered rain
+       passes 900 bu², too shallow for a fish, and are rivers deep enough to swim past 3,200. Each sea and
+       lake is a body, joined to the next water by the river it drains by when a fish can swim it.
+       Checksummed (`c253a8b5` for seed 7 at 300 bu): 49 lakes, 13 of them so joined.
+     - **A water level of its own.** The surface has a new `level(p)`: the valley's lake and river at its
+       one level, a planet's lakes at their brims and its rivers falling to the sea. The simulation asks it
+       wherever it asked the one level: who may stand where, breath ashore, wading, the way back to the
+       water, the filter feeders' search, an egg laid in water. The seam guard now forbids the one level
+       outside the surfaces, and the valley's 12 save hashes are the same.
+     - **Tested** (`tests/sim/planetBake.test.ts`, `cubeGrid.test.ts`). Every drop of rain drains to a lake
+       or the sea. Lakes lie level at their brims, walled by ground no lower. Rivers gather downstream and
+       fall toward the sea. A fish can stand in every river marked swimmable and in none of the streams,
+       and a lake no fish can leave is its own reach. A hundred planets, at every continents and rugged
+       setting, have no NaN, their land within 3 points of what was asked, all draining, and every biome
+       the valley has on each. 1062 tests pass.
+     - **Continents and ruggedness**, the step's two sliders in the lab (`?continents=&rugged=`, and
+       `?at=lon,lat` to open over a place). Past half the surface, land joins up into one by itself. So at
+       60% land, continents up to 0.5 makes one great land with inland seas (its biggest piece is all of
+       it); above that the sea gets in along the seams between continental plates. At 1, six planets in
+       six are in parts, the biggest holding 68% of the land. At 40% land it gives 11 lands, the biggest
+       holding 30%.
+     - **Seen.** `scripts/planet-map.ts` draws a baked planet headless: shaded relief, shelf and deeps,
+       lakes, rivers, and the plates if asked. In the lab, the ground is coloured by its depth under the
+       water and its height above it, so there are beaches at every waterline. Lakes and rivers are a
+       second skin at their own levels, held under the ground wherever it is dry, so shores fall where the
+       two cross. Swimmers, carcasses and the camera sit on the water where they are. Shots: the globe,
+       a region of lakes joined by rivers, a snowy range, the ground by a lake at dusk, an archipelago.
+     - **Cost to draw.** 60 fps on the RTX 5070 Ti at 1× from orbit, over a region and at the ground. On
+       the Radeon 610M: 60 from orbit and over the lakes, and 60 at the ground near the homeland. Following
+       an animal there drops it to 16–22 fps, but it is the followed felid's fur: 46–60 without it. That is
+       the valley's own cost for a furred animal selected close up, and it belongs to step 6's budgets.
+     - **Life.** Headless (`scripts/planet-report.ts`, seed 7, 300 bu): cap 165 holds 115–152 alive in 8–10
+       kinds over 8 days (on step 3's ground, 98–128), the farthest 195–406 bu out. Cap 600 holds 403–512
+       from day 3 (step 3: 323–394), the farthest 524 bu out. A day costs 2.4–4.1 s at cap 165 and 8–11.5 s
+       at cap 600.
+     - **Still rough.** The rain is a first guess by latitude: winds and rain shadows are step 5's. Lakes
+       come mostly from the hills' hollows and a few rifts, with no glacial lakes and few high ones; the
+       big rivers all run low, as big rivers do. The simulation's rock is by height only, the scene's by
+       slope too (step 5's one palette).
   5. **Climate by latitude and rain shadows.** Biomes by temperature and rainfall, each with its own plants
      and food: the food from a productivity curve anchored to the valley's own numbers.
   6. **Weather fronts and seasons by hemisphere**, the air and clouds, culling and detail levels, more

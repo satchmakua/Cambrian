@@ -5,7 +5,6 @@
 import type { Genome } from '../engine/genome';
 import { STILLBORN } from './viability';
 import type { Traits } from './traits';
-import { WATER_LEVEL } from './terrain';
 import type { Place } from './surface';
 import { crossover } from '../engine/crossover';
 import { encodeGenome } from '../engine/share';
@@ -343,7 +342,7 @@ export function breed(w: World, a: Creature, m: Creature | null): void {
         laidAt: w.time,
         hatchAt: w.time + HATCH_TIME * (0.85 + 0.3 * w.rng()),
         nest,
-        water: w.surface.height(a) < WATER_LEVEL,
+        water: w.surface.height(a) < w.surface.level(a),
       });
       a.children++;
       m.children++;

@@ -16,9 +16,9 @@ import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { anyTangent, arc, cross, settle, slide, tangent, toward, turn, type Vec3 } from '../../sim/sphere';
-import { heightOn, type PlanetGround } from '../../sim/planetGround';
+import { heightOn, levelOn, type PlanetGround } from '../../sim/planetGround';
 import type { Creature, World } from '../../sim/world';
-import { START_FOLLOW, START_VIEW, useLab, type ViewName } from './labStore';
+import { START_AT, START_FOLLOW, START_VIEW, useLab, type ViewName } from './labStore';
 
 interface View {
   T: Vec3;
@@ -125,7 +125,7 @@ export function GlobeCamera({ ground, world, home }: { ground: PlanetGround; wor
   const gl = useThree((st) => st.gl);
   const R = ground.radius;
   const view = useRef<View | null>(null);
-  if (view.current === null) view.current = startView(R, home);
+  if (view.current === null) view.current = startView(R, START_AT ?? home);
   const sized = useRef(R);
   // input waiting to be applied, a share of it a frame (a little inertia, as the valley's damped controls have)
   const pend = useRef({ dx: 0, dy: 0, px: 0, py: 0, zoom: 0 });
@@ -318,11 +318,12 @@ export function GlobeCamera({ ground, world, home }: { ground: PlanetGround; wor
     v.H = kept.f;
 
     // the camera: back and up from the ground looked at, never under the ground itself
-    const G = GV.set(v.T[0], v.T[1], v.T[2]).multiplyScalar(Rn + Math.max(heightOn(ground, v.T), 0) + lift.current);
+    const G = GV.set(v.T[0], v.T[1], v.T[2]).multiplyScalar(Rn + Math.max(heightOn(ground, v.T), levelOn(ground, v.T)) + lift.current);
     const ct = Math.cos(v.tilt), st = Math.sin(v.tilt);
     const C = CV.set(v.T[0] * ct - v.H[0] * st, v.T[1] * ct - v.H[1] * st, v.T[2] * ct - v.H[2] * st).multiplyScalar(v.range).add(G);
     let cr = C.length();
-    const under = Math.max(heightOn(ground, [C.x / cr, C.y / cr, C.z / cr]), 0);
+    const below: Vec3 = [C.x / cr, C.y / cr, C.z / cr];
+    const under = Math.max(heightOn(ground, below), levelOn(ground, below));
     if (cr < Rn + under + 0.6) {
       C.multiplyScalar((Rn + under + 0.6) / cr);
       cr = Rn + under + 0.6;

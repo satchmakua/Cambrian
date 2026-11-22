@@ -4,7 +4,6 @@
  * Every place, distance and turn goes through the world's surface (surface.ts).
  */
 import type { Traits } from './traits';
-import { WATER_LEVEL } from './terrain';
 import { perchHeight } from './stands';
 import type { Place } from './surface';
 import { climateOf, AIRBORNE, ALGAE_ENERGY, aName, canStand, cellOf, CLIMB, COURT_TIME, EGG_ENERGY, FRUIT_ENERGY, GRASS_ENERGY, growthOf, INTAKE, log, MEAT_ENERGY, SINK, SOAR_BANK, speciesById, type Creature, type World } from './model';
@@ -366,7 +365,7 @@ function steer(w: World, c: Creature, goal: Place | null, pace: number, dt: numb
   let terrainMul = 1;
   if (!aloft) {
     const swimmer = t.locomotion === 'swim' || t.locomotion === 'drift';
-    if (ground < WATER_LEVEL) terrainMul = swimmer ? 1 : t.habitat === 'land' ? 0.45 : 0.3 + 0.7 * t.swim;
+    if (ground < S.level(c)) terrainMul = swimmer ? 1 : t.habitat === 'land' ? 0.45 : 0.3 + 0.7 * t.swim;
     else if (swimmer) terrainMul = 0.15 + 0.85 * t.walk;
   }
   // the cold-blooded are sluggish after dark, and in the cold of the year

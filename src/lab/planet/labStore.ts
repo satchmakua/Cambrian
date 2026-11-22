@@ -1,7 +1,7 @@
 /**
  * The planet lab's settings: the planet's size, relief and land, how many it may hold, how fast its time
  * runs, and the creature the camera follows. Read first from the URL, so a view can be shared or shot again:
- * ?lab=planet&r=300&relief=30&land=0.6&cap=165&seed=7&speed=1&view=orbit|region|ground|low&follow=1
+ * ?lab=planet&r=300&relief=30&land=0.6&continents=0.45&rugged=0.5&cap=165&seed=7&speed=1&view=orbit|region|ground|low&follow=1&at=lon,lat
  */
 import { create } from 'zustand';
 import { CAPACITIES } from '../../sim/model';
@@ -13,6 +13,10 @@ export interface LabState {
   relief: number;
   /** the share of the surface above the sea */
   land: number;
+  /** a few great continents (0) … many smaller lands (1) */
+  continents: number;
+  /** gentle (0) … rugged (1) */
+  rugged: number;
   /** how many it may hold at once (the valley's three sizes) */
   cap: number;
   seed: number;
@@ -35,6 +39,8 @@ export const useLab = create<LabState>()((set) => ({
   radius: num('r', 300, 40, 600),
   relief: num('relief', 30, 0, 40),
   land: num('land', 0.6, 0.1, 0.8),
+  continents: num('continents', 0.45, 0, 1),
+  rugged: num('rugged', 0.5, 0, 1),
   cap: ((c) => (CAPACITIES.includes(c) ? c : CAPACITIES[0]))(num('cap', CAPACITIES[0], 1, 10000)),
   seed: num('seed', 7, 0, 2 ** 31) >>> 0,
   speed: num('speed', 1, 0, 16),
@@ -46,6 +52,14 @@ export type ViewName = 'orbit' | 'region' | 'ground' | 'low';
 
 /** the view the lab opens on */
 export const START_VIEW: ViewName = ((v) => (v === 'region' || v === 'ground' || v === 'low' ? v : 'orbit'))(Q.get('view'));
+
+/** ?at=lon,lat (degrees): open over that place, not the homeland (for shots of a planet's lakes and ranges) */
+export const START_AT: [number, number, number] | null = ((v) => {
+  const m = v?.split(',').map(Number);
+  if (!m || m.length !== 2 || !m.every(Number.isFinite)) return null;
+  const lon = (m[0] * Math.PI) / 180, lat = (m[1] * Math.PI) / 180;
+  return [Math.cos(lat) * Math.cos(lon), Math.sin(lat), -Math.cos(lat) * Math.sin(lon)];
+})(Q.get('at'));
 
 /** ?follow=1: open following the animal nearest the place the lab opens on */
 export const START_FOLLOW = Q.get('follow') === '1';

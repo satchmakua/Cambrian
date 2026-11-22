@@ -13,9 +13,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const SIM_DIR = join(HERE, '..', '..', 'src', 'sim');
 
 /** the files that may: the port itself, the two surfaces (the valley's, with the terrain and trees it wraps,
- *  and the planet's), and the sphere's geometry (traits.ts reads the coordinates of a body's own parts, in
- *  its own frame: anatomy, not places) */
-const OWN = new Set(['surface.ts', 'valley.ts', 'terrain.ts', 'stands.ts', 'planetSurface.ts', 'sphere.ts', 'traits.ts']);
+ *  and the planet's), and the sphere's geometry and its grid (traits.ts reads the coordinates of a body's
+ *  own parts, in its own frame: anatomy, not places) */
+const OWN = new Set(['surface.ts', 'valley.ts', 'terrain.ts', 'stands.ts', 'planetSurface.ts', 'sphere.ts', 'cubeGrid.ts', 'traits.ts']);
 
 // (a property read, not a spread's `...x`; a call of the terrain's own functions, not of a surface's methods
 // that share their names)
@@ -23,6 +23,7 @@ const FORBIDDEN: [RegExp, string][] = [
   [/(?<!\.\.)\.(x|z|tx|tz|heading)\b/, "a place's coordinates or a heading's angle"],
   [/(?<![.\w])(heightAt|exactHeightAt|biomeAt|isWater|inBounds|normalAt|moistureAt|riverDist|standsOf|nearestTree|makeTerrain)\(/, 'the terrain asked directly'],
   [/\.(lakeX|lakeZ|lakeR)\b|terrain\.size/, "the valley's own shape"],
+  [/\bWATER_LEVEL\b/, "the valley's one water level (a planet's lakes and rivers have their own: ask the surface's level)"],
   [/Math\.atan2\(/, 'an angle worked out by hand'],
 ];
 

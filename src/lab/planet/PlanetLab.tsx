@@ -20,7 +20,8 @@ import { Bushes } from './Bushes';
 import { CAMERA, GlobeCamera, LOOK } from './GlobeCamera';
 import { CAST, LabCast } from './LabCast';
 import { START_DAYS, useLab } from './labStore';
-import { cellsFor, groundGeometry, groundMaterial, seaGeometry } from './planetMesh';
+import { cellsFor, freshWaterGeometry, freshWaterMaterial, groundGeometry, groundMaterial, seaGeometry } from './planetMesh';
+import { RIVER, SWIM_FLOW } from '../../sim/planetBake';
 import { Trees } from './Trees';
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -31,6 +32,10 @@ const TURNED = new THREE.Euler();
 
 /** frames drawn a second, for the HUD */
 const FRAME = { fps: 0 };
+/** how long each planet took to make (its terrain baked, its world laid out), for the HUD: its first making
+ *  (in development React makes each world twice, the second time on the ground already baked) */
+const MADE = new Map<string, number>();
+const madeKey = (s: { seed: number; radius: number; relief: number; land: number; continents: number; rugged: number; cap: number }) => [s.seed, s.radius, s.relief, s.land, s.continents, s.rugged, s.cap].join(':');
 /** the valley's crowding: 165 animals on its 200 bu square */
 const GROUND_EACH = (200 * 200) / 165;
 
@@ -38,16 +43,21 @@ export default function PlanetLab() {
   const radius = useLab((s) => s.radius);
   const relief = useLab((s) => s.relief);
   const land = useLab((s) => s.land);
+  const continents = useLab((s) => s.continents);
+  const rugged = useLab((s) => s.rugged);
   const cap = useLab((s) => s.cap);
   const seed = useLab((s) => s.seed);
   // a new world for each planet: its ground, and the valley's starter cast set down in its homeland
   const world = useMemo(() => {
-    const w = createPlanet({ seed, radius, relief, land }, cap);
+    const t0 = performance.now();
+    const w = createPlanet({ seed, radius, relief, land, continents, rugged }, cap);
+    const key = madeKey({ seed, radius, relief, land, continents, rugged, cap });
+    if (!MADE.has(key)) MADE.set(key, performance.now() - t0);
     populateCast(w, 'standard');
     // (?days=: run on before it is shown)
     for (let i = 0; i < (START_DAYS * DAY_LENGTH) / STEP; i++) stepWorld(w);
     return w;
-  }, [seed, radius, relief, land, cap]);
+  }, [seed, radius, relief, land, continents, rugged, cap]);
   const S = world.surface as PlanetSurface;
   // (every coat countershaded against the planet's up, not the world's +Y: see setRadialUp)
   useEffect(() => {
@@ -78,8 +88,10 @@ export default function PlanetLab() {
       camera: CAMERA,
       cast: CAST,
       frame: FRAME,
+      madeMs: MADE.get(madeKey(useLab.getState())),
+      checksum: S.ground.bake.checksum,
     };
-  }, [world, radius, relief, land, cap]);
+  }, [world, S, radius, relief, land, cap]);
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#020306' }}>
       <Canvas dpr={[1, 1.75]} camera={{ fov: 45, near: 0.1, far: 20000, position: [0, 0, radius * 3] }} gl={{ preserveDrawingBuffer: import.meta.env.DEV }}>
@@ -115,17 +127,21 @@ function Scene({ world, S }: { world: World; S: PlanetSurface }) {
   const sea = useMemo(() => seaGeometry(R), [R]);
   useEffect(() => () => sea.dispose(), [sea]);
   const groundMat = useMemo(() => groundMaterial(g.relief), [g.relief]);
+  const fresh = useMemo(() => freshWaterGeometry(g, cellsFor(R)), [g, R]);
+  useEffect(() => () => fresh.dispose(), [fresh]);
+  const freshMat = useMemo(() => freshWaterMaterial(), []);
   const seaMat = useMemo(() => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.16, metalness: 0, transparent: true, opacity: 0.86, depthWrite: false }), []);
   const air = useMemo(() => atmosphereMaterial(), []);
   const airGeo = useMemo(() => new THREE.SphereGeometry(1, 128, 64), []);
   useEffect(
     () => () => {
       groundMat.dispose();
+      freshMat.dispose();
       seaMat.dispose();
       air.dispose();
       airGeo.dispose();
     },
-    [groundMat, seaMat, air, airGeo],
+    [groundMat, freshMat, seaMat, air, airGeo],
   );
   const scene = useThree((st) => st.scene);
   const fog = useMemo(() => new THREE.FogExp2(0x000000, 0), []);
@@ -174,13 +190,14 @@ function Scene({ world, S }: { world: World; S: PlanetSurface }) {
       <directionalLight ref={sun} intensity={2.6} />
       <ambientLight intensity={0.04} />
       <mesh geometry={groundGeo} material={groundMat} />
+      <mesh geometry={fresh} material={freshMat} renderOrder={1} />
       <mesh geometry={sea} material={seaMat} renderOrder={1} />
       <mesh geometry={airGeo} material={air} scale={Ra} renderOrder={2} frustumCulled={false} />
       <Stars radius={R * 9} depth={R * 2} count={3000} factor={5} saturation={0} fade speed={0} />
       <Trees ground={g} />
       <Bushes world={world} ground={g} />
       <LabCast world={world} R={R} />
-      <GlobeCamera key={`${world.seed}:${R}:${g.relief}:${g.land}:${world.cap}`} ground={g} world={world} home={S.home} />
+      <GlobeCamera key={`${world.seed}:${R}:${g.relief}:${g.land}:${g.continents}:${g.rugged}:${world.cap}`} ground={g} world={world} home={S.home} />
       <Stepper world={world} />
       <FrameCounter />
     </>
@@ -262,7 +279,20 @@ function clockOf(t: number): string {
 }
 
 function Hud({ world }: { world: World }) {
-  const { radius, relief, land, cap, speed, follow, set } = useLab();
+  const { radius, relief, land, continents, rugged, cap, seed, speed, follow, set } = useLab();
+  const madeIn = MADE.get(madeKey({ seed, radius, relief, land, continents, rugged, cap })) ?? 0;
+  const bake = (world.surface as PlanetSurface).ground.bake;
+  const waters = useMemo(() => {
+    const lakes = bake.bodies.filter((b) => b.kind === 'lake');
+    let river = 0, swim = 0;
+    for (let k = 0; k < bake.kind.length; k++) {
+      if (bake.kind[k] !== RIVER) continue;
+      river++;
+      if (bake.flow[k] >= SWIM_FLOW) swim++;
+    }
+    const cell = ((Math.PI / 2) * radius) / bake.grid.N;
+    return { lakes: lakes.length, joined: lakes.filter((l) => l.swim).length, river: Math.round(river * cell), swim: Math.round(swim * cell) };
+  }, [bake, radius]);
   const read = useRef<HTMLPreElement>(null);
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -310,6 +340,15 @@ function Hud({ world }: { world: World }) {
       <Row label={`land ${Math.round(land * 100)}% of the surface`}>
         <Slider value={land} min={0.15} max={0.8} step={0.05} onCommit={(l) => set({ land: l })} />
       </Row>
+      <Row label={`continents ${continents.toFixed(2)} (a few great lands … many smaller)`}>
+        <Slider value={continents} min={0} max={1} step={0.05} onCommit={(c) => set({ continents: c })} />
+      </Row>
+      <Row label={`rugged ${rugged.toFixed(2)} (gentle … mountainous)`}>
+        <Slider value={rugged} min={0} max={1} step={0.05} onCommit={(r) => set({ rugged: r })} />
+      </Row>
+      <div style={{ opacity: 0.75, marginBottom: 4 }}>
+        {waters.lakes} lakes ({waters.joined} joined to the next water by a river a fish can swim) · about {waters.river.toLocaleString()} bu of streams and rivers, {waters.swim.toLocaleString()} of them swimmable · made in {(madeIn / 1000).toFixed(1)} s
+      </div>
       <Row label={`at most ${cap} animals (the valley's sizes)`}>
         {CAPACITIES.map((n) => (
           <button key={n} style={button(cap === n)} onClick={() => set({ cap: n })}>

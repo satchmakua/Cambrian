@@ -4,7 +4,6 @@
  * place, distance and search goes through the world's surface (surface.ts).
  */
 import { BREATHES_AIR } from './traits';
-import { WATER_LEVEL } from './terrain';
 import { distance as morphDistance } from '../engine/morphospace';
 import { unitHash } from '../engine/rng';
 import type { Place } from './surface';
@@ -70,7 +69,7 @@ export function live(w: World, c: Creature, dt: number): void {
 
   // a gilled body out of the water: its breath runs down, and past its time it is suffocating
   if (t.ashore < BREATHES_AIR) {
-    if (w.surface.groundOf(c) > WATER_LEVEL + 0.1 && c.alt <= AIRBORNE) c.dry += dt;
+    if (w.surface.groundOf(c) > w.surface.level(c) + 0.1 && c.alt <= AIRBORNE) c.dry += dt;
     else c.dry = Math.max(0, c.dry - dt * 4);
     if (c.dry > t.ashore) c.health -= t.maxHealth * 0.08 * dt;
   }
@@ -156,7 +155,7 @@ function decide(w: World, c: Creature): void {
   }
 
   // a gilled body ashore for half its breath goes back to the water, whatever it was doing
-  if (t.ashore < BREATHES_AIR && c.dry > t.ashore * 0.5 && S.groundOf(c) > WATER_LEVEL + 0.1) {
+  if (t.ashore < BREATHES_AIR && c.dry > t.ashore * 0.5 && S.groundOf(c) > S.level(c) + 0.1) {
     const back = S.nearestWhere(c, true);
     if (back) {
       c.action = 'wander';
@@ -195,7 +194,7 @@ function decide(w: World, c: Creature): void {
     }
     // a creature of both worlds that breathes air hauls out to sleep (a seal on the rocks, an otter on
     // the bank): it swims for the shore first, and sleeps once it is on dry ground
-    if (t.habitat === 'amphibious' && t.ashore >= BREATHES_AIR && S.groundOf(c) < WATER_LEVEL - 0.3) {
+    if (t.habitat === 'amphibious' && t.ashore >= BREATHES_AIR && S.groundOf(c) < S.level(c) - 0.3) {
       const bank = S.nearestWhere(c, false, 90); // (from the middle of a wide lake, too)
       if (bank) {
         c.action = 'wander';
@@ -445,7 +444,7 @@ function findFood(w: World, c: Creature, near: Creature[], sight: number, hunger
       const ang = c.wanderSeed + i * 2.399;
       const rr = Math.min(sight, 26) * Math.sqrt((i + 0.5) / 20);
       const at = S.around(c, ang, rr);
-      if (!S.inBounds(at) || !reachable(w, c, at) || S.height(at) > WATER_LEVEL - 0.05) continue;
+      if (!S.inBounds(at) || !reachable(w, c, at) || S.height(at) > S.level(at) - 0.05) continue;
       const k = cellOf(w, at);
       const s = w.algae[k] * 10 - rr * 0.2;
       if (s > bs) {
@@ -474,7 +473,7 @@ function findFood(w: World, c: Creature, near: Creature[], sight: number, hunger
 function reachable(w: World, c: Creature, at: Place): boolean {
   const t = c.traits;
   if (!canStand(w, t, at)) return false;
-  if (t.ashore >= BREATHES_AIR || w.surface.height(at) <= WATER_LEVEL + 0.1) return true;
+  if (t.ashore >= BREATHES_AIR || w.surface.height(at) <= w.surface.level(at) + 0.1) return true;
   const pace = t.speed * (t.locomotion === 'swim' ? 0.15 + 0.85 * t.walk : 1);
   return w.surface.dist(c, at) <= Math.max(0, t.ashore - c.dry) * pace * 0.3;
 }

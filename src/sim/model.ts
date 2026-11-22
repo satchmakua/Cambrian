@@ -9,7 +9,7 @@ import type { Genome } from '../engine/genome';
 import type { MutationRates } from '../engine/mutate';
 import { grow, type Phenotype } from '../engine/grow';
 import type { StatefulRng } from '../engine/rng';
-import { type Terrain, WATER_LEVEL } from './terrain';
+import { type Terrain } from './terrain';
 import type { Place, Surface } from './surface';
 import { type Traits, traitsOf } from './traits';
 import { droughtOf, type Weather, weatherAt } from './weather';
@@ -533,8 +533,8 @@ export function canStand(w: World, t: Traits, p: Place): boolean {
   // (a fish keeps to water deep enough to swim in — and the more its fins have begun to crawl, the further
   // up the margin it can flop: into the shallows, to the waterline, over the wet edge of the bank. Each
   // step toward a lobe-fin reaches a little more of what grows there)
-  if (t.habitat === 'water') return h < WATER_LEVEL - 0.3 + MARGIN_REACH * t.walk;
-  if (t.habitat === 'land') return h > WATER_LEVEL - 0.5;
+  if (t.habitat === 'water') return h < w.surface.level(p) - 0.3 + MARGIN_REACH * t.walk;
+  if (t.habitat === 'land') return h > w.surface.level(p) - 0.5;
   return true;
 }
 

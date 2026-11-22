@@ -17,7 +17,6 @@ import { rigOf, useLod, useSkin, useSkinScheduler } from '../../world/Actors';
 import { plainSkin, type Skin } from '../../world/skinQueue';
 import { getQuality } from '../../ui/settings';
 import { AIRBORNE, bodyOf, COURT_TIME, growthOf, type Creature, type World } from '../../sim/world';
-import { WATER_LEVEL } from '../../sim/terrain';
 import { cross, dot, normalize, tangent, type Vec3 } from '../../sim/sphere';
 import { useLab } from './labStore';
 
@@ -67,7 +66,7 @@ function nearSet(w: World, R: number, cam: THREE.Vector3, was: Set<number>, foll
   const within: { id: number; d: number }[] = [];
   for (const c of w.creatures) {
     if (!c.alive) continue;
-    AT.set(c.x, c.y, c.z).multiplyScalar((R + Math.max(0, c.ground ?? 0) + c.alt) / R);
+    AT.set(c.x, c.y, c.z).multiplyScalar((R + Math.max(w.surface.level(c), c.ground ?? 0) + c.alt) / R);
     const d = cam.distanceTo(AT);
     const held = was.has(c.id) ? d / KEEP : d;
     if (c.id === follow || (held < r && inSight(R, AT, cam))) within.push({ id: c.id, d: c.id === follow ? -1 : held });
@@ -127,7 +126,7 @@ function Body({ c, world, R, selected }: { c: Creature; world: World; R: number;
   }
   const here = (v: THREE.Vector3) => {
     const p = P.current.p;
-    return v.set(p[0], p[1], p[2]).multiplyScalar(R + Math.max(0, c.ground ?? 0) + P.current.alt);
+    return v.set(p[0], p[1], p[2]).multiplyScalar(R + Math.max(world.surface.level(c), c.ground ?? 0) + P.current.alt);
   };
   const scratch = useRef(new THREE.Vector3());
   const lod = useLod(() => here(scratch.current), selected, here);
@@ -186,17 +185,19 @@ function Body({ c, world, R, selected }: { c: Creature; world: World; R: number;
       stalk: S.stalk,
       look: [0, 0],
     });
-    // how high: the valley's actor's own reckoning, from the ground under it, then out along the planet's up
+    // how high: the valley's actor's own reckoning, from the ground under it and the water over it there (a
+    // lake's, a river's or the sea's), then out along the planet's up
     const ground = c.ground ?? 0;
+    const L = world.surface.level(c);
     let y = ground + place.lift * s;
-    if (swimmer && ground < WATER_LEVEL) {
-      y = Math.max(ground + place.lift * s, WATER_LEVEL - place.height * s * 0.55);
+    if (swimmer && ground < L) {
+      y = Math.max(ground + place.lift * s, L - place.height * s * 0.55);
       S.bob += dt * (1 + c.speed);
       y += Math.sin(S.bob) * 0.06 * s;
-    } else if (ground < WATER_LEVEL) y = Math.max(y, WATER_LEVEL - place.height * s * 0.4);
+    } else if (ground < L) y = Math.max(y, L - place.height * s * 0.4);
     y -= S.sleep * rig.template.belly * s * SLEEP_DROP;
     y -= S.stalk * place.height * s * 0.12;
-    if (S.alt > 0.01) y = Math.max(y, Math.max(ground, WATER_LEVEL) + place.lift * s * (1 - S.fly * 0.5)) + S.alt;
+    if (S.alt > 0.01) y = Math.max(y, Math.max(ground, L) + place.lift * s * (1 - S.fly * 0.5)) + S.alt;
     g.position.set(S.p[0], S.p[1], S.p[2]).multiplyScalar(R + y);
     faceOn(g, S.p, S.f, -THREE.MathUtils.clamp(S.climb * 0.12, -0.35, 0.35) * S.fly, -THREE.MathUtils.clamp(S.turn * 0.45, -0.6, 0.6) * S.fly);
     g.scale.setScalar(s);
@@ -251,9 +252,10 @@ function Markers({ world, R, near }: { world: World; R: number; near: { current:
       // (sized by its bulk, not its reach, as the valley's are)
       const size = 0.85 * Math.cbrt(c.traits.mass) * (0.4 + 0.6 * growthOf(c));
       const ground = c.ground ?? 0;
-      const swims = c.traits.habitat === 'water' && ground < WATER_LEVEL;
+      const L = world.surface.level(c);
+      const swims = c.traits.habitat === 'water' && ground < L;
       const p = unitOf(c);
-      MARK.position.set(p[0], p[1], p[2]).multiplyScalar(R + (swims ? WATER_LEVEL - size * 0.6 : Math.max(ground, WATER_LEVEL) + c.alt + size * 0.4));
+      MARK.position.set(p[0], p[1], p[2]).multiplyScalar(R + (swims ? L - size * 0.6 : Math.max(ground, L) + c.alt + size * 0.4));
       if (!inSight(R, MARK.position, camera.position)) continue;
       faceOn(MARK, p, headOf(c, p));
       MARK.scale.setScalar(size);
