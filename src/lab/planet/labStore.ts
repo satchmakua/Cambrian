@@ -2,13 +2,12 @@
  * The planet lab's settings: the planet's size, relief and land, how many it may hold, how fast its time
  * runs, and the creature the camera follows. Read first from the URL, so a view can be shared or shot again:
  * ?lab=planet&r=300&relief=30&land=0.6&continents=0.45&rugged=0.5&temperature=0&wetness=0&cap=165&seed=7&speed=1
- *   &tilt=0.5&view=orbit|region|ground|low&follow=1&at=lon,lat
+ *   &tilt=0.5&shelf=0.25&view=orbit|region|ground|low&follow=1&at=lon,lat
  */
 import { create } from 'zustand';
 import { CAPACITIES } from '../../sim/model';
-
-/** how many a planet may hold: the valley's three sizes, and one twice its largest (a big world's) */
-export const PLANET_CAPS = [...CAPACITIES, 1200];
+import { PLANET_CAPS } from '../../sim/planetDesign';
+import type { ViewName } from '../../world/planet/GlobeCamera';
 
 export interface LabState {
   /** the planet's radius (bu) */
@@ -27,6 +26,8 @@ export interface LabState {
   wetness: number;
   /** how far the axis leans (0: no seasons … 0.5: the Earth's … 1: harsh) */
   tilt: number;
+  /** the shallow seas (0: coasts that drop to the deep … 1: wide shelves) */
+  shelf: number;
   /** how many it may hold at once (the valley's three sizes) */
   cap: number;
   seed: number;
@@ -54,14 +55,13 @@ export const useLab = create<LabState>()((set) => ({
   temperature: num('temperature', 0, -1, 1),
   wetness: num('wetness', 0, -1, 1),
   tilt: num('tilt', 0.5, 0, 1),
+  shelf: num('shelf', 0.25, 0, 1),
   cap: ((c) => (PLANET_CAPS.includes(c) ? c : CAPACITIES[0]))(num('cap', CAPACITIES[0], 1, 10000)),
   seed: num('seed', 7, 0, 2 ** 31) >>> 0,
   speed: num('speed', 1, 0, 16),
   follow: null,
   set: (p) => set(p),
 }));
-
-export type ViewName = 'orbit' | 'region' | 'ground' | 'low';
 
 /** the view the lab opens on */
 export const START_VIEW: ViewName = ((v) => (v === 'region' || v === 'ground' || v === 'low' ? v : 'orbit'))(Q.get('view'));

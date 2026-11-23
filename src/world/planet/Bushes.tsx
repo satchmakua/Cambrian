@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { heightOn, levelOn, type PlanetGround } from '../../sim/planetGround';
 import { anyTangent, cross, normalize, turn, type Vec3 } from '../../sim/sphere';
 import type { World } from '../../sim/world';
+import type { PlanetSurface } from '../../sim/planetSurface';
 
 const O = new THREE.Object3D();
 const BASIS = new THREE.Matrix4();
@@ -27,6 +28,9 @@ function standOn(g: PlanetGround, p: Vec3, rise: number, spin: number): void {
 }
 
 const MOST_REMAINS = 512;
+
+/** where a world's sea stands now (bu from its own level: the sea-level lever) */
+const seaOf = (w: World) => (w.surface as Partial<PlanetSurface>).seaLevel?.() ?? 0;
 
 export function Bushes({ world, ground }: { world: World; ground: PlanetGround }) {
   const plants = world.plants;
@@ -51,20 +55,27 @@ export function Bushes({ world, ground }: { world: World; ground: PlanetGround }
   const berryRef = useRef<THREE.InstancedMesh>(null);
   const carcassRef = useRef<THREE.InstancedMesh>(null);
   const eggRef = useRef<THREE.InstancedMesh>(null);
-  // the bushes never move: set once
+  // the bushes never move: set once (and again as the sea moves: those it has risen over are not drawn)
   const units = useMemo(() => plants.map((p) => normalize([p.x, p.y ?? 0, p.z])), [plants]);
-  useEffect(() => {
+  const placeBushes = (sea: number) => {
     const m = bushRef.current;
     if (!m) return;
     plants.forEach((p, i) => {
       standOn(ground, units[i], p.size * 0.3, p.id * 2.4);
-      O.scale.set(p.size * 0.9, p.size * 0.7, p.size * 0.9);
+      const drowned = sea > 0 && heightOn(ground, units[i]) < sea;
+      O.scale.set(p.size * 0.9, p.size * 0.7, p.size * 0.9).multiplyScalar(drowned ? 0 : 1);
       O.updateMatrix();
       m.setMatrixAt(i, O.matrix);
       m.setColorAt(i, C.setHSL(0.27 + (p.id % 5) * 0.012, 0.42, 0.16 + (p.id % 4) * 0.015));
     });
     m.instanceMatrix.needsUpdate = true;
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  };
+  const placedFor = useRef(0);
+  useEffect(() => {
+    placedFor.current = seaOf(world);
+    placeBushes(placedFor.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plants, units, ground]);
   const tick = useRef(0);
   useFrame((_, dt) => {
@@ -72,6 +83,11 @@ export function Bushes({ world, ground }: { world: World; ground: PlanetGround }
     tick.current -= dt;
     const b = berryRef.current;
     if (b && tick.current <= 0) {
+      const sea = seaOf(world);
+      if (sea !== placedFor.current) {
+        placedFor.current = sea;
+        placeBushes(sea);
+      }
       tick.current = 0.5;
       plants.forEach((p, i) => {
         const ripe = p.max > 0 ? Math.sqrt(Math.max(0, p.fruit) / p.max) : 0;

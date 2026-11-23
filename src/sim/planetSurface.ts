@@ -11,7 +11,7 @@
  * it: over the generations they spread out over the rest of the world.
  */
 import { anyTangent, arc, cross, cubeToSphere, dot, fibonacci, normalize, randomHeading, randomPlace, rotate, settle, slide, sphereToCube, step, tangent, toward, turn, type Vec3 } from './sphere';
-import { biomeOn, foodOn, heightOn, levelOn, makePlanetGround, planetStands, tempOn, type PlanetGround, type PlanetSpec } from './planetGround';
+import { biomeOn, foodOn, heightOn, landOn, levelOn, makePlanetGround, planetStands, tempOn, type PlanetGround, type PlanetSpec } from './planetGround';
 import { AIRBORNE, canStand, dayPhase, GRID_CELL, growthOf, MAX_POP, type Creature, type Plant, type World } from './model';
 import { makeTerrain, WORLD_SIZE } from './terrain';
 import { engaged, footprintOf, ROOM, ROOM_AT, ROOM_EVERY, ROOM_PUSH, ROOM_RATE, segmentGap } from './valley';
@@ -30,6 +30,17 @@ export interface PlanetSurface extends Surface {
   readonly homeArc: number;
   /** the way the sunlight comes from at a time (a unit vector): over the homeland at noon */
   sunAt(time: number): Vec3;
+  /** where its sea stands now (bu: 0 is its own level; the sea-level lever moves it) */
+  seaLevel(): number;
+  setSea(level: number): void;
+  /** what grows at a place for the grazers and the filter feeders, with the sea where it stands now */
+  foodAt(p: Place): { grass: number; algae: number };
+  /** which land a place is on, at the sea's own level (planetGround.ts's landsOf; −1: the sea), and the
+   *  homeland's */
+  landOf(p: Place): number;
+  readonly homeLand: number;
+  /** the year's mean warmth at a place (°C) */
+  warmthAt(p: Place): number;
 }
 
 /** the valley's ground (bu²): a homeland is this much for every MAX_POP of the planet's numbers */
@@ -110,7 +121,7 @@ export function makePlanet(spec: PlanetSpec, cap: number = MAX_POP): Ground {
         return { x: u[0] * spec.radius, y: u[1] * spec.radius, z: u[2] * spec.radius };
       },
     },
-    food: (p) => foodOn(surface.ground, unitOf(p)),
+    food: (p) => surface.foodAt(p),
   };
 }
 
@@ -129,7 +140,9 @@ export function planetSurface(spec: PlanetSpec, cap: number = MAX_POP): PlanetSu
   const home = homeOf(g, homeArc);
   const homeMeridian = normalize([home[0], 0, home[2]]);
   const tilt = spec.tilt ?? 0.5;
-  const seasons = planetSeasons(g, tilt, N, (p) => surface.cellOf(p));
+  // (where the sea stands: its own level until the lever moves it)
+  let sea = 0;
+  const seasons = planetSeasons(g, tilt, N, (p) => surface.cellOf(p), () => sea, (p) => height(p) >= level(p));
 
   const unit = unitOf;
   const at = (u: Vec3): Place => ({ x: u[0] * R, y: u[1] * R, z: u[2] * R });
@@ -148,7 +161,7 @@ export function planetSurface(spec: PlanetSpec, cap: number = MAX_POP): PlanetSu
   const chord = (r: number) => 2 * R * Math.sin(Math.min(Math.PI, r / R) / 2);
   const sunAt = (time: number): Vec3 => rotate(homeMeridian, NORTH, -2 * Math.PI * (dayPhase(time) - 0.25));
   const height = (p: Place) => heightOn(g, unit(p));
-  const level = (p: Place) => levelOn(g, unit(p));
+  const level = (p: Place) => levelOn(g, unit(p), sea);
   const around = (p: Place, bearing: number, d: number) => {
     const u = unit(p);
     return at(step(u, dirAt(u, bearing), d / R).p);
@@ -235,6 +248,16 @@ export function planetSurface(spec: PlanetSpec, cap: number = MAX_POP): PlanetSu
     tilt,
     fronts: seasons.fronts,
     seasonsNow: (w) => seasons.now(w),
+    seaLevel: () => sea,
+    setSea(v) {
+      sea = v;
+    },
+    foodAt: (p) => foodOn(g, unit(p), sea),
+    landOf: (p) => landOn(g, unit(p)),
+    get homeLand() {
+      return landOn(g, home);
+    },
+    warmthAt: (p) => tempOn(g, unit(p)),
 
     // --- where things are, and how far apart -------------------------------------------------------
     dist,
@@ -316,7 +339,7 @@ export function planetSurface(spec: PlanetSpec, cap: number = MAX_POP): PlanetSu
     // --- the ground ----------------------------------------------------------------------------------
     height,
     level,
-    biome: (p) => biomeOn(g, unit(p)),
+    biome: (p) => biomeOn(g, unit(p), sea),
     groundOf: (c) => c.ground ?? height(c),
     settle(c) {
       c.ground = height(c);
@@ -456,6 +479,8 @@ export function planetSurface(spec: PlanetSpec, cap: number = MAX_POP): PlanetSu
       let best = -1, bd = within;
       for (let i = 0; i < trees.length; i++) {
         const d = dist(p, trees[i]);
+        // (none the sea has risen over)
+        if (d < bd && sea > 0 && trees[i].h < level(trees[i]) + 0.3) continue;
         if (d < bd) {
           bd = d;
           best = i;

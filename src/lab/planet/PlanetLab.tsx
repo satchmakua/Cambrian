@@ -6,39 +6,30 @@
  * saved: the worker and the saves are later steps (ROADMAP.md, "The planet, in a branch").
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Stars } from '@react-three/drei';
-import * as THREE from 'three';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { setRadialUp } from '../../viewer/creatureMaterial';
-import { StudioEnvironment } from '../../viewer/StudioEnvironment';
 import { createPlanet, DAY_LENGTH, dayNumber, dayPhase, speciesById, stepWorld, STEP, yearNumber, yearPhase, YEAR_DAYS, type World } from '../../sim/world';
 import { populateCast } from '../../sim/cast';
 import type { PlanetSurface } from '../../sim/planetSurface';
-import { airRadius, atmosphereMaterial } from './atmosphere';
-import { Bushes } from './Bushes';
-import { CAMERA, GlobeCamera, LOOK } from './GlobeCamera';
-import { CAST, LabCast } from './LabCast';
-import { PLANET_CAPS, START_DAYS, START_JUMP, useLab } from './labStore';
-import { cellsFor, cloudMaterial, freshWaterGeometry, freshWaterMaterial, GROUND_SEASON, groundMaterial, seaGeometry, setFronts } from './planetMesh';
-import { GROUND_DRAWN, GroundChunks } from './GroundChunks';
+import { Bushes } from '../../world/planet/Bushes';
+import { CAMERA, GlobeCamera } from '../../world/planet/GlobeCamera';
+import { CAST, PlanetCast } from '../../world/planet/PlanetCast';
+import { PlanetSky } from '../../world/planet/PlanetSky';
+import { PLANET_CAPS } from '../../sim/planetDesign';
+import { START_AT, START_DAYS, START_FOLLOW, START_JUMP, START_VIEW, useLab } from './labStore';
+import { GROUND_DRAWN } from '../../world/planet/GroundChunks';
 import { RIVER, SWIM_FLOW } from '../../sim/planetBake';
 import { biomeOn } from '../../sim/planetGround';
 import { cellCentre } from '../../sim/cubeGrid';
-import { Trees } from './Trees';
-
-const UP = new THREE.Vector3(0, 1, 0);
-const AT = new THREE.Vector3();
-const SUN = new THREE.Vector3();
-const TURN = new THREE.Quaternion();
-const TURNED = new THREE.Euler();
+import { Trees } from '../../world/planet/Trees';
 
 /** frames drawn a second, for the HUD */
 const FRAME = { fps: 0 };
 /** how long each planet took to make (its terrain baked, its world laid out), for the HUD: its first making
  *  (in development React makes each world twice, the second time on the ground already baked) */
 const MADE = new Map<string, number>();
-const madeKey = (s: { seed: number; radius: number; relief: number; land: number; continents: number; rugged: number; temperature: number; wetness: number; tilt: number; cap: number }) =>
-  [s.seed, s.radius, s.relief, s.land, s.continents, s.rugged, s.temperature, s.wetness, s.tilt, s.cap].join(':');
+const madeKey = (s: { seed: number; radius: number; relief: number; land: number; continents: number; rugged: number; temperature: number; wetness: number; tilt: number; shelf: number; cap: number }) =>
+  [s.seed, s.radius, s.relief, s.land, s.continents, s.rugged, s.temperature, s.wetness, s.tilt, s.shelf, s.cap].join(':');
 /** the valley's crowding: 165 animals on its 200 bu square */
 const GROUND_EACH = (200 * 200) / 165;
 
@@ -51,20 +42,21 @@ export default function PlanetLab() {
   const temperature = useLab((s) => s.temperature);
   const wetness = useLab((s) => s.wetness);
   const tilt = useLab((s) => s.tilt);
+  const shelf = useLab((s) => s.shelf);
   const cap = useLab((s) => s.cap);
   const seed = useLab((s) => s.seed);
   // a new world for each planet: its ground, and the valley's starter cast set down in its homeland
   const world = useMemo(() => {
     const t0 = performance.now();
-    const w = createPlanet({ seed, radius, relief, land, continents, rugged, temperature, wetness, tilt }, cap);
-    const key = madeKey({ seed, radius, relief, land, continents, rugged, temperature, wetness, tilt, cap });
+    const w = createPlanet({ seed, radius, relief, land, continents, rugged, temperature, wetness, tilt, shelf }, cap);
+    const key = madeKey({ seed, radius, relief, land, continents, rugged, temperature, wetness, tilt, shelf, cap });
     if (!MADE.has(key)) MADE.set(key, performance.now() - t0);
     populateCast(w, 'standard');
     // (?jump=: the clock moved on, unlived, to a season; ?days=: run on before it is shown)
     w.time += START_JUMP * DAY_LENGTH;
     for (let i = 0; i < (START_DAYS * DAY_LENGTH) / STEP; i++) stepWorld(w);
     return w;
-  }, [seed, radius, relief, land, continents, rugged, temperature, wetness, tilt, cap]);
+  }, [seed, radius, relief, land, continents, rugged, temperature, wetness, tilt, shelf, cap]);
   const S = world.surface as PlanetSurface;
   // (every coat countershaded against the planet's up, not the world's +Y: see setRadialUp)
   useEffect(() => {
@@ -129,94 +121,31 @@ function Stepper({ world }: { world: World }) {
 
 function Scene({ world, S }: { world: World; S: PlanetSurface }) {
   const g = S.ground;
-  const R = g.radius;
-  const sea = useMemo(() => seaGeometry(g), [g]);
-  useEffect(() => () => sea.dispose(), [sea]);
-  const groundMat = useMemo(() => groundMaterial(g.relief), [g.relief]);
-  const fresh = useMemo(() => freshWaterGeometry(g, cellsFor(R)), [g, R]);
-  useEffect(() => () => fresh.dispose(), [fresh]);
-  const freshMat = useMemo(() => freshWaterMaterial(), []);
-  const clouds = useMemo(() => cloudMaterial(), []);
-  const cloudGeo = useMemo(() => new THREE.SphereGeometry(1, 160, 80), []);
-  const seaMat = useMemo(() => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.16, metalness: 0, transparent: true, opacity: 0.86, depthWrite: false }), []);
-  const air = useMemo(() => atmosphereMaterial(), []);
-  const airGeo = useMemo(() => new THREE.SphereGeometry(1, 128, 64), []);
-  useEffect(
-    () => () => {
-      groundMat.dispose();
-      freshMat.dispose();
-      clouds.dispose();
-      cloudGeo.dispose();
-      seaMat.dispose();
-      air.dispose();
-      airGeo.dispose();
-    },
-    [groundMat, freshMat, clouds, cloudGeo, seaMat, air, airGeo],
-  );
-  const scene = useThree((st) => st.scene);
-  const fog = useMemo(() => new THREE.FogExp2(0x000000, 0), []);
-  useEffect(() => {
-    scene.fog = fog;
-    scene.background = new THREE.Color(0x020306);
-    return () => {
-      scene.fog = null;
-      scene.background = null;
-    };
-  }, [scene, fog]);
-  const sun = useRef<THREE.DirectionalLight>(null);
-  const Ra = airRadius(R);
-  useFrame(({ camera }) => {
-    // the sun where the simulation has it (its night is the creatures' night)
-    const s = S.sunAt(world.time);
-    SUN.set(s[0], s[1], s[2]);
-    // the season the ground is drawn in, and the clouds where the simulation's fronts are now
-    GROUND_SEASON.yearPhase.value = yearPhase(world.time);
-    GROUND_SEASON.tilt.value = S.tilt;
-    setFronts(clouds, S.fronts(world.time), SUN);
-    sun.current?.position.copy(SUN).multiplyScalar(1000);
-    // the studio light (the valley's environment map), turned so its overhead lies up the planet's up where
-    // the camera looks: a map lights by world direction, and unturned its sky would light the flanks of
-    // every body away from the north pole. Dimmed with the day there, and drawn back from orbit, where the
-    // sun alone should light the globe and leave its night side dark.
-    const T = LOOK.T;
-    TURN.setFromUnitVectors(UP, AT.set(T[0], T[1], T[2])).invert();
-    TURNED.setFromQuaternion(TURN, 'XYZ');
-    // (three samples the map turned by the opposite of each angle: see its WebGLMaterials)
-    scene.environmentRotation.set(-TURNED.x, -TURNED.y, -TURNED.z, 'XYZ');
-    const dayT = THREE.MathUtils.smoothstep(AT.dot(SUN), -0.12, 0.25);
-    scene.environmentIntensity = (0.18 + 0.62 * dayT) * (1 - 0.85 * LOOK.orbit);
-    const u = air.uniforms;
-    u.uCam.value.copy(camera.position);
-    u.uSun.value.copy(SUN);
-    u.uR.value = R;
-    u.uRa.value = Ra;
-    // in the air, a haze in the sky's colour (dark on the night side), the thicker the deeper in it the
-    // camera is: from orbit, none
-    const c = camera.position, r = c.length();
-    const inAir = 1 - THREE.MathUtils.smoothstep(r, R + (Ra - R) * 0.35, Ra);
-    const day = THREE.MathUtils.smoothstep(c.dot(SUN) / r, -0.12, 0.25);
-    fog.color.setRGB(0.3 * day, 0.4 * day, 0.5 * day);
-    fog.density = 0.0055 * inAir;
-  });
   return (
     <>
-      <StudioEnvironment />
-      <directionalLight ref={sun} intensity={2.6} />
-      <ambientLight intensity={0.04} />
-      <GroundChunks ground={g} material={groundMat} />
-      <mesh geometry={fresh} material={freshMat} renderOrder={1} />
-      <mesh geometry={cloudGeo} material={clouds} scale={R + g.relief * 1.15 + 4} renderOrder={1.5} frustumCulled={false} />
-      <mesh geometry={sea} material={seaMat} renderOrder={1} />
-      <mesh geometry={airGeo} material={air} scale={Ra} renderOrder={2} frustumCulled={false} />
-      <Stars radius={R * 9} depth={R * 2} count={3000} factor={5} saturation={0} fade speed={0} />
+      <PlanetSky world={world} S={S} />
       <Trees ground={g} world={world} tilt={S.tilt} />
       <Bushes world={world} ground={g} />
-      <LabCast world={world} R={R} />
-      <GlobeCamera key={`${world.seed}:${R}:${g.relief}:${g.land}:${g.continents}:${g.rugged}:${g.temperature}:${g.wetness}:${S.tilt}:${world.cap}`} ground={g} world={world} home={S.home} />
+      <LabCast world={world} R={g.radius} />
+      <LabCamera world={world} S={S} />
       <Stepper world={world} />
       <FrameCounter />
     </>
   );
+}
+
+/** The cast, the lab's way: a click follows the animal clicked. */
+function LabCast({ world, R }: { world: World; R: number }) {
+  const follow = useLab((st) => st.follow);
+  return <PlanetCast world={world} R={R} selected={follow} onPick={(id) => useLab.getState().set({ follow: id })} />;
+}
+
+/** The camera, the lab's way: following the lab's animal, opening where the URL says, Esc letting go. */
+function LabCamera({ world, S }: { world: World; S: PlanetSurface }) {
+  const g = S.ground;
+  const follow = useLab((st) => st.follow);
+  const start = useMemo(() => ({ view: START_VIEW, at: START_AT, follow: START_FOLLOW ? (id: number) => useLab.getState().set({ follow: id }) : undefined }), []);
+  return <GlobeCamera key={`${world.seed}:${g.radius}:${g.relief}:${g.land}:${g.continents}:${g.rugged}:${g.temperature}:${g.wetness}:${g.shelf}:${S.tilt}:${world.cap}`} ground={g} world={world} home={S.home} follow={follow} onLetGo={() => useLab.getState().set({ follow: null })} start={start} />;
 }
 
 function FrameCounter() {
@@ -301,8 +230,8 @@ function clockOf(t: number): string {
 }
 
 function Hud({ world }: { world: World }) {
-  const { radius, relief, land, continents, rugged, temperature, wetness, tilt, cap, seed, speed, follow, set } = useLab();
-  const madeIn = MADE.get(madeKey({ seed, radius, relief, land, continents, rugged, temperature, wetness, tilt, cap })) ?? 0;
+  const { radius, relief, land, continents, rugged, temperature, wetness, tilt, shelf, cap, seed, speed, follow, set } = useLab();
+  const madeIn = MADE.get(madeKey({ seed, radius, relief, land, continents, rugged, temperature, wetness, tilt, shelf, cap })) ?? 0;
   // what grows where: each kind of ground's share of the land
   const lands = useMemo(() => {
     const g = (world.surface as PlanetSurface).ground;
@@ -390,6 +319,9 @@ function Hud({ world }: { world: World }) {
       </Row>
       <Row label={`tilt ${tilt.toFixed(2)} (no seasons … the Earth's 0.5 … harsh)`}>
         <Slider value={tilt} min={0} max={1} step={0.05} onCommit={(t) => set({ tilt: t })} />
+      </Row>
+      <Row label={`shallow seas ${shelf.toFixed(2)} (coasts that drop to the deep … wide shelves: ${Math.round(4 + 40 * shelf)} bu)`}>
+        <Slider value={shelf} min={0} max={1} step={0.05} onCommit={(t) => set({ shelf: t })} />
       </Row>
       <div style={{ opacity: 0.75, marginBottom: 4 }}>{lands}</div>
       <div style={{ opacity: 0.75, marginBottom: 4 }}>

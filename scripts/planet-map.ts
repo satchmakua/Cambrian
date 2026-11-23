@@ -5,16 +5,15 @@
  * edges; with --relief-colours, a height ramp instead of the biomes.
  *
  *   npx vite-node scripts/planet-map.ts -- --seed 7 --radius 300 --relief 30 --land 0.6 \
- *     [--continents 0.45] [--rugged 0.5] [--temperature 0] [--wetness 0] [--plates] [--relief-colours] \
+ *     [--continents 0.45] [--rugged 0.5] [--temperature 0] [--wetness 0] [--shelf 0.25] [--plates] [--relief-colours] \
  *     [--lon 0 --lat 0 --span 360] [--width 1600] [--out planet.png]
  */
 import { writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
-import { LAKE, RIVER, SEA, SWIM_FLOW } from '../src/sim/planetBake';
-import { cellCentre, cellIndex, sampleAt } from '../src/sim/cubeGrid';
+import { RIVER, SEA, SWIM_FLOW } from '../src/sim/planetBake';
+import { cellCentre } from '../src/sim/cubeGrid';
 import { biomeOn, makePlanetGround } from '../src/sim/planetGround';
-import { BIOME_COLOUR } from '../src/sim/palette';
-import type { Vec3 } from '../src/sim/sphere';
+import { planetMap } from '../src/world/planet/planetMap';
 
 const argv = process.argv.slice(2);
 const arg = (k: string, d: number) => {
@@ -25,7 +24,7 @@ const out = (() => {
   const i = argv.indexOf('--out');
   return i >= 0 ? argv[i + 1] : 'planet.png';
 })();
-const spec = { seed: arg('seed', 7), radius: arg('radius', 300), relief: arg('relief', 30), land: arg('land', 0.6), continents: arg('continents', 0.45), rugged: arg('rugged', 0.5), temperature: arg('temperature', 0), wetness: arg('wetness', 0) };
+const spec = { seed: arg('seed', 7), radius: arg('radius', 300), relief: arg('relief', 30), land: arg('land', 0.6), continents: arg('continents', 0.45), rugged: arg('rugged', 0.5), temperature: arg('temperature', 0), wetness: arg('wetness', 0), shelf: arg('shelf', 0.25) };
 
 const t0 = performance.now();
 const ground = makePlanetGround(spec);
@@ -76,80 +75,18 @@ console.log(`highest ground ${h[hiK].toFixed(1)} bu`);
   console.log(`on land, warmth °C ${qs(b.T)} · rain mm ${qs(b.P)} (5th / 25th / 50th / 75th / 95th)`);
 }
 
-// the picture
+// the picture (world/planet/planetMap.ts: the planet designer's own map), RGBA to RGB
 const Wd = arg('width', 1600), Ht = Math.round(Wd / 2);
-const aH = ground.aH, aL = ground.aL;
-const showRelief = argv.includes('--relief-colours');
-// (--field rain or warmth: that field alone, on a ramp, over the whole planet, land and sea)
 const field = (() => {
   const i = argv.indexOf('--field');
   return i >= 0 ? argv[i + 1] : '';
 })();
+const rgba = planetMap(ground, Wd, { plates: argv.includes('--plates'), relief: argv.includes('--relief-colours'), field: field === 'rain' || field === 'warmth' ? field : '', lon: arg('lon', 0), lat: arg('lat', 0), span: arg('span', 360) });
 const px = new Uint8Array(Wd * Ht * 3);
-// (--lon and --lat in degrees, --span the degrees across: a closer look, two wide by one high)
-const span = (arg('span', 360) * Math.PI) / 180, lon0 = (arg('lon', 0) * Math.PI) / 180, lat0 = (arg('lat', 0) * Math.PI) / 180;
-const dir = (x: number, y: number): Vec3 => {
-  const lon = lon0 + (x / Wd - 0.5) * span, lat = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, lat0 - (y / Ht - 0.5) * span * 0.5));
-  return [Math.cos(lat) * Math.cos(lon), Math.sin(lat), -Math.cos(lat) * Math.sin(lon)];
-};
-const ramp = (t: number): [number, number, number] => {
-  const stops: [number, [number, number, number]][] = [
-    [0, [112, 150, 78]],
-    [0.18, [96, 140, 60]],
-    [0.4, [150, 146, 92]],
-    [0.62, [128, 112, 96]],
-    [0.82, [150, 146, 140]],
-    [1, [236, 236, 232]],
-  ];
-  for (let i = 1; i < stops.length; i++) {
-    if (t <= stops[i][0]) {
-      const [a, ca] = stops[i - 1], [c, cc] = stops[i];
-      const u = (t - a) / (c - a);
-      return [ca[0] + (cc[0] - ca[0]) * u, ca[1] + (cc[1] - ca[1]) * u, ca[2] + (cc[2] - ca[2]) * u];
-    }
-  }
-  return stops[stops.length - 1][1];
-};
-const hs = new Float32Array(Wd * Ht);
-for (let y = 0; y < Ht; y++) for (let x = 0; x < Wd; x++) hs[y * Wd + x] = sampleAt(aH, dir(x + 0.5, y + 0.5));
-const showPlates = argv.includes('--plates');
-for (let y = 0; y < Ht; y++) {
-  for (let x = 0; x < Wd; x++) {
-    const p = dir(x + 0.5, y + 0.5);
-    const hh = hs[y * Wd + x], L = sampleAt(aL, p);
-    const k = cellIndex(g.N, p);
-    let c: [number, number, number];
-    // (the light from the north-west, on the slope across a pixel each way; a pixel is this many bu across)
-    const across = ((span * R) / Wd) * Math.max(0.05, Math.abs(p[0] * p[0] + p[2] * p[2]) ** 0.5);
-    const dx = (hs[y * Wd + ((x + 1) % Wd)] - hs[y * Wd + ((x + Wd - 1) % Wd)]) / (2 * across);
-    const dy = (hs[Math.min(Ht - 1, y + 1) * Wd + x] - hs[Math.max(0, y - 1) * Wd + x]) / (2 * ((span * 0.5 * R) / Ht));
-    const shade = Math.max(0.35, Math.min(1.25, 0.85 + 0.9 * (-dx * 0.7 + dy * 0.7)));
-    if (field) {
-      const v = field === 'rain' ? Math.min(1, Math.log10(Math.max(10, sampleAt(ground.aP, p))) / 3.7) : Math.min(1, Math.max(0, (sampleAt(ground.aT, p) + 25) / 55));
-      c = [255 * v, 255 * (1 - Math.abs(v - 0.5) * 2) * 0.9, 255 * (1 - v)];
-      if (kind[k] === SEA) c = [c[0] * 0.55, c[1] * 0.55, c[2] * 0.55];
-    } else if (kind[k] === RIVER) c = b.flow[k] >= SWIM_FLOW ? [60, 120, 200] : [90, 150, 205];
-    else if (L - hh > 0 || kind[k] === SEA || kind[k] === LAKE) {
-      const depth = L - hh;
-      const lake = kind[k] === LAKE;
-      const t = Math.min(1, Math.max(0, depth / (lake ? 6 : spec.relief * 0.55)));
-      c = lake ? [46 + 20 * (1 - t), 104 + 30 * (1 - t), 150 + 30 * (1 - t)] : depth < 1.25 ? [70, 130, 160] : [22 + 30 * (1 - t), 48 + 40 * (1 - t), 92 + 50 * (1 - t)];
-    } else if (showRelief) {
-      const r = ramp(Math.min(1, Math.max(0, hh / spec.relief)));
-      c = [r[0] * shade, r[1] * shade, r[2] * shade];
-    } else {
-      const col = BIOME_COLOUR[biomeOn(ground, p)];
-      c = [((col >> 16) & 255) * shade, ((col >> 8) & 255) * shade, (col & 255) * shade];
-    }
-    if (showPlates) {
-      const k2 = cellIndex(g.N, dir(x + 1.5, y + 0.5)), k3 = cellIndex(g.N, dir(x + 0.5, y + 1.5));
-      if (b.plate[k2] !== b.plate[k] || b.plate[k3] !== b.plate[k]) c = b.continental[b.plate[k]] ? [200, 40, 40] : [255, 160, 40];
-    }
-    const o = (y * Wd + x) * 3;
-    px[o] = Math.max(0, Math.min(255, c[0]));
-    px[o + 1] = Math.max(0, Math.min(255, c[1]));
-    px[o + 2] = Math.max(0, Math.min(255, c[2]));
-  }
+for (let i = 0; i < Wd * Ht; i++) {
+  px[i * 3] = rgba[i * 4];
+  px[i * 3 + 1] = rgba[i * 4 + 1];
+  px[i * 3 + 2] = rgba[i * 4 + 2];
 }
 
 // a PNG, written by hand (zlib's deflate is all it needs)

@@ -176,6 +176,9 @@ export interface Species {
   /** its film: its most typical body, taken at dawn whenever it had visibly changed since the last frame
    *  (at most FILM_MAX frames, thinned as it fills, its first kept) */
   film: FilmFrame[];
+  /** on a planet, where it lived when its seed bank was last refreshed (the member nearest the middle of
+   *  them all): a stock lost from the world wanders back in there. A valley's species have none. */
+  range?: Place;
 }
 
 /** One frame of a species' film: when, how many generations in, and the body (its members' medoid). */
@@ -334,6 +337,10 @@ export interface Levers {
   warmth: number;
   rain: number;
   events: LeverEvent[];
+  /** (a planet's) the sea lowered or raised (−1 … 1: a tenth of its relief each way), and where it stands
+   *  now on its way there (bu from its own level): absent until first pulled */
+  sea?: number;
+  seaNow?: number;
 }
 
 /** Weather forced by the player in god mode: a shower now, or a dry spell, from `from` to `until`. */
@@ -391,8 +398,9 @@ export interface World {
   adopted: number[];
   /** the levers the player has pulled on the climate, and the events under way (see levers.ts) */
   levers: Levers;
-  /** the scenario this valley is played as, and how it stands (null: none — see scenarios.ts) */
-  scenario: { id: string; status: 'going' | 'won' | 'lost'; from: number } | null;
+  /** the scenario this valley is played as, and how it stands (null: none — see scenarios.ts); on a planet,
+   *  the lands its founders stood on when it began (where a scenario asks for that) */
+  scenario: { id: string; status: 'going' | 'won' | 'lost'; from: number; lands?: number[] } | null;
   history: HistorySample[];
   historyTimer: number;
   fieldTimer: number;

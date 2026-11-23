@@ -13,6 +13,7 @@ import { anyTangent, cross, turn, type Vec3 } from '../../sim/sphere';
 import { planetStands, tempOn, type PlanetGround, type PlanetStand } from '../../sim/planetGround';
 import { swingAt, warmthNow } from '../../sim/planetSeasons';
 import type { World } from '../../sim/world';
+import type { PlanetSurface } from '../../sim/planetSurface';
 import { LOOK } from './GlobeCamera';
 
 type Stand = PlanetStand;
@@ -87,7 +88,7 @@ export function Trees({ ground, world, tilt }: { ground: PlanetGround; world: Wo
   const pineRef = useRef<THREE.InstancedMesh>(null);
   // each tree's crown: where its middle is and how far round it reaches (for the sightline below), which
   // trees are left out now, and every instance's own matrix, to put them back from
-  const crowns = useRef<{ at: Float32Array; reach: Float32Array }>({ at: new Float32Array(0), reach: new Float32Array(0) });
+  const crowns = useRef<{ at: Float32Array; reach: Float32Array; ground: Float32Array }>({ at: new Float32Array(0), reach: new Float32Array(0), ground: new Float32Array(0) });
   const held = useRef<{ cut: Uint8Array; kept: Float32Array[] }>({ cut: new Uint8Array(0), kept: [] });
   const judged = useRef(0);
   // each broadleaf's summer green, and its year's mean warmth (a jungle's never drops its leaves)
@@ -102,11 +103,12 @@ export function Trees({ ground, world, tilt }: { ground: PlanetGround; world: Wo
     const R = shape.radius;
     const c = new THREE.Color();
     const n = trees.length + pines.length;
-    const at = new Float32Array(n * 3), reach = new Float32Array(n);
-    const mark = (k: number, t: Stand, rise: number, r: number) => {
+    const at = new Float32Array(n * 3), reach = new Float32Array(n), ground = new Float32Array(n);
+    const mark = (k: number, t: Stand & { h: number }, rise: number, r: number) => {
       const p = [t.x / R, t.y / R, t.z / R];
       for (let a = 0; a < 3; a++) at[k * 3 + a] = p[a] * (R + t.h + rise);
       reach[k] = r;
+      ground[k] = t.h;
     };
     trees.forEach((t, i) => {
       const H = 3.2 * t.s;
@@ -128,7 +130,7 @@ export function Trees({ ground, world, tilt }: { ground: PlanetGround; world: Wo
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
-    crowns.current = { at, reach };
+    crowns.current = { at, reach, ground };
     held.current = { cut: new Uint8Array(n), kept: [trunkRef, crownRef, pineTrunkRef, pineRef].map((r) => (r.current ? (r.current.instanceMatrix.array as Float32Array).slice() : new Float32Array(0))) };
     judged.current = 0;
   }, [shape, trees, pines]);
@@ -157,8 +159,10 @@ export function Trees({ ground, world, tilt }: { ground: PlanetGround; world: Wo
     judged.current -= dt;
     if (judged.current > 0) return;
     judged.current = 0.15;
-    const { at, reach } = crowns.current;
+    const { at, reach, ground: under } = crowns.current;
     const { cut, kept } = held.current;
+    // (and those the sea has risen over: drowned, not drawn)
+    const sea = (world.surface as Partial<PlanetSurface>).seaLevel?.() ?? 0;
     if (cut.length !== reach.length) return;
     const ox = st.camera.position.x, oy = st.camera.position.y, oz = st.camera.position.z;
     const [tx, ty, tz] = LOOK.at;
@@ -171,7 +175,7 @@ export function Trees({ ground, world, tilt }: { ground: PlanetGround; world: Wo
       const px = at[k * 3] - ox, py = at[k * 3 + 1] - oy, pz = at[k * 3 + 2] - oz;
       const u = Math.max(0, Math.min(1, (px * dx + py * dy + pz * dz) / L2));
       const ex = px - dx * u, ey = py - dy * u, ez = pz - dz * u;
-      const out = ex * ex + ey * ey + ez * ez < (reach[k] + 0.6) ** 2 ? 1 : 0;
+      const out = ex * ex + ey * ey + ez * ez < (reach[k] + 0.6) ** 2 || (sea > 0 && under[k] < sea + 0.2) ? 1 : 0;
       if (out === cut[k]) continue;
       cut[k] = out;
       const pine = k >= trees.length;

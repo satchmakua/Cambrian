@@ -188,6 +188,7 @@ export function speciateDaily(w: World): void {
     const members = byId.get(sp.id);
     if (!members || members.length === 0 || sp.extinctAt !== null) continue;
     sp.bank = bankOf(members);
+    if (w.surface.kind === 'planet') sp.range = rangeOf(w, members);
     const fork = members.length >= SPLIT_FROM ? splitIfTwo(w, sp, members) : 'one';
     if (members.length < SPLIT_FROM) sp.splitWatch = 0;
     // (while two groups stand apart their average lies between them: that is not a line drifted)
@@ -221,6 +222,26 @@ function filmOn(w: World, sp: Species, members: Creature[]): void {
   sp.film.push({ t: w.time, gen: m.generation, genome: m.genome });
   if (sp.film.length > FILM_MAX) sp.film = sp.film.filter((_, i) => i === 0 || i % 2 === 1 || i === sp.film.length - 1);
 }
+
+/** Where a species lives: the place of the member nearest the middle of them all (on a planet, a place it
+ *  stands, where the middle of a species spread over two lands could be the sea between). */
+function rangeOf(w: World, members: Creature[]): Place {
+  const S = w.surface;
+  const mid = S.centroid(members, () => true);
+  if (!mid) return S.laid(members[0]);
+  let best = members[0], bd = Infinity;
+  for (const c of members) {
+    const d = S.dist(c, mid);
+    if (d < bd) {
+      bd = d;
+      best = c;
+    }
+  }
+  return S.laid(best);
+}
+
+/** an immigrant to a planet comes in this far (bu, give or take half) from where its stock last lived */
+const RETURN_FROM = 40;
 
 /** Up to BANK genomes, spread evenly over the members (in their fixed order), each once. */
 function bankOf(members: Creature[]): Genome[] {
@@ -396,15 +417,19 @@ export function immigrate(w: World): void {
     // its first founders, which would undo everything the line had become
     const stock = sp.bank.length > 0 ? sp.bank : [sp.founder];
     const t = bodyOf(stock[0]).traits;
+    // (a valley's stocks come in from beyond its edge; a planet has no beyond, and its stocks come back to
+    // the region they were lost from — from round about where they last lived — not to the homeland, which
+    // would erase every split distance had made)
+    const from = sp.range;
     let at: Place | undefined;
     if (t.habitat !== 'water') {
-      // (in from the world's edge, where it may stand)
+      // (in from the world's edge, or from round about its region, where it may stand)
       for (let i = 0; i < 40 && !at; i++) {
-        const p = w.surface.edge(w.rng() * Math.PI * 2);
+        const p = from ? w.surface.around(from, w.rng() * Math.PI * 2, RETURN_FROM * (0.5 + w.rng())) : w.surface.edge(w.rng() * Math.PI * 2);
         if (canStand(w, t, p)) at = p;
       }
     }
-    const base = at ?? spawnPoint(w, t);
+    const base = at ?? (from ? spawnPoint(w, t, from, 2 * RETURN_FROM) : spawnPoint(w, t));
     const n = 3 + Math.floor(w.rng() * 3);
     let came = 0;
     for (let i = 0; i < n && liveCount(w) < w.cap; i++) {

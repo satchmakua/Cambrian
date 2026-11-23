@@ -12,14 +12,15 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { Genome } from '../engine/genome';
 import { WorldScene, captureStill } from './WorldScene';
+import { PlanetScene } from './planet/PlanetScene';
 import { TreeOfLife } from './TreeOfLife';
 import { SpeciesCard } from './SpeciesCard';
-import { useWorldUi, getWorld, populate, starterCast, strangerGenome, bumpVersion, changed, autosave, downloadWorld, type Snapshot } from './worldStore';
+import { useWorldUi, getWorld, populate, starterCast, strangerGenome, bumpVersion, changed, autosave, downloadWorld, isPlanet, readyWorld, worldSetup, type Snapshot } from './worldStore';
 import { DAY_LENGTH, YEAR_DAYS, bredFromHere, dayNumber, liveCount, release, speciesById, stepWorld, type Creature, type HistorySample, type World } from '../sim/world';
 import { genomeOfMorphotype } from '../engine/random';
 import { MUTATION_DIAL, bloom, cull, forceWeather, glut, heal, makeBreed, setGodMode, setImmigration, setMutation, smite } from '../sim/god';
 import { inAdoptedLine } from '../sim/evolution';
-import { setRain, setWarmth, startEvent } from '../sim/levers';
+import { setRain, setSea, setWarmth, startEvent } from '../sim/levers';
 import { howItDiffers } from '../sim/lineage';
 import { usePortrait } from '../viewer/portrait';
 import { DrawnWhole, KeepPrograms, WarmShaders } from '../viewer/programs';
@@ -208,6 +209,8 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
   // (a new or loaded world numbers its species afresh: an open card would show a stranger)
   const epoch = useWorldUi((s) => s.epoch);
   useEffect(() => setCard(null), [epoch]);
+  // a valley or a planet (each world put in place remounts this screen, with its epoch)
+  const planet = useMemo(() => isPlanet(getWorld()), [epoch]);
   const followOne = (id: number) => {
     const c = getWorld().creatures.find((x) => x.species === id && x.alive);
     if (c) {
@@ -287,7 +290,9 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
   const openFile = async (f: File | undefined) => {
     if (!f) return;
     try {
-      open(await f.text());
+      const text = await f.text();
+      await readyWorld(worldSetup(), text); // (a planet's ground, baked off the page first)
+      open(text);
       setNotice(`Opened ${f.name}`);
     } catch (e) {
       setNotice(e instanceof Error ? e.message : 'That file is not a saved world.');
@@ -422,16 +427,16 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
   return (
     <div className={`world${placing ? ' placing' : ''}${photo ? ' photo' : ''}`} ref={root}>
       {/* the scene mounts paused while its shaders compile (in parallel, where the browser can), then runs */}
-      <Canvas className="world-canvas" frameloop={!warm ? 'never' : menuOpen ? 'demand' : 'always'} shadows={quality.shadows} dpr={dprOf(quality, 1.75)} camera={{ position: [40, 38, 70], fov: 45, near: 0.2, far: 1200 }} gl={{ preserveDrawingBuffer: import.meta.env.DEV }}>
+      <Canvas className="world-canvas" frameloop={!warm ? 'never' : menuOpen ? 'demand' : 'always'} shadows={quality.shadows && !planet} dpr={dprOf(quality, 1.75)} camera={planet ? { position: [0, 0, 1000], fov: 45, near: 0.1, far: 20000 } : { position: [40, 38, 70], fov: 45, near: 0.2, far: 1200 }} gl={{ preserveDrawingBuffer: import.meta.env.DEV }}>
         <KeepPrograms />
         <DrawnWhole onChange={setWhole} />
         {!warm && <WarmShaders onReady={() => setWarm(true)} />}
         {/* (a measurement of its own for each try: the one after a lowering starts from nothing) */}
         <MeasureFrames key={rate.tries} run={warm && whole && rate.ms === null && !menuOpen} onDone={onRate} />
-        <WorldScene />
+        {planet ? <PlanetScene /> : <WorldScene />}
       </Canvas>
       {!warm && <div className="world-loading">Waking the world…</div>}
-      {warm && hints && <div className="cam-hint">drag to orbit · scroll to zoom · WASD or arrows to pan (Shift: faster) · I: the creature panel</div>}
+      {warm && hints && <div className="cam-hint">{planet ? 'drag to spin the globe, or to look round close by · right-drag to pan · scroll to zoom · double-click to fly there · 1–4: orbit, region, ground, low · F: the whole planet · I: the creature panel' : 'drag to orbit · scroll to zoom · WASD or arrows to pan (Shift: faster) · I: the creature panel'}</div>}
 
       <header className="world-bar" ref={bar}>
         <h1>Cambrian</h1>
@@ -442,7 +447,7 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
         </nav>
         {snap && (
           <div className="clock">
-            <b title={`a year in the valley is ${YEAR_DAYS} days, three to a season`}>Year {snap.year}</b> <span className="day">day {snap.day}</span> <span className="season">{snap.season}{snap.dry > 0 && <span className="dry" title="a dry year: fewer showers, and the grass and the fruit come back slower"> · {snap.dry > 0.8 ? 'drought' : 'dry year'}</span>}</span>{snap.weather && <span className="weather">{snap.weather === 'overcast' ? '☁' : snap.weather.includes('snow') ? '❄' : '☂'} {snap.weather}</span>} <span>{clock(snap.phase)}</span> <span className="sky">{snap.night ? '☾ night' : '☀ day'}</span>
+            <b title={`a year ${snap.hemispheres ? 'on the planet' : 'in the valley'} is ${YEAR_DAYS} days, three to a season`}>Year {snap.year}</b> <span className="day">day {snap.day}</span> <span className="season">{snap.hemispheres ? <span title="the seasons are half a year apart north and south of the equator">{snap.hemispheres.north} in the north, {snap.hemispheres.south} in the south</span> : snap.season}{snap.dry > 0 && <span className="dry" title="a dry year: fewer showers, and the grass and the fruit come back slower"> · {snap.dry > 0.8 ? 'drought' : 'dry year'}</span>}</span>{snap.weather && <span className="weather">{snap.weather === 'overcast' ? '☁' : snap.weather.includes('snow') ? '❄' : '☂'} {snap.weather}</span>} <span>{clock(snap.phase)}</span> <span className="sky">{snap.night ? '☾ night' : '☀ day'}</span>
           </div>
         )}
         <div className="transport">
@@ -470,7 +475,7 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
             <button onClick={() => releaseGenome(strangerGenome((Date.now() * 2654435761) >>> 0), 6)} title="release six of a random new species">six strangers</button>
           </Menu>
           {snap && (
-            <Menu label="🌦 climate" title="levers on the environment: a colder or warmer age, a drier or wetter valley, and what may befall it (told in the journal)">
+            <Menu label="🌦 climate" title={planet ? 'levers on the environment: a colder or warmer age, a drier or wetter world, a lower or higher sea, and what may befall it (told in the journal)' : 'levers on the environment: a colder or warmer age, a drier or wetter valley, and what may befall it (told in the journal)'}>
               <span className="menu-sub">the age</span>
               <span className="menu-dial">
                 {[-1, -0.5, 0, 0.5, 1].map((x) => (
@@ -487,8 +492,20 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
                   </button>
                 ))}
               </span>
+              {planet && (
+                <>
+                  <span className="menu-sub">the sea</span>
+                  <span className="menu-dial">
+                    {[-1, -0.5, 0, 0.5, 1].map((x) => (
+                      <button key={x} className={(snap.levers.sea ?? 0) === x ? 'active' : ''} onClick={() => godAct((w) => setSea(w, x))} title={x === 0 ? 'the sea at its own level' : x < 0 ? `a ${x === -1 ? 'much ' : ''}lower sea: the shallows dry out, and straits close into land bridges (it falls a little each day)` : `a ${x === 1 ? 'much ' : ''}higher sea: the low coasts drown, and lands are parted (it rises a little each day)`}>
+                        {x === -1 ? '↓↓' : x === -0.5 ? '↓' : x === 0 ? '·' : x === 0.5 ? '↑' : '↑↑'}
+                      </button>
+                    ))}
+                  </span>
+                </>
+              )}
               <span className="menu-sub">events</span>
-              <button onClick={() => godAct((w) => startEvent(w, 'ice-age'))} title="four years of hard cold, and snow that does not melt">an ice age</button>
+              <button onClick={() => godAct((w) => startEvent(w, 'ice-age'))} title={planet ? 'four years of hard cold, snow that does not melt, and the sea falling as the ice holds its water' : 'four years of hard cold, and snow that does not melt'}>an ice age</button>
               <button onClick={() => godAct((w) => startEvent(w, 'ash-winter'))} title="a volcano far off: three days of cold and dark, little growing">an ash winter</button>
               <button onClick={() => godAct((w) => startEvent(w, 'meteor'))} title="most of the big animals killed at a stroke, and dust after">a meteor</button>
             </Menu>
@@ -767,7 +784,7 @@ function saveStill(): void {
   const w = getWorld();
   const a = document.createElement('a');
   a.href = url;
-  a.download = `cambrian-valley-${w.seed}-day${dayNumber(w.time)}.png`;
+  a.download = `cambrian-${isPlanet(w) ? 'planet' : 'valley'}-${w.seed}-day${dayNumber(w.time)}.png`;
   a.click();
   useWorldUi.getState().notify('Still saved');
 }

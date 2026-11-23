@@ -54,9 +54,16 @@ export interface PlanetSpec {
   /** how far the planet's axis leans (0: no seasons … 0.5: the Earth's … 1: harsh): its seasons, not its
    *  ground (planetSeasons.ts) */
   tilt?: number;
+  /** the shallow seas (0: the coasts drop straight to the deep … 1: wide shelves): how far out from every
+   *  coast the sea stays shallow, where the algae grow and the fish feed (4 bu … 44; 0.25 is 14) */
+  shelf?: number;
 }
 
-export const SPEC_DEFAULTS = { continents: 0.45, rugged: 0.5, temperature: 0, wetness: 0 };
+export const SPEC_DEFAULTS = { continents: 0.45, rugged: 0.5, temperature: 0, wetness: 0, shelf: 0.25 };
+
+/** The bake's own version: raised whenever the same spec would bake another planet, so a saved planet made
+ *  by another version is known for one (persist.ts). */
+export const BAKE_VERSION = 1;
 
 /** what a cell is */
 export const LAND = 0, SEA = 1, LAKE = 2, RIVER = 3;
@@ -79,8 +86,8 @@ const STREAM_DEPTH = 0.22;
 const RIVER_DEPTH = 0.65;
 /** a channel's water stands this far (bu) below its banks */
 const FREEBOARD = 0.2;
-/** the sea's shelf: this far out (bu) it is shallow, then falls away to the deep */
-const SHELF = 14;
+/** the sea's shelf: this far out (bu) it is shallow, then falls away to the deep (14 at the spec's 0.25) */
+const shelfWidth = (shelf: number) => 4 + 40 * shelf;
 
 export interface WaterBody {
   id: number;
@@ -788,6 +795,7 @@ export function bakePlanet(given: PlanetSpec): Bake {
     moist[k] = Math.min(1, Math.max(0, 0.16 + 0.36 * Math.min(1.2, rain[k]) + 0.62 * (fbm(x * km, y * km, z * km, sDamp, 3) - 0.5) + 0.2 * near));
     if (kind[k] !== SEA) continue;
     // the sea's floor: a shelf along every coast, then down to the deep (a little broken by noise)
+    const SHELF = shelfWidth(spec.shelf);
     const off = toCoast.d[k] * R;
     const deep = Math.max(2, spec.relief * 0.55);
     const rough = 0.85 + 0.3 * fbm(x * 6, y * 6, z * 6, sFloor, 3);

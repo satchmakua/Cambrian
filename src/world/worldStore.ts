@@ -10,16 +10,19 @@
 import { create } from 'zustand';
 import { SOUND } from './audio';
 import { NARRATOR } from './narrator';
-import { loadWorld, saveWorld } from '../sim/persist';
+import { loadWorld, savedPlanetSpec, saveWorld } from '../sim/persist';
 import { weatherWord } from '../sim/weather';
 import { adoptWorld, chronicle, snapshotForChronicle, type Chronicle } from '../sim/fastForward';
 import type { Genome } from '../engine/genome';
 import { randomGenome } from '../engine/random';
 import { populateCast } from '../sim/cast';
 import {
-  AIRBORNE, createWorld, release, skyNow, dryNow, takeHome, bredFromHere, cloneCreature, boostSpecies, dayNumber, yearNumber, dayPhase, isNight, growthOf, speciesById, liveCount, seasonOf, type Season,
+  AIRBORNE, createPlanet, createWorld, release, skyNow, dryNow, takeHome, bredFromHere, cloneCreature, boostSpecies, dayNumber, yearNumber, dayPhase, isNight, growthOf, speciesById, liveCount, seasonOf, DAY_LENGTH, YEAR_DAYS, type Season,
   type World, type Action, type HistorySample, type WorldEvent,
 } from '../sim/world';
+import { designOfSpec, PLANET_CAP, PLANET_CAPS, PLANET_PRESETS, presetById, specOf } from '../sim/planetDesign';
+import { readyGround } from './planet/planetBaker';
+import type { PlanetSurface } from '../sim/planetSurface';
 import type { Traits } from '../sim/traits';
 import { useSettings } from '../ui/settings';
 import { checkSetup, DEFAULT_SETUP, type GameSetup } from '../ui/saves';
@@ -43,8 +46,29 @@ export function changed(): void {
 }
 
 export function getWorld(): World {
-  if (!WORLD) WORLD = resumeWorld() ?? createWorld(SETUP.worldSeed, SETUP.capacity);
+  if (!WORLD) WORLD = resumeWorld() ?? worldFromSetup(SETUP);
   return WORLD;
+}
+
+/** A new world for a game's set-up: its valley, or its planet (made from its design and the seed). */
+export function worldFromSetup(setup: GameSetup): World {
+  return setup.planet ? createPlanet(specOf(setup.worldSeed, setup.planet), setup.capacity) : createWorld(setup.worldSeed >>> 0, setup.capacity);
+}
+
+/** Is this world a planet (not a valley)? */
+export function isPlanet(w: World): boolean {
+  return w.surface.kind === 'planet';
+}
+
+/**
+ * Before a game's world is put in place (installWorld): where it is a planet, have its ground baked off the
+ * page's thread first (planet/planetBaker.ts), so making the world does not stall the page for the second or
+ * two a bake takes. A valley's needs nothing; and a planet whose bake cannot be had there is baked on the
+ * page all the same.
+ */
+export async function readyWorld(setup: GameSetup, json: string | null): Promise<void> {
+  const spec = json !== null ? savedPlanetSpec(json) : setup.planet ? specOf(setup.worldSeed, setup.planet) : null;
+  if (spec) await readyGround(spec);
 }
 
 // --- persistence: the world is kept in the browser between visits, and can be saved to a file -----
@@ -59,7 +83,7 @@ function devFresh(): boolean {
 }
 
 function loadSetup(): GameSetup {
-  if (devFresh()) return { ...DEFAULT_SETUP };
+  if (devFresh()) return devSetup();
   try {
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(SETUP_KEY) : null;
     const v = raw ? (JSON.parse(raw) as Partial<GameSetup>) : null;
@@ -68,6 +92,16 @@ function loadSetup(): GameSetup {
     /* fall through */
   }
   return { ...DEFAULT_SETUP };
+}
+
+/** (dev: ?planet=earthlike|archipelago|…, or 1 — a planet of that design in place of the valley, with
+ *  ?wseed=… its seed and ?cap=… its room, for inspection shots of the game's planet) */
+function devSetup(): GameSetup {
+  const q = new URLSearchParams(location.search);
+  const p = q.get('planet');
+  if (!p) return { ...DEFAULT_SETUP };
+  const cap = Number(q.get('cap'));
+  return { ...DEFAULT_SETUP, worldSeed: Number(q.get('wseed') ?? 7) >>> 0, planet: { ...(presetById(p) ?? PLANET_PRESETS[0]).design }, capacity: PLANET_CAPS.includes(cap) ? cap : PLANET_CAP };
 }
 
 /** The valley's set-up: its seed, and the cast it starts with (a game's choice, kept with it). */
@@ -89,7 +123,8 @@ function keepSetup(): void {
 // valleyReady() resolves when it has been. (A copy an older version left in localStorage is moved across.)
 let RESUME: string | null = null;
 const READY: Promise<void> = (async () => {
-  if (typeof window === 'undefined' || devFresh()) return;
+  if (typeof window === 'undefined') return;
+  if (devFresh()) return readyWorld(SETUP, null);
   try {
     const old = localStorage.getItem(AUTOSAVE_KEY);
     if (old !== null) {
@@ -109,6 +144,8 @@ const READY: Promise<void> = (async () => {
   } catch {
     /* no localStorage either */
   }
+  // (a planet's ground baked off the page before its world is made: the World screen waits for this)
+  await readyWorld(SETUP, RESUME);
 })();
 
 /** Resolves once the valley kept in the browser has been read (the World screen waits for it). */
@@ -179,7 +216,7 @@ export function worldSummary(): { day: number; population: number; species: numb
  * the current valley — if a saved World will not load.
  */
 export function installWorld(setup: GameSetup, json: string | null): void {
-  const next = json !== null ? loadWorld(json) : createWorld(setup.worldSeed >>> 0, setup.capacity);
+  const next = json !== null ? loadWorld(json) : worldFromSetup(setup);
   abandonFastForward(); // (only now: a save that will not load leaves a run in progress alone)
   WORLD = next;
   changed();
@@ -214,7 +251,7 @@ export function downloadWorld(): void {
   const blob = new Blob([saveWorld(w)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `cambrian-world-${w.seed}-day${dayNumber(w.time)}.json`;
+  a.download = `cambrian-${isPlanet(w) ? 'planet' : 'world'}-${w.seed}-day${dayNumber(w.time)}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
@@ -282,6 +319,8 @@ export interface TreeNode {
 export interface Snapshot {
   tree: TreeNode[];
   season: Season;
+  /** a planet's seasons, north and south (the south's half a year on); null in a valley */
+  hemispheres: { north: Season; south: Season } | null;
   /** how dry this year is: 0 an ordinary year, 0.5 … 1 a drought */
   dry: number;
   /** '' when fair, else 'overcast' / 'rain' / 'downpour' / 'snow' / 'heavy snow' */
@@ -342,7 +381,9 @@ interface WorldUi {
   refresh: () => void;
   /** Start a new world from a seed, populated with a starter ecosystem (and optionally `founder`). */
   reset: (seed: number, founder?: Genome | null, capacity?: number) => void;
-  /** Swap in a loaded world (from a saved file). Throws, leaving the current world, if it won't load. */
+  /** Swap in a loaded world (from a saved file): a valley or a planet, the game's set-up following it.
+   *  Throws, leaving the current world, if it won't load. (A planet's ground is best made ready first:
+   *  readyWorld.) */
   open: (json: string) => void;
   /** a fast-forward in progress (run in a worker): how far through, and a line of news */
   ff: { f: number; label: string } | null;
@@ -467,8 +508,9 @@ export function snapshotOf(w: World, selected: number | null): Snapshot {
   return {
     tree: w.species.map((sp) => ({ id: sp.id, name: sp.name, hue: sp.hue, parent: sp.parent, born: sp.firstSeen, extinctAt: sp.extinctAt, alive: sp.alive })),
     season: seasonOf(w.time),
+    hemispheres: isPlanet(w) ? { north: seasonOf(w.time), south: seasonOf(w.time + (DAY_LENGTH * YEAR_DAYS) / 2) } : null,
     dry: dryNow(w),
-    weather: weatherWord(skyNow(w)),
+    weather: isPlanet(w) ? planetWeather(w, selected) : weatherWord(skyNow(w)),
     time: w.time,
     day: dayNumber(w.time),
     year: yearNumber(w.time),
@@ -488,6 +530,16 @@ export function snapshotOf(w: World, selected: number | null): Snapshot {
     history: w.history,
     selected: card,
   };
+}
+
+/** A planet's weather where the creature looked at is (else over the homeland), in a word. */
+function planetWeather(w: World, selected: number | null): string {
+  const S = w.surface as PlanetSurface;
+  const now = S.seasonsNow?.(w);
+  if (!now) return '';
+  const c = selected !== null ? w.creatures.find((x) => x.id === selected) : undefined;
+  const k = S.cellOf(c ?? { x: S.home[0] * S.ground.radius, y: S.home[1] * S.ground.radius, z: S.home[2] * S.ground.radius });
+  return weatherWord({ cloud: now.cloud[k], rain: now.rain[k], snow: now.snowing[k] === 1 });
 }
 
 // The World's sound only plays while its scene is on screen (the scene says when); the options that
@@ -545,7 +597,7 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
     abandonFastForward();
     // (a new world from the World screen keeps the game's cast and size but takes the new seed as its own)
     SETUP = { ...SETUP, worldSeed: seed >>> 0, ...(capacity ? { capacity } : {}) };
-    WORLD = createWorld(seed >>> 0, SETUP.capacity);
+    WORLD = worldFromSetup(SETUP);
     keepSetup();
     populate(WORLD, founder);
     bumpVersion();
@@ -556,8 +608,15 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
     abandonFastForward();
     WORLD = next;
     changed();
+    // (the game's set-up follows the world opened — a planet's design and seed, or a valley's seed — so a new
+    // world made from it is of the same kind)
+    const S = next.surface as Partial<PlanetSurface>;
+    const { planet: _was, ...rest } = SETUP;
+    SETUP = S.kind === 'planet' && S.ground ? { ...rest, worldSeed: next.seed, planet: designOfSpec({ ...S.ground, tilt: S.tilt }) } : { ...rest, worldSeed: next.seed };
+    keepSetup();
     bumpVersion();
-    set({ selected: null, follow: false, chronicle: null, snapshot: snapshotOf(WORLD, null) });
+    // (the epoch remounts the World screen: a planet opened over a valley is drawn by another scene)
+    set((u) => ({ epoch: u.epoch + 1, selected: null, follow: false, chronicle: null, snapshot: snapshotOf(WORLD!, null) }));
   },
   ff: null,
   chronicle: null,

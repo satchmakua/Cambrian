@@ -16,7 +16,7 @@
  */
 import { mulberry32 } from '../engine/rng';
 import { apronOf, cellIndex, sampleAt, type Apron } from './cubeGrid';
-import { bakePlanet, LAKE, LAND, RIVER, SPEC_DEFAULTS, SWIM_FLOW, type Bake, type PlanetSpec } from './planetBake';
+import { bakePlanet, LAKE, LAND, RIVER, SEA, SPEC_DEFAULTS, SWIM_FLOW, type Bake, type PlanetSpec } from './planetBake';
 import { lushness, waterLushness } from './planetClimate';
 import { randomPlace, type Vec3 } from './sphere';
 import type { Biome } from './terrain';
@@ -29,6 +29,7 @@ export interface PlanetGround extends PlanetSpec {
   rugged: number;
   temperature: number;
   wetness: number;
+  shelf: number;
   bake: Bake;
   /** the ground's height, the water's surface, the damp, the warmth (°C), the rain (mm) and the slope,
    *  laid out to be read between cells */
@@ -43,16 +44,33 @@ export interface PlanetGround extends PlanetSpec {
 // (the last two grounds made: a world made again on the same planet, at another size, keeps its ground)
 const MADE = new Map<string, PlanetGround>();
 
+/** what makes one ground another: everything in its spec but the tilt (its seasons, not its ground) */
+function groundKey(spec: PlanetSpec): string {
+  const s = { ...SPEC_DEFAULTS, ...spec };
+  return [s.seed, s.radius, s.relief, s.land, s.continents, s.rugged, s.temperature, s.wetness, s.shelf].join(':');
+}
+
 /** A planet's ground, from its spec: baked (a second or two at 300 bu), or the one already baked for it. */
 export function makePlanetGround(spec: PlanetSpec): PlanetGround {
   const s = { ...SPEC_DEFAULTS, ...spec };
-  const key = [s.seed, s.radius, s.relief, s.land, s.continents, s.rugged, s.temperature, s.wetness].join(':');
-  const made = MADE.get(key);
-  if (made) return made;
-  const bake = bakePlanet(s);
+  return MADE.get(groundKey(s)) ?? kept(groundOf(bakePlanet(s)));
+}
+
+/** Is the ground for this spec already baked here (made, or adopted from a worker)? */
+export function groundMade(spec: PlanetSpec): boolean {
+  return MADE.has(groundKey(spec));
+}
+
+/** A ground from a bake made elsewhere — a worker's, sent across — kept as if it had been baked here: the
+ *  same code on the same numbers, so the same planet, and the next world made on its spec bakes nothing. */
+export function adoptBake(bake: Bake): PlanetGround {
+  return MADE.get(groundKey(bake.spec)) ?? kept(groundOf(bake));
+}
+
+function groundOf(bake: Bake): PlanetGround {
   const N = bake.grid.N;
-  const g: PlanetGround = {
-    ...s,
+  return {
+    ...bake.spec,
     bake,
     aH: apronOf(N, bake.h),
     aL: apronOf(N, bake.level),
@@ -61,7 +79,10 @@ export function makePlanetGround(spec: PlanetSpec): PlanetGround {
     aP: apronOf(N, bake.P),
     aS: apronOf(N, bake.slope),
   };
-  MADE.set(key, g);
+}
+
+function kept(g: PlanetGround): PlanetGround {
+  MADE.set(groundKey(g), g);
   if (MADE.size > 2) MADE.delete(MADE.keys().next().value as string);
   return g;
 }
@@ -73,9 +94,14 @@ export function heightOn(g: PlanetGround, p: Vec3): number {
 }
 
 /** The water's surface at p (bu): the sea's 0, a lake's brim, a river's water. Where it is above the
- *  ground, p is wet; on dry ground away from any lake or river, the sea's. */
-export function levelOn(g: PlanetGround, p: Vec3): number {
-  return sampleAt(g.aL, p);
+ *  ground, p is wet; on dry ground away from any lake or river, the sea's. With the sea moved to `sea` (the
+ *  sea-level lever: levers.ts), the sea's surface stands there: risen, over every lake and river lower
+ *  than it (they all drain to the sea, down ground lower still, so all of it floods together); fallen,
+ *  under the lakes and rivers, which keep their own. */
+export function levelOn(g: PlanetGround, p: Vec3, sea = 0): number {
+  const L = sampleAt(g.aL, p);
+  if (sea === 0) return L;
+  return L > 0 ? Math.max(L, sea) : sea;
 }
 
 /** How lush the ground looks at p (∈ [0, 1]): its rain, and the water near it. */
@@ -126,8 +152,8 @@ const CLIFF = 1;
 
 /** What grows at p: the water's depth from its own surface; then ice, the shore, the heights and cliffs,
  *  the wet flats, and the Whittaker diagram's lands. */
-export function biomeOn(g: PlanetGround, p: Vec3): Biome {
-  const h = heightOn(g, p), L = levelOn(g, p);
+export function biomeOn(g: PlanetGround, p: Vec3, sea = 0): Biome {
+  const h = heightOn(g, p), L = levelOn(g, p, sea);
   if (h < L - 1.2) return 'deep';
   if (h < L) return 'shallow';
   const T = tempOn(g, p);
@@ -152,8 +178,8 @@ const GRASS: Partial<Record<Biome, number>> = { meadow: 0.6, savanna: 0.6, tundr
 /** What grows for the grazers and the filter feeders at p: its ground's grass at the climate's
  *  productivity, and algae in the shallows and the lakes (the valley's 1.25 and 0.8 at its warmth) — none
  *  in the open sea beyond the shelf, as real oceans are mostly barren, so deep water parts coastal fish. */
-export function foodOn(g: PlanetGround, p: Vec3): { grass: number; algae: number } {
-  const b = biomeOn(g, p);
+export function foodOn(g: PlanetGround, p: Vec3, sea = 0): { grass: number; algae: number } {
+  const b = biomeOn(g, p, sea);
   const T = tempOn(g, p);
   const grass = (GRASS[b] ?? 0) * lushness(T, rainOn(g, p));
   let algae = 0;
@@ -163,6 +189,51 @@ export function foodOn(g: PlanetGround, p: Vec3): { grass: number; algae: number
     algae = kind === LAKE || kind === RIVER ? 0.8 * waterLushness(T) : 0;
   }
   return { grass, algae };
+}
+
+const LANDS = new WeakMap<PlanetGround, { label: Int32Array; cells: number[] }>();
+
+/** A planet's lands at its sea's own level: each cell's land (a number shared by every cell of one land — its
+ *  lakes and rivers with it — the largest numbered 0; −1 for the sea) and how many cells each land holds. */
+export function landsOf(g: PlanetGround): { label: Int32Array; cells: number[] } {
+  let out = LANDS.get(g);
+  if (out) return out;
+  const { grid, kind } = g.bake;
+  const label = new Int32Array(grid.count).fill(-1);
+  const sizes: number[] = [];
+  const stack: number[] = [];
+  for (let k0 = 0; k0 < grid.count; k0++) {
+    if (kind[k0] === SEA || label[k0] >= 0) continue;
+    const id = sizes.length;
+    let n = 0;
+    label[k0] = id;
+    stack.push(k0);
+    while (stack.length) {
+      const k = stack.pop()!;
+      n++;
+      for (let e = 0; e < 8; e++) {
+        const q = grid.nbr[k * 8 + e];
+        if (q >= 0 && kind[q] !== SEA && label[q] < 0) {
+          label[q] = id;
+          stack.push(q);
+        }
+      }
+    }
+    sizes.push(n);
+  }
+  // (the largest first: renumbered by size, ties by the order found)
+  const order = sizes.map((_, i) => i).sort((a, b) => sizes[b] - sizes[a] || a - b);
+  const to = new Int32Array(sizes.length);
+  order.forEach((old, i) => (to[old] = i));
+  for (let k = 0; k < label.length; k++) if (label[k] >= 0) label[k] = to[label[k]];
+  out = { label, cells: order.map((i) => sizes[i]) };
+  LANDS.set(g, out);
+  return out;
+}
+
+/** Which land p is on (landsOf's number; −1: the sea's own, at its own level). */
+export function landOn(g: PlanetGround, p: Vec3): number {
+  return landsOf(g).label[cellIndex(g.bake.grid.N, p)];
 }
 
 /** A planet's tree: its place (on the sea's sphere, `radius` out) and the height of its ground. */

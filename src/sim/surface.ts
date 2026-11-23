@@ -133,6 +133,8 @@ export interface Surface {
    *  each hemisphere, none at the equator, and fronts that come and go on the winds. The valley has none:
    *  one season and one sky over it all (model.ts's climateOf and skyNow). */
   seasonsNow?(w: World): SeasonsNow;
+  /** (a planet's) move its sea to stand at `level` (bu from its own): the sea-level lever (levers.ts) */
+  setSea?(level: number): void;
 
   // --- headings, goals and moves ----------------------------------------------------------------------
 

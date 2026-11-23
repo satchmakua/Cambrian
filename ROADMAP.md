@@ -1004,7 +1004,8 @@ artificial selection.
   species' typical body each dawn it has visibly changed, at most twelve frames, on its card) and adopted
   lines (☆ on the card; a split, a renaming or an extinction anywhere in the line is announced, with a way
   to its card).
-- [ ] **2. A planet with climate zones.** Built together, so terrain is rewritten once.
+- [ ] **2. A planet with climate zones.** Built together, so terrain is rewritten once. **Built in the branch
+  `planet` (2026-11-21…22: "The planet, in a branch" below); it joins the game when the branch is merged.**
   - A small sphere you can rotate, with no map edge. Distant animals as simple markers, full bodies when
     zoomed in.
   - Climate by latitude: ice caps, temperate belts, desert, tropics.
@@ -1034,12 +1035,15 @@ artificial selection.
   **Built (2026-11-20), but for the terrain:** the 🌦 climate menu sets a colder or warmer age and a drier or
   wetter valley, and sets going an ice age, an ash winter or a meteor; "a plague on it" is on a species'
   card (sim/levers.ts, each told in the journal, saved with the valley). Releases are the introductions.
-  Sea level, forests, a land bridge and a strait wait for the planet's terrain.
+  Sea level, forests, a land bridge and a strait wait for the planet's terrain. **On the planet (branch
+  `planet`, 2026-11-22):** the sea is a lever, and a lower sea closes straits into land bridges; forests
+  still wait.
 - [x] **5. Scenarios.** Goals that give a run a point: "get something to colonise the ice cap", "keep three
   levels of the food chain alive for 100 years".
   **Done for the valley (2026-11-20)** (sim/scenarios.ts): "Three levels for a century", "Through the ice
   age" and "A walker takes wing", chosen in the new-game panel; the goal and where it stands at the foot of
-  the view, won or lost at a dawn, in the journal. The ice cap waits for the planet.
+  the view, won or lost at a dawn, in the journal. The ice cap waits for the planet. **On the planet
+  (branch `planet`, 2026-11-22):** "Life on the ice" and "Across the water".
 
 #### What a 26-year valley showed (proposed 2026-11-20)
 
@@ -1196,7 +1200,7 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
   60); at 16× the worker keeps 28 fps where the page managed 20. Ten fifty-year valleys (1.6–3.2 MB) each
   reloaded as saved and ran on a day identically.
 
-- [ ] **The planet, in a branch** (item 2 above), in this order: first how it feels and how big it is,
+- [x] **The planet, in a branch** (item 2 above), in this order: first how it feels and how big it is,
   then the one seam the simulation needs, and only then the planet itself. (The markers, the worker and
   `world.ts` split by concern are done already, on the valley.)
   1. [x] **A feel prototype: the planet lab** (dev: `/?lab=planet`, `src/lab/planet/`). Today's creatures,
@@ -1433,7 +1437,7 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
        stand bare through its winter.
      - **Not yet.** No rain or snow falls near the camera, the atmosphere is still step 1's shell (not
        single scattering), and plants have no impostors.
-  7. **Regional immigration, sea level as a lever**, saves, and **a planet designer for every game**: its
+  7. [x] **Regional immigration, sea level as a lever**, saves, and **a planet designer for every game**: its
      planet types as presets (earthlike, archipelago, one great continent, desert world, ice world,
      hothouse, highlands), each a set of sliders that can be moved on from: size, land, relief,
      continents (a few large ↔ many islands), ruggedness, temperature (the ice caps and the snow line),
@@ -1441,7 +1445,67 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
      get), and the seed, re-rolled. Each slider comes into the lab with the step that makes it real: size,
      land and relief now; continents and ruggedness with the terrain (4); temperature and wetness with the
      climate (5); tilt with the seasons (6). A game saves its settings and seed, and makes the same planet
-     from them every time.
+     from them every time. **Done (2026-11-22).** What shows it:
+     - **A planet for every game.** The new-game panel offers a valley or a planet. A planet starts as one of
+       seven types (`src/sim/planetDesign.ts`) and moves on from it by nine sliders: size (200–450 bu), land,
+       continents, relief, ruggedness, temperature, wetness, seasons, and the shallow seas. The shallow seas
+       are new: a shelf 4–44 bu wide, 14 at the default, which leaves every planet made so far as it was,
+       checksum for checksum. Beside the sliders, a map of the planet they make is baked in a worker
+       (`src/world/planet/bakeWorker.ts`) as each slider is let go, with its land and grounds in numbers; the
+       game started on it takes that worker's ground, so the page never bakes. Each type checked on seed 7:
+       the archipelago is 35% land in islands on wide shallows; one great continent is one land round an
+       inland sea; the desert world is 35% desert and 23% savanna; the ice world is 30% tundra and 15% ice;
+       the hothouse is 45% jungle with no ice; the highlands stand 40 bu high with 97 lakes.
+     - **In the game.** The World screen draws a planet with the lab's scene, now the game's
+       (`src/world/planet/`: the ground in chunks, sea, lakes and rivers, clouds, air, trees, bushes, the
+       cast and the globe camera). The valley's HUD sits over it: census, cards, journal, following, the
+       documentary, the seasons north and south, the weather where the creature looked at is, and releases
+       and god mode's carry placed by a click on the globe. It is stepped in the valley's worker at 1×–48×,
+       and fast-forward runs it in its own: a day took 54 animals to 131.
+     - **Frame rates.** Measured with about 376 animals (cap 600, three days fast-forwarded):
+       | View | RTX 5070 Ti | Radeon 610M |
+       |---|---|---|
+       | Orbit | 60 fps | 58 fps |
+       | Over a region | 60 fps | 48 fps |
+       | Ground, 75 bodies whole, skins built | 58 fps | 44 fps |
+       | Following a bird | 54 fps | 57 fps |
+       In the first seconds at the ground, while the skins build, it drops to 16 (RTX) and 13 (Radeon), as
+       the valley does.
+     - **Saves.** A planet's world is saved as version 2: a valley's version 1 with the planet beside it (its
+       spec, the bake's version and its checksum), made again from them on loading (`persist.ts`). A planet
+       made again by another version of the bake, or by another browser's rounding, loads all the same, and
+       the journal says so once. Autosave, Continue, named saves and files all carry planets; opening a
+       world file switches the screen to a valley or a planet as the file is. A planet saved and loaded
+       carries on bit-for-bit. The page's mirror of the worker's planet saves byte for byte as the one
+       stepped. A valley's saves are as they were: 12 of 12 hashes.
+     - **Regional immigration.** On a planet each species notes where it lives each dawn (the member nearest
+       the middle of them all). A founding stock lost from the world wanders back in 20–60 bu from there,
+       not at the homeland's rim, which would erase every split distance had made. A valley's immigrants
+       come in from its edge as before.
+     - **The sea, a lever** (on a planet only). The sea can be set lower or higher: −1 … 1 in halves, up to a
+       tenth of the relief each way (3 bu at 30). It moves a thirtieth of the relief a day, and an ice age
+       holds water and lowers it by half that. The ground follows it in quarter-bu steps:
+       - the water's surface, so who may stand where and who may swim;
+       - what grows, and the grass and algae each field cell may hold;
+       - the bushes it drowns, which bear no fruit, and the trees, which no flier roosts in.
+       The shelves are shallow. On an earthlike planet a fall of 1.5 bu lays most of them bare (19% more
+       land) and closes straits into land bridges; a rise of 3 bu drowns a fifth of the land (6 bu would
+       drown nearly half, so the lever stops at a tenth). In the scene the sea, every shore, the camera's
+       clearance, and drowned trees and bushes follow it. It is saved with the world, and a world loaded
+       mid-fall carries on bit-for-bit.
+     - **Planet scenarios**, offered only for a planet:
+       - "Across the water": on an archipelago, six walkers of the starting lines must live on an island
+         none of the founders stood on, within forty years, over the shallows or by a sea lowered into land
+         bridges.
+       - "Life on the ice": six land animals of the starting lines must live where the year's mean is
+         below −6°, within forty years.
+       `landsOf` numbers a planet's lands at its own sea level.
+     - **Tested.** 1094 tests pass (166 files), among them planet saves, a planet game saved to a slot and
+       loaded, regional immigration, the sea lever, the planet scenarios and the lands. The lab has the new
+       shallow-seas slider. The build holds no lab code, and the bake worker is a chunk of its own.
+     - **Not yet.** The bake is not cached beside the save: a planet is made again on each load, 1.2–1.5 s
+       in a worker. Rain and snow near the camera, the atmosphere's scattering and plant impostors are still
+       to come. Merging the branch into main is the last thing.
 
   The flat valley stays as a mode, so its saves still play.
 

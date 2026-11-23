@@ -105,8 +105,9 @@ export function weatherOf(fronts: Front[], p: Vec3): { cloud: number; rain: numb
   return { cloud: Math.min(1, 1.3 * sum), rain: Math.min(1, 1.1 * sum) };
 }
 
-/** A planet's seasons, over its fields' cells (`N` along each face's edge), for its surface. */
-export function planetSeasons(g: PlanetGround, tilt: number, N: number, cellOf: (p: Place) => number) {
+/** A planet's seasons, over its fields' cells (`N` along each face's edge), for its surface (`seaOf`: where
+ *  its sea stands now, moved by the sea-level lever; `dryAt`: whether a place stands above its water). */
+export function planetSeasons(g: PlanetGround, tilt: number, N: number, cellOf: (p: Place) => number, seaOf: () => number = () => 0, dryAt: (p: Place) => boolean = () => true) {
   const n = 6 * N * N;
   const unit = new Float32Array(n * 3), tMean = new Float32Array(n), wetness = new Float32Array(n), swing = new Float32Array(n), land = new Uint8Array(n);
   for (let k = 0; k < n; k++) {
@@ -133,14 +134,22 @@ export function planetSeasons(g: PlanetGround, tilt: number, N: number, cellOf: 
   };
   const PLANT_CELLS = new WeakMap<Plant[], Int32Array>();
   const p: Vec3 = [0, 0, 0];
-  // (what they were last worked out for: the time, the levers, the bushes)
-  let madeWarmth = NaN, madeEvents: unknown = null, madeEventCount = -1, madePlants = -1;
+  // (with the sea moved: which cells stand above it now — worked out once for each level it stands at)
+  let dry = land, dryFor = 0;
+  // (what they were last worked out for: the time, the levers, the bushes, the sea)
+  let madeWarmth = NaN, madeEvents: unknown = null, madeEventCount = -1, madePlants = -1, madeSea = 0;
   return {
     now(w: World): SeasonsNow {
       const at = Math.floor(w.time / SEASON_EVERY) * SEASON_EVERY;
       const lv = w.levers;
-      if (at === now.at && lv.warmth === madeWarmth && lv.events === madeEvents && lv.events.length === madeEventCount && w.plants.length === madePlants) return now;
-      [madeWarmth, madeEvents, madeEventCount, madePlants] = [lv.warmth, lv.events, lv.events.length, w.plants.length];
+      const sea = seaOf();
+      if (at === now.at && lv.warmth === madeWarmth && lv.events === madeEvents && lv.events.length === madeEventCount && w.plants.length === madePlants && sea === madeSea) return now;
+      [madeWarmth, madeEvents, madeEventCount, madePlants, madeSea] = [lv.warmth, lv.events, lv.events.length, w.plants.length, sea];
+      if (sea !== dryFor) {
+        dryFor = sea;
+        dry = sea === 0 ? land : new Uint8Array(n);
+        if (sea !== 0) for (let k = 0; k < n; k++) dry[k] = heightOn(g, [unit[k * 3], unit[k * 3 + 1], unit[k * 3 + 2]]) >= levelOn(g, [unit[k * 3], unit[k * 3 + 1], unit[k * 3 + 2]], sea) ? 1 : 0;
+      }
       now.at = at;
       // (the levers move every place as they move the valley: a colder age, an ice age, an ash winter, as
       // they stand at the time these are worked out for)
@@ -160,6 +169,8 @@ export function planetSeasons(g: PlanetGround, tilt: number, N: number, cellOf: 
         // (the valley's year, as far as this place swings, stopping where the ground freezes hard)
         now.grass[k] = (GRASS_MEAN + a * hemi.grass) * Math.max(0.05, smooth(-12, -2, t)) * kGrass;
         now.fruit[k] = Math.max(0, FRUIT_MEAN + a * hemi.fruit) * Math.max(0.05, smooth(-10, 0, t)) * kFruit;
+        // (nothing fruits that the sea has drowned)
+        if (sea !== 0 && !dry[k]) now.fruit[k] = 0;
         now.cold[k] = Math.min(1.5, Math.max(0, coldOf(t) + dCold));
         now.heat[k] = Math.min(1.6, Math.max(0, (t - 14) / 10)) * heatK;
         p[0] = unit[k * 3];
@@ -169,13 +180,14 @@ export function planetSeasons(g: PlanetGround, tilt: number, N: number, cellOf: 
         now.cloud[k] = sky.cloud;
         now.rain[k] = Math.min(1, sky.rain * wetness[k]);
         now.snowing[k] = t < 0.5 ? 1 : 0;
-        now.snow[k] = land[k] ? 0.9 * (1 - smooth(-5, 1, t)) : 0;
+        now.snow[k] = dry[k] ? 0.9 * (1 - smooth(-5, 1, t)) : 0;
       }
-      // each bush's fruit by its cell (the bushes never move)
+      // each bush's fruit by its cell (the bushes never move) — and none for a bush the sea has risen over
       let cells = PLANT_CELLS.get(w.plants);
       if (!cells || cells.length !== w.plants.length) PLANT_CELLS.set(w.plants, (cells = Int32Array.from(w.plants, (b) => cellOf(b))));
       if (now.plantFruit.length !== cells.length) now.plantFruit = new Float32Array(cells.length);
       for (let i = 0; i < cells.length; i++) now.plantFruit[i] = now.fruit[cells[i]];
+      if (sea > 0) for (let i = 0; i < cells.length; i++) if (!dryAt(w.plants[i])) now.plantFruit[i] = 0;
       return now;
     },
     fronts: (time: number) => frontsAt(g.seed, g.radius, time),

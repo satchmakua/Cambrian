@@ -14,7 +14,8 @@ import * as THREE from 'three';
 import { AIRBORNE, type Creature, type World } from '../sim/world';
 import { getWorld, useWorldUi } from './worldStore';
 
-function interest(w: World, c: Creature): number {
+/** How much worth watching a creature is now (higher: more). */
+export function interest(w: World, c: Creature): number {
   const near = (id: number, r: number) => {
     const o = w.creatures.find((x) => x.id === id && x.alive);
     return !!o && Math.hypot(o.x - c.x, o.z - c.z) < r;

@@ -43,8 +43,9 @@ const glsl = (c: THREE.Color) => `vec3(${c.r.toFixed(5)}, ${c.g.toFixed(5)}, ${c
  * with its depth.
  */
 /** the season the ground is drawn in: the year's phase (0: the north's first morning of spring) and how far
- *  the planet's axis leans (shared by every ground material: set each frame) */
-export const GROUND_SEASON = { yearPhase: { value: 0 }, tilt: { value: 0.5 } };
+ *  the planet's axis leans; and where the sea stands (bu from its own level: the sea-level lever). Shared by
+ *  every ground material: set each frame. */
+export const GROUND_SEASON = { yearPhase: { value: 0 }, tilt: { value: 0.5 }, sea: { value: 0 } };
 
 export function groundMaterial(relief: number): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
@@ -52,6 +53,7 @@ export function groundMaterial(relief: number): THREE.MeshStandardMaterial {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uYearPhase = GROUND_SEASON.yearPhase;
     shader.uniforms.uTilt = GROUND_SEASON.tilt;
+    shader.uniforms.uSea = GROUND_SEASON.sea;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float aH;\nattribute float aL;\nattribute float aM;\nattribute float aT;\nattribute float aP;\nvarying float vH;\nvarying float vL;\nvarying float vM;\nvarying float vT;\nvarying float vP;\nvarying vec3 vOP;\nvarying vec3 vON;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vH = aH;\n  vL = aL;\n  vM = aM;\n  vT = aT;\n  vP = aP;\n  vOP = position;\n  vON = normal;');
@@ -69,6 +71,7 @@ varying vec3 vON;
 const float K = ${k.toFixed(4)};
 uniform float uYearPhase;
 uniform float uTilt;
+uniform float uSea;
 // a season's warmth from its year's mean (the simulation's: planetSeasons.ts), keyed at the seasons' middles
 float seasonKey(float i) {
   float a = mod(i, 4.0);
@@ -93,7 +96,9 @@ vec3 biomeColour(float T, float P) {
 }
 vec3 groundColour(float h, float L, float up, float m, float T, float P, float y) {
   vec3 c;
-  float d = L - h;
+  // (the water's surface with the sea where it stands now: risen over every lower water, fallen under the
+  // lakes and rivers; at its own level, the baked surface as it is)
+  float d = (L > 0.0 ? max(L, uSea) : uSea) - h;
   // its warmth now: its hemisphere's season, as far as its latitude swings
   float swing = (uTilt / 0.5) * min(1.0, abs(y)) / 0.70711;
   float Tn = T + swing * 13.0 * seasonWarmth(fract(uYearPhase + (y < 0.0 ? 0.5 : 0.0)));
@@ -119,7 +124,7 @@ vec3 groundColour(float h, float L, float up, float m, float T, float P, float y
       );
   };
   // (one program for every relief: three would otherwise reuse the first relief's compiled shader)
-  m.customProgramCacheKey = () => `lab-ground-seasons-${k.toFixed(4)}`;
+  m.customProgramCacheKey = () => `planet-ground-seasons-sea-${k.toFixed(4)}`;
   return m;
 }
 

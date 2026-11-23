@@ -1,6 +1,6 @@
 /**
- * The planet lab's camera: a globe you spin from orbit, which becomes, as you come down to the ground, the
- * valley's orbit view with the ground's own up. One camera, with no switch between the two.
+ * A planet's camera (the game's and the lab's): a globe you spin from orbit, which becomes, as you come down to
+ * the ground, the valley's orbit view with the ground's own up. One camera, with no switch between the two.
  *
  * It is held as the place it looks at (T, a unit vector), a heading there (H: the way the top of the screen
  * faces, laid on the ground), a tilt (0 looks straight down; near the ground up to the valley's 0.47π, from
@@ -18,7 +18,20 @@ import * as THREE from 'three';
 import { anyTangent, arc, cross, settle, slide, tangent, toward, turn, type Vec3 } from '../../sim/sphere';
 import { heightOn, levelOn, type PlanetGround } from '../../sim/planetGround';
 import type { Creature, World } from '../../sim/world';
-import { START_AT, START_FOLLOW, START_VIEW, useLab, type ViewName } from './labStore';
+import type { PlanetSurface } from '../../sim/planetSurface';
+
+/** where a world's sea stands now (bu from its own level: the sea-level lever) */
+const seaOf = (w: World) => (w.surface as Partial<PlanetSurface>).seaLevel?.() ?? 0;
+
+export type ViewName = 'orbit' | 'region' | 'ground' | 'low';
+
+/** How the camera opens: on which of its views, over which place (else the homeland), and — given a way to
+ *  follow one — following the animal nearest that place. */
+export interface CameraStart {
+  view?: ViewName;
+  at?: Vec3 | null;
+  follow?: (id: number) => void;
+}
 
 interface View {
   T: Vec3;
@@ -74,10 +87,10 @@ export const VIEWS: Record<ViewName, (R: number) => { range: number; tilt: numbe
 };
 const KEYS: Record<string, ViewName> = { '1': 'orbit', '2': 'region', '3': 'ground', '4': 'low' };
 
-/** Where the lab opens: over the homeland, where life starts, with the top of the screen facing north. */
-function startView(R: number, home: Vec3): View {
+/** Where it opens: over the homeland, where life starts, with the top of the screen facing north. */
+function startView(R: number, home: Vec3, name: ViewName): View {
   const north = tangent(home, [0, 1, 0]);
-  const v = VIEWS[START_VIEW](R);
+  const v = VIEWS[name](R);
   return { T: home, H: north[0] || north[1] || north[2] ? north : anyTangent(home), tilt: Math.min(v.tilt, tiltCap(v.range, R)), range: v.range };
 }
 
@@ -91,7 +104,7 @@ const NDC = new THREE.Vector2();
 const HIT = new THREE.Vector3();
 
 /** The place under the pointer, on the ball at the sea's height (null: the pointer is off the planet). */
-function pick(camera: THREE.Camera, el: HTMLElement, x: number, y: number, R: number): Vec3 | null {
+export function pick(camera: THREE.Camera, el: HTMLElement, x: number, y: number, R: number): Vec3 | null {
   const r = el.getBoundingClientRect();
   NDC.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
   RAYCASTER.setFromCamera(NDC, camera);
@@ -119,13 +132,21 @@ function panBy(v: View, dx: number, dy: number, span: number, R: number): void {
 const GV = new THREE.Vector3();
 const CV = new THREE.Vector3();
 
-/** The globe camera, over a planet's world (made anew with each world: it opens over that one's homeland). */
-export function GlobeCamera({ ground, world, home }: { ground: PlanetGround; world: World; home: Vec3 }) {
+/**
+ * The globe camera, over a planet's world (made anew with each world: it opens over that one's homeland).
+ * `follow`: the creature kept under it (null: none), flown down to as it is chosen; `onLetGo`: Esc, where the
+ * page does not keep Esc for itself; `keysOn`: whether its keys are its own now (not while a menu is up).
+ */
+export function GlobeCamera({ ground, world, home, follow, onLetGo, keysOn, start }: { ground: PlanetGround; world: World; home: Vec3; follow: number | null; onLetGo?: () => void; keysOn?: () => boolean; start?: CameraStart }) {
   const camera = useThree((st) => st.camera) as THREE.PerspectiveCamera;
   const gl = useThree((st) => st.gl);
   const R = ground.radius;
   const view = useRef<View | null>(null);
-  if (view.current === null) view.current = startView(R, START_AT ?? home);
+  if (view.current === null) view.current = startView(R, start?.at ?? home, start?.view ?? 'orbit');
+  const following = useRef(follow);
+  following.current = follow;
+  const hands = useRef({ onLetGo, keysOn });
+  hands.current = { onLetGo, keysOn };
   const sized = useRef(R);
   // input waiting to be applied, a share of it a frame (a little inertia, as the valley's damped controls have)
   const pend = useRef({ dx: 0, dy: 0, px: 0, py: 0, zoom: 0 });
@@ -196,9 +217,10 @@ export function GlobeCamera({ ground, world, home }: { ground: PlanetGround; wor
     };
     const menu = (e: Event) => e.preventDefault();
     const key = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return;
+      if (e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (hands.current.keysOn && !hands.current.keysOn()) return;
       const v = view.current!;
-      if (e.key === 'Escape') useLab.getState().set({ follow: null });
+      if (e.key === 'Escape') hands.current.onLetGo?.();
       else if (e.key === 'f' || e.key === 'F') flyTo.current(v.T, VIEWS.orbit(sized.current));
       else if (KEYS[e.key]) flyTo.current(v.T, VIEWS[KEYS[e.key]](sized.current));
     };
@@ -222,10 +244,10 @@ export function GlobeCamera({ ground, world, home }: { ground: PlanetGround; wor
     };
   }, [gl, camera]);
 
-  // (?follow=1: open on the animal nearest the opening view, the way a click on it would)
+  // (asked to: open on the animal nearest the opening view, the way a click on it would)
   const opened = useRef(false);
   useEffect(() => {
-    if (!START_FOLLOW || opened.current) return;
+    if (!start?.follow || opened.current) return;
     opened.current = true;
     const T = view.current!.T;
     let best: Creature | null = null, bd = Infinity;
@@ -236,11 +258,11 @@ export function GlobeCamera({ ground, world, home }: { ground: PlanetGround; wor
         best = c;
       }
     }
-    if (best) useLab.getState().set({ follow: best.id });
+    if (best) start.follow(best.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [world, R]);
 
-  // a creature picked: fly down to it (it is then kept under the camera, frame by frame)
-  const follow = useLab((st) => st.follow);
+  // a creature to follow: fly down to it (it is then kept under the camera, frame by frame)
   useEffect(() => {
     const c = creatureOf(world, follow);
     if (c) flyTo.current(placeOf(c, R), { range: Math.min(view.current!.range, 16), tilt: 1.05 });
@@ -300,7 +322,7 @@ export function GlobeCamera({ ground, world, home }: { ground: PlanetGround; wor
       v.range = r1;
     }
     // a creature followed is kept under the camera (and its height, if it flies)
-    const b = creatureOf(world, useLab.getState().follow);
+    const b = creatureOf(world, following.current);
     if (b && !flight.current) {
       const bp = placeOf(b, Rn);
       const a = arc(v.T, bp);
@@ -318,12 +340,13 @@ export function GlobeCamera({ ground, world, home }: { ground: PlanetGround; wor
     v.H = kept.f;
 
     // the camera: back and up from the ground looked at, never under the ground itself
-    const G = GV.set(v.T[0], v.T[1], v.T[2]).multiplyScalar(Rn + Math.max(heightOn(ground, v.T), levelOn(ground, v.T)) + lift.current);
+    const sea = seaOf(world);
+    const G = GV.set(v.T[0], v.T[1], v.T[2]).multiplyScalar(Rn + Math.max(heightOn(ground, v.T), levelOn(ground, v.T, sea)) + lift.current);
     const ct = Math.cos(v.tilt), st = Math.sin(v.tilt);
     const C = CV.set(v.T[0] * ct - v.H[0] * st, v.T[1] * ct - v.H[1] * st, v.T[2] * ct - v.H[2] * st).multiplyScalar(v.range).add(G);
     let cr = C.length();
     const below: Vec3 = [C.x / cr, C.y / cr, C.z / cr];
-    const under = Math.max(heightOn(ground, below), levelOn(ground, below));
+    const under = Math.max(heightOn(ground, below), levelOn(ground, below, sea));
     if (cr < Rn + under + 0.6) {
       C.multiplyScalar((Rn + under + 0.6) / cr);
       cr = Rn + under + 0.6;

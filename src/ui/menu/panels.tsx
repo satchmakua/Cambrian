@@ -14,6 +14,8 @@ import { cleanName, describeSave, nextGameName, saveStore, NAME_MAX, type CastEn
 import { CAST_COUNT, CAST_KINDS, castOf, founderOf, lookFor } from '../../sim/cast';
 import { CAPACITIES } from '../../sim/model';
 import { SCENARIOS } from '../../sim/scenarios';
+import { EARTHLIKE, PLANET_CAP, PLANET_CAPS, type PlanetDesign } from '../../sim/planetDesign';
+import { PlanetDesigner } from './PlanetDesigner';
 import { decodeGenome } from '../../engine/share';
 import { grow } from '../../engine/grow';
 import { coherence } from '../../engine/morphospace';
@@ -276,7 +278,7 @@ export function SavesPanel({ mode, onLoaded, onSaved }: { mode: 'load' | 'save';
                 <SlotPortrait genome={h.summary.creature} />
                 <div className="slot-text">
                   <b>{h.name}{mine && <em> · this game</em>}</b>
-                  <span>{describeSave(h.summary)}</span>
+                  <span>{describeSave(h.summary, !!h.setup.planet)}</span>
                   <small>{when(h.savedAt)}</small>
                 </div>
                 {asking ? (
@@ -465,7 +467,7 @@ function CastEditor({ cast, worldSeed, room, onChange }: { cast: CastEntry[]; wo
  * where the menu has a stage (`staged`) — and `onStart` receives the finished options. `slow`: the
  * menu knows this machine draws slowly (the valley is then offered with a warning).
  */
-export function NewGamePanel({ onPreview, onStart, staged, slow }: { onPreview: (g: Genome) => void; onStart: (o: NewGameOptions) => void; staged: boolean; slow: boolean }) {
+export function NewGamePanel({ onPreview, onStart, staged, slow }: { onPreview: (g: Genome) => void; onStart: (o: NewGameOptions) => void | Promise<void>; staged: boolean; slow: boolean }) {
   const lowered = useSettings((s) => s.notice.lowered);
   const store = useMemo(() => saveStore(), []);
   const hasGame = useStore((s) => s.hasGame);
@@ -481,6 +483,21 @@ export function NewGamePanel({ onPreview, onStart, staged, slow }: { onPreview: 
   const [castOpen, setCastOpen] = useState(false);
   const [capacity, setCapacity] = useState<number>(CAPACITIES[0]);
   const [scenario, setScenario] = useState<string>('');
+  // a valley, or a planet of the player's design
+  const [kindOfWorld, setKindOfWorld] = useState<'valley' | 'planet'>('valley');
+  const planet = kindOfWorld === 'planet';
+  const [design, setDesign] = useState<PlanetDesign>(EARTHLIKE);
+  const chooseWorld = (k: 'valley' | 'planet') => {
+    setKindOfWorld(k);
+    // (a planet's scenario goes with the planet)
+    if (k === 'valley' && sc?.planetOnly) setScenario('');
+    // (a planet is a dozen valleys of land and more: it starts with room for the valley's largest; a valley
+    // cannot hold a planet's largest)
+    if (k === 'planet' && capacity === CAPACITIES[0]) setCapacity(PLANET_CAP);
+    if (k === 'valley' && !CAPACITIES.includes(capacity)) setCapacity(CAPACITIES[CAPACITIES.length - 1]);
+  };
+  const [starting, setStarting] = useState(false);
+  const [startErr, setStartErr] = useState<string | null>(null);
   const sc = SCENARIOS.find((x) => x.id === scenario) ?? null;
   const edited = useMemo(() => JSON.stringify(cast) !== JSON.stringify(castOf(ecosystem)), [cast, ecosystem]);
   const [startIn, setStartIn] = useState<GameView>('breed');
@@ -498,7 +515,17 @@ export function NewGamePanel({ onPreview, onStart, staged, slow }: { onPreview: 
   }, [store, hasGame, current.name]);
   const founder = useMemo(() => founderFor(seed, kind || null, symmetry), [seed, kind, symmetry]);
   useEffect(() => onPreview(founder), [founder, onPreview]);
-  const start = () => onStart({ name: cleanName(name, 'Game 1'), founder, symmetry, worldSeed, ecosystem, ...(edited ? { cast } : {}), ...(capacity !== CAPACITIES[0] ? { capacity } : {}), ...(sc ? { scenario: sc.id } : {}), startIn });
+  const start = () => {
+    if (starting) return;
+    const o: NewGameOptions = { name: cleanName(name, 'Game 1'), founder, symmetry, worldSeed, ecosystem, ...(edited ? { cast } : {}), ...(capacity !== CAPACITIES[0] ? { capacity } : {}), ...(sc ? { scenario: sc.id } : {}), ...(planet ? { planet: design } : {}), startIn };
+    const r = onStart(o);
+    if (!r) return;
+    // (a planet is made first, off the page: the button says so meanwhile)
+    setStarting(true);
+    setStartErr(null);
+    r.catch((e: unknown) => setStartErr(e instanceof Error ? e.message : 'The game could not be started.')).finally(() => setStarting(false));
+  };
+  const place = planet ? 'planet' : 'valley';
   return (
     <div className="newgame">
       <Row label="Name">
@@ -523,11 +550,24 @@ export function NewGamePanel({ onPreview, onStart, staged, slow }: { onPreview: 
         )}
       </section>
       <section>
-        <h3>The valley</h3>
-        <Row label="Scenario" hint={sc ? sc.goal : 'A free valley: no goal but what you make of it.'}>
-          <select value={scenario} aria-label="Scenario" onChange={(e) => setScenario(e.target.value)}>
+        <h3>The world</h3>
+        <Row label="World" hint={planet ? 'A whole world of your design: life starts in a homeland and spreads out over the generations.' : 'A valley 200 bu across: a lake, a river, woods and meadows.'}>
+          <Choice<'valley' | 'planet'> label="World" value={kindOfWorld} options={[{ v: 'valley', label: 'A valley' }, { v: 'planet', label: 'A planet' }]} onChange={chooseWorld} />
+        </Row>
+        {planet && <PlanetDesigner design={design} seed={worldSeed} onChange={setDesign} />}
+        <Row label="Scenario" hint={sc ? sc.goal : `A free ${place}: no goal but what you make of it.`}>
+          <select
+            value={scenario}
+            aria-label="Scenario"
+            onChange={(e) => {
+              setScenario(e.target.value);
+              // (a scenario made for a planet of its own sets the designer going from that one)
+              const pick = SCENARIOS.find((x) => x.id === e.target.value);
+              if (pick?.planet) setDesign({ ...pick.planet });
+            }}
+          >
             <option value="">None</option>
-            {SCENARIOS.map((x) => (
+            {SCENARIOS.filter((x) => planet || !x.planetOnly).map((x) => (
               <option key={x.id} value={x.id}>{x.title}</option>
             ))}
           </select>
@@ -546,7 +586,7 @@ export function NewGamePanel({ onPreview, onStart, staged, slow }: { onPreview: 
             }}
           />
         </Row>
-        <Row label="The cast" hint="Which kinds start in the valley, and how many. Each valley's founders are its own; ↻ shows another of a kind.">
+        <Row label="The cast" hint={`Which kinds start in the ${place}, and how many. Each ${place}'s founders are its own; ↻ shows another of a kind.`}>
           <button className="plain" aria-expanded={castOpen} onClick={() => setCastOpen(!castOpen)}>
             {castOpen ? 'Hide ▴' : 'Choose ▾'}
           </button>
@@ -554,19 +594,22 @@ export function NewGamePanel({ onPreview, onStart, staged, slow }: { onPreview: 
         {castOpen && <CastEditor cast={cast} worldSeed={worldSeed} room={capacity} onChange={setCast} />}
         </>
         )}
-        <Row label="Room for" hint={capacity === CAPACITIES[0] ? 'As many as are drawn whole.' : 'Far off, animals are drawn as markers: a busy valley asks more of the computer.'}>
-          <Choice<number> label="Room for" value={capacity} options={CAPACITIES.map((v) => ({ v, label: `${v}` }))} onChange={setCapacity} />
+        <Row label="Room for" hint={capacity === CAPACITIES[0] ? 'As many as are drawn whole.' : `Far off, animals are drawn as markers: a busy ${place} asks more of the computer.`}>
+          <Choice<number> label="Room for" value={capacity} options={(planet ? PLANET_CAPS : CAPACITIES).map((v) => ({ v, label: `${v}` }))} onChange={setCapacity} />
         </Row>
-        <Row label="Seed" hint="The same seed grows the same valley.">
+        <Row label="Seed" hint={planet ? 'The same seed and design make the same planet.' : 'The same seed grows the same valley.'}>
           <input className="seed" type="number" min={0} max={4294967295} value={worldSeed} aria-label="Valley seed" onChange={(e) => setWorldSeed(Math.max(0, Math.floor(Number(e.target.value) || 0)) >>> 0)} />
-          <button className="plain" onClick={() => setWorldSeed(randomSeed() % 100000)} title="a random valley">↻ Random</button>
+          <button className="plain" onClick={() => setWorldSeed(randomSeed() % 100000)} title={`a random ${place}`}>↻ Random</button>
         </Row>
       </section>
       <Row label="Begin in" hint={slow || lowered !== null ? VALLEY_SLOW : undefined}>
-        <Choice<GameView> label="Begin in" value={startIn} options={[{ v: 'breed', label: 'The breeder' }, { v: 'world', label: 'The valley' }]} onChange={setStartIn} />
+        <Choice<GameView> label="Begin in" value={startIn} options={[{ v: 'breed', label: 'The breeder' }, { v: 'world', label: planet ? 'The planet' : 'The valley' }]} onChange={setStartIn} />
       </Row>
       <div className="panel-foot">
-        {confirm ? (
+        {startErr && <span className="warn">{startErr}</span>}
+        {starting ? (
+          <button className="primary big" disabled>Making the planet…</button>
+        ) : confirm ? (
           <>
             <span className="warn">This replaces the game in progress (“{current.name}”). Save it first if you want to keep it.</span>
             <button className="primary" onClick={start}>Start anyway</button>

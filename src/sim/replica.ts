@@ -15,6 +15,7 @@
  */
 import type { Genome } from '../engine/genome';
 import { bodyOf, rebuildBuckets, type Corpse, type Creature, type Egg, type HistorySample, type Species, type World, type WorldEvent } from './model';
+import { applySea } from './levers';
 
 type Ref = number;
 export type CreatureData = Omit<Creature, 'genome' | 'traits'> & { genome: Ref };
@@ -212,6 +213,9 @@ export function applyFrame(r: World, f: Frame, table: Genome[]): void {
   r.cap = f.cap;
   r.adopted = f.adopted;
   r.levers = f.levers;
+  // (a planet's ground where its sea now stands: the water the view draws, and the food, should the page
+  // ever step it itself)
+  applySea(r, false);
   r.scenario = f.scenario;
   // (the replica is never stepped, but the view asks it who is near whom)
   rebuildBuckets(r);

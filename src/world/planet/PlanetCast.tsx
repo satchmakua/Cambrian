@@ -1,5 +1,6 @@
 /**
- * A planet's living drawn: the nearest (the valley's 90 at most, within its 80 bu) as their own grown bodies,
+ * A planet's living drawn (the game's planet and the planet lab alike): the nearest (the valley's 90 at most,
+ * within its 80 bu) as their own grown bodies,
  * posed by the valley's rig from what each is doing (world/Actors.tsx: asleep, feeding, courting, stalking,
  * swimming, aloft), the rest as the valley's markers, and none that the planet hides behind its horizon.
  * The simulation steps at 20 Hz; each body eases toward where it has it, along the sphere.
@@ -18,7 +19,6 @@ import { plainSkin, type Skin } from '../../world/skinQueue';
 import { getQuality } from '../../ui/settings';
 import { AIRBORNE, bodyOf, COURT_TIME, growthOf, type Creature, type World } from '../../sim/world';
 import { cross, dot, normalize, tangent, type Vec3 } from '../../sim/sphere';
-import { useLab } from './labStore';
 
 /** how many are drawn whole and how many as markers, this moment (for the HUD) */
 export const CAST = { bodies: 0, markers: 0 };
@@ -77,9 +77,12 @@ function nearSet(w: World, R: number, cam: THREE.Vector3, was: Set<number>, foll
 
 const youngOf = (c: Creature) => c.age < c.traits.maturity * JUVENILE_UNTIL;
 
-export function LabCast({ world, R }: { world: World; R: number }) {
+/** The cast: `selected`, the creature looked at (always drawn whole, wherever it is), and `onPick`, a body
+ *  clicked. */
+export function PlanetCast({ world, R, selected, onPick }: { world: World; R: number; selected: number | null; onPick: (id: number) => void }) {
   const camera = useThree((st) => st.camera);
-  const follow = useLab((st) => st.follow);
+  const sel = useRef(selected);
+  sel.current = selected;
   const near = useRef<Set<number>>(new Set());
   const [, redraw] = useState(0);
   const judged = useRef(0);
@@ -92,7 +95,7 @@ export function LabCast({ world, R }: { world: World; R: number }) {
     judged.current -= dt;
     if (judged.current > 0) return;
     judged.current = JUDGE;
-    near.current = nearSet(world, R, camera.position, near.current, useLab.getState().follow);
+    near.current = nearSet(world, R, camera.position, near.current, sel.current);
     CAST.bodies = near.current.size;
     // (re-drawn each judgement: the cast changes as they are born and die, and the young grow up)
     redraw((x) => x + 1);
@@ -100,7 +103,7 @@ export function LabCast({ world, R }: { world: World; R: number }) {
   return (
     <>
       {world.creatures.map((c) =>
-        c.alive && near.current.has(c.id) ? <Body key={`${c.id}:${youngOf(c) ? 'y' : 'a'}`} c={c} world={world} R={R} selected={c.id === follow} /> : null,
+        c.alive && (near.current.has(c.id) || c.id === selected) ? <Body key={`${c.id}:${youngOf(c) ? 'y' : 'a'}`} c={c} world={world} R={R} selected={c.id === selected} onPick={onPick} /> : null,
       )}
       <Markers world={world} R={R} near={near} />
     </>
@@ -108,7 +111,7 @@ export function LabCast({ world, R }: { world: World; R: number }) {
 }
 
 /** One creature, drawn whole: the valley's actor, on a sphere. */
-function Body({ c, world, R, selected }: { c: Creature; world: World; R: number; selected: boolean }) {
+function Body({ c, world, R, selected, onPick }: { c: Creature; world: World; R: number; selected: boolean; onPick: (id: number) => void }) {
   const young = youngOf(c);
   const { traits } = bodyOf(c.genome);
   const { phenotype } = bodyOf(young ? juvenileGenome(c.genome) : c.genome);
@@ -136,7 +139,7 @@ function Body({ c, world, R, selected }: { c: Creature; world: World; R: number;
     // (the end of a drag over an animal is not a click on it)
     if (e.delta > 4) return;
     e.stopPropagation();
-    useLab.getState().set({ follow: c.id });
+    onPick(c.id);
   };
   useFrame((_, dt) => {
     const g = ref.current;

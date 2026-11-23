@@ -10,9 +10,9 @@ import { grow } from '../engine/grow';
 import { coherence } from '../engine/morphospace';
 import type { Genome } from '../engine/genome';
 import { genomeOfMorphotype, randomGenome, type SymmetryMode } from '../engine/random';
-import { autosave, installWorld, valleyReady, worldForSave, worldSummary } from '../world/worldStore';
+import { autosave, installWorld, readyWorld, valleyReady, worldForSave, worldSummary } from '../world/worldStore';
 import {
-  cleanName, newSaveId, packGame, parseSave, saveFileName, serializeSave, type CastEntry, type Ecosystem, type GameSetup, type SavedGame, type SaveHeader, type SaveStore, type SaveSummary,
+  cleanName, newSaveId, packGame, parseSave, saveFileName, serializeSave, type CastEntry, type Ecosystem, type GameSetup, type PlanetDesign, type SavedGame, type SaveHeader, type SaveStore, type SaveSummary,
 } from './saves';
 import { lastGameView, saveSessionNow, useStore, type GameView } from './store';
 
@@ -28,6 +28,8 @@ export interface NewGameOptions {
   capacity?: number;
   /** a scenario to play the valley as (absent: a free valley) */
   scenario?: string;
+  /** a planet to play on, made from this design and the world seed (absent: a valley) */
+  planet?: PlanetDesign;
   startIn: GameView;
 }
 
@@ -36,9 +38,27 @@ export function founderFor(seed: number, kind: string | null, symmetry: Symmetry
   return kind ? genomeOfMorphotype(seed >>> 0, kind) : randomGenome(seed >>> 0, symmetry);
 }
 
-/** Begin a fresh game: a new lineage at the founder, a new (as yet unvisited) valley, on the chosen screen. */
+/** A new game's set-up, from the new-game panel's options. */
+function setupOf(o: NewGameOptions): GameSetup {
+  return { worldSeed: o.worldSeed >>> 0, ecosystem: o.ecosystem, ...(o.cast ? { cast: o.cast.map((e) => ({ ...e })) } : {}), ...(o.capacity ? { capacity: o.capacity } : {}), ...(o.scenario ? { scenario: o.scenario } : {}), ...(o.planet ? { planet: { ...o.planet } } : {}) };
+}
+
+/** Before startNewGame: a planet's ground baked off the page (nothing to do for a valley). */
+export function prepareNewGame(o: NewGameOptions): Promise<void> {
+  return readyWorld(setupOf(o), null);
+}
+
+/** A new game from the new-game panel: its planet's ground made ready off the page first, if it has one, and
+ *  then the game begun. */
+export async function beginNewGame(o: NewGameOptions): Promise<void> {
+  await prepareNewGame(o);
+  startNewGame(o);
+}
+
+/** Begin a fresh game: a new lineage at the founder, a new (as yet unvisited) valley or planet, on the chosen
+ *  screen. (A planet's ground is best made ready first: prepareNewGame.) */
 export function startNewGame(o: NewGameOptions): void {
-  const setup: GameSetup = { worldSeed: o.worldSeed >>> 0, ecosystem: o.ecosystem, ...(o.cast ? { cast: o.cast.map((e) => ({ ...e })) } : {}), ...(o.capacity ? { capacity: o.capacity } : {}), ...(o.scenario ? { scenario: o.scenario } : {}) };
+  const setup = setupOf(o);
   grow(o.founder); // (a founder that will not grow stops here, with nothing replaced)
   installWorld(setup, null);
   useStore.getState().newGame(o.founder, o.symmetry, { id: null, name: cleanName(o.name), setup });
@@ -108,6 +128,7 @@ export function playSave(g: SavedGame, view?: GameView): void {
 export async function loadGame(store: SaveStore, id: string, view?: GameView): Promise<void> {
   const g = await store.get(id);
   if (!g) throw new Error('That save is no longer there.');
+  await readyWorld(g.setup, g.world); // (a planet's ground, baked off the page first)
   playSave(g, view);
 }
 
