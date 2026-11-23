@@ -9,6 +9,7 @@
  */
 import { useMemo } from 'react';
 import type { TreeNode } from './worldStore';
+import { usePanel } from './usePanel';
 
 const ROW = 15;
 const LEFT = 6;
@@ -19,6 +20,8 @@ function hueCss(h: number, l = 58): string {
 }
 
 export function TreeOfLife({ tree, now, onPick, onClose }: { tree: TreeNode[]; now: number; onPick: (speciesId: number) => void; onClose: () => void }) {
+  // (moved and folded at will, like the census)
+  const panel = usePanel('tree');
   const W = 560;
   const layout = useMemo(() => {
     // depth-first order: founders (no parent, or a parent the tree no longer knows) by founding time,
@@ -49,9 +52,12 @@ export function TreeOfLife({ tree, now, onPick, onClose }: { tree: TreeNode[]; n
   const days = Math.floor(now / 240);
   const dayStep = Math.max(1, Math.ceil(days / 8));
   return (
-    <section className="tree-of-life">
-      <div className="tol-head">
+    <section className={`tree-of-life${panel.folded ? ' folded' : ''}`} ref={panel.ref}>
+      <div className={`tol-head ${panel.head.className}`} onPointerDown={panel.head.onPointerDown} onDoubleClick={panel.head.onDoubleClick} title="drag to move it; double-click to put it back">
         <h3>Tree of life <span>{layout.order.length} species · {tree.filter((n) => n.extinctAt !== null).length} extinct</span></h3>
+        <button className="fold" onClick={() => panel.fold()} title={panel.folded ? 'open the tree' : 'fold the tree away'} aria-label={panel.folded ? 'Open the tree' : 'Fold the tree'}>
+          {panel.folded ? '▸' : '▾'}
+        </button>
         <button onClick={onClose} title="close">✕</button>
       </div>
       <div className="tol-scroll">

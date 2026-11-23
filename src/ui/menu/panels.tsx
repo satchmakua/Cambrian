@@ -651,6 +651,21 @@ const CONTROLS: { where: string; rows: [string, string][] }[] = [
       ['I', 'Close or open the selected creature’s panel'],
       [', and .', 'The previous or next one of its species'],
       ['Click a census row', 'Follow one of that species'],
+      ['H', 'Hide or show every panel and the bar'],
+      ['Drag a panel by its head', 'Move it (double-click its head to put it back)'],
+      ['▾ on a panel', 'Fold it away to its head, or open it again'],
+      ['⏩ pass time', 'Run the world on for a day … a century, then see what happened'],
+    ],
+  },
+  {
+    where: 'A planet',
+    rows: [
+      ['Drag', 'Spin the globe from afar; close by, turn the view'],
+      ['Right-drag', 'Pan over the ground'],
+      ['Scroll', 'Zoom toward the pointer'],
+      ['Double-click', 'Fly there'],
+      ['1 2 3 4', 'Orbit, a region, the ground, low'],
+      ['F', 'The whole planet'],
     ],
   },
 ];

@@ -44,6 +44,14 @@ export function setHost(h: SimHost | null): void {
 export function changed(): void {
   HOST?.invalidate();
 }
+/** How fast the world runs flat out, lately (sim seconds a real second; null: not yet measured): the last pass
+ *  of time's own pace, where this world has had one, else its steps as it runs. */
+export function simRate(): number | null {
+  if (PASS_PACE && PASS_PACE.world === WORLD) return PASS_PACE.rate;
+  return HOST?.rate() ?? null;
+}
+/** the pace the last pass of time went at, and the world it ran */
+let PASS_PACE: { world: World; rate: number } | null = null;
 
 export function getWorld(): World {
   if (!WORLD) WORLD = resumeWorld() ?? worldFromSetup(SETUP);
@@ -385,11 +393,12 @@ interface WorldUi {
    *  Throws, leaving the current world, if it won't load. (A planet's ground is best made ready first:
    *  readyWorld.) */
   open: (json: string) => void;
-  /** a fast-forward in progress (run in a worker): how far through, and a line of news */
-  ff: { f: number; label: string } | null;
+  /** a fast-forward in progress (run in a worker): how far through, a line of news, how long it was asked
+   *  to run (sim s), and how long it has left to run here (real s; null: not yet known) */
+  ff: { f: number; label: string; seconds: number; left: number | null } | null;
   /** what happened over the last fast-forward (shown until dismissed) */
   chronicle: (Chronicle & { span: string }) | null;
-  /** run the world on `seconds` of sim time in a worker, then show what happened */
+  /** run the world on `seconds` of sim time in a worker (a day, or a century), then show what happened */
   fastForward: (seconds: number, span: string) => void;
   stopFastForward: () => void;
   dismissChronicle: () => void;
@@ -416,6 +425,9 @@ interface WorldUi {
   /** photo mode: the bar and the panels hidden, for framing a shot */
   photo: boolean;
   setPhoto: (v: boolean) => void;
+  /** the overlays shown (false: every panel and the bar hidden, the world alone — H, or the bar's ▢) */
+  hud: boolean;
+  setHud: (v: boolean) => void;
 }
 
 /** What a click on the ground places: a release (what, how many at each click, and its breeder
@@ -625,8 +637,11 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
     const w = getWorld();
     const before = snapshotForChronicle(w);
     const wasRunning = get().running;
+    const t0 = w.time;
+    const started = performance.now();
     changed(); // (a frame on its way would change the valley the run set out from)
-    set({ ff: { f: 0, label: '' }, running: false, chronicle: null });
+    // (nothing placed meanwhile: whatever the live world is given now, the run's result replaces)
+    set({ ff: { f: 0, label: '', seconds, left: null }, running: false, chronicle: null, placing: null });
     const worker = new Worker(new URL('./ffWorker.ts', import.meta.url), { type: 'module' });
     FF = { worker, wasRunning };
     /** The run is over (done, failed or refused): stop the worker and hand the valley back. */
@@ -640,7 +655,13 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
       if (FF?.worker !== worker) return;
       const m = e.data as { type: string; f?: number; time?: number; pop?: number; species?: number; json?: string; message?: string };
       if (m.type === 'progress') {
-        set({ ff: { f: m.f ?? 0, label: `Day ${dayNumber(m.time ?? 0)} · ${m.pop} alive · ${m.species} species` } });
+        // how long it has to go, at the pace it has gone so far (after a moment: the first steps carry the start)
+        const done = (m.time ?? t0) - t0, took = (performance.now() - started) / 1000;
+        const left = done > 0 && took > 2 ? ((seconds - done) * took) / done : null;
+        if (done > 0 && took > 2) PASS_PACE = { world: w, rate: done / took };
+        const day = dayNumber(m.time ?? 0);
+        const where = seconds >= DAY_LENGTH * YEAR_DAYS ? `year ${yearNumber(m.time ?? 0)}, day ${((day - 1) % YEAR_DAYS) + 1}` : `day ${day}`;
+        set({ ff: { f: m.f ?? 0, label: `${where} · ${m.pop} alive · ${m.species} species`, seconds, left } });
       } else if (m.type === 'done' && m.json) {
         if (WORLD !== w) return end();
         try {
@@ -714,6 +735,8 @@ export const useWorldUi = create<WorldUi>((set, get) => ({
   },
   photo: false,
   setPhoto: (photo) => set({ photo }),
+  hud: true,
+  setHud: (hud) => set({ hud }),
   godAct: (act) => {
     if (!act(getWorld())) return;
     changed();

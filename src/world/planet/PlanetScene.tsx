@@ -85,6 +85,7 @@ const DEV_VIEW = (() => {
   const v = new URLSearchParams(location.search).get('view');
   return v === 'orbit' || v === 'region' || v === 'ground' || v === 'low' ? v : null;
 })();
+const DEV_NIGHT = import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('at') === 'night';
 const DEV_AT = ((): [number, number, number] | null => {
   if (!import.meta.env.DEV || typeof location === 'undefined') return null;
   const m = new URLSearchParams(location.search).get('at')?.split(',').map(Number);
@@ -99,7 +100,12 @@ const DEV_AT = ((): [number, number, number] | null => {
 function Camera({ world, S }: { world: World; S: PlanetSurface }) {
   const selected = useWorldUi((s) => s.selected);
   const follow = useWorldUi((s) => s.follow);
-  const start = useMemo<CameraStart>(() => ({ view: DEV_VIEW ?? 'region', at: DEV_AT }), []);
+  // (dev: ?at=night opens over the middle of the night side, for shots of it)
+  const start = useMemo<CameraStart>(() => {
+    const s = S.sunAt(world.time);
+    return { view: DEV_VIEW ?? 'region', at: DEV_NIGHT ? [-s[0], -s[1], -s[2]] : DEV_AT };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return <GlobeCamera ground={S.ground} world={world} home={S.home} follow={follow ? selected : null} keysOn={() => !useStore.getState().menuOpen} start={start} />;
 }
 

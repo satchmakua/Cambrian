@@ -1510,6 +1510,29 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
 
   The flat valley stays as a mode, so its saves still play.
 
+- [x] **Long passes of time, a moonlit night, panels that move.** Wanted after playing the planet. **Done
+  (2026-11-22).**
+  - **Pass time** takes the place of the day, season and year buttons. It runs any span from a day to a
+    century (in days, seasons or years) at full speed in the fast-forward worker.
+    - While it runs, a strip under the bar shows how far it has come and how long it has left, at the pace
+      it has gone. It can be stopped where it has got to.
+    - The frozen world can be looked round meanwhile; releases, the levers and god mode wait, as the run's
+      result would undo them.
+    - The estimate before starting comes from the last pass's pace, or else from the world's own recent
+      steps, leaving out the first few hundred (a world just loaded runs slow).
+    - Measured: a year of the starting valley in about 15 s. A planet at cap 600 starts at about two
+      minutes a year and slows as it fills.
+    - A pass's result now comes back whole: its levers, its scenario's verdict, a forced sky and a planet's
+      sea. Before, a goal won during a fast-forward was forgotten, and a planet's sea jumped back to where it
+      had been; a test holds it now.
+  - **The night side** of a planet is moonlit: a dim blue light from the far side of the sky, a cool fill
+    and a deep blue haze in the air, so the ground, the trees and the living show by night without its
+    looking like day.
+  - **The panels:** `H` (or the bar's ▢) hides every panel and the bar, leaving the world and a small button
+    to bring them back. The census, the creature's panel, the species card and the tree of life can each be
+    dragged by their head (a double click puts one back) and folded to it (▾). Each stays where it was put,
+    in this browser. The Controls screen lists it all, and the planet's camera.
+
 - [x] **Smaller things the valley wants.**
   - **No bead chains on the way in.** Bodies wear the capsule skin for several seconds while their smooth
     skins build. A coarse smooth skin should come first ("More headroom" plans the skin worker).

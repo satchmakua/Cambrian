@@ -13,9 +13,10 @@ import { Canvas } from '@react-three/fiber';
 import type { Genome } from '../engine/genome';
 import { WorldScene, captureStill } from './WorldScene';
 import { PlanetScene } from './planet/PlanetScene';
+import { usePanel } from './usePanel';
 import { TreeOfLife } from './TreeOfLife';
 import { SpeciesCard } from './SpeciesCard';
-import { useWorldUi, getWorld, populate, starterCast, strangerGenome, bumpVersion, changed, autosave, downloadWorld, isPlanet, readyWorld, worldSetup, type Snapshot } from './worldStore';
+import { useWorldUi, getWorld, populate, starterCast, strangerGenome, bumpVersion, changed, autosave, downloadWorld, isPlanet, readyWorld, simRate, worldSetup, type Snapshot } from './worldStore';
 import { DAY_LENGTH, YEAR_DAYS, bredFromHere, dayNumber, liveCount, release, speciesById, stepWorld, type Creature, type HistorySample, type World } from '../sim/world';
 import { genomeOfMorphotype } from '../engine/random';
 import { MUTATION_DIAL, bloom, cull, forceWeather, glut, heal, makeBreed, setGodMode, setImmigration, setMutation, smite } from '../sim/god';
@@ -32,6 +33,26 @@ import { dprOf, useQuality, useSettings } from '../ui/settings';
 import { useStore } from '../ui/store';
 
 const SPEEDS = [1, 4, 16, 48];
+
+/** Passing time: the spans offered at a click, and how much of each unit may be asked for (a century) */
+type PassUnit = 'days' | 'seasons' | 'years';
+const UNIT_DAYS: Record<PassUnit, number> = { days: 1, seasons: 3, years: YEAR_DAYS };
+const PASS_MAX: Record<PassUnit, number> = { days: 100 * YEAR_DAYS, seasons: 400, years: 100 };
+const PASS_PICKS: { n: number; unit: PassUnit; label: string }[] = [
+  { n: 1, unit: 'days', label: 'a day' },
+  { n: 1, unit: 'seasons', label: 'a season' },
+  { n: 1, unit: 'years', label: 'a year' },
+  { n: 10, unit: 'years', label: '10 years' },
+  { n: 100, unit: 'years', label: 'a century' },
+];
+
+/** "40 seconds", "3 minutes", "2 hours" — how long something takes here, roughly */
+function realWords(s: number): string {
+  if (s < 50) return `${Math.max(5, Math.round(s / 5) * 5)} seconds`;
+  if (s < 3000) return `${Math.max(1, Math.round(s / 60))} minute${Math.round(s / 60) === 1 ? '' : 's'}`;
+  const h = s / 3600;
+  return h < 1.75 ? 'an hour' : `${h < 10 ? h.toFixed(1).replace(/\.0$/, '') : Math.round(h)} hours`;
+}
 let DEV_WARMED = false;
 let DEV_CROWDED = false;
 
@@ -174,6 +195,16 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
   useEffect(() => () => setPlacing(null), [setPlacing]);
   const ff = useWorldUi((s) => s.ff);
   const chron = useWorldUi((s) => s.chronicle);
+  // passing time: the card that asks how much, and its amount
+  const [passOpen, setPassOpen] = useState(false);
+  const [passN, setPassN] = useState(1);
+  const [passUnit, setPassUnit] = useState<PassUnit>('years');
+  const passSeconds = Math.max(1, Math.min(PASS_MAX[passUnit], Math.floor(passN) || 1)) * UNIT_DAYS[passUnit] * DAY_LENGTH;
+  const passRate = passOpen ? simRate() : null;
+  const pass = () => {
+    setPassOpen(false);
+    fastForward(passSeconds, spanWords(passSeconds).toLowerCase());
+  };
   const fileRef = useRef<HTMLInputElement>(null);
   const quality = useQuality();
   // (the scene holds still while the game menu is over it — nothing steps — and is drawn again only
@@ -256,6 +287,10 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
     return () => clearTimeout(t);
   }, [storeNotice]);
   const photo = useWorldUi((s) => s.photo);
+  // the overlays: all shown or none (H), and the census and the creature's panel each moved and folded at will
+  const hud = useWorldUi((s) => s.hud);
+  const censusP = usePanel('census');
+  const critterP = usePanel('critter');
   // news of an adopted line: a split, a renaming, an extinction — each said for a while, with a way to it
   const [lineNews, setLineNews] = useState<{ key: string; text: string; id: number }[]>([]);
   const seenNews = useRef<string | null>(null);
@@ -331,6 +366,8 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
         else setPanel(!ui.panel);
       } else if (e.code === 'Comma' || e.code === 'Period') {
         stepKin(e.code === 'Comma' ? -1 : 1);
+      } else if (e.code === 'KeyH' && !e.repeat) {
+        useWorldUi.getState().setHud(!useWorldUi.getState().hud);
       } else if (e.code === 'KeyP' && !e.repeat) {
         useWorldUi.getState().setPhoto(!useWorldUi.getState().photo);
       } else if (e.code === 'KeyS' && !e.repeat && useWorldUi.getState().photo) {
@@ -425,7 +462,7 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
   const kin = sel ? kinOf(sel.speciesId) : [];
   const kinAt = sel ? kin.findIndex((x) => x.id === sel.id) : -1;
   return (
-    <div className={`world${placing ? ' placing' : ''}${photo ? ' photo' : ''}`} ref={root}>
+    <div className={`world${placing ? ' placing' : ''}${photo ? ' photo' : ''}${ff ? ' passing' : ''}${hud ? '' : ' bare'}`} ref={root}>
       {/* the scene mounts paused while its shaders compile (in parallel, where the browser can), then runs */}
       <Canvas className="world-canvas" frameloop={!warm ? 'never' : menuOpen ? 'demand' : 'always'} shadows={quality.shadows && !planet} dpr={dprOf(quality, 1.75)} camera={planet ? { position: [0, 0, 1000], fov: 45, near: 0.1, far: 20000 } : { position: [40, 38, 70], fov: 45, near: 0.2, far: 1200 }} gl={{ preserveDrawingBuffer: import.meta.env.DEV }}>
         <KeepPrograms />
@@ -444,6 +481,7 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
           <button onClick={onExit}>Breed</button>
           <button className="active">World</button>
           {onMenu && <button className="menu-btn" onClick={onMenu} title="menu: save, load, settings, exit (Esc)" aria-label="Menu">☰</button>}
+          <button className="hud-btn" onClick={() => useWorldUi.getState().setHud(false)} title="hide every panel and this bar: the world alone (H brings them back)" aria-label="Hide the panels">▢</button>
         </nav>
         {snap && (
           <div className="clock">
@@ -458,10 +496,8 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
             </button>
           ))}
         </div>
-        <div className="skip" title="fast-forward: the world runs on at full speed, then you see what happened">
-          <button disabled={!!ff} onClick={() => fastForward(DAY_LENGTH, 'a day')}>⏩ day</button>
-          <button disabled={!!ff} onClick={() => fastForward(DAY_LENGTH * 3, 'a season')}>season</button>
-          <button disabled={!!ff} onClick={() => fastForward(DAY_LENGTH * YEAR_DAYS, 'a year')} title={`a year: ${YEAR_DAYS} days`}>year</button>
+        <div className="skip">
+          <button className={passOpen ? 'active' : ''} disabled={!!ff} onClick={() => setPassOpen(!passOpen)} title="pass time: the world runs on at full speed for as long as you choose — a day, a year, a century — and then you see what happened">⏩ pass time</button>
         </div>
         <div className="releases">
           <button className={sound ? 'active' : ''} onClick={() => setSound(!sound)} title="synthesized wind, birdsong and crickets, and the creatures' own calls">{sound ? '♪ sound' : '♪ sound off'}</button>
@@ -567,6 +603,11 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
           ))}
         </div>
       )}
+      {!hud && !photo && (
+        <button className="hud-show" onClick={() => useWorldUi.getState().setHud(true)} title="bring back the bar and the panels (H)">
+          show the panels <kbd>H</kbd>
+        </button>
+      )}
       {photo && (
         <div className="photo-bar">
           <span>Photo mode — drag and scroll to frame the shot</span>
@@ -604,16 +645,48 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
       )}
 
 
-      {ff && (
-        <div className="ff-overlay">
-          <div className="ff-panel">
-            <b>Time passes…</b>
-            <div className="ff-bar">
-              <i style={{ width: `${Math.round(ff.f * 100)}%` }} />
-            </div>
-            <span>{ff.label || 'starting'}</span>
-            <button onClick={stopFastForward}>stop here</button>
+      {passOpen && !ff && (
+        <div className="pass-card">
+          <div className="critter-head">
+            <h3>Pass time</h3>
+            <button onClick={() => setPassOpen(false)} title="close">✕</button>
           </div>
+          <p className="doing">The world runs on at full speed, and then you see what happened. Stop it on the way and it is left where it had got to.</p>
+          <div className="pass-picks">
+            {PASS_PICKS.map((p) => (
+              <button key={p.label} className={passN === p.n && passUnit === p.unit ? 'active' : ''} onClick={() => (setPassN(p.n), setPassUnit(p.unit))}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="pass-row">
+            <input type="number" min={1} max={PASS_MAX[passUnit]} value={passN} aria-label="How much time" onChange={(e) => setPassN(Math.max(1, Math.min(PASS_MAX[passUnit], Math.floor(Number(e.target.value)) || 1)))} />
+            <select value={passUnit} aria-label="Of what" onChange={(e) => {
+              const u = e.target.value as PassUnit;
+              setPassUnit(u);
+              setPassN((n) => Math.min(PASS_MAX[u], n));
+            }}>
+              <option value="days">days</option>
+              <option value="seasons">seasons</option>
+              <option value="years">years</option>
+            </select>
+            <button className="primary" onClick={pass}>pass {spanWords(passSeconds).toLowerCase()}</button>
+          </div>
+          <small className="pass-eta">{passRate ? `About ${realWords(passSeconds / passRate)} here, at the pace the world runs now (it slows as it fills).` : 'How long it takes here depends on how many live in it: it says as it goes.'}</small>
+        </div>
+      )}
+
+      {ff && (
+        <div className="ff-pill">
+          <b>Passing {spanWords(ff.seconds).toLowerCase()}…</b>
+          <div className="ff-bar">
+            <i style={{ width: `${Math.round(ff.f * 100)}%` }} />
+          </div>
+          <span>
+            {ff.label || 'starting'}
+            {ff.left !== null && ff.left > 1 ? ` · about ${realWords(ff.left)} left` : ''}
+          </span>
+          <button onClick={stopFastForward} title="stop the run: the world is left where it had got to">stop here</button>
         </div>
       )}
       {chron && !ff && (
@@ -626,7 +699,7 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
           <p>
             population {chron.population[0]} → <b>{chron.population[1]}</b>
           </p>
-          {chron.arose.length > 0 && <p className="arose">New species: {chron.arose.join(', ')}</p>}
+          {chron.arose.length > 0 && <p className="arose">New species: {someOf(chron.arose)}</p>}
           {chron.aroseIds.length > 0 && (
             <div className="chron-portraits">
               {chron.aroseIds.slice(0, 4).map((id) => (
@@ -634,16 +707,19 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
               ))}
             </div>
           )}
-          {chron.became.length > 0 && <p className="arose">Lines that changed: {chron.became.join(', ')}</p>}
-          {chron.lost.length > 0 && <p className="lost">Died out: {chron.lost.join(', ')}</p>}
+          {chron.became.length > 0 && <p className="arose">Lines that changed: {someOf(chron.became)}</p>}
+          {chron.lost.length > 0 && <p className="lost">Died out: {someOf(chron.lost)}</p>}
           {chron.arose.length === 0 && chron.lost.length === 0 && <p className="quiet">No species arose or died out.</p>}
           {chron.stillborn > 0 && <p className="quiet">{chron.stillborn} young too misshapen to live were never born.</p>}
         </div>
       )}
 
       {snap && (
-        <aside className="census">
-          <h3>
+        <aside className={`census${censusP.folded ? ' folded' : ''}`} ref={censusP.ref}>
+          <h3 {...censusP.head} title="drag to move it; double-click to put it back">
+            <button className="fold" onClick={() => censusP.fold()} title={censusP.folded ? 'open the census' : 'fold the census away'} aria-label={censusP.folded ? 'Open the census' : 'Fold the census'}>
+              {censusP.folded ? '▸' : '▾'}
+            </button>
             Census <span>{snap.pop} alive{snap.aloft > 0 && <em className="aloft" title="in the air now"> · {snap.aloft} aloft</em>}</span>
             <button className={`tol-toggle${showTree ? ' active' : ''}`} onClick={() => setShowTree(!showTree)} title="every species the world has known, as a branching tree through time">tree of life</button>
           </h3>
@@ -681,8 +757,8 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
       )}
 
       {sel && panel && (
-        <aside className="critter">
-          <div className="critter-head">
+        <aside className={`critter${critterP.folded ? ' folded' : ''}`} ref={critterP.ref}>
+          <div className={`critter-head ${critterP.head.className}`} onPointerDown={critterP.head.onPointerDown} onDoubleClick={critterP.head.onDoubleClick} title="drag to move it; double-click to put it back">
             <h3>
               <button className="link" onClick={() => setCard(sel.speciesId)} title="its species' record">
                 {sel.species}
@@ -692,6 +768,9 @@ export function WorldView({ founder, lineageRoot = null, onExit, onAdopt, onMenu
               <button onClick={() => stepKin(-1)} disabled={kin.length < 2} title="the previous one of its species (,)" aria-label="the previous one of its species">‹</button>
               <span className="kin-n" title="which of its species' living members this is">{kinAt >= 0 ? `${kinAt + 1} of ${kin.length}` : `of ${kin.length}`}</span>
               <button onClick={() => stepKin(1)} disabled={kin.length < 2} title="the next one of its species (.)" aria-label="the next one of its species">›</button>
+              <button className="fold" onClick={() => critterP.fold()} title={critterP.folded ? 'open the panel' : 'fold the panel away'} aria-label={critterP.folded ? 'Open the panel' : 'Fold the panel'}>
+                {critterP.folded ? '▸' : '▾'}
+              </button>
               <button className="close" onClick={() => setPanel(false)} title="close the panel (I opens it again)" aria-label="close the panel">✕</button>
             </div>
           </div>
@@ -789,14 +868,24 @@ function saveStill(): void {
   useWorldUi.getState().notify('Still saved');
 }
 
-/** "a day", "3 days", "a season and a day"… for the chronicle's heading */
+/** "A day", "3 days", "A season", "2 years", "A century"… for the chronicle's heading and the pass */
 function spanWords(seconds: number): string {
   const days = Math.round(seconds / DAY_LENGTH);
   if (days <= 0) return 'A few hours';
   if (days === 1) return 'A day';
-  if (days === YEAR_DAYS) return 'A year';
   if (days === 3) return 'A season';
+  if (days % YEAR_DAYS === 0) {
+    const years = days / YEAR_DAYS;
+    return years === 1 ? 'A year' : years === 100 ? 'A century' : `${years} years`;
+  }
+  if (days > YEAR_DAYS) return `${(days / YEAR_DAYS).toFixed(1)} years`;
+  if (days % 3 === 0) return `${days / 3} seasons`;
   return `${days} days`;
+}
+
+/** A long list said short: the first dozen, and how many more. */
+function someOf(names: string[], most = 12): string {
+  return names.length <= most ? names.join(', ') : `${names.slice(0, most).join(', ')} and ${names.length - most} more`;
 }
 
 /** A small dropdown: a button that opens a column of actions (closing on a pick or a click away). */
