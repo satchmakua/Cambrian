@@ -28,10 +28,14 @@ export { fitOf, lineRoot, TREND_EVERY, TREND_MAX } from './species';
 export { boostSpecies, bredFromHere, breedNow, cloneCreature, killCreature, release, takeHome } from './population';
 export { preysOn } from './behaviour';
 export { footprintGap } from './motion';
-import { biomeAt, makeTerrain } from './terrain';
+import { makeValley } from './valley';
+import { makePlanet } from './planetSurface';
+import type { PlanetSpec } from './planetGround';
+import type { Ground } from './surface';
+import type { Biome } from './terrain';
 import { droughtOf } from './weather';
 import { mix32, mulberry32State } from '../engine/rng';
-import { DAY_LENGTH, GRID_CELL, log, MAX_POP, rebuildBuckets, STEP, YEAR_DAYS, type World } from './model';
+import { DAY_LENGTH, log, MAX_POP, rebuildBuckets, STEP, YEAR_DAYS, type World } from './model';
 import { immigrate, sampleTrends, speciateDaily, TREND_EVERY } from './species';
 import { hatch } from './population';
 import { live } from './behaviour';
@@ -42,31 +46,52 @@ import { judgeScenario } from './scenarios';
 
 // --- construction --------------------------------------------------------------------------------
 
+/** A new valley, from its seed. */
 export function createWorld(seed: number, cap: number = MAX_POP): World {
-  const terrain = makeTerrain(seed);
+  return worldOn(seed, cap, makeValley(seed));
+}
+
+/** A new planet, from its spec (its seed, size, relief and land): the same life on a ball of ground. Not
+ *  saved yet, and stepped on the page (the planet's later steps bring both). */
+export function createPlanet(spec: PlanetSpec, cap: number = MAX_POP): World {
+  return worldOn(spec.seed, cap, makePlanet(spec, cap));
+}
+
+/** where fruit bushes grow: the share of the throws landing on each ground that take (every one in a wood
+ *  or a jungle, a quarter on a meadow, fewer in the boreal forest, the marshes and the savanna; and the
+ *  valley's woods and meadows as they always were) */
+const BUSH_TAKES: Partial<Record<Biome, number>> = { wood: 1, jungle: 1, meadow: 0.25, taiga: 0.3, marsh: 0.15, savanna: 0.12 };
+
+function worldOn(seed: number, cap: number, ground: Ground): World {
+  const { terrain, surface, gridN, bushes, food } = ground;
   const rng = mulberry32State(mix32(seed, 0x3c0105));
-  const gridN = Math.ceil(terrain.size / GRID_CELL);
-  const grass = new Float32Array(gridN * gridN);
-  const grassCap = new Float32Array(gridN * gridN);
-  const algae = new Float32Array(gridN * gridN);
-  const algaeCap = new Float32Array(gridN * gridN);
-  for (let j = 0; j < gridN; j++) {
-    for (let i = 0; i < gridN; i++) {
-      const x = -terrain.size / 2 + (i + 0.5) * GRID_CELL;
-      const z = -terrain.size / 2 + (j + 0.5) * GRID_CELL;
-      const b = biomeAt(terrain, x, z);
-      const k = j * gridN + i;
+  const cells = surface.cells;
+  const grass = new Float32Array(cells);
+  const grassCap = new Float32Array(cells);
+  const algae = new Float32Array(cells);
+  const algaeCap = new Float32Array(cells);
+  // (each cell by what grows at its middle, in the fields' own order: the valley's by its ground, a planet's
+  // by its climate too)
+  for (let k = 0; k < cells; k++) {
+    const at = surface.cellCenter(k);
+    if (food) {
+      const f = food(at);
+      grassCap[k] = f.grass;
+      algaeCap[k] = f.algae;
+    } else {
+      const b = surface.biome(at);
       grassCap[k] = b === 'meadow' ? 0.6 : b === 'wood' ? 0.32 : b === 'sand' ? 0.05 : 0;
       algaeCap[k] = b === 'shallow' ? 1.25 : b === 'deep' ? 0.8 : 0;
-      grass[k] = grassCap[k] * (0.6 + 0.4 * rng());
-      algae[k] = algaeCap[k] * (0.6 + 0.4 * rng());
     }
+    grass[k] = grassCap[k] * (0.6 + 0.4 * rng());
+    algae[k] = algaeCap[k] * (0.6 + 0.4 * rng());
   }
   const world: World = {
     seed,
     rng,
     time: DAY_LENGTH * 0.08, // start just after dawn
     terrain,
+    surface,
     gridN,
     grass,
     grassCap,
@@ -94,13 +119,12 @@ export function createWorld(seed: number, cap: number = MAX_POP): World {
   };
   // fruit bushes: dense in the woods, scattered across the meadows
   let tries = 0;
-  while (world.plants.length < 170 && tries++ < 8000) {
-    const x = (rng() - 0.5) * terrain.size * 0.94;
-    const z = (rng() - 0.5) * terrain.size * 0.94;
-    const b = biomeAt(terrain, x, z);
-    if (b !== 'wood' && !(b === 'meadow' && rng() < 0.25)) continue;
+  while (world.plants.length < bushes.most && tries++ < bushes.tries) {
+    const p = bushes.place(rng);
+    const takes = BUSH_TAKES[surface.biome(p)] ?? 0;
+    if (takes <= 0 || (takes < 1 && !(rng() < takes))) continue;
     const max = 3 + Math.floor(rng() * 5);
-    world.plants.push({ id: world.nextId++, x, z, fruit: max * rng(), max, size: 0.8 + rng() * 0.9 });
+    world.plants.push({ id: world.nextId++, ...p, fruit: max * rng(), max, size: 0.8 + rng() * 0.9 });
   }
   return world;
 }
@@ -149,6 +173,6 @@ export function stepWorld(w: World, dt = STEP): void {
 /** A cheap deterministic fingerprint of the world state (for replay tests). */
 export function worldHash(w: World): number {
   let h = mix32(w.stepCount, w.creatures.length, w.corpses.length, w.species.length, w.eggs.length);
-  for (const c of w.creatures) h = mix32(h, c.id, Math.round(c.x * 1000), Math.round(c.z * 1000), Math.round(c.energy * 10));
+  for (const c of w.creatures) h = mix32(h, c.id, ...w.surface.key(c), Math.round(c.energy * 10));
   return h >>> 0;
 }

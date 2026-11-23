@@ -1,13 +1,13 @@
 /**
  * Behaviour — one creature's life from moment to moment: its metabolism and needs (live), what it decides
- * to do about them (decide: flee, sleep, eat, breed, wander), and how it finds a meal it can reach.
+ * to do about them (decide: flee, sleep, eat, breed, wander), and how it finds a meal it can reach. Every
+ * place, distance and search goes through the world's surface (surface.ts).
  */
 import { BREATHES_AIR } from './traits';
-import { heightAt, inBounds, WATER_LEVEL } from './terrain';
 import { distance as morphDistance } from '../engine/morphospace';
-import { nearestTree, standsOf } from './stands';
 import { unitHash } from '../engine/rng';
-import { AIRBORNE, canStand, cellCenter, cellOf, DAY_LENGTH, DECIDE_EVERY, descriptorOf, growthOf, isNight, MATE_FIT, MATE_LIKENESS, nearby, ROOST_REACH, SCENT, SOAR_BANK, SOAR_LIFT, SOAR_MASS, UPKEEP, type Action, type Creature, type Plant, type World } from './model';
+import type { Place } from './surface';
+import { AIRBORNE, canStand, cellCenter, cellOf, DAY_LENGTH, DECIDE_EVERY, descriptorOf, growthOf, MATE_FIT, MATE_LIKENESS, nearby, ROOST_REACH, SCENT, SOAR_BANK, SOAR_LIFT, SOAR_MASS, UPKEEP, type Action, type Creature, type Plant, type World } from './model';
 import { breed, die, roomToBreed } from './population';
 import { act } from './motion';
 import { conspicuity, showiness, weatherCost } from './selection';
@@ -53,7 +53,7 @@ export function live(w: World, c: Creature, dt: number): void {
   const moveCost = aloft ? t.metabolism * (t.flies ? (c.soarT > 0 ? 0.3 : 0.8 * (1 + Math.max(0, 1.4 - t.lift))) : 0.25) : t.metabolism * 1.6 * (c.speed / Math.max(0.1, t.sprint)) ** 2;
   // the warm-blooded burn more to keep warm through a hard winter
   // (…by its coat and its size: see selection.ts)
-  const warmth = 1 + weatherCost(t, w);
+  const warmth = 1 + weatherCost(t, w, c);
   // …and a misbuilt body is dearer to keep than a well-made one
   const upkeep = 1 + UPKEEP * (1 - c.fit);
   c.energy -= (t.metabolism * warmth * upkeep * (asleep ? 0.55 : 1) * growth ** 2 + moveCost) * dt;
@@ -69,7 +69,7 @@ export function live(w: World, c: Creature, dt: number): void {
 
   // a gilled body out of the water: its breath runs down, and past its time it is suffocating
   if (t.ashore < BREATHES_AIR) {
-    if (c.y > WATER_LEVEL + 0.1 && c.alt <= AIRBORNE) c.dry += dt;
+    if (w.surface.groundOf(c) > w.surface.level(c) + 0.1 && c.alt <= AIRBORNE) c.dry += dt;
     else c.dry = Math.max(0, c.dry - dt * 4);
     if (c.dry > t.ashore) c.health -= t.maxHealth * 0.08 * dt;
   }
@@ -82,14 +82,15 @@ export function live(w: World, c: Creature, dt: number): void {
     decide(w, c);
   }
   act(w, c, dt);
-  c.y = heightAt(w.terrain, c.x, c.z);
+  w.surface.settle(c);
 }
 
 function decide(w: World, c: Creature): void {
+  const S = w.surface;
   const t = c.traits;
   const asleep = c.action === 'sleep';
-  const sight = t.vision * (asleep ? 0.35 : 1) * (isNight(w.time) && !t.nocturnal ? 0.6 : 1);
-  const near = nearby(w, c.x, c.z, sight, NEAR);
+  const sight = t.vision * (asleep ? 0.35 : 1) * (S.night(c, w.time) && !t.nocturnal ? 0.6 : 1);
+  const near = nearby(w, c, sight, NEAR);
 
   // 1. danger — the nearest thing that hunts us (or just bit us)
   let threat: Creature | null = null;
@@ -99,7 +100,7 @@ function decide(w: World, c: Creature): void {
     const bitUs = o.id === c.attacker && w.time - c.attackedAt < 4;
     if (!bitUs && !preysOn(o, c)) continue;
     if (c.alt > AIRBORNE * 3 && !o.traits.flies) continue; // safe on the wing from anything that walks
-    const d = Math.hypot(o.x - c.x, o.z - c.z);
+    const d = S.dist(c, o);
     // flight distance: a hunter charging at it is seen at once, one charging at another a little nearer;
     // a stalker creeping in low goes unnoticed until it is half as near; a hunter about its own business —
     // eating, wandering — is watched, and fled when it comes within two-fifths of sight, a sleeping one
@@ -124,10 +125,10 @@ function decide(w: World, c: Creature): void {
     for (const o of near) {
       // only close kin carry the alarm, and only about a hunter that is close enough to matter
       if (o === c || o.species !== c.species || o.action !== 'flee') continue;
-      if (Math.hypot(o.x - c.x, o.z - c.z) > 9) continue;
+      if (S.dist(c, o) > 9) continue;
       const th = w.creatures.find((x) => x.id === o.target && x.alive);
       if (!th || (c.alt > AIRBORNE * 3 && !th.traits.flies)) continue;
-      const d = Math.hypot(th.x - c.x, th.z - c.z);
+      const d = S.dist(c, th);
       if (d > t.vision * 0.8) continue;
       threat = th;
       threatD = d;
@@ -138,11 +139,11 @@ function decide(w: World, c: Creature): void {
   // the young bolt when their parent does (they follow it through the escape, not just a stroll)
   if (!threat && c.age < t.maturity && c.parent !== null) {
     const mum = w.creatures.find((o) => o.id === c.parent && o.alive);
-    if (mum && mum.action === 'flee' && Math.hypot(mum.x - c.x, mum.z - c.z) < 20) {
+    if (mum && mum.action === 'flee' && S.dist(c, mum) < 20) {
       const th = w.creatures.find((x) => x.id === mum.target && x.alive);
       if (th) {
         threat = th;
-        threatD = Math.hypot(th.x - c.x, th.z - c.z);
+        threatD = S.dist(c, th);
         alarmed = true;
       }
     }
@@ -154,13 +155,12 @@ function decide(w: World, c: Creature): void {
   }
 
   // a gilled body ashore for half its breath goes back to the water, whatever it was doing
-  if (t.ashore < BREATHES_AIR && c.dry > t.ashore * 0.5 && c.y > WATER_LEVEL + 0.1) {
-    const back = nearestWhere(w, c.x, c.z, true);
+  if (t.ashore < BREATHES_AIR && c.dry > t.ashore * 0.5 && S.groundOf(c) > S.level(c) + 0.1) {
+    const back = S.nearestWhere(c, true);
     if (back) {
       c.action = 'wander';
       c.target = -1;
-      c.tx = back.x;
-      c.tz = back.z;
+      S.aim(c, back);
       return;
     }
   }
@@ -173,21 +173,20 @@ function decide(w: World, c: Creature): void {
   if (c.action === 'mate' && c.breedCooldown <= 0) return;
 
   // 2. sleep — when tired at its time of day; a sleeper keeps sleeping until rested
-  const night = isNight(w.time);
+  const night = S.night(c, w.time);
   const myNight = t.nocturnal ? !night : night;
   if (asleep && c.fatigue > 0.1 && hunger < 0.9) return;
   if ((c.fatigue > 0.9 || (c.fatigue > 0.5 && myNight)) && hunger < 0.8) {
     // a flier roosts in the crown of the nearest broadleaf it can reach, out of reach of anything that
     // walks: it makes for the tree, and goes up into it to sleep
     if (t.flies && c.perch < 0) {
-      const i = nearestTree(w.terrain, c.x, c.z, ROOST_REACH);
+      const i = S.nearestTree(c, ROOST_REACH);
       if (i >= 0) {
-        const tree = standsOf(w.terrain).trees[i];
-        if (Math.hypot(tree.x - c.x, tree.z - c.z) > 2.5) {
+        const tree = S.trees()[i];
+        if (S.dist(c, tree) > 2.5) {
           c.action = 'wander';
           c.target = -1;
-          c.tx = tree.x;
-          c.tz = tree.z;
+          S.aim(c, tree);
           return;
         }
         c.perch = i;
@@ -195,13 +194,12 @@ function decide(w: World, c: Creature): void {
     }
     // a creature of both worlds that breathes air hauls out to sleep (a seal on the rocks, an otter on
     // the bank): it swims for the shore first, and sleeps once it is on dry ground
-    if (t.habitat === 'amphibious' && t.ashore >= BREATHES_AIR && c.y < WATER_LEVEL - 0.3) {
-      const bank = nearestWhere(w, c.x, c.z, false, 90); // (from the middle of a wide lake, too)
+    if (t.habitat === 'amphibious' && t.ashore >= BREATHES_AIR && S.groundOf(c) < S.level(c) - 0.3) {
+      const bank = S.nearestWhere(c, false, 90); // (from the middle of a wide lake, too)
       if (bank) {
         c.action = 'wander';
         c.target = -1;
-        c.tx = bank.x;
-        c.tz = bank.z;
+        S.aim(c, bank);
         return;
       }
     }
@@ -232,7 +230,7 @@ function decide(w: World, c: Creature): void {
       if (o === c || o.species !== c.species || o.age < o.traits.maturity || o.breedCooldown > 0) continue;
       if (o.energy < o.traits.maxEnergy * 0.45 || o.action === 'sleep' || o.action === 'flee') continue;
       // (…and a showy one: a crest, a bright coat, a bold pattern — see selection.ts)
-      const d = (Math.hypot(o.x - c.x, o.z - c.z) * (1 + MATE_LIKENESS * morphDistance(mine, descriptorOf(o.genome))) * (1 + MATE_FIT * (1 - o.fit))) / (1 + MATE_SHOW * showiness(o.genome));
+      const d = (S.dist(c, o) * (1 + MATE_LIKENESS * morphDistance(mine, descriptorOf(o.genome))) * (1 + MATE_FIT * (1 - o.fit))) / (1 + MATE_SHOW * showiness(o.genome));
       if (d < md) {
         md = d;
         mate = o;
@@ -253,12 +251,12 @@ function decide(w: World, c: Creature): void {
     // no one in sight: call — head for the nearest of its kind within earshot (solitary hunters and
     // scattered shoals would otherwise never meet)
     // roaming hunters range far wider to find a mate than herd animals ever need to
-    const far = nearby(w, c.x, c.z, t.vision * SCENT * (t.diet === 'carnivore' ? 2 : 1), SCENT_BUF);
+    const far = nearby(w, c, t.vision * SCENT * (t.diet === 'carnivore' ? 2 : 1), SCENT_BUF);
     let call: Creature | null = null;
     let cd = Infinity;
     for (const o of far) {
       if (o === c || o.species !== c.species || o.age < o.traits.maturity) continue;
-      const d = Math.hypot(o.x - c.x, o.z - c.z);
+      const d = S.dist(c, o);
       if (d < cd) {
         cd = d;
         call = o;
@@ -267,15 +265,14 @@ function decide(w: World, c: Creature): void {
     if (call) {
       c.action = 'wander';
       c.target = -1;
-      c.tx = call.x;
-      c.tz = call.z;
+      S.aim(c, call);
       return;
     }
   }
 
   // a flight in progress finishes at its destination (re-picking a stroll every half-second would
   // keep a flier circling aloft forever, never arriving anywhere to land)
-  if (c.action === 'wander' && c.alt > AIRBORNE && Math.hypot(c.tx - c.x, c.tz - c.z) > 6) return;
+  if (c.action === 'wander' && c.alt > AIRBORNE && S.toGoal(c) > 6) return;
 
   // a big flier with nothing to do on a fine day rides the thermals: up high, circling, for a minute or
   // two at a time, at little cost (a hawk's day is mostly this)
@@ -284,8 +281,7 @@ function decide(w: World, c: Creature): void {
     c.action = 'wander';
     c.target = -1;
     c.soarT = 45 + 75 * unitHash(w.seed, c.id, spell, 0x50b);
-    c.tx = c.x + Math.sin(c.heading + SOAR_BANK) * 30;
-    c.tz = c.z + Math.cos(c.heading + SOAR_BANK) * 30;
+    S.aim(c, S.ahead(c, SOAR_BANK, 30));
     return;
   }
 
@@ -296,152 +292,91 @@ function decide(w: World, c: Creature): void {
   // a mother keeps close to her clutch until it hatches
   const clutch = w.eggs.find((e) => e.mother === c.id);
   if (clutch) {
-    const a = c.wanderSeed + w.time * 0.25;
-    c.tx = clutch.x + Math.sin(a) * 2.2;
-    c.tz = clutch.z + Math.cos(a) * 2.2;
+    S.aim(c, S.around(clutch, c.wanderSeed + w.time * 0.25, 2.2));
     return;
   }
   if (c.age < t.maturity && c.parent !== null) {
     const mum = w.creatures.find((o) => o.id === c.parent && o.alive);
-    if (mum && Math.hypot(mum.x - c.x, mum.z - c.z) < 60) {
-      const a = c.wanderSeed + w.time * 0.3;
-      c.tx = mum.x + Math.sin(a) * (1.5 + mum.traits.radius * 2);
-      c.tz = mum.z + Math.cos(a) * (1.5 + mum.traits.radius * 2);
+    if (mum && S.dist(c, mum) < 60) {
+      S.aim(c, S.around(mum, c.wanderSeed + w.time * 0.3, 1.5 + mum.traits.radius * 2));
       return;
     }
   }
   if ((t.diet === 'carnivore' || t.diet === 'omnivore') && hunger > 0.45) {
-    const far = nearby(w, c.x, c.z, t.vision * SCENT, SCENT_BUF);
+    const far = nearby(w, c, t.vision * SCENT, SCENT_BUF);
     let best: Creature | null = null;
     let bd = Infinity;
     for (const o of far) {
       if (!preysOn(c, o)) continue;
-      const d = Math.hypot(o.x - c.x, o.z - c.z);
+      const d = S.dist(c, o);
       if (d < bd) {
         bd = d;
         best = o;
       }
     }
     if (best) {
-      c.tx = best.x + (w.rng() - 0.5) * 6;
-      c.tz = best.z + (w.rng() - 0.5) * 6;
+      S.aim(c, S.offset(best, (w.rng() - 0.5) * 6, (w.rng() - 0.5) * 6));
       return;
     }
   }
-  let hx = 0, hz = 0, hn = 0;
-  if (t.herding > 0) {
-    for (const o of near) {
-      if (o === c || o.species !== c.species) continue;
-      hx += o.x;
-      hz += o.z;
-      hn++;
-    }
-  }
+  const herd = t.herding > 0 ? S.centroid(near, (o) => o !== c && o.species === c.species) : null;
   // a well-fed flier sometimes ranges far — the trip is flown
   // (rolled at every deliberation, so the odds are per ~0.6 s: about one roam per half-minute adrift)
   const wanderR = t.flies && hunger < 0.3 && w.rng() < 0.02 ? 24 + t.flySpeed * 3 : 6 + t.speed * 4;
-  const a = c.heading + (w.rng() - 0.5) * 1.6;
-  c.tx = c.x + Math.sin(a) * wanderR;
-  c.tz = c.z + Math.cos(a) * wanderR;
-  if (hn > 0) {
-    const cx = hx / hn, cz = hz / hn;
-    const d = Math.hypot(cx - c.x, cz - c.z);
-    if (d > 5) {
-      c.tx = c.tx * (1 - t.herding * 0.7) + cx * t.herding * 0.7;
-      c.tz = c.tz * (1 - t.herding * 0.7) + cz * t.herding * 0.7;
-    }
-  }
+  let to = S.ahead(c, (w.rng() - 0.5) * 1.6, wanderR);
+  if (herd && S.dist(c, herd) > 5) to = S.pull(to, herd, t.herding, 0.7);
   // keep the destination inside the world (a target past the edge was never reached: the walker
   // turned back at the wall, but a flier on a long trip slid along it forever)
-  const half = w.terrain.size / 2 - 10;
-  c.tx = Math.max(-half, Math.min(half, c.tx));
-  c.tz = Math.max(-half, Math.min(half, c.tz));
+  S.aim(c, S.keepInside(to, 10));
 }
 
 /** Below this mass, prey can hide from hunters in the bushes. */
 export const COVER_MASS = 1.5;
 
-/** the plants by the square (they never move: a world's are placed once, and a load replaces the
- *  whole list), so a search for cover looks at the few near it — not all 170 for every hunter's prey
- *  and every fleeing animal, every step (a sixth of a year's fast-forward was that scan) */
-const PLANT_CELL = 8;
-const PLANT_GRIDS = new WeakMap<Plant[], Map<number, Plant[]>>();
-function plantGrid(plants: Plant[]): Map<number, Plant[]> {
-  let grid = PLANT_GRIDS.get(plants);
-  if (!grid) {
-    grid = new Map();
-    for (const p of plants) {
-      const k = (Math.floor(p.x / PLANT_CELL) + 1000) * 4096 + (Math.floor(p.z / PLANT_CELL) + 1000);
-      let cell = grid.get(k);
-      if (!cell) grid.set(k, (cell = []));
-      cell.push(p);
-    }
-    PLANT_GRIDS.set(plants, grid);
-  }
-  return grid;
-}
-
-export function nearestBush(w: World, x: number, z: number, within: number): Plant | null {
-  const grid = plantGrid(w.plants);
-  let best: Plant | null = null;
-  let bd = within;
-  const i0 = Math.floor((x - within) / PLANT_CELL), i1 = Math.floor((x + within) / PLANT_CELL);
-  const j0 = Math.floor((z - within) / PLANT_CELL), j1 = Math.floor((z + within) / PLANT_CELL);
-  for (let i = i0; i <= i1; i++) {
-    for (let j = j0; j <= j1; j++) {
-      const cell = grid.get((i + 1000) * 4096 + (j + 1000));
-      if (!cell) continue;
-      for (const p of cell) {
-        const d = Math.hypot(p.x - x, p.z - z);
-        // (a tie goes to the plant placed first, as a scan of the whole list in order gave it)
-        if (d < bd || (d === bd && best && p.id < best.id)) {
-          bd = d;
-          best = p;
-        }
-      }
-    }
-  }
-  return best;
+/** The nearest bush to a place within `within` (a tie to the one placed first). */
+export function nearestBush(w: World, p: Place, within: number): Plant | null {
+  return w.surface.nearestBush(w.plants, p, within);
 }
 
 /** A small animal crouched in a thicket while it flees — out of any hunter's reach. */
 export function hidden(w: World, c: Creature): boolean {
   if (c.action !== 'flee' || c.traits.mass >= COVER_MASS || c.alt > AIRBORNE) return false;
-  const b = nearestBush(w, c.x, c.z, 4);
-  return !!b && Math.hypot(b.x - c.x, b.z - c.z) < b.size * 0.8 + 0.45;
+  const b = nearestBush(w, c, 4);
+  return !!b && w.surface.dist(c, b) < b.size * 0.8 + 0.45;
 }
 
 /** Pick the best food in sight for this diet; returns true if a food action was chosen. */
 function findFood(w: World, c: Creature, near: Creature[], sight: number, hunger: number): boolean {
+  const S = w.surface;
   const t = c.traits;
   const eatsPlants = t.diet === 'herbivore' || t.diet === 'omnivore';
   const eatsFruit = t.diet === 'herbivore' || t.diet === 'omnivore' || t.diet === 'nectar';
   const eatsMeat = t.diet === 'carnivore' || t.diet === 'omnivore';
 
   let best = -Infinity;
-  let pick: { action: Action; target: number; x: number; z: number } | null = null;
-  const consider = (score: number, action: Action, target: number, x: number, z: number) => {
+  let pick: { action: Action; target: number; at: Place } | null = null;
+  const consider = (score: number, action: Action, target: number, at: Place) => {
     if (score > best) {
       best = score;
-      pick = { action, target, x, z };
+      pick = { action, target, at };
     }
   };
 
   // carcasses — an easy meal for scavengers
   if (eatsMeat) {
     for (const k of w.corpses) {
-      const d = Math.hypot(k.x - c.x, k.z - c.z);
-      if (d > sight || !reachable(w, c, k.x, k.z)) continue;
-      consider(30 - d * 0.5 + Math.min(20, k.meat * 0.1), 'scavenge', k.id, k.x, k.z);
+      const d = S.dist(c, k);
+      if (d > sight || !reachable(w, c, k)) continue;
+      consider(30 - d * 0.5 + Math.min(20, k.meat * 0.1), 'scavenge', k.id, k);
     }
     // a clutch left unguarded: eggs of another kind (raided only when properly hungry)
     if (hunger > 0.35) {
       for (const e of w.eggs) {
         if (e.species === c.species) continue;
-        const d = Math.hypot(e.x - c.x, e.z - c.z);
-        if (d > sight || !reachable(w, c, e.x, e.z)) continue;
-        const guarded = w.creatures.some((o) => o.id === e.mother && o.alive && Math.hypot(o.x - e.x, o.z - e.z) < 3);
-        consider(22 - d * 0.6 - (guarded ? 14 : 0), 'scavenge', e.id, e.x, e.z);
+        const d = S.dist(c, e);
+        if (d > sight || !reachable(w, c, e)) continue;
+        const guarded = w.creatures.some((o) => o.id === e.mother && o.alive && S.dist(e, o) < 3);
+        consider(22 - d * 0.6 - (guarded ? 14 : 0), 'scavenge', e.id, e);
       }
     }
   }
@@ -451,7 +386,7 @@ function findFood(w: World, c: Creature, near: Creature[], sight: number, hunger
       if (o === c || !preysOn(c, o)) continue;
       if (!t.flies && o.alt > AIRBORNE * 3) continue; // out of reach in the air
       if (hidden(w, o)) continue; // gone to ground
-      const d = Math.hypot(o.x - c.x, o.z - c.z);
+      const d = S.dist(c, o);
       // (an animal matched to the ground it stands on is spotted only nearer: see selection.ts)
       if (d > sight * (SEEN_FLOOR + (1 - SEEN_FLOOR) * seenAs(w, o))) continue;
       // the young, the weak, the asleep are easier — and anything it can outrun
@@ -461,31 +396,31 @@ function findFood(w: World, c: Creature, near: Creature[], sight: number, hunger
       // the easiest prey alone ate the valley's small kinds out and left the big ones be)
       const go = growthOf(o);
       const worth = 6 * Math.min(1, ((o.traits.maxEnergy * 0.8 + 30) * go * go) / (t.maxEnergy * 0.6));
-      consider((t.diet === 'carnivore' ? 22 : 8) - d * 0.6 + ease + worth, 'hunt', o.id, o.x, o.z);
+      consider((t.diet === 'carnivore' ? 22 : 8) - d * 0.6 + ease + worth, 'hunt', o.id, o);
     }
   }
   // fruit
   if (eatsFruit) {
-    for (const p of w.plants) {
+    for (const p of S.plantsWithin(w.plants, c, sight)) {
       if (p.fruit < 1) continue;
-      const d = Math.hypot(p.x - c.x, p.z - c.z);
-      if (d > sight || !reachable(w, c, p.x, p.z)) continue;
-      consider((t.diet === 'nectar' ? 30 : t.diet === 'herbivore' ? 8 : 16) - d * 0.45 + p.fruit, 'forage', p.id, p.x, p.z);
+      const d = S.dist(c, p);
+      if (d > sight || !reachable(w, c, p)) continue;
+      consider((t.diet === 'nectar' ? 30 : t.diet === 'herbivore' ? 8 : 16) - d * 0.45 + p.fruit, 'forage', p.id, p);
     }
   }
   // grass — search a ring of cells for the richest within reach
   // (a fish grazes only what grows where it can flop to: see canStand)
   if (eatsPlants) {
-    const here = cellOf(w, c.x, c.z);
+    const here = cellOf(w, c);
     let bk = -1, bs = -Infinity;
     const r = Math.min(sight, 22);
     const steps = 10;
     for (let i = 0; i < steps * 2; i++) {
       const ang = c.wanderSeed + i * 2.399; // golden-angle probes
       const rr = r * Math.sqrt((i + 0.5) / (steps * 2));
-      const x = c.x + Math.sin(ang) * rr, z = c.z + Math.cos(ang) * rr;
-      if (!inBounds(w.terrain, x, z) || !reachable(w, c, x, z)) continue;
-      const k = cellOf(w, x, z);
+      const at = S.around(c, ang, rr);
+      if (!S.inBounds(at) || !reachable(w, c, at)) continue;
+      const k = cellOf(w, at);
       const s = w.grass[k] * 10 - rr * 0.25;
       if (s > bs) {
         bs = s;
@@ -498,7 +433,7 @@ function findFood(w: World, c: Creature, near: Creature[], sight: number, hunger
     }
     if (bk >= 0 && w.grass[bk] > 0.12) {
       const cc = cellCenter(w, bk);
-      consider(bs + (t.diet === 'herbivore' ? 6 : -4), 'graze', bk, cc.x + (w.rng() - 0.5) * 2, cc.z + (w.rng() - 0.5) * 2);
+      consider(bs + (t.diet === 'herbivore' ? 6 : -4), 'graze', bk, S.offset(cc, (w.rng() - 0.5) * 2, (w.rng() - 0.5) * 2));
     }
   }
   // algae — filter feeders sieve the lake
@@ -508,58 +443,39 @@ function findFood(w: World, c: Creature, near: Creature[], sight: number, hunger
     for (let i = 0; i < 20; i++) {
       const ang = c.wanderSeed + i * 2.399;
       const rr = Math.min(sight, 26) * Math.sqrt((i + 0.5) / 20);
-      const x = c.x + Math.sin(ang) * rr, z = c.z + Math.cos(ang) * rr;
-      if (!inBounds(w.terrain, x, z) || !reachable(w, c, x, z) || heightAt(w.terrain, x, z) > WATER_LEVEL - 0.05) continue;
-      const k = cellOf(w, x, z);
+      const at = S.around(c, ang, rr);
+      if (!S.inBounds(at) || !reachable(w, c, at) || S.height(at) > S.level(at) - 0.05) continue;
+      const k = cellOf(w, at);
       const s = w.algae[k] * 10 - rr * 0.2;
       if (s > bs) {
         bs = s;
         bk = k;
       }
     }
-    const hereA = cellOf(w, c.x, c.z);
+    const hereA = cellOf(w, c);
     if (w.algae[hereA] > 0.2) {
       bk = hereA;
       bs = w.algae[hereA] * 10 + 2;
     }
-    if (bk >= 0 && w.algae[bk] > 0.1) {
-      const cc = cellCenter(w, bk);
-      consider(bs + 4, 'filter', bk, cc.x, cc.z);
-    }
+    if (bk >= 0 && w.algae[bk] > 0.1) consider(bs + 4, 'filter', bk, cellCenter(w, bk));
   }
   if (!pick) return false;
-  const chosen = pick as { action: Action; target: number; x: number; z: number };
+  const chosen = pick as { action: Action; target: number; at: Place };
   if (chosen.action !== c.action || chosen.target !== c.target) c.chaseT = 0;
   c.action = chosen.action;
   c.target = chosen.target;
-  c.tx = chosen.x;
-  c.tz = chosen.z;
+  S.aim(c, chosen.at);
   return true;
 }
 
-/** Can `c` get to (x, z) for a meal — and, a gilled body going ashore, back to the water before its breath
+/** Can `c` get to a place for a meal — and, a gilled body going ashore, back to the water before its breath
  *  runs out? (A lobe-finned fish takes the carcass at the waterline, not the fruit up the bank.) */
-function reachable(w: World, c: Creature, x: number, z: number): boolean {
+function reachable(w: World, c: Creature, at: Place): boolean {
   const t = c.traits;
-  if (!canStand(w, t, x, z)) return false;
-  if (t.ashore >= BREATHES_AIR || heightAt(w.terrain, x, z) <= WATER_LEVEL + 0.1) return true;
+  if (!canStand(w, t, at)) return false;
+  if (t.ashore >= BREATHES_AIR || w.surface.height(at) <= w.surface.level(at) + 0.1) return true;
   const pace = t.speed * (t.locomotion === 'swim' ? 0.15 + 0.85 * t.walk : 1);
-  return Math.hypot(x - c.x, z - c.z) <= Math.max(0, t.ashore - c.dry) * pace * 0.3;
-}
-
-/** The nearest point (rings outward, a fixed set of bearings: deterministic) that is deep water or dry
- *  land, within `max` bu — or null. */
-function nearestWhere(w: World, x: number, z: number, deep: boolean, max = 40): { x: number; z: number } | null {
-  for (let r = 3; r <= max; r *= 1.5) {
-    for (let i = 0; i < 16; i++) {
-      const a = (i / 16) * Math.PI * 2;
-      const px = x + Math.sin(a) * r, pz = z + Math.cos(a) * r;
-      if (!inBounds(w.terrain, px, pz, 4)) continue;
-      const h = heightAt(w.terrain, px, pz);
-      if (deep ? h < WATER_LEVEL - 0.6 : h > WATER_LEVEL + 0.4) return { x: px, z: pz };
-    }
-  }
-  return null;
+  return w.surface.dist(c, at) <= Math.max(0, t.ashore - c.dry) * pace * 0.3;
 }
 
 /** how far, at the least, a body is seen against its ground (× sight): the best-matched coat is still seen

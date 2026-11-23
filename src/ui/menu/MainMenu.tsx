@@ -25,7 +25,7 @@ import type { Genome } from '../../engine/genome';
 import { grow } from '../../engine/grow';
 import { coherence } from '../../engine/morphospace';
 import { PartBoundary, fetching } from '../ScreenBoundary';
-import { continueGame, quitGame, startNewGame } from '../game';
+import { beginNewGame, continueGame, quitGame } from '../game';
 import { settleGraphics } from '../gpu';
 import { SAFE, useSettings } from '../settings';
 import { useStore } from '../store';
@@ -167,7 +167,7 @@ export function MainMenu() {
               <h2>{TITLES[screen]}</h2>
             </div>
             <div className="mm-sub-body">
-              {screen === 'new' && <NewGamePanel onPreview={onPreview} onStart={startNewGame} staged={backdrop} slow={noGpu === true || dropped} />}
+              {screen === 'new' && <NewGamePanel onPreview={onPreview} onStart={beginNewGame} staged={backdrop} slow={noGpu === true || dropped} />}
               {screen === 'load' && <SavesPanel mode="load" />}
               {screen === 'settings' && <SettingsPanel />}
               {screen === 'controls' && <ControlsPanel />}

@@ -21,68 +21,13 @@ import { Ambient } from './Ambient';
 import { FOLIAGE_CUT } from './foliage';
 import { Precipitation, WEATHER_LOOK, setPrecipDaylight, updateWeatherLook } from './Weather';
 import { Director } from './Director';
-import { Actor, Carcass, capsuled, useSkinScheduler } from './Actors';
-import { getWorld, useWorldUi, worldVersion, bumpVersion, worldSceneLive, setHost } from './worldStore';
-import { pageHost, workerHost, type SimHost } from './simHost';
+import { Actor, Carcass, useSkinScheduler } from './Actors';
+import { getWorld, useWorldUi, worldVersion, worldSceneLive } from './worldStore';
+import { SimDriver } from './SimDriver';
 import { carry } from '../sim/god';
 import { StudioEnvironment } from '../viewer/StudioEnvironment';
 import { getQuality, useQuality } from '../ui/settings';
 import { useStore } from '../ui/store';
-
-const MAX_STEPS_PER_FRAME = 90;
-
-function SimDriver() {
-  const gl = useThree((s) => s.gl);
-  const scene = useThree((s) => s.scene);
-  const snapTimer = useRef(0);
-  const lastShape = useRef('');
-  // the valley is stepped in a worker (the page draws from a mirror of its world), or — where no worker
-  // can run, or a dev page asks with ?worker=0 — by the page, as it always was
-  const host = useMemo(() => {
-    const page = import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('worker') === '0';
-    return (page ? null : workerHost(getWorld, () => undefined)) ?? pageHost(getWorld);
-  }, []);
-  useEffect(() => {
-    setHost(host);
-    host.invalidate();
-    if (import.meta.env.DEV) (window as unknown as { __simHost?: SimHost }).__simHost = host;
-    return () => {
-      setHost(null);
-      host.dispose();
-    };
-  }, [host]);
-  useFrame((_, dtRaw) => {
-    const { running, speed, refresh } = useWorldUi.getState();
-    const w = getWorld();
-    updateSeasonLook(w.time, dryNow(w), leverSnow(w));
-    updateWeatherLook(w, dtRaw);
-    const dt = Math.min(dtRaw, 0.1);
-    if (running) host.advance(dt * speed, MAX_STEPS_PER_FRAME);
-    // re-render the actor list when births/deaths change the cast
-    const shape = `${w.creatures.length}:${w.creatures[w.creatures.length - 1]?.id ?? 0}:${w.corpses.length}:${w.corpses[w.corpses.length - 1]?.id ?? 0}:${w.eggs.length}:${w.eggs[0]?.id ?? 0}`;
-    if (shape !== lastShape.current) {
-      lastShape.current = shape;
-      bumpVersion();
-    }
-    snapTimer.current += dtRaw;
-    if (snapTimer.current > 0.25) {
-      snapTimer.current = 0;
-      refresh();
-      if (import.meta.env.DEV) {
-        (window as unknown as { __worldScene?: unknown }).__worldScene = scene;
-        (window as unknown as { __worldInfo?: unknown }).__worldInfo = {
-          calls: gl.info.render.calls,
-          triangles: gl.info.render.triangles,
-          geometries: gl.info.memory.geometries,
-          creatures: w.creatures.length,
-          stepper: host.where,
-          capsules: capsuled(),
-        };
-      }
-    }
-  });
-  return null;
-}
 
 /** The sun's shadow map is redrawn once in this many frames (see DayNight). */
 export const SHADOW_EVERY = 2;
@@ -185,9 +130,15 @@ function DayNight() {
   );
 }
 
-/** Follow the selected creature: glide the orbit target (and the camera with it). */
-/** Keeps the audio listener on the camera and the ambience in step with the day and the season. */
-function SoundDriver() {
+/** the valley's look, kept in step with its world each frame: its season's colours and its weather */
+function valleyLook(w: World, dt: number): void {
+  updateSeasonLook(w.time, dryNow(w), leverSnow(w));
+  updateWeatherLook(w, dt);
+}
+
+/** Keeps the audio listener on the camera and the ambience in step with the day and the season (a valley's
+ *  and a planet's alike). */
+export function SoundDriver() {
   const camera = useThree((s) => s.camera);
   const fwd = useMemo(() => new THREE.Vector3(), []);
   // suspend the ambience (wind and rain beds) when the World is left — it played on in the breeder —
@@ -280,12 +231,11 @@ export function captureStill(): string | null {
  * to it. A flight eases in and out over most of a second; the documentary and following let go of the
  * camera for it.
  */
-function CameraKeys() {
+/** Lets the photo mode take a still of the scene this is in (a valley's or a planet's). */
+export function StillCapture() {
   const camera = useThree((s) => s.camera);
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
-  const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3; update: () => void } | null;
-  const flight = useRef<{ from: View; to: View; t: number } | null>(null);
   useEffect(() => {
     CAPTURE = () => {
       gl.render(scene, camera);
@@ -295,6 +245,13 @@ function CameraKeys() {
       CAPTURE = null;
     };
   }, [gl, scene, camera]);
+  return null;
+}
+
+function CameraKeys() {
+  const camera = useThree((s) => s.camera);
+  const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3; update: () => void } | null;
+  const flight = useRef<{ from: View; to: View; t: number } | null>(null);
   useEffect(() => {
     const here = (): View | null => (controls ? { pos: camera.position.toArray() as View['pos'], target: controls.target.toArray() as View['target'] } : null);
     const fly = (to: View) => {
@@ -567,7 +524,7 @@ function GroundPicker({ world }: { world: World }) {
       else {
         // (carried: set down at the click, and the placing is done)
         const c = world.creatures.find((x) => x.id === placing.id);
-        if (c) ui.godAct((w) => carry(w, c, at.x, at.z));
+        if (c) ui.godAct((w) => carry(w, c, at));
         ui.setPlacing(null);
       }
     };
@@ -593,7 +550,7 @@ export function WorldScene() {
   const lake = world.terrain;
   return (
     <>
-      <SimDriver />
+      <SimDriver look={valleyLook} />
       <DayNight />
       <StudioEnvironment />
       <TerrainMesh key={`t${wid}`} world={world} />
@@ -621,6 +578,7 @@ export function WorldScene() {
       />
       <FollowCam />
       <CameraKeys />
+      <StillCapture />
       <KeyPan />
       {import.meta.env.DEV && <DevLook />}
       <Director />

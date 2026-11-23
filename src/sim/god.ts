@@ -11,7 +11,7 @@
  * world keeps its effects, and carries on from them bit-for-bit.
  */
 import { DAY_LENGTH, aName, breedNow, growthOf, killCreature, log, speciesById, type Creature, type World } from './world';
-import { heightAt, inBounds } from './terrain';
+import type { Place } from './surface';
 
 /** the most and least a birth may be mutated, against the valley's own rate */
 export const MUTATION_DIAL: readonly number[] = [0, 0.5, 1, 2, 3];
@@ -58,12 +58,13 @@ export function heal(w: World, c: Creature): boolean {
   return true;
 }
 
-/** Carried to (x, z) and set down there (out of the air, its errand forgotten). */
-export function carry(w: World, c: Creature, x: number, z: number): boolean {
-  if (!w.god.on || !c.alive || !inBounds(w.terrain, x, z, 4)) return false;
-  c.x = c.tx = x;
-  c.z = c.tz = z;
-  c.y = heightAt(w.terrain, x, z);
+/** Carried to a place and set down there (out of the air, its errand forgotten). */
+export function carry(w: World, c: Creature, at: Place): boolean {
+  const S = w.surface;
+  if (!w.god.on || !c.alive || !S.inBounds(at, 4)) return false;
+  S.moveTo(c, at);
+  S.aim(c, at);
+  S.settle(c);
   c.alt = 0;
   c.fly = false;
   c.speed = 0;
@@ -82,7 +83,7 @@ export function makeBreed(w: World, c: Creature): boolean {
   let best = Infinity;
   for (const o of w.creatures) {
     if (o === c || !o.alive || o.species !== c.species || o.age < o.traits.maturity) continue;
-    const d = Math.hypot(o.x - c.x, o.z - c.z);
+    const d = w.surface.dist(c, o);
     if (d < best) {
       best = d;
       mate = o;

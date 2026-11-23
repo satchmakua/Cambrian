@@ -17,7 +17,7 @@ describe('god mode', () => {
     const w = valley();
     const c = w.creatures[0];
     const before = saveWorld(w);
-    expect([smite(w, c), cull(w, c), heal(w, c), carry(w, c, 0, 0), makeBreed(w, c), bloom(w), glut(w), forceWeather(w, 'rain'), setMutation(w, 3), setImmigration(w, false)]).toEqual(Array(10).fill(false));
+    expect([smite(w, c), cull(w, c), heal(w, c), carry(w, c, { x: 0, z: 0 }), makeBreed(w, c), bloom(w), glut(w), forceWeather(w, 'rain'), setMutation(w, 3), setImmigration(w, false)]).toEqual(Array(10).fill(false));
     expect(saveWorld(w)).toBe(before);
   });
 
@@ -34,7 +34,7 @@ describe('god mode', () => {
     expect(a.health).toBe(a.traits.maxHealth);
     expect(a.energy).toBeGreaterThan(1);
     // carry
-    expect(carry(w, b, 10, -12)).toBe(true);
+    expect(carry(w, b, { x: 10, z: -12 })).toBe(true);
     expect([b.x, b.z]).toEqual([10, -12]);
     // breed: a litter or a clutch, at once
     const n = w.creatures.length + w.eggs.length;

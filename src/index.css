@@ -2577,6 +2577,130 @@ body,
   overflow: hidden;
 }
 
+/* --- the planet designer (new game) --- */
+
+.planet-designer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.planet-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.planet-presets button {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.planet-presets button:hover {
+  color: var(--fg);
+}
+
+.planet-presets button.active {
+  background: rgba(127, 209, 185, 0.16);
+  border-color: rgba(127, 209, 185, 0.4);
+  color: var(--accent);
+}
+
+.planet-own {
+  margin-left: 4px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--accent);
+}
+
+.planet-map {
+  position: relative;
+  aspect-ratio: 2 / 1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0c0e13;
+}
+
+.planet-map canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transition: opacity 0.2s;
+}
+
+.planet-map.making canvas {
+  opacity: 0.45;
+}
+
+.planet-note {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.planet-facts {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.planet-facts b {
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.planet-sliders {
+  display: grid;
+  gap: 2px;
+}
+
+.planet-slider {
+  display: grid;
+  grid-template-columns: 110px 1fr 200px;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.planet-slider input[type='range'] {
+  width: 100%;
+}
+
+.planet-label {
+  color: var(--fg);
+}
+
+.planet-val {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+@media (max-width: 560px) {
+  .planet-slider {
+    grid-template-columns: 90px 1fr;
+  }
+  .planet-val {
+    grid-column: 2;
+  }
+}
+
 .cast {
   display: flex;
   flex-direction: column;

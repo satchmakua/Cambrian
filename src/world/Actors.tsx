@@ -97,7 +97,7 @@ export const capsuled = (): number => CAPSULED.size;
 const COARSE_FIRST = !(import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('coarse') === '0');
 
 /** The skin to wear now, while the wanted one is built in the background (null: the capsule kit). */
-function useSkin(p: Phenotype, want: Skin): Skin | null {
+export function useSkin(p: Phenotype, want: Skin): Skin | null {
   const [state, setState] = useState<{ p: Phenotype; have: Skin | null }>(() => ({ p, have: bestBuilt(p, want) }));
   let have = state.have;
   if (state.p !== p) {
@@ -178,13 +178,13 @@ function useNear(get: () => THREE.Vector3 | null, radius: number): boolean {
 
 // --- placement -----------------------------------------------------------------------------------
 
-interface Rig {
+export interface Rig {
   center: [number, number, number];
   lift: number; // raise the body so its lowest point meets the ground
   height: number;
 }
 const RIGS = new WeakMap<Phenotype, Rig>();
-function rigOf(p: Phenotype): Rig {
+export function rigOf(p: Phenotype): Rig {
   let r = RIGS.get(p);
   if (!r) {
     const { min, max } = p.bounds;
@@ -222,7 +222,7 @@ const HERE = new THREE.Vector3();
  * first poll). `force`: the selected creature is drawn in full wherever it is (its true level is
  * still tracked underneath, so it is right the moment the selection moves on).
  */
-function useLod(get: () => THREE.Vector3 | null, force: boolean, start: (v: THREE.Vector3) => THREE.Vector3): Lod {
+export function useLod(get: () => THREE.Vector3 | null, force: boolean, start: (v: THREE.Vector3) => THREE.Vector3): Lod {
   const camera = useThree((s) => s.camera);
   const [lod, setLod] = useState<Lod>(() => lodAt(camera.position.distanceTo(start(START)), getQuality().lod, null));
   const cur = useRef(lod);

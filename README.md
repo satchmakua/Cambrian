@@ -9,10 +9,10 @@ selected — by you (Biomorphs-style breeder) or by directed pressures — so yo
 lineage from a scurrying blob to a finned giant to a striped quadruped.
 
 **Status:** 🟢 Parts 1–2 complete (the breeder, the creature grammar, fidelity) — and **Part 3 is
-live: the creatures have a world**, and evolve in it. Next is the planet (a sphere you can turn, with
-climate by latitude), in a branch of its own. It opens on a **main menu** — Continue, New game (name,
-first creature, the valley's seed, its cast, its size, or a scenario), Load game, Settings, Controls,
-Quit — and `Esc` opens the in-game menu (save, load, settings, exit) over any of its three screens:
+live: the creatures have a world**, and evolve in it: a valley, or **a planet of your own design**. It
+opens on a **main menu** — Continue, New game (name, first creature, a valley or a planet, its seed, its
+cast, its size, or a scenario), Load game, Settings, Controls, Quit — and `Esc` opens the in-game menu
+(save, load, settings, exit) over any of its three screens:
 
 - **Breed** — the Biomorphs loop: nine divergent mutant offspring, click one to make it the parent;
   directed pressures, the Menagerie (MAP-Elites), lineage tree, `CAM2:` sharing, glTF export,
@@ -37,13 +37,26 @@ Quit — and `Esc` opens the in-game menu (save, load, settings, exit) over any 
   bloom, a glut, rain or drought), and three scenarios with goals. The valley is stepped in a worker;
   far animals are drawn as markers, so a valley can hold 165, 330 or 600. `F` frames the valley,
   `Shift+1…4` saves a view (`1…4` returns), `P` is a photo mode.
+- **A planet** — the same life on a world made to your design: one of seven planet types (earthlike,
+  an archipelago, one great continent, a desert world, an ice world, a hothouse, highlands) moved on
+  from by nine sliders (size, land, continents, relief, ruggedness, temperature, wetness, seasons,
+  shallow seas), with a map of it as you go. Its ground is baked from its seed: plates that raise ranges,
+  rivers that carve their valleys, lakes and rivers a fish can or cannot swim, winds and rain shadows,
+  biomes from tundra to jungle and the food each grows, seasons half a year apart north and south, and
+  weather fronts that drift with the wind bands. Life starts in a homeland and spreads over the
+  generations; a stock lost from the world wanders back where it last lived. The sea is a lever: a lower
+  sea lays the shelves bare and closes straits into land bridges, a higher one drowns the low coasts.
+  A globe camera spins it from orbit and comes down to the ground (`1…4`: orbit, a region, the ground,
+  low; `F` the whole planet); it holds up to 1,200 animals, stepped in a worker, and two scenarios are
+  its own (across the water, life on the ice).
 
 Creatures are smooth organic bodies (an implicit round-cone field, welded and skinned) with
 anti-aliased procedural coverings — fur, scales, feathers, chitin, slime, plates, crystal. Full variety spec in
 [MORPHOLOGY.md](MORPHOLOGY.md); milestones in [ROADMAP.md](ROADMAP.md).
 
 **Saves and settings.** The game in progress is kept in the browser as you play (Continue returns to
-it; the valley itself is kept in IndexedDB, as a fifty-year valley runs to a few megabytes). Named
+it; the valley itself is kept in IndexedDB, as a fifty-year valley runs to a few megabytes; a planet is
+kept as its design and seed, and made again from them, checksummed, when it is loaded). Named
 saves — the lineage and the valley together — live in IndexedDB too, and can be exported to a `.json`
 file and imported back. A saved valley reloads and carries on exactly as it would have. Settings cover graphics (a Low / Medium / High level,
 or resolution, shadows, grass, weather and creature detail one by one), sound and volume, and the

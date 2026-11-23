@@ -106,6 +106,12 @@ const FINE_RELIEF = { value: 1 };
 /** Always 0: every octave loop's count is offset by it, so no shader compiler can unroll one (see OCT). */
 const ROLL = { value: 0 };
 
+/** Which way is up for a body's countershading (the dark back, the pale belly). 0: the world's +Y, as on
+ *  the valley and the bench. 1: out from the world's origin through the body, as on a planet centred there
+ *  (where +Y is up only at the north pole: at the equator it runs along the ground, and a back lit as a
+ *  belly). Shared by every creature material: see `setRadialUp`. */
+const RADIAL_UP = { value: 0 };
+
 /** a cut crystal's clear coat, how rough it is, and the least roughness of its stone (see
  *  makeCreatureMaterial). Its faces are exact planes now (facets.ts gemGeometry), each mirroring its own
  *  part of the studio's softboxes — crisp light and dark faces with glints. (Cut in place, their ragged
@@ -138,6 +144,12 @@ export function setFineRelief(on: boolean): void {
 // (it follows the settings: every coat already drawn changes with the option, no material is rebuilt)
 setFineRelief(getQuality().fineRelief);
 useSettings.subscribe(() => setFineRelief(getQuality().fineRelief));
+
+/** Countershade every creature against a planet's up, out from the world's origin (true), or against the
+ *  world's +Y (false, the default). Every coat already drawn changes with it; no material is rebuilt. */
+export function setRadialUp(on: boolean): void {
+  RADIAL_UP.value = on ? 1 : 0;
+}
 
 export function makeCreatureMaterial(
   pal: Palette,
@@ -250,6 +262,7 @@ export function makeCreatureMaterial(
     shader.uniforms.uMuscle = { value: preset.muscle };
     shader.uniforms.uRoll = ROLL;
     shader.uniforms.uFine = FINE_RELIEF; // (one object, shared: the graphics option switches every coat at once)
+    shader.uniforms.uRadial = RADIAL_UP; // (shared too: a planet switches every coat at once)
     // (unused slots keep r = 0, which clears nothing)
     shader.uniforms.uEyes = { value: Array.from({ length: 8 }, (_, i) => new THREE.Vector4(...(shell?.eyes?.slice(i * 4, i * 4 + 4) ?? []).concat([0, 0, 0, 0]).slice(0, 4))) };
 
@@ -265,7 +278,7 @@ export function makeCreatureMaterial(
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
-        '#include <common>\nattribute vec3 aBodyPos;\nattribute float aFlesh;\nattribute float aAO;\nattribute float aLeg;\nattribute float aCut;\nvarying vec3 vBodyPos;\nvarying vec3 vWNrm;\nvarying vec3 vBNrm;\nvarying float vFlesh;\nvarying float vAO;\nvarying float vLeg;\nvarying float vCut;',
+        '#include <common>\nattribute vec3 aBodyPos;\nattribute float aFlesh;\nattribute float aAO;\nattribute float aLeg;\nattribute float aCut;\nuniform float uRadial;\nvarying vec3 vBodyPos;\nvarying vec3 vWNrm;\nvarying vec3 vUpW;\nvarying vec3 vBNrm;\nvarying float vFlesh;\nvarying float vAO;\nvarying float vLeg;\nvarying float vCut;',
       )
       .replace('#include <project_vertex>', '  vBodyPos = aBodyPos;\n  vFlesh = aFlesh;\n  vAO = aAO;\n  vLeg = aLeg;\n  vCut = aCut;\n#include <project_vertex>')
       // a fur shell rides out along the (skinned) normal
@@ -276,7 +289,8 @@ export function makeCreatureMaterial(
       .replace(
         '#include <beginnormal_vertex>',
         // (objectNormal here is the REST normal, in the body's own frame — before skinning bends it)
-        '#include <beginnormal_vertex>\n  vWNrm = normalize(mat3(modelMatrix) * objectNormal);\n  vBNrm = objectNormal;',
+        // (and the up it is countershaded against: the world's, or a planet's, out through the body)
+        '#include <beginnormal_vertex>\n  vWNrm = normalize(mat3(modelMatrix) * objectNormal);\n  vUpW = uRadial > 0.5 ? normalize(modelMatrix[3].xyz) : vec3(0.0, 1.0, 0.0);\n  vBNrm = objectNormal;',
       );
 
     shader.fragmentShader = shader.fragmentShader
@@ -326,7 +340,7 @@ export function makeCreatureMaterial(
           gM = muscle(bp) * uMuscle;
           // (a cut stone has no countershading: by its flat faces' normals, whole faces snapped between
           // the belly's, the flank's and the back's tones — pale and dark patches, a camouflage)
-          float up = uCut > 0.5 ? 0.5 : clamp(vWNrm.y * 0.5 + 0.5, 0.0, 1.0);
+          float up = uCut > 0.5 ? 0.5 : clamp(dot(vWNrm, vUpW) * 0.5 + 0.5, 0.0, 1.0);
           // (a leg, and a paw on it, wears the flank's tone: facing the ground, a paw took the belly's —
           // pale puffballs under a dark animal. Where it faces up it wears the back's, as a back does: in
           // the flank's tone a paw's flat top, lit by the sky, was the brightest thing on a bear — a slipper)
@@ -568,6 +582,7 @@ export function makeCreatureMaterial(
 const FRAG_HELPERS = /* glsl */ `
 varying vec3 vBodyPos;
 varying vec3 vWNrm;
+varying vec3 vUpW;
 varying vec3 vBNrm;
 varying float vFlesh;
 varying float vAO;

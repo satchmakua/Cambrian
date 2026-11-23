@@ -16,23 +16,17 @@
  * mates choose and hunters are few, toward bulk where the winters bite. Pure.
  */
 import type { Genome, SegmentGene } from '../engine/genome';
-import { biomeAt, type Biome } from './terrain';
-import { climateOf, leverSnow, seasonal, type Creature, type World } from './model';
+import type { Biome } from './terrain';
+import { cellOf, climateOf, leverSnow, seasonal, type Creature, type World } from './model';
+import { BIOME_COLOUR, SNOW_COLOUR } from './palette';
 import { yearLook } from './seasonLook';
 import type { Traits } from './traits';
 
 type RGB = [number, number, number];
 
-/** the ground's colours, as the scene paints them (world/Landscape.tsx) */
-const GROUND: Record<Biome, RGB> = {
-  deep: hex(0x3d4a3f),
-  shallow: hex(0x3d4a3f),
-  sand: hex(0xb8a77c),
-  meadow: hex(0x5f8f3a),
-  wood: hex(0x3f5f2c),
-  rock: hex(0x77736c),
-};
-const SNOW = hex(0xd8d8d2);
+/** the ground's colours, as the scene paints them (the one palette: palette.ts) */
+const GROUND = Object.fromEntries(Object.entries(BIOME_COLOUR).map(([b, c]) => [b, hex(c)])) as Record<Biome, RGB>;
+const SNOW = hex(SNOW_COLOUR);
 
 function hex(h: number): RGB {
   return [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
@@ -61,11 +55,12 @@ const DISRUPTIVE = new Set(['stripes', 'bands', 'spots', 'mottle', 'reticulate']
 
 /** 0 (melts into the ground under it) … 1 (stands out against it): a creature's coat, now. */
 export function conspicuity(w: World, c: Creature): number {
-  const b = biomeAt(w.terrain, c.x, c.z);
+  const b = w.surface.biome(c);
   let g = GROUND[b];
-  // (snow lies on the land in the depth of winter, not on the lake)
+  // (snow lies on the land in the depth of winter, not on the lake; on a planet, where its own winter is)
   if (b !== 'deep' && b !== 'shallow') {
-    const snow = snowNow(w);
+    const local = w.surface.seasonsNow?.(w);
+    const snow = local ? Math.max(local.snow[cellOf(w, c)], leverSnow(w)) : snowNow(w);
     if (snow > 0) g = [g[0] + (SNOW[0] - g[0]) * snow, g[1] + (SNOW[1] - g[1]) * snow, g[2] + (SNOW[2] - g[2]) * snow];
   }
   const coat = coatOf(c.genome);
@@ -104,12 +99,15 @@ export function showiness(g: Genome): number {
  * winter, the more the smaller it is (heat leaves through the skin, and a small body has more skin for its
  * bulk: a deer's a tenth of its burn again, a mouse's a seventh, a songbird's a sixth — at a fifth for a
  * mouse, the rodents starved out of a valley a winter at a time); and a summer's heat, a little, under the
- * coat of a big one. Nothing for the cold-blooded (they slow in the cold instead: motion.ts).
+ * coat of a big one. Nothing for the cold-blooded (they slow in the cold instead: motion.ts). On a planet,
+ * the cold and the heat where the body is (`at`): its hemisphere's season, and its latitude's climate.
  */
-export function weatherCost(t: Traits, w: World): number {
+export function weatherCost(t: Traits, w: World, at?: Creature): number {
   if (!t.endotherm) return 0;
-  const cold = climateOf(w).cold;
-  const heat = seasonal(w.time, [0.15, 1, 0.1, 0]) * Math.max(0, 1 + 0.6 * w.levers.warmth);
+  const local = at ? w.surface.seasonsNow?.(w) : undefined;
+  const k = local && at ? cellOf(w, at) : -1;
+  const cold = local ? local.cold[k] : climateOf(w).cold;
+  const heat = local ? local.heat[k] : seasonal(w.time, [0.15, 1, 0.1, 0]) * Math.max(0, 1 + 0.6 * w.levers.warmth);
   const size = Math.cbrt(Math.max(0.05, t.mass));
   return (0.13 * cold) / size + 0.06 * heat * size;
 }

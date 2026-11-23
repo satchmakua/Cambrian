@@ -29,7 +29,8 @@ export const NAME_MAX = 48;
 import { checkCast, type CastEntry, type Ecosystem } from '../sim/cast';
 import { CAPACITIES } from '../sim/model';
 import { scenarioById } from '../sim/scenarios';
-export type { CastEntry, Ecosystem };
+import { checkDesign, PLANET_CAPS, type PlanetDesign } from '../sim/planetDesign';
+export type { CastEntry, Ecosystem, PlanetDesign };
 export const ECOSYSTEMS: readonly Ecosystem[] = ['standard', 'sparse', 'empty'];
 
 export interface GameSetup {
@@ -41,6 +42,9 @@ export interface GameSetup {
   capacity?: number;
   /** the scenario the valley is played as (see sim/scenarios.ts; absent: none) */
   scenario?: string;
+  /** a planet, made from this design and the seed (sim/planetDesign.ts; absent: a valley). Its capacity may
+   *  be any of PLANET_CAPS. */
+  planet?: PlanetDesign;
 }
 
 export const DEFAULT_SETUP: GameSetup = { worldSeed: 1, ecosystem: 'standard' };
@@ -109,10 +113,10 @@ export function nextGameName(taken: readonly string[]): string {
 }
 
 /** One line for a list: "Generation 12 canid · Day 5, 43 alive in 8 species". */
-export function describeSave(s: SaveSummary): string {
+export function describeSave(s: SaveSummary, planet = false): string {
   const breed = `Generation ${s.generation} ${s.kind}`;
-  if (s.day === null) return `${breed} · valley not yet visited`;
-  return `${breed} · Day ${s.day}, ${s.population ?? 0} alive in ${s.species ?? 0} species`;
+  if (s.day === null) return `${breed} · ${planet ? 'planet' : 'valley'} not yet visited`;
+  return `${breed} · ${planet ? 'a planet, ' : ''}Day ${s.day}, ${s.population ?? 0} alive in ${s.species ?? 0} species`;
 }
 
 /** A file name for an exported save: its name made safe, and the day it was saved. */
@@ -168,8 +172,13 @@ export function checkSetup(v: unknown): GameSetup {
   };
   const cast = checkCast(v.cast);
   if (cast) out.cast = cast;
-  if (finite(v.capacity) && CAPACITIES.includes(v.capacity) && v.capacity !== CAPACITIES[0]) out.capacity = v.capacity;
-  if (typeof v.scenario === 'string' && scenarioById(v.scenario)) out.scenario = v.scenario;
+  const planet = checkDesign(v.planet);
+  const caps = planet ? PLANET_CAPS : CAPACITIES;
+  if (finite(v.capacity) && caps.includes(v.capacity) && v.capacity !== CAPACITIES[0]) out.capacity = v.capacity;
+  // (a planet's scenario is never played in a valley)
+  const sc = typeof v.scenario === 'string' ? scenarioById(v.scenario) : null;
+  if (sc && (planet || !sc.planetOnly)) out.scenario = sc.id;
+  if (planet) out.planet = planet;
   return out;
 }
 

@@ -7,13 +7,30 @@
  * strings) and referenced by index, so a herd of clones costs one genome, and genome *identity* is
  * kept (a species' founder is the same object as its first creatures' genome, as in a live world).
  *
+ * A valley is version 1, as it always was. A planet is version 2: it carries the planet too — its spec
+ * (rebuilt from, as a valley is from its seed), the version of the bake that made it and its checksum.
+ * A planet made again by another bake, or by a browser that rounds differently, is still loaded, and
+ * the journal says its ground has changed a little.
+ *
  * The contract the tests hold it to: a loaded world continues bit-for-bit as the original would.
  */
 import type { Genome } from '../engine/genome';
 import { decodeGenome, encodeGenome } from '../engine/share';
-import { bodyOf, createWorld, type Corpse, type Creature, type Egg, type Species, type World } from './world';
+import { bodyOf, createPlanet, createWorld, log, type Corpse, type Creature, type Egg, type Species, type World } from './world';
+import { BAKE_VERSION, SPEC_DEFAULTS, type PlanetSpec } from './planetBake';
+import type { PlanetSurface } from './planetSurface';
+import { applySea } from './levers';
 
 export const SAVE_VERSION = 1;
+/** a planet's saves */
+export const PLANET_SAVE_VERSION = 2;
+
+/** what a planet's save holds of the planet itself */
+interface SavedPlanet {
+  spec: Required<PlanetSpec>;
+  bake: number;
+  checksum: string;
+}
 
 type SavedCreature = Omit<Creature, 'genome' | 'traits' | 'fit' | 'dry' | 'perch' | 'soarT'> & { genome: number; fit?: number; dry?: number; perch?: number; soarT?: number };
 type SavedCorpse = Omit<Corpse, 'genome'> & { genome: number };
@@ -23,6 +40,7 @@ type SavedEgg = Omit<Egg, 'genome'> & { genome: number };
 interface SavedWorld {
   format: 'cambrian-world';
   v: number;
+  planet?: SavedPlanet;
   seed: number;
   time: number;
   stepCount: number;
@@ -66,9 +84,11 @@ export function saveWorld(w: World): string {
   const creatures = w.creatures.map(({ genome, traits: _traits, ...rest }) => ({ ...rest, genome: ref(genome) }));
   const corpses = w.corpses.map(({ genome, ...rest }) => ({ ...rest, genome: ref(genome) }));
   const eggs = w.eggs.map(({ genome, ...rest }) => ({ ...rest, genome: ref(genome) }));
+  const planet = planetOf(w);
   const out: SavedWorld = {
     format: 'cambrian-world',
-    v: SAVE_VERSION,
+    v: planet ? PLANET_SAVE_VERSION : SAVE_VERSION,
+    ...(planet ? { planet } : {}),
     seed: w.seed,
     time: w.time,
     stepCount: w.stepCount,
@@ -106,9 +126,11 @@ export function loadWorld(json: string): World {
     throw new Error('Not a saved world — the file is not valid JSON.');
   }
   if (!s || s.format !== 'cambrian-world') throw new Error('Not a saved Cambrian world.');
-  if (s.v !== SAVE_VERSION) throw new Error(`Saved world is version ${s.v}; this build reads version ${SAVE_VERSION}.`);
+  if (s.v !== SAVE_VERSION && s.v !== PLANET_SAVE_VERSION) throw new Error(`Saved world is version ${s.v}; this build reads versions ${SAVE_VERSION} and ${PLANET_SAVE_VERSION}.`);
+  const planet = s.v === PLANET_SAVE_VERSION ? checkPlanet(s.planet) : null;
   // (a world saved before valleys came in sizes holds MAX_POP)
-  const w = createWorld(s.seed, typeof s.cap === 'number' && s.cap > 0 ? s.cap : undefined);
+  const cap = typeof s.cap === 'number' && s.cap > 0 ? s.cap : undefined;
+  const w = planet ? createPlanet(planet.spec, cap) : createWorld(s.seed, cap);
   const genomes = s.genomes.map((g) => decodeGenome(g));
   const genome = (i: number): Genome => {
     const g = genomes[i];
@@ -129,7 +151,7 @@ export function loadWorld(json: string): World {
   w.historyTimer = s.historyTimer;
   w.fieldTimer = s.fieldTimer;
   w.plants = s.plants.map((p) => ({ ...p }));
-  w.species = s.species.map(({ founder, bank, evolvedInto, splitWatch, bred, film, ...rest }) => ({
+  w.species = s.species.map(({ founder, bank, evolvedInto, splitWatch, bred, film, range, ...rest }) => ({
     ...rest,
     // (a world saved before species kept their records starts them empty)
     causes: rest.causes ? { ...rest.causes } : { starvation: 0, predation: 0, oldAge: 0 },
@@ -145,6 +167,8 @@ export function loadWorld(json: string): World {
     bred: bred ?? false,
     // (a world saved before species kept a film starts each with none)
     film: (film ?? []).map((f) => ({ t: f.t, gen: f.gen, genome: genome(f.genome) })),
+    // (a planet's species: where each last lived — last, where a live one's is)
+    ...(range ? { range: { ...range } } : {}),
   }));
   w.creatures = s.creatures.map(({ genome: gi, ...rest }) => {
     const g = genome(gi);
@@ -160,12 +184,67 @@ export function loadWorld(json: string): World {
   w.tally = { ...s.tally, stillborn: s.tally.stillborn ?? 0 };
   w.homes = (s.homes ?? []).map((h) => ({ ...h }));
   w.adopted = [...(s.adopted ?? [])];
-  // (a world saved before the levers had none pulled, and no scenario)
-  if (s.levers) w.levers = { warmth: s.levers.warmth, rain: s.levers.rain, events: s.levers.events.map((e) => ({ ...e })) };
+  // (a world saved before the levers had none pulled, and no scenario; a planet's sea, where it was moved)
+  if (s.levers) w.levers = { warmth: s.levers.warmth, rain: s.levers.rain, events: s.levers.events.map((e) => ({ ...e })), ...(s.levers.sea !== undefined ? { sea: s.levers.sea } : {}), ...(s.levers.seaNow !== undefined ? { seaNow: s.levers.seaNow } : {}) };
+  applySea(w, false);
   w.scenario = s.scenario ? { ...s.scenario } : null;
   // (a world saved before god mode runs itself)
   if (s.god) w.god = { on: !!s.god.on, mutation: Number.isFinite(s.god.mutation) ? s.god.mutation : 1, immigration: s.god.immigration !== false, forced: s.god.forced ? { ...s.god.forced } : null };
+  // (a planet made again here that is not the one saved: said once — the next save holds this one's mark)
+  if (planet) {
+    const made = (w.surface as PlanetSurface).ground.bake;
+    if (planet.bake !== BAKE_VERSION || planet.checksum !== made.checksum) log(w, 'climate', planet.bake !== BAKE_VERSION ? 'this planet was made by an older version of the game: its ground has changed a little' : 'this planet was made again by another browser, and its ground differs a little from the one saved');
+  }
   return w;
+}
+
+/** What a save holds of a world's planet (null: a valley). */
+function planetOf(w: World): SavedPlanet | null {
+  const S = w.surface as Partial<PlanetSurface>;
+  if (S.kind !== 'planet' || !S.ground) return null;
+  const g = S.ground;
+  return {
+    spec: { seed: g.seed, radius: g.radius, relief: g.relief, land: g.land, continents: g.continents, rugged: g.rugged, temperature: g.temperature, wetness: g.wetness, tilt: S.tilt ?? 0.5, shelf: g.shelf },
+    bake: BAKE_VERSION,
+    checksum: g.bake.checksum,
+  };
+}
+
+/** A saved planet, checked: every number of its spec finite and in reason (or a readable error). */
+function checkPlanet(v: unknown): SavedPlanet {
+  const bad = () => new Error('Saved world is corrupt (its planet is unreadable).');
+  if (!v || typeof v !== 'object') throw bad();
+  const p = v as Partial<SavedPlanet>;
+  const s = (p.spec ?? {}) as Record<string, unknown>;
+  const num = (k: string, lo: number, hi: number, d?: number): number => {
+    const x = s[k] ?? d;
+    if (typeof x !== 'number' || !Number.isFinite(x) || x < lo || x > hi) throw bad();
+    return x;
+  };
+  const spec: Required<PlanetSpec> = {
+    seed: num('seed', 0, 2 ** 32) >>> 0,
+    radius: num('radius', 40, 1000),
+    relief: num('relief', 0, 100),
+    land: num('land', 0.05, 0.95),
+    continents: num('continents', 0, 1, SPEC_DEFAULTS.continents),
+    rugged: num('rugged', 0, 1, SPEC_DEFAULTS.rugged),
+    temperature: num('temperature', -1, 1, SPEC_DEFAULTS.temperature),
+    wetness: num('wetness', -1, 1, SPEC_DEFAULTS.wetness),
+    tilt: num('tilt', 0, 1, 0.5),
+    shelf: num('shelf', 0, 1, SPEC_DEFAULTS.shelf),
+  };
+  return { spec, bake: typeof p.bake === 'number' ? p.bake : 0, checksum: typeof p.checksum === 'string' ? p.checksum : '' };
+}
+
+/** The planet a save is of, read without loading it (null: a valley's, or no saved world at all) — so a
+ *  page can have its ground baked off its own thread first. */
+export function savedPlanetSpec(json: string): Required<PlanetSpec> | null {
+  try {
+    const s = JSON.parse(json) as Partial<SavedWorld>;
+    return s && s.format === 'cambrian-world' && s.v === PLANET_SAVE_VERSION ? checkPlanet(s.planet).spec : null;
+  } catch {
+    return null;
+  }
 }
 
 // --- Float32Array <-> base64 (exact: the bytes themselves) ---------------------------------------

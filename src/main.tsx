@@ -1,4 +1,4 @@
-import { StrictMode } from 'react';
+import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './ui/App';
 import { ScreenBoundary } from './ui/ScreenBoundary';
@@ -41,6 +41,12 @@ if (import.meta.env.DEV) {
   }
 }
 
+// Dev only: ?lab=planet opens the planet lab in place of the game: the planet's feel prototype, today's
+// creatures on a bare planet of a chosen size under a globe camera (lab/planet/PlanetLab.tsx). A build
+// leaves it out altogether.
+const PlanetLab = import.meta.env.DEV ? lazy(() => import('./lab/planet/PlanetLab')) : null;
+const LAB = import.meta.env.DEV ? new URLSearchParams(location.search).get('lab') : null;
+
 // (Nothing here asks what draws the browser's WebGL: the menu must be up first. See ui/gpu.ts.)
 
 const root = document.getElementById('app');
@@ -49,8 +55,14 @@ if (!root) throw new Error('#app mount point not found');
 // (the page's static shell — the name and "Loading" — is replaced by this first render)
 createRoot(root).render(
   <StrictMode>
-    <ScreenBoundary>
-      <App />
-    </ScreenBoundary>
+    {PlanetLab && LAB === 'planet' ? (
+      <Suspense fallback={null}>
+        <PlanetLab />
+      </Suspense>
+    ) : (
+      <ScreenBoundary>
+        <App />
+      </ScreenBoundary>
+    )}
   </StrictMode>,
 );

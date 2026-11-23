@@ -1004,7 +1004,9 @@ artificial selection.
   species' typical body each dawn it has visibly changed, at most twelve frames, on its card) and adopted
   lines (☆ on the card; a split, a renaming or an extinction anywhere in the line is announced, with a way
   to its card).
-- [ ] **2. A planet with climate zones.** Built together, so terrain is rewritten once.
+- [x] **2. A planet with climate zones.** Built together, so terrain is rewritten once. **Done (2026-11-22):**
+  built in the branch `planet` ("The planet, in a branch" below) and merged into main: a new game is played
+  on a valley or on a planet of its own design.
   - A small sphere you can rotate, with no map edge. Distant animals as simple markers, full bodies when
     zoomed in.
   - Climate by latitude: ice caps, temperate belts, desert, tropics.
@@ -1034,12 +1036,15 @@ artificial selection.
   **Built (2026-11-20), but for the terrain:** the 🌦 climate menu sets a colder or warmer age and a drier or
   wetter valley, and sets going an ice age, an ash winter or a meteor; "a plague on it" is on a species'
   card (sim/levers.ts, each told in the journal, saved with the valley). Releases are the introductions.
-  Sea level, forests, a land bridge and a strait wait for the planet's terrain.
+  Sea level, forests, a land bridge and a strait wait for the planet's terrain. **On the planet (branch
+  `planet`, 2026-11-22):** the sea is a lever, and a lower sea closes straits into land bridges; forests
+  still wait.
 - [x] **5. Scenarios.** Goals that give a run a point: "get something to colonise the ice cap", "keep three
   levels of the food chain alive for 100 years".
   **Done for the valley (2026-11-20)** (sim/scenarios.ts): "Three levels for a century", "Through the ice
   age" and "A walker takes wing", chosen in the new-game panel; the goal and where it stands at the foot of
-  the view, won or lost at a dawn, in the journal. The ice cap waits for the planet.
+  the view, won or lost at a dawn, in the journal. The ice cap waits for the planet. **On the planet
+  (branch `planet`, 2026-11-22):** "Life on the ice" and "Across the water".
 
 #### What a 26-year valley showed (proposed 2026-11-20)
 
@@ -1196,14 +1201,312 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
   60); at 16× the worker keeps 28 fps where the page managed 20. Ten fifty-year valleys (1.6–3.2 MB) each
   reloaded as saved and ran on a day identically.
 
-- [ ] **The planet, in a branch** (item 2 above), in this order:
-  1. A sphere that spins, with water and the line of day, and today's creatures walking on it.
-  2. Procedural terrain, with climate by latitude and rain shadows. Biomes by temperature and rainfall,
-     each with its own plants and food.
-  3. The fields on a cube-sphere grid.
-  4. Far markers and more creatures.
-  5. Weather fronts, and seasons by hemisphere.
-  6. Saves, and the new-game planet options.
+- [x] **The planet, in a branch** (item 2 above), in this order: first how it feels and how big it is,
+  then the one seam the simulation needs, and only then the planet itself. (The markers, the worker and
+  `world.ts` split by concern are done already, on the valley.)
+  1. [x] **A feel prototype: the planet lab** (dev: `/?lab=planet`, `src/lab/planet/`). Today's creatures,
+     the valley's starter cast at the valley's crowding (about 240 bu² of land each), on a bare planet:
+     noise continents, the valley's hills and colours, its trees, a sea, a shell of air. A globe camera
+     spins it from orbit and becomes the valley's orbit view near the ground (one camera, no switch); a
+     click follows an animal. Radius, relief, land and sun are sliders, and `?r=…&view=…&follow=1` makes a
+     shot repeatable. Throwaway. **Done (2026-11-21).** What it showed:
+     - **Size.** With a third of the planet land, the valley's 165 / 330 / 600 animals at its crowding
+       need radii of about 95 / 135 / 180 bu. From 10 bu up, the horizon is then 44–60 bu off and 19–25°
+       below level: a small world's curve, nothing like Earth's. The valley's 14 bu of relief makes a lumpy
+       limb from orbit.
+     - **Cost.** On the RTX 5070 Ti, 58–60 fps at the ground with about 25 bodies whole, once their first
+       skins and programs are built (the first ten seconds stall, as they do in the valley). On the Radeon
+       610M, 31–60 fps at the ground, and 60 in orbit over a 250 bu planet with 600 animals and its trees.
+     - **Countershading.** The creature shader shaded backs and bellies against the world's +Y, which is
+       wrong everywhere but the north pole. A shared switch (`setRadialUp`) shades them against the
+       planet's up; off, the valley and the bench are shaded exactly as before.
+     - **Coastlines.** Coloured at the grid's corners, every shore and wood's edge came out in steps a
+       cell wide. The ground is coloured per pixel from its interpolated height and damp instead.
+     **Chosen (2026-11-21): a big world.** A radius of 250–400 bu, 30 bu of relief and 60% land, and the
+     camera and controls kept as they are. Every one of these is set for each game, along with more besides
+     (step 7). What a planet that size means:
+     - **Room.** Its land is 12–30 valleys. At the valley's crowding that would be 1,950–5,000 animals; the
+       600 the largest valley holds leave each 800–2,000 bu² (the valley gives 242), and from the ground at
+       400 bu only 9–15 are near enough to draw whole. So step 6 raises the count (measured first: the
+       lab's 600 at 400 bu draw at 58–60 fps at the ground on the RTX 5070 Ti, 35–53 on the Radeon 610M),
+       and a game's founders start in one region and spread: a world that fills over the generations, its
+       far-flung lines kept apart by distance. Encounters per creature-day are the check.
+     - **Ground.** The lab's 256 cells a face are 2.5 bu at 400 bu (the valley's are 1), and its 3,000 trees
+       stand one to every 400 bu² of land (the valley's one to 100): the detail levels and culling of step 6
+       carry more weight on a big planet.
+  2. [x] **The `Surface` port, on the flat valley.** One interface for the ground (`src/sim/surface.ts`):
+     where a body is, how far from another, which way it faces and how it turns, what the ground is like
+     under it, and the few searches that need the ground's own shape (the spatial index, the nearest bush
+     and tree, the room bodies keep, the way off the water). The valley implements it
+     (`src/sim/valley.ts`), and behaviour, motion, population, species, god mode and selection ask it for
+     everything: they read no coordinate of their own. `src/sim/sphere.ts` is the planet's half to come:
+     great-circle steps with the heading carried along, turns, slides, and the equiangular cube-sphere
+     (cells within √2 of one another in area), all tested. **Done (2026-11-22).** What shows it:
+     - **The same valley, to the bit.** Each operation is the valley's old arithmetic, kept operation for
+       operation, and the creature, carcass and egg fields keep their order in a save. Three seeded
+       valleys run 24 days give the same save hashes at every sixth day as before the port (12 of 12;
+       `scripts/valley-fingerprint.ts`, the check for any change meant to change nothing). No cost: six
+       days of a valley in 6.41 s against 6.40.
+     - **Held there.** `tests/sim/surface-seam.test.ts` scans the simulation for a place's coordinates, a
+       heading's angle, a direct question to the terrain, the valley's own shape or an angle worked out by
+       hand: 200 such lines before the port, none after. 1041 tests pass.
+     - **In the game.** The valley runs in its worker on the branch at 16×, with no page errors.
+  3. [x] **A sphere that spins**, with water and the line of day, and today's creatures living on it: the
+     grid, movement, the spatial hash in 3D, the fields, terrain from noise alone. **Done (2026-11-22).**
+     What shows it:
+     - **The planet as a surface.** `src/sim/planetSurface.ts` implements the port the valley does, and
+       `createPlanet(spec)` makes a world on it; nothing else in the simulation changed. Places lie on the
+       sphere of its sea, and bodies move along great circles with their headings carried along
+       (`sphere.ts`). The spatial index is a 3D hash of 16 bu cells (its searches match a search of every
+       body, a test). The fields lie on the equiangular cube-sphere, 83,544 cells of about the valley's
+       4 bu at 300 bu. The nearest bush comes from grids of the plants, and the room bodies keep is
+       measured in each body's own tangent plane.
+     - **Ground from noise alone.** `src/sim/planetGround.ts` lays warped continents of fractal noise
+       under the valley's own hills, scaled to the relief and cut at the sea to the share of land. Heights
+       are sampled a tile at a time, as bodies first reach them. The biomes are the valley's, from height
+       and damp, and past 64° of latitude the poles are ice, where nothing grows. Its trees (up to 3,000) are the ones the
+       fliers roost in.
+     - **The line of day.** The sun goes round once a day and night is local: a place is dark once the
+       sun is 3.4° below its horizon, so half the world is dark at any hour (a test). The homeland's noon
+       falls at the valley's. In the lab, dusk shows the terminator with a red rim, and at night the birds
+       are in the trees.
+     - **A homeland.** The founders start in a cap of land with the valley's area for every 165 the world
+       may hold (the cap nearest three-quarters land, with water in reach), and spread from it. At cap 165
+       the median animal is 68 bu from its middle on day 1 and 111 on day 8, the farthest 400 bu off; at
+       cap 600 the farthest is 542 bu off (half the way round a 300 bu planet is 942).
+     - **It lives.** Headless (`scripts/planet-report.ts`; seed 7, 300 bu, 30 bu of relief, 60% land),
+       cap 165 holds 98–128 alive in 9–10 kinds over 8 days (deaths: 34 killed, 28 starved, 131 of old
+       age), and cap 600 climbs to 323–394 by day 2 and holds there. The same seed makes the same planet,
+       step for step (a test).
+     - **In the lab.** It is a real world now, stepped on the page, with the cast spawned as a game spawns
+       it. Bodies are whole within 80 bu (at most 90) and markers beyond. Bushes and their fruit, carcasses
+       and eggs are drawn where the simulation has them, with a clock, a census, and stop / 1× / 4× / 16×.
+       At 1×, following an animal on the ground: 60 fps on the RTX 5070 Ti with 36–40 bodies whole, and
+       37–46 on the Radeon 610M (56–61 in orbit). At 16× the page also steps the world: 24–61 fps on the
+       RTX and 21–48 on the Radeon, falling as up to 90 bodies fill in. The valley's worker takes the
+       stepping off the page when the planet comes into the game.
+     - **What it costs.** A planet day at cap 165 takes 2.1–3.6 s headless; a valley day takes about 1.1.
+       In a profile, about a quarter is the sphere's vector arithmetic (normalizing, arcs, headings, cube
+       faces). Another 11% is the heights (filling tiles as bodies first reach them, then the lookups), and
+       8% is regrowing 33 times the valley's field cells. Fewer short-lived vectors and regrowth by region
+       are for step 6's budgets.
+     - **The valley untouched.** Its 12 save hashes are the same as before the port. The seam guard counts
+       the planet's surface as a surface, and 1050 tests pass.
+  4. [x] **Procedural terrain and water**: plates, stream-power erosion, Priority-Flood lakes and rivers,
+     and water bodies a swimmer can or cannot reach. **Done (2026-11-22).** What shows it:
+     - **Baked once, in passes** (`src/sim/planetBake.ts`, 1.2 s at 300 bu), on a grid of about 2.5 bu
+       cells (`src/sim/cubeGrid.ts`: 212,064 cells at 300 bu, each with its neighbours found across the
+       seams by the shared edge and checked both ways). The plates are grown by a random flood and each
+       turns about a pole of its own: ranges rise where they collide, island arcs out at sea, rifts where
+       they part. The sea is let in to the share of land asked for (60.1% for 60%), and a rough rain falls
+       by latitude, less of it inland. The rivers carve the land to the balance of uplift against
+       incision: stream power in Braun & Willett's implicit form, run to its steady state (Cordonnier et
+       al.). The flow is routed over hollows by Priority-Flood and jittered Rho8-style, so rivers don't run
+       down the grid's lines, and hillslopes are eased by creep. Then the valley's hills, and hollows big
+       and deep enough fill as lakes; the rest are filled away. Streams begin where the gathered rain
+       passes 900 bu², too shallow for a fish, and are rivers deep enough to swim past 3,200. Each sea and
+       lake is a body, joined to the next water by the river it drains by when a fish can swim it.
+       Checksummed (`c253a8b5` for seed 7 at 300 bu): 49 lakes, 13 of them so joined.
+     - **A water level of its own.** The surface has a new `level(p)`: the valley's lake and river at its
+       one level, a planet's lakes at their brims and its rivers falling to the sea. The simulation asks it
+       wherever it asked the one level: who may stand where, breath ashore, wading, the way back to the
+       water, the filter feeders' search, an egg laid in water. The seam guard now forbids the one level
+       outside the surfaces, and the valley's 12 save hashes are the same.
+     - **Tested** (`tests/sim/planetBake.test.ts`, `cubeGrid.test.ts`). Every drop of rain drains to a lake
+       or the sea. Lakes lie level at their brims, walled by ground no lower. Rivers gather downstream and
+       fall toward the sea. A fish can stand in every river marked swimmable and in none of the streams,
+       and a lake no fish can leave is its own reach. A hundred planets, at every continents and rugged
+       setting, have no NaN, their land within 3 points of what was asked, all draining, and every biome
+       the valley has on each. 1062 tests pass.
+     - **Continents and ruggedness**, the step's two sliders in the lab (`?continents=&rugged=`, and
+       `?at=lon,lat` to open over a place). Past half the surface, land joins up into one by itself. So at
+       60% land, continents up to 0.5 makes one great land with inland seas (its biggest piece is all of
+       it); above that the sea gets in along the seams between continental plates. At 1, six planets in
+       six are in parts, the biggest holding 68% of the land. At 40% land it gives 11 lands, the biggest
+       holding 30%.
+     - **Seen.** `scripts/planet-map.ts` draws a baked planet headless: shaded relief, shelf and deeps,
+       lakes, rivers, and the plates if asked. In the lab, the ground is coloured by its depth under the
+       water and its height above it, so there are beaches at every waterline. Lakes and rivers are a
+       second skin at their own levels, held under the ground wherever it is dry, so shores fall where the
+       two cross. Swimmers, carcasses and the camera sit on the water where they are. Shots: the globe,
+       a region of lakes joined by rivers, a snowy range, the ground by a lake at dusk, an archipelago.
+     - **Cost to draw.** 60 fps on the RTX 5070 Ti at 1× from orbit, over a region and at the ground. On
+       the Radeon 610M: 60 from orbit and over the lakes, and 60 at the ground near the homeland. Following
+       an animal there drops it to 16–22 fps, but it is the followed felid's fur: 46–60 without it. That is
+       the valley's own cost for a furred animal selected close up, and it belongs to step 6's budgets.
+     - **Life.** Headless (`scripts/planet-report.ts`, seed 7, 300 bu): cap 165 holds 115–152 alive in 8–10
+       kinds over 8 days (on step 3's ground, 98–128), the farthest 195–406 bu out. Cap 600 holds 403–512
+       from day 3 (step 3: 323–394), the farthest 524 bu out. A day costs 2.4–4.1 s at cap 165 and 8–11.5 s
+       at cap 600.
+     - **Still rough.** The rain is a first guess by latitude: winds and rain shadows are step 5's. Lakes
+       come mostly from the hills' hollows and a few rifts, with no glacial lakes and few high ones; the
+       big rivers all run low, as big rivers do. The simulation's rock is by height only, the scene's by
+       slope too (step 5's one palette).
+  5. [x] **Climate by latitude and rain shadows.** Biomes by temperature and rainfall, each with its own
+     plants and food: the food from a productivity curve anchored to the valley's own numbers. **Done
+     (2026-11-22).** What shows it:
+     - **A climate, worked out twice in the bake** (`src/sim/planetClimate.ts`): on the first ground, for
+       the rain the rivers carve with, and on the carved ground, for what grows. Each cell's yearly warmth
+       goes by latitude (26° at the equator, −20 at the poles, at sea level), and the highest ground is some
+       21° colder than the shore. The winds blow in three bands a hemisphere (trades, westerlies, polar
+       easterlies), turned by noise; "east" is the one place the planet's axis shows. Rain is carried on
+       them over the ground's large shape, on a grid a quarter as fine. The air takes up water over warm sea
+       and drops a little everywhere by its belt, much more where it climbs or cools. Storms bring the
+       sea's water ashore from every side as well, less of it inland.
+     - **What came of it** (seed 7, 300 bu, on land, 5th to 95th percentile): warmth −10° to 24°, rain 116
+       to 1,903 mm (median 502). The equator is wettest, the warm dry belts and the poles driest. Tested:
+       colder toward the poles and up the mountains, and a range's lee at least 15% drier than its windward
+       side. The first rain was too dry inland (median 25 mm): air climbing every ridge between two
+       valleys wrung itself out, and one mean wind brought sea air to the windward coasts only. The air now
+       rides the ranges alone and storms come from every side. A single upwind neighbour also cut seams
+       where the bands meet and the wind drops, so the air now drifts every way in a calm.
+     - **Biomes** (`planetGround.ts`'s `biomeOn`): a Whittaker diagram, by warmth (ice below −10°, tundra
+       below −1, boreal forest below 5, the tropics above 18) and by rain (desert, grassland, forest), with
+       the ground's own cases on top: sand on every shore (tundra on a cold one), rock on the cold heights
+       and the cliffs, marsh on wet flats. Seven new kinds of ground (marsh, desert, savanna, jungle, taiga,
+       tundra, ice) join the valley's six. Seed 7's land is savanna 16%, desert 15%, wood 13%, meadow 13%,
+       tundra 9%, jungle 9%, rock 7%, taiga 7%, ice 5%, sand 4%, marsh 1%.
+     - **Food from productivity** (Lieth's Miami model, through a `food` the world's ground may give; the
+       valley's own table is untouched). At the valley's own climate (12°, 800 mm) a meadow grows exactly
+       its 0.6 of grass, a wood its 0.32, sand its 0.05, the shallows their 1.25 of algae and a deep lake its
+       0.8. A desert grows about a fifth, a rainforest's floor about twice, the tundra a third. The open sea
+       beyond the shelf is barren, so deep water parts coastal fish.
+     - **Plants by ground.** Trees are thick in the woods and jungles, conifers fill the taiga, a few stand
+       on the meadows, savanna and marshes, hardly any on the tundra, and none on sand, desert or ice. Fruit
+       bushes grow in the woods and jungles, a quarter of the throws on meadows, fewer in the taiga, the
+       marshes and the savanna; the valley's throws are the same as ever.
+     - **One palette** (`src/sim/palette.ts`): the scene's ground and the camouflage the hunters see
+       through read the same colours, and the planet's ice is snow, so a polar coat can whiten.
+     - **The homeland** is chosen now for ground as rich in grass (0.48 on its land) and as warm (12°) as
+       the valley's, as well as three parts land: on four seeds, savanna, wood, meadow and jungle at
+       15–21°, with land grass 0.31–0.49.
+     - **Temperature and wetness**, the step's two sliders in the lab: an ice world 12° colder (seed 7:
+       tundra 29%, ice 18% of the land), a hothouse with no ice caps, and deserts or forests spreading with
+       the rain (tests). `scripts/planet-map.ts` draws the biomes, or `--field rain|warmth`.
+     - **Life** (headless, seed 7, 300 bu, 8 days): cap 165 holds 128–153 alive in 9–10 kinds, and cap 600
+       holds 365–418 from day 3. The report now counts by ground (alive, born there, died there): shallows
+       43/66/69, wood 40/96/40, jungle 36/116/75, meadow 13/28/17, savanna 12/20/16, the rest a few each.
+       Sand saw 1 birth to 11 deaths, the shore's strip: a balance to watch over longer runs.
+     - **Cost.** The bake takes 1.8–1.9 s at 300 bu with its climate. On the RTX 5070 Ti, 60 fps at the
+       ground. On the Radeon 610M, 50–59 at the ground, 57–60 in orbit, and 50 over a region of dense
+       woods. The valley's 12 save hashes are the same, and 1068 tests pass.
+     - **Still to come.** The seasons are still the valley's, all at once over the whole planet (step 6),
+       so body size can't yet answer to the cold by latitude; marsh is rare.
+  6. [x] **Weather fronts and seasons by hemisphere**, the air and clouds, culling and detail levels, more
+     creatures and founders that spread from a homeland, and the budgets on both GPUs. **Done
+     (2026-11-22).** What shows it:
+     - **Seasons by hemisphere** (`src/sim/planetSeasons.ts`): the year turns half a year apart north and
+       south. A place swings by the planet's tilt and its latitude: none at the equator, the valley's own
+       year at 45° on an Earth's tilt, harsher toward the poles, none at all on a planet with no tilt (the
+       lab's new slider). The grass and fruit follow the valley's year as far as a place swings, and stop
+       where the ground freezes hard. The cold and the heat come from the place's warmth now (its year's
+       mean, swung by its season), so a tundra's winter is harder than the valley's and the tropics have
+       none; snow lies where it is cold now.
+     - **Weather fronts**: soft rounds of cloud 28–68 bu across, born on the wet belts, carried along their
+       band by its wind (east in the westerlies, west in the trades) and dying away over two to five days.
+       Each is a hash of the seed, the front and its life, so no state needs saving. Where one passes it
+       rains as much as the place's climate is wet, or snows where it is cold.
+     - **Through the port.** A planet's surface offers its seasons and weather per field cell
+       (`seasonsNow`), worked out every 6 sim-seconds. The grass's growth, each bush's fruit, the cold's
+       cost to the warm-blooded, the cold-blooded's chill and the snow camouflage is judged against read
+       it where it exists. The valley offers none and keeps its one season and sky; its 12 save hashes are
+       the same as before.
+     - **Tested** (`tests/sim/planetSeasons.test.ts`): the north's summer is the south's winter; there are
+       no seasons at the equator or untilted; at 45° on an Earth's tilt the year is exactly the valley's;
+       fronts drift east in the westerlies and west in the trades and leave an overcast sky where strong; a
+       world's grass grows with its own hemisphere's season, and it snows only where the warmth is below
+       freezing.
+     - **The sky.** In the lab the ground follows each hemisphere's season (snow lying where it is cold
+       now, winter's dull browning over the year's biomes), and a cloud shell above the highest ground is
+       drawn from the simulation's own fronts, so the overcast seen from orbit is the rain on the ground.
+       `?jump=` moves the clock to a season without living it.
+     - **Detail levels and culling** (`src/lab/planet/GroundChunks.tsx`): the ground is 384 chunks, 8 a
+       face's edge, each at 32, 16 or 8 cells a side by its distance (the finest within 170 bu), skirted at
+       its edges against cracks, and not drawn past the horizon. It draws 51–55 thousand cells in every
+       view (254 chunks from orbit, 79 at the ground) where the one mesh drew 393 thousand.
+     - **More creatures.** The lab offers a cap of 1,200, twice the valley's largest. Headless, the homeland
+       carries about 740 by day 3 (its food, before they spread), at 18–25 s a day: the page can carry it
+       at 1×, and 16× is for the simulation worker when the planet comes into the game (step 7).
+     - **Life through a year** (cap 165, 12 days, seasons and fronts): 121–150 alive in 8–10 kinds, no
+       collapse in either hemisphere's winter. The seasons first cost a day 4.5–5.2 s; working each
+       hemisphere's season once and refreshing every 6 s brought it to 3.1–3.5 (step 5's: 2.6–3.3).
+     - **Budgets.** On the RTX 5070 Ti: 60 fps at the ground and over a region with the cap-1,200 planet
+       at its 740 or so, against the research's budget of 330 at 60, and 60 following an animal. On the
+       Radeon 610M: 59–60 at the ground (50–59 before the chunks), 60 in orbit, and 47 over a region, where
+       the cloud shell fills the screen. Following the felid at the ground it drops to 16–18: its fur, the
+       cost step 4 found. The broadleaves of the temperate lands turn gold as their hemisphere cools and
+       stand bare through its winter.
+     - **Not yet.** No rain or snow falls near the camera, the atmosphere is still step 1's shell (not
+       single scattering), and plants have no impostors.
+  7. [x] **Regional immigration, sea level as a lever**, saves, and **a planet designer for every game**: its
+     planet types as presets (earthlike, archipelago, one great continent, desert world, ice world,
+     hothouse, highlands), each a set of sliders that can be moved on from: size, land, relief,
+     continents (a few large ↔ many islands), ruggedness, temperature (the ice caps and the snow line),
+     wetness (desert ↔ forest), tilt (seasons none ↔ harsh), the shallow seas (how much shelf the fish
+     get), and the seed, re-rolled. Each slider comes into the lab with the step that makes it real: size,
+     land and relief now; continents and ruggedness with the terrain (4); temperature and wetness with the
+     climate (5); tilt with the seasons (6). A game saves its settings and seed, and makes the same planet
+     from them every time. **Done (2026-11-22).** What shows it:
+     - **A planet for every game.** The new-game panel offers a valley or a planet. A planet starts as one of
+       seven types (`src/sim/planetDesign.ts`) and moves on from it by nine sliders: size (200–450 bu), land,
+       continents, relief, ruggedness, temperature, wetness, seasons, and the shallow seas. The shallow seas
+       are new: a shelf 4–44 bu wide, 14 at the default, which leaves every planet made so far as it was,
+       checksum for checksum. Beside the sliders, a map of the planet they make is baked in a worker
+       (`src/world/planet/bakeWorker.ts`) as each slider is let go, with its land and grounds in numbers; the
+       game started on it takes that worker's ground, so the page never bakes. Each type checked on seed 7:
+       the archipelago is 35% land in islands on wide shallows; one great continent is one land round an
+       inland sea; the desert world is 35% desert and 23% savanna; the ice world is 30% tundra and 15% ice;
+       the hothouse is 45% jungle with no ice; the highlands stand 40 bu high with 97 lakes.
+     - **In the game.** The World screen draws a planet with the lab's scene, now the game's
+       (`src/world/planet/`: the ground in chunks, sea, lakes and rivers, clouds, air, trees, bushes, the
+       cast and the globe camera). The valley's HUD sits over it: census, cards, journal, following, the
+       documentary, the seasons north and south, the weather where the creature looked at is, and releases
+       and god mode's carry placed by a click on the globe. It is stepped in the valley's worker at 1×–48×,
+       and fast-forward runs it in its own: a day took 54 animals to 131.
+     - **Frame rates.** Measured with about 376 animals (cap 600, three days fast-forwarded):
+       | View | RTX 5070 Ti | Radeon 610M |
+       |---|---|---|
+       | Orbit | 60 fps | 58 fps |
+       | Over a region | 60 fps | 48 fps |
+       | Ground, 75 bodies whole, skins built | 58 fps | 44 fps |
+       | Following a bird | 54 fps | 57 fps |
+       In the first seconds at the ground, while the skins build, it drops to 16 (RTX) and 13 (Radeon), as
+       the valley does.
+     - **Saves.** A planet's world is saved as version 2: a valley's version 1 with the planet beside it (its
+       spec, the bake's version and its checksum), made again from them on loading (`persist.ts`). A planet
+       made again by another version of the bake, or by another browser's rounding, loads all the same, and
+       the journal says so once. Autosave, Continue, named saves and files all carry planets; opening a
+       world file switches the screen to a valley or a planet as the file is. A planet saved and loaded
+       carries on bit-for-bit. The page's mirror of the worker's planet saves byte for byte as the one
+       stepped. A valley's saves are as they were: 12 of 12 hashes.
+     - **Regional immigration.** On a planet each species notes where it lives each dawn (the member nearest
+       the middle of them all). A founding stock lost from the world wanders back in 20–60 bu from there,
+       not at the homeland's rim, which would erase every split distance had made. A valley's immigrants
+       come in from its edge as before.
+     - **The sea, a lever** (on a planet only). The sea can be set lower or higher: −1 … 1 in halves, up to a
+       tenth of the relief each way (3 bu at 30). It moves a thirtieth of the relief a day, and an ice age
+       holds water and lowers it by half that. The ground follows it in quarter-bu steps:
+       - the water's surface, so who may stand where and who may swim;
+       - what grows, and the grass and algae each field cell may hold;
+       - the bushes it drowns, which bear no fruit, and the trees, which no flier roosts in.
+       The shelves are shallow. On an earthlike planet a fall of 1.5 bu lays most of them bare (19% more
+       land) and closes straits into land bridges; a rise of 3 bu drowns a fifth of the land (6 bu would
+       drown nearly half, so the lever stops at a tenth). In the scene the sea, every shore, the camera's
+       clearance, and drowned trees and bushes follow it. It is saved with the world, and a world loaded
+       mid-fall carries on bit-for-bit.
+     - **Planet scenarios**, offered only for a planet:
+       - "Across the water": on an archipelago, six walkers of the starting lines must live on an island
+         none of the founders stood on, within forty years, over the shallows or by a sea lowered into land
+         bridges.
+       - "Life on the ice": six land animals of the starting lines must live where the year's mean is
+         below −6°, within forty years.
+       `landsOf` numbers a planet's lands at its own sea level.
+     - **Tested.** 1094 tests pass (166 files), among them planet saves, a planet game saved to a slot and
+       loaded, regional immigration, the sea lever, the planet scenarios and the lands. The lab has the new
+       shallow-seas slider. The build holds no lab code, and the bake worker is a chunk of its own.
+     - **Not yet.** The bake is not cached beside the save: a planet is made again on each load, 1.2–1.5 s
+       in a worker. Rain and snow near the camera, the atmosphere's scattering and plant impostors are still
+       to come. The branch is merged into main (2026-11-22).
 
   The flat valley stays as a mode, so its saves still play.
 

@@ -9,7 +9,8 @@ import type { Genome } from '../engine/genome';
 import type { MutationRates } from '../engine/mutate';
 import { grow, type Phenotype } from '../engine/grow';
 import type { StatefulRng } from '../engine/rng';
-import { heightAt, type Terrain, WATER_LEVEL } from './terrain';
+import { type Terrain } from './terrain';
+import type { Place, Surface } from './surface';
 import { type Traits, traitsOf } from './traits';
 import { droughtOf, type Weather, weatherAt } from './weather';
 import { describe as describeMorph } from '../engine/morphospace';
@@ -104,7 +105,7 @@ export const MATE_LIKENESS = 4;
 export const MATE_FIT = 3;
 /** How much dearer a misbuilt body is to keep: resting burn × (1 + UPKEEP × (1 − viability)). */
 export const UPKEEP = 1;
-const SPATIAL = 10; // spatial-hash cell (bu)
+export const SPATIAL = 10; // spatial-hash cell (bu)
 export const SCENT = 2.6; // hungry hunters smell prey this many vision-radii away
 /** seconds a pair circle each other in display before they mate */
 export const COURT_TIME = 4;
@@ -175,6 +176,9 @@ export interface Species {
   /** its film: its most typical body, taken at dawn whenever it had visibly changed since the last frame
    *  (at most FILM_MAX frames, thinned as it fills, its first kept) */
   film: FilmFrame[];
+  /** on a planet, where it lived when its seed bank was last refreshed (the member nearest the middle of
+   *  them all): a stock lost from the world wanders back in there. A valley's species have none. */
+  range?: Place;
 }
 
 /** One frame of a species' film: when, how many generations in, and the body (its members' medoid). */
@@ -221,8 +225,10 @@ export interface Creature {
   traits: Traits;
   x: number;
   z: number;
-  y: number; // ground height under it (kept fresh for the viewer)
-  heading: number; // radians; 0 faces +Z, π/2 faces +X
+  /** on the valley, the ground's height under it (kept fresh for the viewer); on a planet, its place's third
+   *  coordinate (its ground there is `ground`) */
+  y: number;
+  heading: number; // radians; 0 faces +Z, π/2 faces +X (on a planet, unused: its heading is fx, fy, fz)
   speed: number; // current ground speed (bu/s)
   energy: number;
   health: number;
@@ -262,12 +268,21 @@ export interface Creature {
   soarT: number;
   /** seconds it has been out of the water (a gilled body has only so long: see Traits.ashore) */
   dry: number;
+  /** a planet's own (planetSurface.ts): the third coordinate of its goal, its heading as a tangent at its
+   *  place, and the ground's height under it */
+  ty?: number;
+  fx?: number;
+  fy?: number;
+  fz?: number;
+  ground?: number;
 }
 
 export interface Plant {
   id: number;
   x: number;
   z: number;
+  /** a planet's plant: its place's third coordinate */
+  y?: number;
   fruit: number;
   max: number;
   size: number; // visual size
@@ -279,6 +294,10 @@ export interface Corpse {
   z: number;
   y: number;
   heading: number;
+  /** a planet's carcass: the way the body faced, as a tangent */
+  fx?: number;
+  fy?: number;
+  fz?: number;
   meat: number;
   maxMeat: number;
   rot: number; // seconds left
@@ -318,6 +337,10 @@ export interface Levers {
   warmth: number;
   rain: number;
   events: LeverEvent[];
+  /** (a planet's) the sea lowered or raised (−1 … 1: a tenth of its relief each way), and where it stands
+   *  now on its way there (bu from its own level): absent until first pulled */
+  sea?: number;
+  seaNow?: number;
 }
 
 /** Weather forced by the player in god mode: a shower now, or a dry spell, from `from` to `until`. */
@@ -347,6 +370,9 @@ export interface World {
   rng: StatefulRng;
   time: number;
   terrain: Terrain;
+  /** the ground the simulation stands on, as one port (surface.ts): every place, distance, heading and
+   *  question about the ground goes through it */
+  surface: Surface;
   gridN: number;
   grass: Float32Array; // biomass per cell (0..cap)
   grassCap: Float32Array; // carrying capacity per cell
@@ -372,8 +398,9 @@ export interface World {
   adopted: number[];
   /** the levers the player has pulled on the climate, and the events under way (see levers.ts) */
   levers: Levers;
-  /** the scenario this valley is played as, and how it stands (null: none — see scenarios.ts) */
-  scenario: { id: string; status: 'going' | 'won' | 'lost'; from: number } | null;
+  /** the scenario this valley is played as, and how it stands (null: none — see scenarios.ts); on a planet,
+   *  the lands its founders stood on when it began (where a scenario asks for that) */
+  scenario: { id: string; status: 'going' | 'won' | 'lost'; from: number; lands?: number[] } | null;
   history: HistorySample[];
   historyTimer: number;
   fieldTimer: number;
@@ -457,20 +484,26 @@ export function climate(time: number): { grass: number; fruit: number; cold: num
   };
 }
 
-const eventOn = (w: World, kind: LeverEventKind) => w.levers.events.some((e) => e.kind === kind && w.time >= e.from && w.time < e.until);
+const eventOn = (w: World, kind: LeverEventKind, time = w.time) => w.levers.events.some((e) => e.kind === kind && time >= e.from && time < e.until);
 
 /** The climate the valley lives under now: the season's, moved by the levers — a colder or warmer age,
  *  and an ice age or an ash winter under way (levers.ts). */
 export function climateOf(w: World): { grass: number; fruit: number; cold: number } {
   const c = climate(w.time);
+  return levered(w, c.grass, c.fruit, c.cold);
+}
+
+/** A season's grass, fruit and cold, moved by the levers as they stand at a time (now, unless asked for
+ *  another: a planet's seasons are worked out a few seconds at a time, place by place: planetSeasons.ts). */
+export function levered(w: World, g: number, f: number, k: number, time = w.time): { grass: number; fruit: number; cold: number } {
   const L = w.levers;
-  let cold = c.cold - 0.35 * L.warmth, grass = c.grass * (1 + 0.15 * L.warmth), fruit = c.fruit * (1 + 0.1 * L.warmth);
-  if (eventOn(w, 'ice-age')) {
+  let cold = k - 0.35 * L.warmth, grass = g * (1 + 0.15 * L.warmth), fruit = f * (1 + 0.1 * L.warmth);
+  if (eventOn(w, 'ice-age', time)) {
     cold += 0.45;
     grass *= 0.6;
     fruit *= 0.55;
   }
-  if (eventOn(w, 'ash-winter') || eventOn(w, 'meteor')) {
+  if (eventOn(w, 'ash-winter', time) || eventOn(w, 'meteor', time)) {
     cold += 0.35;
     grass *= 0.35;
     fruit *= 0.25;
@@ -508,13 +541,14 @@ export function growthOf(c: Creature): number {
   return 0.4 + 0.6 * Math.min(1, c.age / Math.max(1, c.traits.maturity));
 }
 
-export function canStand(w: World, t: Traits, x: number, z: number): boolean {
-  const h = heightAt(w.terrain, x, z);
+/** May a body of these traits be at this place: in water deep enough, on dry enough ground? */
+export function canStand(w: World, t: Traits, p: Place): boolean {
+  const h = w.surface.height(p);
   // (a fish keeps to water deep enough to swim in — and the more its fins have begun to crawl, the further
   // up the margin it can flop: into the shallows, to the waterline, over the wet edge of the bank. Each
   // step toward a lobe-fin reaches a little more of what grows there)
-  if (t.habitat === 'water') return h < WATER_LEVEL - 0.3 + MARGIN_REACH * t.walk;
-  if (t.habitat === 'land') return h > WATER_LEVEL - 0.5;
+  if (t.habitat === 'water') return h < w.surface.level(p) - 0.3 + MARGIN_REACH * t.walk;
+  if (t.habitat === 'land') return h > w.surface.level(p) - 0.5;
   return true;
 }
 
@@ -544,44 +578,19 @@ export function descriptorOf(g: Genome): number[] {
   return d;
 }
 
+/** Index the living by place (each step, before any of them looks round). */
 export function rebuildBuckets(w: World): void {
-  w.buckets.clear();
-  for (const c of w.creatures) {
-    if (!c.alive) continue;
-    const key = bucketKey(c.x, c.z);
-    let b = w.buckets.get(key);
-    if (!b) w.buckets.set(key, (b = []));
-    b.push(c);
-  }
+  w.surface.index(w);
 }
-function bucketKey(x: number, z: number): number {
-  return (Math.floor(x / SPATIAL) + 1000) * 4096 + (Math.floor(z / SPATIAL) + 1000);
-}
-/** Live creatures within `r` of (x, z). */
-export function nearby(w: World, x: number, z: number, r: number, out: Creature[] = []): Creature[] {
-  out.length = 0;
-  const i0 = Math.floor((x - r) / SPATIAL), i1 = Math.floor((x + r) / SPATIAL);
-  const j0 = Math.floor((z - r) / SPATIAL), j1 = Math.floor((z + r) / SPATIAL);
-  const r2 = r * r;
-  for (let i = i0; i <= i1; i++) {
-    for (let j = j0; j <= j1; j++) {
-      const b = w.buckets.get((i + 1000) * 4096 + (j + 1000));
-      if (!b) continue;
-      for (const c of b) {
-        const dx = c.x - x, dz = c.z - z;
-        if (dx * dx + dz * dz <= r2) out.push(c);
-      }
-    }
-  }
-  return out;
+/** Live creatures within `r` of a place. */
+export function nearby(w: World, p: Place, r: number, out: Creature[] = []): Creature[] {
+  return w.surface.nearby(w, p, r, out);
 }
 
-export function cellOf(w: World, x: number, z: number): number {
-  const i = Math.min(w.gridN - 1, Math.max(0, Math.floor((x + w.terrain.size / 2) / GRID_CELL)));
-  const j = Math.min(w.gridN - 1, Math.max(0, Math.floor((z + w.terrain.size / 2) / GRID_CELL)));
-  return j * w.gridN + i;
+/** The field cell a place falls in, and a cell's middle. */
+export function cellOf(w: World, p: Place): number {
+  return w.surface.cellOf(p);
 }
-export function cellCenter(w: World, k: number): { x: number; z: number } {
-  const i = k % w.gridN, j = Math.floor(k / w.gridN);
-  return { x: -w.terrain.size / 2 + (i + 0.5) * GRID_CELL, z: -w.terrain.size / 2 + (j + 0.5) * GRID_CELL };
+export function cellCenter(w: World, k: number): Place {
+  return w.surface.cellCenter(k);
 }
