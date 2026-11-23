@@ -2,10 +2,13 @@
  * The planet lab's settings: the planet's size, relief and land, how many it may hold, how fast its time
  * runs, and the creature the camera follows. Read first from the URL, so a view can be shared or shot again:
  * ?lab=planet&r=300&relief=30&land=0.6&continents=0.45&rugged=0.5&temperature=0&wetness=0&cap=165&seed=7&speed=1
- *   &view=orbit|region|ground|low&follow=1&at=lon,lat
+ *   &tilt=0.5&view=orbit|region|ground|low&follow=1&at=lon,lat
  */
 import { create } from 'zustand';
 import { CAPACITIES } from '../../sim/model';
+
+/** how many a planet may hold: the valley's three sizes, and one twice its largest (a big world's) */
+export const PLANET_CAPS = [...CAPACITIES, 1200];
 
 export interface LabState {
   /** the planet's radius (bu) */
@@ -22,6 +25,8 @@ export interface LabState {
   temperature: number;
   /** drier (−1) … wetter (1) */
   wetness: number;
+  /** how far the axis leans (0: no seasons … 0.5: the Earth's … 1: harsh) */
+  tilt: number;
   /** how many it may hold at once (the valley's three sizes) */
   cap: number;
   seed: number;
@@ -48,7 +53,8 @@ export const useLab = create<LabState>()((set) => ({
   rugged: num('rugged', 0.5, 0, 1),
   temperature: num('temperature', 0, -1, 1),
   wetness: num('wetness', 0, -1, 1),
-  cap: ((c) => (CAPACITIES.includes(c) ? c : CAPACITIES[0]))(num('cap', CAPACITIES[0], 1, 10000)),
+  tilt: num('tilt', 0.5, 0, 1),
+  cap: ((c) => (PLANET_CAPS.includes(c) ? c : CAPACITIES[0]))(num('cap', CAPACITIES[0], 1, 10000)),
   seed: num('seed', 7, 0, 2 ** 31) >>> 0,
   speed: num('speed', 1, 0, 16),
   follow: null,
@@ -73,3 +79,6 @@ export const START_FOLLOW = Q.get('follow') === '1';
 
 /** ?days=…: run the world on this many days before showing it (a later hour, a world grown and spread) */
 export const START_DAYS = num('days', 0, 0, 60);
+
+/** ?jump=…: move the clock on this many days before showing it, without living them (to see a season) */
+export const START_JUMP = num('jump', 0, 0, 1200);

@@ -51,6 +51,9 @@ export interface PlanetSpec {
   temperature?: number;
   /** drier (−1: deserts) … wetter (1: forests): how much water the winds carry inland */
   wetness?: number;
+  /** how far the planet's axis leans (0: no seasons … 0.5: the Earth's … 1: harsh): its seasons, not its
+   *  ground (planetSeasons.ts) */
+  tilt?: number;
 }
 
 export const SPEC_DEFAULTS = { continents: 0.45, rugged: 0.5, temperature: 0, wetness: 0 };

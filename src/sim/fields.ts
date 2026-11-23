@@ -7,6 +7,8 @@ import { climateOf, DROUGHT_FRUIT, DROUGHT_GRASS, DROUGHT_HOLD, DROUGHT_WITHER, 
 export function growFields(w: World, dt: number): void {
   const { grass, grassCap, algae, algaeCap } = w;
   const cl = climateOf(w);
+  // (a planet's seasons and showers are its places' own: see planetSeasons.ts)
+  const local = w.surface.seasonsNow?.(w);
   // a shower brings the grass on (snow doesn't); a wetter or drier valley (the rain lever) the more or less
   const sky = skyNow(w);
   const wet = (1 + (sky.snow ? 0 : 0.8 * sky.rain)) * w.levers.rain;
@@ -21,7 +23,8 @@ export function growFields(w: World, dt: number): void {
     const K = grassCap[k] * hold;
     if (K > 0) {
       const b = grass[k];
-      grass[k] = b > K ? b - (b - K) * Math.min(1, DROUGHT_WITHER * dt) : Math.min(K, b + (GRASS_REGROW * b * (1 - b / K) + 0.0004 * K) * cl.grass * wet * parched * dt);
+      if (local) grass[k] = b > K ? b - (b - K) * Math.min(1, DROUGHT_WITHER * dt) : Math.min(K, b + (GRASS_REGROW * b * (1 - b / K) + 0.0004 * K) * local.grass[k] * (1 + (local.snowing[k] ? 0 : 0.8 * local.rain[k])) * w.levers.rain * parched * dt);
+      else grass[k] = b > K ? b - (b - K) * Math.min(1, DROUGHT_WITHER * dt) : Math.min(K, b + (GRASS_REGROW * b * (1 - b / K) + 0.0004 * K) * cl.grass * wet * parched * dt);
     }
     // (a lake is richer than a meadow: at three times the grass's rate it fed some fifteen big fish, and
     // a line so few, always hungry, seldom fed well enough to court, died out every few years)
@@ -31,7 +34,11 @@ export function growFields(w: World, dt: number): void {
       algae[k] = Math.min(A, a + (GRASS_REGROW * 7 * a * (1 - a / A) + 0.004 * A) * dt);
     }
   }
-  for (const p of w.plants) p.fruit = Math.min(p.max, p.fruit + FRUIT_REGROW * cl.fruit * barren * dt);
+  const plants = w.plants;
+  for (let i = 0; i < plants.length; i++) {
+    const p = plants[i];
+    p.fruit = Math.min(p.max, p.fruit + FRUIT_REGROW * (local ? local.plantFruit[i] : cl.fruit) * barren * dt);
+  }
 }
 
 export function sampleHistory(w: World): void {

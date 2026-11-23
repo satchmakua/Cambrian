@@ -21,6 +21,26 @@ import type { Biome, Terrain } from './terrain';
 import type { Corpse, Creature, Egg, Plant, World } from './model';
 import type { Stand } from './stands';
 
+/** The seasons and the weather at each of a world's field cells now (a planet's: planetSeasons.ts). */
+export interface SeasonsNow {
+  /** the sim time they were worked out for */
+  at: number;
+  /** how fast the grass and the fruit come back (the valley's year's own numbers, its mean about 0.93),
+   *  how cold it is (the valley's 0 mild … 1 a hard frost) and how hot (its summer's 1, more in the tropics) */
+  grass: Float32Array;
+  fruit: Float32Array;
+  cold: Float32Array;
+  heat: Float32Array;
+  /** the weather: 0 clear … 1 overcast, 0 dry … 1 a downpour, and whether it falls as snow */
+  cloud: Float32Array;
+  rain: Float32Array;
+  snowing: Uint8Array;
+  /** snow lying on the ground (0 … 0.9) */
+  snow: Float32Array;
+  /** each of the world's bushes' fruit growth, in w.plants' order */
+  plantFruit: Float32Array;
+}
+
 /** What a world is made on: its terrain (a valley's; a planet carries its seed's, unused, for the valley's
  *  viewer), its surface, how many cells its fields run across (the valley's viewer draws its grass by them),
  *  where its bushes may grow (up to `most`, in `tries` throws), and — where it is the climate's, not the
@@ -109,6 +129,10 @@ export interface Surface {
   settle(c: Creature): void;
   /** Is it night at a place (on the valley, everywhere at once; on a planet, where its sun is down)? */
   night(p: Place, time: number): boolean;
+  /** A planet's seasons and weather now, field cell by field cell (planetSeasons.ts): a year of its own in
+   *  each hemisphere, none at the equator, and fronts that come and go on the winds. The valley has none:
+   *  one season and one sky over it all (model.ts's climateOf and skyNow). */
+  seasonsNow?(w: World): SeasonsNow;
 
   // --- headings, goals and moves ----------------------------------------------------------------------
 

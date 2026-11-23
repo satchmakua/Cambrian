@@ -16,11 +16,15 @@ import { AIRBORNE, canStand, dayPhase, GRID_CELL, growthOf, MAX_POP, type Creatu
 import { makeTerrain, WORLD_SIZE } from './terrain';
 import { engaged, footprintOf, ROOM, ROOM_AT, ROOM_EVERY, ROOM_PUSH, ROOM_RATE, segmentGap } from './valley';
 import type { Ground, Place, Surface } from './surface';
+import { planetSeasons, type Front } from './planetSeasons';
 
 /** A planet's surface: the port, and what its viewer and its tests want of it besides. */
 export interface PlanetSurface extends Surface {
   readonly kind: 'planet';
   readonly ground: PlanetGround;
+  /** how far its axis leans (planetSeasons.ts), and its weather's fronts at a time (for its sky) */
+  readonly tilt: number;
+  fronts(time: number): Front[];
   /** the homeland's middle (a unit vector) and how far it reaches (radians) */
   readonly home: Vec3;
   readonly homeArc: number;
@@ -124,6 +128,8 @@ export function planetSurface(spec: PlanetSpec, cap: number = MAX_POP): PlanetSu
   const homeArc = Math.acos(Math.max(-1, 1 - (VALLEY_AREA * cap) / MAX_POP / (2 * Math.PI * R * R)));
   const home = homeOf(g, homeArc);
   const homeMeridian = normalize([home[0], 0, home[2]]);
+  const tilt = spec.tilt ?? 0.5;
+  const seasons = planetSeasons(g, tilt, N, (p) => surface.cellOf(p));
 
   const unit = unitOf;
   const at = (u: Vec3): Place => ({ x: u[0] * R, y: u[1] * R, z: u[2] * R });
@@ -226,6 +232,9 @@ export function planetSurface(spec: PlanetSpec, cap: number = MAX_POP): PlanetSu
     home,
     homeArc,
     sunAt,
+    tilt,
+    fronts: seasons.fronts,
+    seasonsNow: (w) => seasons.now(w),
 
     // --- where things are, and how far apart -------------------------------------------------------
     dist,

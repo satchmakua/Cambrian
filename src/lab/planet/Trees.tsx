@@ -1,14 +1,18 @@
 /**
  * A planet's trees drawn: the simulation's own (planetGround.ts's planetStands — the broadleaves its fliers
  * roost in), in the valley's broadleaf and conifer shapes, sizes and greens (world/Landscape.tsx), each
- * standing up the planet's own up. No wind and no seasons yet.
+ * standing up the planet's own up. The broadleaves of the temperate lands keep their hemisphere's seasons:
+ * they turn gold as it cools and stand bare through its winter (planetSeasons.ts's warmth now); the
+ * jungle's and the conifers stay green. No wind yet.
  */
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { coniferGeometry, crownGeometry } from '../../world/foliage';
 import { anyTangent, cross, turn, type Vec3 } from '../../sim/sphere';
-import { planetStands, type PlanetGround, type PlanetStand } from '../../sim/planetGround';
+import { planetStands, tempOn, type PlanetGround, type PlanetStand } from '../../sim/planetGround';
+import { swingAt, warmthNow } from '../../sim/planetSeasons';
+import type { World } from '../../sim/world';
 import { LOOK } from './GlobeCamera';
 
 type Stand = PlanetStand;
@@ -33,7 +37,13 @@ function placeOn(R: number, t: Stand, rise: number, sx: number, sy: number, sz: 
   return O.matrix;
 }
 
-export function Trees({ ground }: { ground: PlanetGround }) {
+/** a broadleaf's colours: its summer's own (set per tree below), its autumn's gold, and bare */
+const GOLD = new THREE.Color().setHSL(0.11, 0.6, 0.32);
+const BARE = new THREE.Color(0x4d4036);
+const SUMMER = new THREE.Color();
+const NOW = new THREE.Color();
+
+export function Trees({ ground, world, tilt }: { ground: PlanetGround; world: World; tilt: number }) {
   const shape = ground;
   const { trees, pines } = useMemo(() => planetStands(ground), [ground]);
   const geos = useMemo(
@@ -80,6 +90,14 @@ export function Trees({ ground }: { ground: PlanetGround }) {
   const crowns = useRef<{ at: Float32Array; reach: Float32Array }>({ at: new Float32Array(0), reach: new Float32Array(0) });
   const held = useRef<{ cut: Uint8Array; kept: Float32Array[] }>({ cut: new Uint8Array(0), kept: [] });
   const judged = useRef(0);
+  // each broadleaf's summer green, and its year's mean warmth (a jungle's never drops its leaves)
+  const leaves = useMemo(() => {
+    const green = trees.map((_, i) => ((i * 7) % 23 === 0 ? new THREE.Color().setHSL(0.13, 0.55, 0.3) : new THREE.Color().setHSL(0.24 + (i % 7) * 0.014, 0.45, 0.17 + (i % 5) * 0.018)));
+    const R = ground.radius;
+    const warm = trees.map((t) => tempOn(ground, [t.x / R, t.y / R, t.z / R]));
+    return { green, warm };
+  }, [trees, ground]);
+  const turned = useRef(0);
   useEffect(() => {
     const R = shape.radius;
     const c = new THREE.Color();
@@ -118,6 +136,23 @@ export function Trees({ ground }: { ground: PlanetGround }) {
   // The trees between the camera and what it looks at are left out, as the valley's follow camera sees
   // through the leaves on its sightline: a crown a few bu off the lens filled the whole view. (Judged a
   // few times a second; a tree left out is scaled to nothing, and put back from the matrices kept.)
+  // the broadleaves' seasons, a couple of times a second: gold as their hemisphere cools, bare in its cold
+  useFrame((_, dt) => {
+    turned.current -= dt;
+    const m = crownRef.current;
+    if (turned.current > 0 || !m || !m.instanceColor) return;
+    turned.current = 0.5;
+    const R = ground.radius;
+    trees.forEach((t, i) => {
+      const mean = leaves.warm[i];
+      const y = t.y / R;
+      const now = mean >= 18 ? mean : warmthNow(mean, swingAt(tilt, y), world.time, y);
+      SUMMER.copy(leaves.green[i]);
+      NOW.copy(SUMMER).lerp(GOLD, 1 - smoothstep(6, 11, now)).lerp(BARE, 1 - smoothstep(1, 5, now));
+      m.setColorAt(i, NOW);
+    });
+    m.instanceColor.needsUpdate = true;
+  });
   useFrame((st, dt) => {
     judged.current -= dt;
     if (judged.current > 0) return;
@@ -162,4 +197,9 @@ export function Trees({ ground }: { ground: PlanetGround }) {
       <instancedMesh ref={pineRef} args={[geos.pine, mats.pine, Math.max(1, pines.length)]} count={pines.length} frustumCulled={false} />
     </group>
   );
+}
+
+function smoothstep(a: number, b: number, x: number): number {
+  const u = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return u * u * (3 - 2 * u);
 }

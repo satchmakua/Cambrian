@@ -1387,8 +1387,52 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
        woods. The valley's 12 save hashes are the same, and 1068 tests pass.
      - **Still to come.** The seasons are still the valley's, all at once over the whole planet (step 6),
        so body size can't yet answer to the cold by latitude; marsh is rare.
-  6. **Weather fronts and seasons by hemisphere**, the air and clouds, culling and detail levels, more
-     creatures and founders that spread from a homeland, and the budgets on both GPUs.
+  6. [x] **Weather fronts and seasons by hemisphere**, the air and clouds, culling and detail levels, more
+     creatures and founders that spread from a homeland, and the budgets on both GPUs. **Done
+     (2026-11-22).** What shows it:
+     - **Seasons by hemisphere** (`src/sim/planetSeasons.ts`): the year turns half a year apart north and
+       south. A place swings by the planet's tilt and its latitude: none at the equator, the valley's own
+       year at 45° on an Earth's tilt, harsher toward the poles, none at all on a planet with no tilt (the
+       lab's new slider). The grass and fruit follow the valley's year as far as a place swings, and stop
+       where the ground freezes hard. The cold and the heat come from the place's warmth now (its year's
+       mean, swung by its season), so a tundra's winter is harder than the valley's and the tropics have
+       none; snow lies where it is cold now.
+     - **Weather fronts**: soft rounds of cloud 28–68 bu across, born on the wet belts, carried along their
+       band by its wind (east in the westerlies, west in the trades) and dying away over two to five days.
+       Each is a hash of the seed, the front and its life, so no state needs saving. Where one passes it
+       rains as much as the place's climate is wet, or snows where it is cold.
+     - **Through the port.** A planet's surface offers its seasons and weather per field cell
+       (`seasonsNow`), worked out every 6 sim-seconds. The grass's growth, each bush's fruit, the cold's
+       cost to the warm-blooded, the cold-blooded's chill and the snow camouflage is judged against read
+       it where it exists. The valley offers none and keeps its one season and sky; its 12 save hashes are
+       the same as before.
+     - **Tested** (`tests/sim/planetSeasons.test.ts`): the north's summer is the south's winter; there are
+       no seasons at the equator or untilted; at 45° on an Earth's tilt the year is exactly the valley's;
+       fronts drift east in the westerlies and west in the trades and leave an overcast sky where strong; a
+       world's grass grows with its own hemisphere's season, and it snows only where the warmth is below
+       freezing.
+     - **The sky.** In the lab the ground follows each hemisphere's season (snow lying where it is cold
+       now, winter's dull browning over the year's biomes), and a cloud shell above the highest ground is
+       drawn from the simulation's own fronts, so the overcast seen from orbit is the rain on the ground.
+       `?jump=` moves the clock to a season without living it.
+     - **Detail levels and culling** (`src/lab/planet/GroundChunks.tsx`): the ground is 384 chunks, 8 a
+       face's edge, each at 32, 16 or 8 cells a side by its distance (the finest within 170 bu), skirted at
+       its edges against cracks, and not drawn past the horizon. It draws 51–55 thousand cells in every
+       view (254 chunks from orbit, 79 at the ground) where the one mesh drew 393 thousand.
+     - **More creatures.** The lab offers a cap of 1,200, twice the valley's largest. Headless, the homeland
+       carries about 740 by day 3 (its food, before they spread), at 18–25 s a day: the page can carry it
+       at 1×, and 16× is for the simulation worker when the planet comes into the game (step 7).
+     - **Life through a year** (cap 165, 12 days, seasons and fronts): 121–150 alive in 8–10 kinds, no
+       collapse in either hemisphere's winter. The seasons first cost a day 4.5–5.2 s; working each
+       hemisphere's season once and refreshing every 6 s brought it to 3.1–3.5 (step 5's: 2.6–3.3).
+     - **Budgets.** On the RTX 5070 Ti: 60 fps at the ground and over a region with the cap-1,200 planet
+       at its 740 or so, against the research's budget of 330 at 60, and 60 following an animal. On the
+       Radeon 610M: 59–60 at the ground (50–59 before the chunks), 60 in orbit, and 47 over a region, where
+       the cloud shell fills the screen. Following the felid at the ground it drops to 16–18: its fur, the
+       cost step 4 found. The broadleaves of the temperate lands turn gold as their hemisphere cools and
+       stand bare through its winter.
+     - **Not yet.** No rain or snow falls near the camera, the atmosphere is still step 1's shell (not
+       single scattering), and plants have no impostors.
   7. **Regional immigration, sea level as a lever**, saves, and **a planet designer for every game**: its
      planet types as presets (earthlike, archipelago, one great continent, desert world, ice world,
      hothouse, highlands), each a set of sliders that can be moved on from: size, land, relief,

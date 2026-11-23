@@ -53,7 +53,7 @@ export function live(w: World, c: Creature, dt: number): void {
   const moveCost = aloft ? t.metabolism * (t.flies ? (c.soarT > 0 ? 0.3 : 0.8 * (1 + Math.max(0, 1.4 - t.lift))) : 0.25) : t.metabolism * 1.6 * (c.speed / Math.max(0.1, t.sprint)) ** 2;
   // the warm-blooded burn more to keep warm through a hard winter
   // (…by its coat and its size: see selection.ts)
-  const warmth = 1 + weatherCost(t, w);
+  const warmth = 1 + weatherCost(t, w, c);
   // …and a misbuilt body is dearer to keep than a well-made one
   const upkeep = 1 + UPKEEP * (1 - c.fit);
   c.energy -= (t.metabolism * warmth * upkeep * (asleep ? 0.55 : 1) * growth ** 2 + moveCost) * dt;

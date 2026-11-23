@@ -476,20 +476,26 @@ export function climate(time: number): { grass: number; fruit: number; cold: num
   };
 }
 
-const eventOn = (w: World, kind: LeverEventKind) => w.levers.events.some((e) => e.kind === kind && w.time >= e.from && w.time < e.until);
+const eventOn = (w: World, kind: LeverEventKind, time = w.time) => w.levers.events.some((e) => e.kind === kind && time >= e.from && time < e.until);
 
 /** The climate the valley lives under now: the season's, moved by the levers — a colder or warmer age,
  *  and an ice age or an ash winter under way (levers.ts). */
 export function climateOf(w: World): { grass: number; fruit: number; cold: number } {
   const c = climate(w.time);
+  return levered(w, c.grass, c.fruit, c.cold);
+}
+
+/** A season's grass, fruit and cold, moved by the levers as they stand at a time (now, unless asked for
+ *  another: a planet's seasons are worked out a few seconds at a time, place by place: planetSeasons.ts). */
+export function levered(w: World, g: number, f: number, k: number, time = w.time): { grass: number; fruit: number; cold: number } {
   const L = w.levers;
-  let cold = c.cold - 0.35 * L.warmth, grass = c.grass * (1 + 0.15 * L.warmth), fruit = c.fruit * (1 + 0.1 * L.warmth);
-  if (eventOn(w, 'ice-age')) {
+  let cold = k - 0.35 * L.warmth, grass = g * (1 + 0.15 * L.warmth), fruit = f * (1 + 0.1 * L.warmth);
+  if (eventOn(w, 'ice-age', time)) {
     cold += 0.45;
     grass *= 0.6;
     fruit *= 0.55;
   }
-  if (eventOn(w, 'ash-winter') || eventOn(w, 'meteor')) {
+  if (eventOn(w, 'ash-winter', time) || eventOn(w, 'meteor', time)) {
     cold += 0.35;
     grass *= 0.35;
     fruit *= 0.25;

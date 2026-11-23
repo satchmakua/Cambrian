@@ -369,7 +369,8 @@ function steer(w: World, c: Creature, goal: Place | null, pace: number, dt: numb
     else if (swimmer) terrainMul = 0.15 + 0.85 * t.walk;
   }
   // the cold-blooded are sluggish after dark, and in the cold of the year
-  const chill = t.endotherm ? 1 : (S.night(c, w.time) ? 0.65 : 1) * Math.max(0.3, 1 - 0.3 * climateOf(w).cold);
+  const local = t.endotherm ? undefined : S.seasonsNow?.(w);
+  const chill = t.endotherm ? 1 : (S.night(c, w.time) ? 0.65 : 1) * Math.max(0.3, 1 - 0.3 * (local ? local.cold[S.cellOf(c)] : climateOf(w).cold));
   // on the wing: a flier can't dawdle (a floor on the pace), sprints a little faster than it cruises,
   // and slows as it comes in to land
   const airPace = !c.fly ? (c.action === 'hunt' ? 1.1 : 0.5) : pace > 1 ? 1.25 : Math.max(0.7, pace);
