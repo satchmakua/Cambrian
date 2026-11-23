@@ -1004,8 +1004,9 @@ artificial selection.
   species' typical body each dawn it has visibly changed, at most twelve frames, on its card) and adopted
   lines (☆ on the card; a split, a renaming or an extinction anywhere in the line is announced, with a way
   to its card).
-- [ ] **2. A planet with climate zones.** Built together, so terrain is rewritten once. **Built in the branch
-  `planet` (2026-11-21…22: "The planet, in a branch" below); it joins the game when the branch is merged.**
+- [x] **2. A planet with climate zones.** Built together, so terrain is rewritten once. **Done (2026-11-22):**
+  built in the branch `planet` ("The planet, in a branch" below) and merged into main: a new game is played
+  on a valley or on a planet of its own design.
   - A small sphere you can rotate, with no map edge. Distant animals as simple markers, full bodies when
     zoomed in.
   - Climate by latitude: ice caps, temperate belts, desert, tropics.
@@ -1505,7 +1506,7 @@ and their bodies came apart: the ursids went from 32 body nodes to as many as 74
        shallow-seas slider. The build holds no lab code, and the bake worker is a chunk of its own.
      - **Not yet.** The bake is not cached beside the save: a planet is made again on each load, 1.2–1.5 s
        in a worker. Rain and snow near the camera, the atmosphere's scattering and plant impostors are still
-       to come. Merging the branch into main is the last thing.
+       to come. The branch is merged into main (2026-11-22).
 
   The flat valley stays as a mode, so its saves still play.
 
