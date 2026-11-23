@@ -6,6 +6,8 @@ import { biomeOn, heightOn, levelOn, makePlanetGround } from '../../src/sim/plan
 import type { PlanetSurface } from '../../src/sim/planetSurface';
 import { cellCentre } from '../../src/sim/cubeGrid';
 import { populateCast } from '../../src/sim/cast';
+import { adoptWorld, runFor } from '../../src/sim/fastForward';
+import { startScenario } from '../../src/sim/scenarios';
 
 const SPEC = { seed: 23, radius: 120, relief: 20, land: 0.5 };
 const runDays = (w: World, days: number) => {
@@ -105,6 +107,28 @@ describe('the sea as a lever', () => {
     runDays(w, 1);
     runDays(b, 1);
     expect(saveWorld(b)).toBe(saveWorld(w));
+  });
+
+  it('comes back whole from a fast-forward: the sea, its levers and a scenario as the run left them', () => {
+    const make = () => {
+      const w = createPlanet(SPEC, 165);
+      populateCast(w, 'sparse');
+      startScenario(w, 'take-wing');
+      setSea(w, -1);
+      runDays(w, 0.5);
+      return w;
+    };
+    const a = make(), b = make();
+    // in place…
+    runDays(a, 2);
+    // …and shipped out as a save, run in a "worker", and folded back into the same object
+    const far = loadWorld(saveWorld(b));
+    runFor(far, 2 * DAY_LENGTH);
+    adoptWorld(b, loadWorld(saveWorld(far)));
+    expect(b.levers.seaNow).toBe(a.levers.seaNow);
+    expect((b.surface as PlanetSurface).seaLevel()).toBe((a.surface as PlanetSurface).seaLevel());
+    expect(Array.from(b.grassCap)).toEqual(Array.from(a.grassCap));
+    expect(saveWorld(b)).toBe(saveWorld(a));
   });
 
   it('is no lever in a valley: its levers and its saves are as they were', () => {

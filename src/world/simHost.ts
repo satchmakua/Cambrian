@@ -22,16 +22,45 @@ export interface SimHost {
   readonly where: 'worker' | 'page';
   /** what it has cost the page: frames taken in, and the time spent taking them in (ms) */
   readonly cost: { frames: number; ms: number; steps: number };
+  /** how fast the world runs flat out, lately (sim seconds a real second; null: not measured yet) */
+  rate(): number | null;
   dispose(): void;
+}
+
+/** What a step costs lately: the last WINDOW steps' time (ms), the first WARM steps left out (a world just
+ *  loaded steps slowly while its caches fill and its code warms up). */
+const WINDOW = 2400;
+const WARM = 400;
+function stepClock() {
+  const runs: { ms: number; steps: number }[] = [];
+  let seen = 0, ms = 0, steps = 0;
+  return {
+    add(t: number, n: number) {
+      if (n <= 0) return;
+      seen += n;
+      if (seen <= WARM) return;
+      runs.push({ ms: t, steps: n });
+      ms += t;
+      steps += n;
+      while (steps - runs[0].steps >= WINDOW) {
+        const r = runs.shift()!;
+        ms -= r.ms;
+        steps -= r.steps;
+      }
+    },
+    rate: () => (steps >= 200 && ms > 0 ? (steps * STEP * 1000) / ms : null),
+  };
 }
 
 /** The page steps its own world. */
 export function pageHost(world: () => World): SimHost {
   let acc = 0;
   const cost = { frames: 0, ms: 0, steps: 0 };
+  const clock = stepClock();
   return {
     where: 'page',
     cost,
+    rate: clock.rate,
     advance(seconds, maxSteps) {
       acc += seconds;
       let n = 0;
@@ -43,6 +72,7 @@ export function pageHost(world: () => World): SimHost {
       }
       cost.ms += performance.now() - t0;
       cost.steps += n;
+      clock.add(performance.now() - t0, n);
       if (n === maxSteps) acc = 0; // falling behind: drop the backlog
     },
     invalidate() {},
@@ -67,15 +97,20 @@ export function workerHost(world: () => World, onFrame: () => void): SimHost | n
   let acc = 0;
   let failed: SimHost | null = null;
   const cost = { frames: 0, ms: 0, steps: 0 };
+  // (how long the worker's own steps take: the steps of the run out, and what it said they took)
+  const clock = stepClock();
+  let out = 0;
   const fail = () => {
     if (failed) return;
     worker.terminate();
     failed = pageHost(world);
   };
-  worker.onmessage = (e: MessageEvent<{ type: 'frame'; epoch: number; frame: Frame } | { type: 'error'; message: string }>) => {
+  worker.onmessage = (e: MessageEvent<{ type: 'frame'; epoch: number; frame: Frame; ms?: number } | { type: 'error'; message: string }>) => {
     const m = e.data;
     if (m.type === 'error') return fail();
     if (failed || m.epoch !== epoch) return; // (of a world the page has since changed)
+    clock.add(m.ms ?? 0, out);
+    out = 0;
     waiting = false;
     const t0 = performance.now();
     try {
@@ -101,6 +136,7 @@ export function workerHost(world: () => World, onFrame: () => void): SimHost | n
       return failed ? ('page' as const) : ('worker' as const);
     },
     cost,
+    rate: () => (failed ? failed.rate() : clock.rate()),
     advance(seconds, maxSteps) {
       if (failed) return failed.advance(seconds, maxSteps);
       if (stale) load();
@@ -111,6 +147,7 @@ export function workerHost(world: () => World, onFrame: () => void): SimHost | n
       acc = steps === maxSteps ? 0 : acc - steps * STEP;
       worker.postMessage({ type: 'step', steps, epoch });
       cost.steps += steps;
+      out = steps;
       waiting = true;
     },
     invalidate() {

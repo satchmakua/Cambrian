@@ -4,6 +4,7 @@
  * fold the result back into the live world object and say what happened while you were away.
  */
 import { stepWorld, STEP, type World } from './world';
+import { applySea } from './levers';
 
 /** Step `w` on by `seconds` of sim time. `onProgress(fraction)` is called every `every` steps;
  *  `stop()` returning true ends the run early (the world is left at a clean step boundary). */
@@ -39,6 +40,15 @@ export function adoptWorld(into: World, from: World): void {
   into.events = from.events;
   into.history = from.history;
   into.tally = from.tally;
+  // (and what the run moved besides the living: the levers' events run their course, a scenario is won or
+  // lost, a forced sky passes, a planet's sea moves — with its ground following it)
+  into.homes = from.homes;
+  into.god = from.god;
+  into.cap = from.cap;
+  into.adopted = from.adopted;
+  into.levers = from.levers;
+  into.scenario = from.scenario;
+  applySea(into, false);
   into.buckets = new Map();
 }
 

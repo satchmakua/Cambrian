@@ -8,6 +8,7 @@ import { speciesProfile, type Relation, type SpeciesProfile } from '../sim/evolu
 import { dayNumber, type TrendSample, type FilmFrame } from '../sim/world';
 import { usePortrait } from '../viewer/portrait';
 import { getWorld } from './worldStore';
+import { usePanel } from './usePanel';
 
 function hueCss(h: number, l = 58): string {
   return `hsl(${Math.round(h * 360)} 62% ${l}%)`;
@@ -167,6 +168,8 @@ function FilmFrameView({ f }: { f: FilmFrame }) {
 }
 
 export function SpeciesCard({ id, at, onClose, onPick, onFollow, onBoost, onAdopt, onPlague }: { id: number; at: number; onClose: () => void; onPick: (id: number) => void; onFollow: (id: number) => void; onBoost?: (id: number, n: number) => void; onAdopt?: (id: number, on: boolean) => void; onPlague?: (id: number) => void }) {
+  // (moved and folded at will, like the census)
+  const panel = usePanel('species-card');
   // (read again on every snapshot of the world: `at` is its clock)
   const p = useMemo(() => speciesProfile(getWorld(), id), [id, at]);
   const changed = (p?.differs.length ?? 0) > 0;
@@ -181,9 +184,12 @@ export function SpeciesCard({ id, at, onClose, onPick, onFollow, onBoost, onAdop
     return Math.max(...vs) - Math.min(...vs) > 0.01;
   });
   return (
-    <aside className="species-card">
-      <div className="critter-head">
+    <aside className={`species-card${panel.folded ? ' folded' : ''}`} ref={panel.ref}>
+      <div className={`critter-head ${panel.head.className}`} onPointerDown={panel.head.onPointerDown} onDoubleClick={panel.head.onDoubleClick} title="drag to move it; double-click to put it back">
         <h3 style={{ borderColor: color }}>{p.name}</h3>
+        <button className="fold" onClick={() => panel.fold()} title={panel.folded ? 'open the card' : 'fold the card away'} aria-label={panel.folded ? 'Open the card' : 'Fold the card'}>
+          {panel.folded ? '▸' : '▾'}
+        </button>
         {onAdopt && (
           <button className={`adopt${p.adopted ? ' active' : ''}`} onClick={() => onAdopt(p.id, !p.adopted)} title={p.adopted ? 'your line: you are told when it splits, changes or dies out (click to let it go)' : 'adopt its line: be told when it splits, changes or dies out'}>
             {p.adopted ? '★ your line' : '☆ adopt'}

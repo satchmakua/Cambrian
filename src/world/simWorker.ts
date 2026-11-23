@@ -18,10 +18,10 @@ let W: World | null = null;
 let sent: Sent | null = null;
 let epoch = -1;
 
-function answer(ep: number): void {
+function answer(ep: number, ms = 0): void {
   const frame = frameOf(W!, sent!);
-  // (the two fields go across without copying)
-  (self as DedicatedWorkerGlobalScope).postMessage({ type: 'frame', epoch: ep, frame }, [frame.grass.buffer, frame.algae.buffer]);
+  // (the two fields go across without copying; `ms`, how long the steps took)
+  (self as DedicatedWorkerGlobalScope).postMessage({ type: 'frame', epoch: ep, frame, ms }, [frame.grass.buffer, frame.algae.buffer]);
 }
 
 self.onmessage = (e: MessageEvent<{ type: 'load'; json: string; epoch: number } | { type: 'step'; steps: number; epoch: number }>) => {
@@ -34,8 +34,9 @@ self.onmessage = (e: MessageEvent<{ type: 'load'; json: string; epoch: number } 
       answer(m.epoch);
     } else if (m.type === 'step') {
       if (!W || m.epoch !== epoch) return; // (a run asked of a world since replaced)
+      const t0 = performance.now();
       for (let i = 0; i < m.steps; i++) stepWorld(W);
-      answer(m.epoch);
+      answer(m.epoch, performance.now() - t0);
     }
   } catch (err) {
     (self as DedicatedWorkerGlobalScope).postMessage({ type: 'error', message: err instanceof Error ? err.message : String(err) });
